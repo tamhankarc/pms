@@ -128,6 +128,7 @@ model EmployeeGroup {
 model User {
   id                     String                 @id @default(cuid())
   email                  String                 @unique
+  username               String                 @unique
   passwordHash           String
   fullName               String
   userType               UserType
@@ -285,6 +286,7 @@ model TimeEntry {
   employeeId   String
   countryId    String?
   workDate     DateTime
+  taskName     String
   minutesSpent Int
   isBillable   Boolean         @default(true)
   notes        String?         @db.Text

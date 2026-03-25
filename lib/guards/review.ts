@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import type { CurrentUser } from "@/lib/auth-types";
 import {
   canComprehensivelyModerateProject,
+  isManager,
   isTeamLead,
 } from "@/lib/permissions";
 
@@ -13,8 +14,17 @@ export async function assertCanReviewEmployeeOrThrow(
     return true;
   }
 
-  if (!isTeamLead(currentUser)) {
+  if (!isTeamLead(currentUser) && !isManager(currentUser)) {
     throw new Error("You are not allowed to review this employee's work.");
+  }
+
+  const employee = await db.user.findUnique({
+    where: { id: employeeId },
+    select: { id: true, functionalRole: true },
+  });
+
+  if (!employee) {
+    throw new Error("Employee not found.");
   }
 
   const assignment = await db.employeeTeamLead.findUnique({
@@ -28,7 +38,15 @@ export async function assertCanReviewEmployeeOrThrow(
   });
 
   if (!assignment) {
-    throw new Error("Team Lead can review only employees assigned to them.");
+    throw new Error("You can review only employees assigned to you.");
+  }
+
+  if (
+    currentUser.functionalRole &&
+    currentUser.functionalRole !== "UNASSIGNED" &&
+    employee.functionalRole !== currentUser.functionalRole
+  ) {
+    throw new Error("You can review only employees with a matching functional role.");
   }
 
   return true;

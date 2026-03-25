@@ -24,6 +24,7 @@ async function main() {
     where: { email: "admin@company.com" },
     update: {},
     create: {
+      username: "admin",
       email: "admin@company.com",
       passwordHash: adminHash,
       fullName: "Admin User",
@@ -37,6 +38,7 @@ async function main() {
     where: { email: "manager@company.com" },
     update: {},
     create: {
+      username: "manager",
       email: "manager@company.com",
       passwordHash: managerHash,
       fullName: "Delivery Manager",
@@ -50,6 +52,7 @@ async function main() {
     where: { email: "lead@company.com" },
     update: {},
     create: {
+      username: "lead.dev",
       email: "lead@company.com",
       passwordHash: leadHash,
       fullName: "Team Lead One",
@@ -63,6 +66,7 @@ async function main() {
     where: { email: "dev1@company.com" },
     update: {},
     create: {
+      username: "dev.one",
       email: "dev1@company.com",
       passwordHash: employeeHash,
       fullName: "Developer One",
@@ -76,6 +80,7 @@ async function main() {
     where: { email: "qa1@company.com" },
     update: {},
     create: {
+      username: "qa.one",
       email: "qa1@company.com",
       passwordHash: employeeHash,
       fullName: "QA One",
@@ -89,6 +94,7 @@ async function main() {
     where: { email: "viewer@company.com" },
     update: {},
     create: {
+      username: "viewer",
       email: "viewer@company.com",
       passwordHash: viewerHash,
       fullName: "Report Viewer",
@@ -273,6 +279,7 @@ async function main() {
       employeeId: employee1.id,
       countryId: india.id,
       workDate: new Date(),
+      taskName: "Dashboard metrics implementation",
       minutesSpent: 240,
       isBillable: true,
       notes: "Implemented dashboard metrics cards",
@@ -315,12 +322,12 @@ async function main() {
 
   console.log("Seed complete");
   console.log({
-    admin: "admin@company.com / Admin@123",
-    manager: "manager@company.com / Manager@123",
-    teamLead: "lead@company.com / Lead@123",
-    employee: "dev1@company.com / Employee@123",
-    qa: "qa1@company.com / Employee@123",
-    reportViewer: "viewer@company.com / Viewer@123",
+    admin: "admin or admin@company.com / Admin@123",
+    manager: "manager or manager@company.com / Manager@123",
+    teamLead: "lead.dev or lead@company.com / Lead@123",
+    employee: "dev.one or dev1@company.com / Employee@123",
+    qa: "qa.one or qa1@company.com / Employee@123",
+    reportViewer: "viewer or viewer@company.com / Viewer@123",
   });
 }
 

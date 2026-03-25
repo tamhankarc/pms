@@ -61,8 +61,10 @@ export function Sidebar({ user }: { user: SessionUser }) {
         <div className="border-b border-slate-800 px-6 py-6">
           <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Internal PMS</p>
           <h2 className="mt-3 text-lg font-semibold">Project Management Suite</h2>
-          <p className="mt-2 text-sm text-slate-400">{user.name}</p>
-          <p className="text-xs text-slate-500">{user.userType.replaceAll("_", " ")}</p>
+          <p className="mt-2 text-sm font-medium text-slate-200">{user.fullName}</p>
+          {user.designation ? (
+            <p className="text-xs text-slate-400">{user.designation}</p>
+          ) : null}
         </div>
 
         <nav className="flex-1 space-y-1 px-3 py-6">

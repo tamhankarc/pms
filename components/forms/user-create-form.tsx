@@ -44,6 +44,11 @@ export function UserCreateForm({
         </div>
 
         <div>
+          <FormLabel htmlFor="username" required>Username</FormLabel>
+          <input id="username" className="input" name="username" required />
+        </div>
+
+        <div>
           <FormLabel htmlFor="email" required>Email</FormLabel>
           <input id="email" className="input" name="email" type="email" required />
         </div>

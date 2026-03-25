@@ -4,31 +4,79 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { requireUserTypes } from "@/lib/auth";
 import {
-  assertEmployeeHasAtLeastOneTeamLead,
+  assertEmployeeHasAtLeastOneSupervisor,
   assertUniqueIds,
 } from "@/lib/domain/rules";
 
+type FunctionalRole =
+  | "DEVELOPER"
+  | "QA"
+  | "DESIGNER"
+  | "LOCALIZATION"
+  | "DEVOPS"
+  | "PROJECT_MANAGER"
+  | "OTHER";
+
 type CreateEmployeeInput = {
   fullName: string;
+  username: string;
   email: string;
   password: string;
-  functionalRole:
-    | "DEVELOPER"
-    | "QA"
-    | "DESIGNER"
-    | "LOCALIZATION"
-    | "DEVOPS"
-    | "PROJECT_MANAGER"
-    | "OTHER";
-  teamLeadIds: string[];
+  functionalRole: FunctionalRole;
+  supervisorIds: string[];
   phoneNumber?: string;
 };
+
+async function validateSupervisors(
+  supervisorIds: string[],
+  employeeFunctionalRole: FunctionalRole,
+) {
+  if (supervisorIds.length === 0) return false;
+
+  const supervisors = await db.user.findMany({
+    where: {
+      id: { in: supervisorIds },
+      isActive: true,
+    },
+    select: {
+      id: true,
+      userType: true,
+      functionalRole: true,
+    },
+  });
+
+  if (supervisors.length !== supervisorIds.length) {
+    return false;
+  }
+
+  return supervisors.every((person) => {
+    if (person.userType === "TEAM_LEAD") return true;
+    if (
+      person.userType === "MANAGER" &&
+      person.functionalRole === employeeFunctionalRole
+    ) {
+      return true;
+    }
+    return false;
+  });
+}
 
 export async function createEmployee(input: CreateEmployeeInput) {
   const currentUser = await requireUserTypes(["ADMIN", "MANAGER"]);
 
-  assertEmployeeHasAtLeastOneTeamLead(input.teamLeadIds);
-  assertUniqueIds(input.teamLeadIds, "team lead");
+  assertEmployeeHasAtLeastOneSupervisor(input.supervisorIds);
+  assertUniqueIds(input.supervisorIds, "supervisor");
+
+  const valid = await validateSupervisors(
+    input.supervisorIds,
+    input.functionalRole,
+  );
+
+  if (!valid) {
+    throw new Error(
+      "Supervisors must be Team Leads or Managers with the same functional role as the employee.",
+    );
+  }
 
   const passwordHash = await bcrypt.hash(input.password, 10);
 
@@ -36,6 +84,7 @@ export async function createEmployee(input: CreateEmployeeInput) {
     const employee = await tx.user.create({
       data: {
         fullName: input.fullName,
+        username: input.username.toLowerCase(),
         email: input.email.toLowerCase(),
         passwordHash,
         userType: "EMPLOYEE",
@@ -45,7 +94,7 @@ export async function createEmployee(input: CreateEmployeeInput) {
     });
 
     await tx.employeeTeamLead.createMany({
-      data: input.teamLeadIds.map((teamLeadId) => ({
+      data: input.supervisorIds.map((teamLeadId) => ({
         employeeId: employee.id,
         teamLeadId,
         assignedById: currentUser.id,
@@ -59,21 +108,32 @@ export async function createEmployee(input: CreateEmployeeInput) {
 
 export async function updateEmployeeTeamLeads(
   employeeId: string,
-  teamLeadIds: string[],
+  supervisorIds: string[],
 ) {
   const currentUser = await requireUserTypes(["ADMIN", "MANAGER"]);
 
-  assertEmployeeHasAtLeastOneTeamLead(teamLeadIds);
-  assertUniqueIds(teamLeadIds, "team lead");
+  assertEmployeeHasAtLeastOneSupervisor(supervisorIds);
+  assertUniqueIds(supervisorIds, "supervisor");
 
   return db.$transaction(async (tx) => {
     const employee = await tx.user.findUnique({
       where: { id: employeeId },
-      select: { id: true, userType: true },
+      select: { id: true, userType: true, functionalRole: true },
     });
 
     if (!employee || employee.userType !== "EMPLOYEE") {
       throw new Error("Employee not found.");
+    }
+
+    const valid = await validateSupervisors(
+      supervisorIds,
+      employee.functionalRole ?? "OTHER",
+    );
+
+    if (!valid) {
+      throw new Error(
+        "Supervisors must be Team Leads or Managers with the same functional role as the employee.",
+      );
     }
 
     await tx.employeeTeamLead.deleteMany({
@@ -81,7 +141,7 @@ export async function updateEmployeeTeamLeads(
     });
 
     await tx.employeeTeamLead.createMany({
-      data: teamLeadIds.map((teamLeadId) => ({
+      data: supervisorIds.map((teamLeadId) => ({
         employeeId,
         teamLeadId,
         assignedById: currentUser.id,

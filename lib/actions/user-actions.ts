@@ -5,7 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { hashPassword, requireUserTypes } from "@/lib/auth";
 import {
-  assertEmployeeHasAtLeastOneTeamLead,
+  assertEmployeeHasAtLeastOneSupervisor,
   assertUniqueIds,
 } from "@/lib/domain/rules";
 
@@ -35,6 +35,12 @@ export type UserFormState = {
 const baseSchema = z.object({
   id: z.string().optional(),
   fullName: z.string().min(2),
+  username: z
+    .string()
+    .trim()
+    .min(3, "Username must be at least 3 characters.")
+    .max(50)
+    .regex(/^[a-z0-9._-]+$/i, "Username can only contain letters, numbers, dot, underscore, and hyphen."),
   email: z.string().email(),
   password: z.string().min(6).optional(),
   userType: z.enum(userTypes),
@@ -52,6 +58,30 @@ function normalizeGroupIds(userType: typeof userTypes[number], groupIds: string[
   return [];
 }
 
+async function validateSupervisors(supervisorIds: string[], employeeFunctionalRole: (typeof functionalRoles)[number]) {
+  if (supervisorIds.length === 0) return false;
+
+  const supervisors = await db.user.findMany({
+    where: {
+      id: { in: supervisorIds },
+      isActive: true,
+    },
+    select: {
+      id: true,
+      userType: true,
+      functionalRole: true,
+    },
+  });
+
+  if (supervisors.length !== supervisorIds.length) return false;
+
+  return supervisors.every((person) => {
+    if (person.userType === "TEAM_LEAD") return true;
+    if (person.userType === "MANAGER" && person.functionalRole === employeeFunctionalRole) return true;
+    return false;
+  });
+}
+
 export async function createUserAction(
   _prevState: UserFormState,
   formData: FormData,
@@ -61,6 +91,7 @@ export async function createUserAction(
 
     const parsed = baseSchema.safeParse({
       fullName: formData.get("fullName"),
+      username: formData.get("username"),
       email: formData.get("email"),
       password: formData.get("password"),
       userType: formData.get("userType"),
@@ -81,24 +112,16 @@ export async function createUserAction(
       return { success: false, error: "Only Admin can create Manager or Admin users." };
     }
 
-    const teamLeadIds = parsed.data.userType === "EMPLOYEE"
-      ? formData.getAll("teamLeadIds").map(String).filter(Boolean)
+    const supervisorIds = parsed.data.userType === "EMPLOYEE"
+      ? formData.getAll("supervisorIds").map(String).filter(Boolean)
       : [];
 
     if (parsed.data.userType === "EMPLOYEE") {
-      assertEmployeeHasAtLeastOneTeamLead(teamLeadIds);
-      assertUniqueIds(teamLeadIds, "team lead");
-
-      const count = await db.user.count({
-        where: {
-          id: { in: teamLeadIds },
-          userType: "TEAM_LEAD",
-          isActive: true,
-        },
-      });
-
-      if (count !== teamLeadIds.length) {
-        return { success: false, error: "One or more selected Team Leads are invalid." };
+      assertEmployeeHasAtLeastOneSupervisor(supervisorIds);
+      assertUniqueIds(supervisorIds, "supervisor");
+      const valid = await validateSupervisors(supervisorIds, parsed.data.functionalRole);
+      if (!valid) {
+        return { success: false, error: "Supervisors must be Team Leads or Managers with the same functional role as the employee." };
       }
     }
 
@@ -111,6 +134,7 @@ export async function createUserAction(
       const user = await tx.user.create({
         data: {
           fullName: parsed.data.fullName,
+          username: parsed.data.username.toLowerCase(),
           email: parsed.data.email.toLowerCase(),
           passwordHash,
           userType: parsed.data.userType,
@@ -135,7 +159,7 @@ export async function createUserAction(
 
       if (parsed.data.userType === "EMPLOYEE") {
         await tx.employeeTeamLead.createMany({
-          data: teamLeadIds.map((teamLeadId) => ({
+          data: supervisorIds.map((teamLeadId) => ({
             employeeId: user.id,
             teamLeadId,
             assignedById: actor.id,
@@ -163,6 +187,7 @@ export async function updateUserAction(
     const parsed = baseSchema.safeParse({
       id: formData.get("id"),
       fullName: formData.get("fullName"),
+      username: formData.get("username"),
       email: formData.get("email"),
       userType: formData.get("userType"),
       functionalRole: formData.get("functionalRole"),
@@ -182,13 +207,17 @@ export async function updateUserAction(
       return { success: false, error: "Only Admin can assign Manager or Admin user type." };
     }
 
-    const teamLeadIds = parsed.data.userType === "EMPLOYEE"
-      ? formData.getAll("teamLeadIds").map(String).filter(Boolean)
+    const supervisorIds = parsed.data.userType === "EMPLOYEE"
+      ? formData.getAll("supervisorIds").map(String).filter(Boolean)
       : [];
 
     if (parsed.data.userType === "EMPLOYEE") {
-      assertEmployeeHasAtLeastOneTeamLead(teamLeadIds);
-      assertUniqueIds(teamLeadIds, "team lead");
+      assertEmployeeHasAtLeastOneSupervisor(supervisorIds);
+      assertUniqueIds(supervisorIds, "supervisor");
+      const valid = await validateSupervisors(supervisorIds, parsed.data.functionalRole);
+      if (!valid) {
+        return { success: false, error: "Supervisors must be Team Leads or Managers with the same functional role as the employee." };
+      }
     }
 
     const groupIds = normalizeGroupIds(parsed.data.userType, parsed.data.groupIds);
@@ -199,6 +228,7 @@ export async function updateUserAction(
         where: { id: parsed.data.id! },
         data: {
           fullName: parsed.data.fullName,
+          username: parsed.data.username.toLowerCase(),
           email: parsed.data.email.toLowerCase(),
           userType: parsed.data.userType,
           functionalRole: parsed.data.functionalRole,
@@ -222,9 +252,9 @@ export async function updateUserAction(
       }
 
       await tx.employeeTeamLead.deleteMany({ where: { employeeId: parsed.data.id! } });
-      if (parsed.data.userType === "EMPLOYEE" && teamLeadIds.length > 0) {
+      if (parsed.data.userType === "EMPLOYEE" && supervisorIds.length > 0) {
         await tx.employeeTeamLead.createMany({
-          data: teamLeadIds.map((teamLeadId) => ({
+          data: supervisorIds.map((teamLeadId) => ({
             employeeId: parsed.data.id!,
             teamLeadId,
             assignedById: actor.id,
@@ -278,20 +308,27 @@ export async function assignTeamLeadAction(formData: FormData) {
 
   const employee = await db.user.findUnique({
     where: { id: parsed.data.employeeId },
-    select: { id: true, userType: true },
+    select: { id: true, userType: true, functionalRole: true },
   });
 
   if (!employee || employee.userType !== "EMPLOYEE") {
     throw new Error("Selected user is not an employee.");
   }
 
-  const teamLead = await db.user.findUnique({
+  const supervisor = await db.user.findUnique({
     where: { id: parsed.data.teamLeadId },
-    select: { id: true, userType: true },
+    select: { id: true, userType: true, functionalRole: true },
   });
 
-  if (!teamLead || teamLead.userType !== "TEAM_LEAD") {
-    throw new Error("Selected user is not a Team Lead.");
+  const validSupervisor =
+    supervisor &&
+    (
+      supervisor.userType === "TEAM_LEAD" ||
+      (supervisor.userType === "MANAGER" && supervisor.functionalRole === employee.functionalRole)
+    );
+
+  if (!validSupervisor) {
+    throw new Error("Selected supervisor must be a Team Lead or a Manager with the same functional role as the employee.");
   }
 
   await db.employeeTeamLead.upsert({

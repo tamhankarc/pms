@@ -7,7 +7,7 @@ import {
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatMinutes } from "@/lib/utils";
-import { canFullyModerateProject } from "@/lib/permissions";
+import { canFullyModerateProject, isRoleScopedManager } from "@/lib/permissions";
 import { getVisibleProjects } from "@/lib/queries";
 
 const estimateWithRelations = {
@@ -46,7 +46,7 @@ export default async function EstimatesPage() {
       where: { isActive: true },
       orderBy: { name: "asc" },
     }),
-    user.userType === "TEAM_LEAD"
+    (user.userType === "TEAM_LEAD" || isRoleScopedManager(user))
       ? db.employeeTeamLead.findMany({
           where: { teamLeadId: user.id },
           include: {
@@ -59,11 +59,9 @@ export default async function EstimatesPage() {
   ]);
 
   const safeProjectIds = projects.length ? projects.map((p) => p.id) : ["__none__"];
-  const managedIds = new Set(
-    assignments
-      .filter((row) => row.employee.functionalRole === user.functionalRole)
-      .map((row) => row.employeeId),
-  );
+  const assignedScopedEmployeeIds = assignments
+    .filter((row) => row.employee.functionalRole === user.functionalRole)
+    .map((row) => row.employeeId);
 
   const estimates = (await db.estimate.findMany({
     ...estimateWithRelations,
@@ -73,9 +71,9 @@ export default async function EstimatesPage() {
             employeeId: user.id,
             projectId: { in: safeProjectIds },
           }
-        : user.userType === "TEAM_LEAD"
+        : user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
           ? {
-              employeeId: { in: managedIds.size ? Array.from(managedIds) : ["__none__"] },
+              employeeId: { in: assignedScopedEmployeeIds.length ? assignedScopedEmployeeIds : ["__none__"] },
               projectId: { in: safeProjectIds },
             }
           : {
@@ -83,15 +81,18 @@ export default async function EstimatesPage() {
             },
   })) as EstimateRow[];
 
-  const countryMap = new Map(
-    countries.map((country) => [country.id, country.name]),
-  );
+  const countryMap = new Map(countries.map((country) => [country.id, country.name]));
+  const managedIds = new Set(assignedScopedEmployeeIds);
 
   return (
     <div>
       <PageHeader
         title="Estimates"
-        description="Team Leads can review only assigned employees whose functional role matches their own. Admins and Managers can review across visible projects."
+        description={
+          isRoleScopedManager(user)
+            ? "Role-scoped Managers can review estimates only for assigned employees whose functional role matches their own. Team Leads can review only assigned employees whose functional role matches their own. Project Managers and Admins can review across visible projects."
+            : "Team Leads can review only assigned employees whose functional role matches their own. Project Managers and Admins can review across visible projects."
+        }
       />
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
@@ -158,7 +159,9 @@ export default async function EstimatesPage() {
           <div className="card p-6">
             <h2 className="section-title">Estimate review</h2>
             <p className="section-subtitle">
-              Admins and Managers can review submitted estimates across visible projects.
+              {isRoleScopedManager(user)
+                ? "This manager account is role-scoped and can review only assigned employees with a matching functional role."
+                : "Project Managers and Admins can review submitted estimates across visible projects."}
             </p>
           </div>
         )}
@@ -178,7 +181,7 @@ export default async function EstimatesPage() {
               {estimates.map((estimate) => {
                 const canReview =
                   canFullyModerateProject(user) ||
-                  (user.userType === "TEAM_LEAD" &&
+                  ((user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) &&
                     managedIds.has(estimate.employeeId) &&
                     estimate.employee.functionalRole === user.functionalRole);
 

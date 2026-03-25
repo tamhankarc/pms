@@ -51,13 +51,24 @@ export async function updateProfileAction(formData: FormData) {
       permanentAddress,
       permanentSameAsCurrent,
     },
+    select: {
+      id: true,
+      username: true,
+      fullName: true,
+      email: true,
+      designation: true,
+      userType: true,
+      functionalRole: true,
+    },
   });
 
   await createSession({
     id: updated.id,
+    username: updated.username,
     name: updated.fullName,
     fullName: updated.fullName,
     email: updated.email,
+    designation: updated.designation ?? null,
     userType: updated.userType,
     functionalRole: updated.functionalRole ?? "UNASSIGNED",
   });

@@ -11,6 +11,7 @@ type CreateTimeEntryInput = {
   employeeId: string;
   countryId: string;
   workDate: string;
+  taskName: string;
   minutesSpent: number;
   isBillable?: boolean;
   notes?: string;
@@ -31,15 +32,21 @@ export async function createTimeEntry(input: CreateTimeEntryInput) {
     throw new Error("You can create time entries only for yourself unless you are Admin/Manager.");
   }
 
+  const taskName = input.taskName?.trim();
+  if (!taskName) {
+    throw new Error("Task name is required.");
+  }
+
   return db.timeEntry.create({
     data: {
       projectId: input.projectId,
       employeeId: input.employeeId,
       countryId: input.countryId,
       workDate: new Date(input.workDate),
+      taskName,
       minutesSpent: input.minutesSpent,
       isBillable: input.isBillable ?? true,
-      notes: input.notes || null,
+      notes: input.notes?.trim() || null,
       status: "SUBMITTED",
     },
   });

@@ -10,6 +10,7 @@ const timeSchema = z.object({
   projectId: z.string().min(1),
   countryId: z.string().optional(),
   workDate: z.string().min(1),
+  taskName: z.string().trim().min(2, "Task name is required.").max(200),
   minutesSpent: z.coerce.number().int().positive(),
   isBillable: z.coerce.boolean().default(true),
   notes: z.string().optional(),
@@ -41,12 +42,13 @@ export async function createTimeEntryAction(formData: FormData) {
     projectId: formData.get("projectId"),
     countryId: formData.get("countryId") || undefined,
     workDate: formData.get("workDate"),
+    taskName: formData.get("taskName"),
     minutesSpent: formData.get("minutesSpent"),
     isBillable: formData.get("isBillable") === "true",
     notes: formData.get("notes") || "",
   });
 
-  if (!parsed.success) throw new Error("Invalid time entry payload");
+  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || "Invalid time entry payload");
 
   const canUseProject = await userCanLogAgainstProject(user.id, parsed.data.projectId);
   if (!canUseProject) {
@@ -59,6 +61,7 @@ export async function createTimeEntryAction(formData: FormData) {
       projectId: parsed.data.projectId,
       countryId: parsed.data.countryId || null,
       workDate: new Date(parsed.data.workDate),
+      taskName: parsed.data.taskName,
       minutesSpent: parsed.data.minutesSpent,
       isBillable: parsed.data.isBillable,
       notes: parsed.data.notes || null,
@@ -73,6 +76,7 @@ const updateTimeSchema = z.object({
   entryId: z.string().min(1),
   countryId: z.string().optional(),
   workDate: z.string().min(1),
+  taskName: z.string().trim().min(2, "Task name is required.").max(200),
   minutesSpent: z.coerce.number().int().positive(),
   isBillable: z.coerce.boolean().default(true),
   notes: z.string().optional(),
@@ -85,12 +89,13 @@ export async function updateTimeEntryAction(formData: FormData) {
     entryId: formData.get("entryId"),
     countryId: formData.get("countryId") || undefined,
     workDate: formData.get("workDate"),
+    taskName: formData.get("taskName"),
     minutesSpent: formData.get("minutesSpent"),
     isBillable: formData.get("isBillable") === "true",
     notes: formData.get("notes") || "",
   });
 
-  if (!parsed.success) throw new Error("Invalid time entry update payload");
+  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || "Invalid time entry update payload");
 
   const entry = await db.timeEntry.findUnique({
     where: { id: parsed.data.entryId },
@@ -118,6 +123,7 @@ export async function updateTimeEntryAction(formData: FormData) {
     data: {
       countryId: parsed.data.countryId || null,
       workDate: new Date(parsed.data.workDate),
+      taskName: parsed.data.taskName,
       minutesSpent: parsed.data.minutesSpent,
       isBillable: parsed.data.isBillable,
       notes: parsed.data.notes || null,

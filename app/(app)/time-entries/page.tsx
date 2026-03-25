@@ -5,24 +5,31 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getVisibleProjects } from "@/lib/queries";
 import { formatMinutes } from "@/lib/utils";
-import { canFullyModerateProject } from "@/lib/permissions";
+import { canFullyModerateProject, isRoleScopedManager } from "@/lib/permissions";
 
 export default async function TimeEntriesPage() {
   const user = await requireUser();
 
-  const [projects, countries, teamLeadEmployeeIds] = await Promise.all([
+  const [projects, countries, supervisorEmployeeIds] = await Promise.all([
     getVisibleProjects(user),
     db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
-    user.userType === "TEAM_LEAD"
+    (user.userType === "TEAM_LEAD" || isRoleScopedManager(user))
       ? db.employeeTeamLead.findMany({
           where: { teamLeadId: user.id },
-          select: { employeeId: true },
+          include: {
+            employee: {
+              select: { id: true, functionalRole: true },
+            },
+          },
         })
       : Promise.resolve([]),
   ]);
 
   const visibleProjectIds = projects.map((project) => project.id);
   const safeProjectIds = visibleProjectIds.length ? visibleProjectIds : ["__none__"];
+  const scopedEmployeeIds = supervisorEmployeeIds
+    .filter((row) => row.employee.functionalRole === user.functionalRole)
+    .map((row) => row.employeeId);
 
   const entries = await db.timeEntry.findMany({
     where:
@@ -31,9 +38,14 @@ export default async function TimeEntriesPage() {
             employeeId: user.id,
             projectId: { in: safeProjectIds },
           }
-        : {
-            projectId: { in: safeProjectIds },
-          },
+        : user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
+          ? {
+              employeeId: { in: scopedEmployeeIds.length ? scopedEmployeeIds : ["__none__"] },
+              projectId: { in: safeProjectIds },
+            }
+          : {
+              projectId: { in: safeProjectIds },
+            },
     include: {
       employee: true,
       project: true,
@@ -43,14 +55,18 @@ export default async function TimeEntriesPage() {
   });
 
   const countryMap = new Map(countries.map((country) => [country.id, country.name]));
-  const managedIds = new Set(teamLeadEmployeeIds.map((row) => row.employeeId));
+  const managedIds = new Set(scopedEmployeeIds);
   const canCreate = user.userType === "EMPLOYEE" || user.userType === "TEAM_LEAD";
 
   return (
     <div>
       <PageHeader
         title="Time entries"
-        description="Employees and Team Leads can submit time entries. Submitted entries can be edited only by assigned Team Leads, Admins, or Managers."
+        description={
+          isRoleScopedManager(user)
+            ? "Employees and Team Leads can submit time entries. Submitted entries can be edited by assigned Team Leads, Project Managers, Admins, or assigned Managers with the same functional role."
+            : "Employees and Team Leads can submit time entries. Submitted entries can be edited only by assigned Team Leads, Admins, or Managers."
+        }
       />
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
@@ -87,6 +103,11 @@ export default async function TimeEntriesPage() {
               </div>
 
               <div>
+                <label className="label">Task name <span className="text-red-600">*</span></label>
+                <input className="input" name="taskName" required />
+              </div>
+
+              <div>
                 <label className="label">Minutes spent <span className="text-red-600">*</span></label>
                 <input className="input" type="number" name="minutesSpent" min="15" step="15" required />
               </div>
@@ -104,7 +125,7 @@ export default async function TimeEntriesPage() {
           <div className="card p-6">
             <h2 className="section-title">Time entry moderation</h2>
             <p className="section-subtitle">
-              Employees and Team Leads submit time entries directly. Admins, Managers, and assigned Team Leads can edit submitted entries when required.
+              Submitted time entries can be edited by Project Managers, Admins, assigned Team Leads, and assigned Managers with matching functional roles.
             </p>
           </div>
         )}
@@ -114,7 +135,7 @@ export default async function TimeEntriesPage() {
             <thead className="table-head">
               <tr>
                 <th className="table-cell">Employee</th>
-                <th className="table-cell">Project</th>
+                <th className="table-cell">Project / Task</th>
                 <th className="table-cell">Time</th>
                 <th className="table-cell">Status</th>
                 <th className="table-cell">Action</th>
@@ -124,7 +145,7 @@ export default async function TimeEntriesPage() {
               {entries.map((entry) => {
                 const canEdit =
                   canFullyModerateProject(user) ||
-                  (user.userType === "TEAM_LEAD" && managedIds.has(entry.employeeId));
+                  ((user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) && managedIds.has(entry.employeeId));
 
                 return (
                   <tr key={entry.id}>
@@ -134,6 +155,7 @@ export default async function TimeEntriesPage() {
                     </td>
                     <td className="table-cell">
                       {entry.project.name}
+                      <div className="text-xs text-slate-500">{entry.taskName}</div>
                       <div className="text-xs text-slate-500">
                         {entry.countryId ? countryMap.get(entry.countryId) ?? "—" : "No specific country"}
                       </div>

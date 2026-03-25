@@ -13,6 +13,8 @@ export type SessionUser = {
   name: string;
   fullName: string;
   email: string;
+  username: string;
+  designation?: string | null;
   userType: UserType;
   functionalRole: FunctionalRoleCode | "UNASSIGNED";
 };
@@ -79,9 +81,23 @@ export async function requireUserTypes(userTypes: UserType[]) {
   return user;
 }
 
-export async function authenticate(email: string, password: string) {
-  const user = await db.user.findUnique({
-    where: { email: email.toLowerCase() },
+export async function authenticate(usernameOrEmail: string, password: string) {
+  const normalizedInput = usernameOrEmail.trim().toLowerCase();
+  const user = await db.user.findFirst({
+    where: {
+      OR: [{ email: normalizedInput }, { username: normalizedInput }],
+    },
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      username: true,
+      designation: true,
+      userType: true,
+      functionalRole: true,
+      passwordHash: true,
+      isActive: true,
+    },
   });
 
   if (!user || !user.isActive) return null;
@@ -94,6 +110,8 @@ export async function authenticate(email: string, password: string) {
     name: user.fullName,
     fullName: user.fullName,
     email: user.email,
+    username: user.username,
+    designation: user.designation ?? null,
     userType: user.userType,
     functionalRole: user.functionalRole ?? "UNASSIGNED",
   } satisfies SessionUser;

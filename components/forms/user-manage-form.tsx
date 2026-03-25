@@ -22,14 +22,23 @@ const userTypes = [
   "REPORT_VIEWER",
 ] as const;
 
+type SupervisorOption = {
+  id: string;
+  fullName: string;
+  email: string;
+  userType: "TEAM_LEAD" | "MANAGER";
+  functionalRole: typeof functionalRoles[number] | null;
+};
+
 type UserManageFormProps = {
   mode: "create" | "edit";
   action: (state: UserFormState, formData: FormData) => Promise<UserFormState>;
-  teamLeads: { id: string; fullName: string; email: string }[];
+  supervisors: SupervisorOption[];
   groups: { id: string; name: string }[];
   initialValues?: {
     id?: string;
     fullName?: string;
+    username?: string;
     email?: string;
     userType?: typeof userTypes[number];
     functionalRole?: typeof functionalRoles[number];
@@ -39,7 +48,7 @@ type UserManageFormProps = {
     phoneNumber?: string | null;
     isActive?: boolean;
     groupIds?: string[];
-    teamLeadIds?: string[];
+    supervisorIds?: string[];
   };
 };
 
@@ -48,19 +57,30 @@ const initialState: UserFormState = {};
 export function UserManageForm({
   mode,
   action,
-  teamLeads,
+  supervisors,
   groups,
   initialValues,
 }: UserManageFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [userType, setUserType] = useState<typeof userTypes[number]>(initialValues?.userType ?? "EMPLOYEE");
+  const [functionalRole, setFunctionalRole] = useState<typeof functionalRoles[number]>(initialValues?.functionalRole ?? "DEVELOPER");
 
   const canHaveGroups = useMemo(
     () => userType === "EMPLOYEE" || userType === "TEAM_LEAD",
     [userType],
   );
 
-  const canHaveTeamLeads = userType === "EMPLOYEE";
+  const canHaveSupervisors = userType === "EMPLOYEE";
+
+  const filteredSupervisors = useMemo(
+    () =>
+      supervisors.filter(
+        (person) =>
+          person.userType === "TEAM_LEAD" ||
+          (person.userType === "MANAGER" && person.functionalRole === functionalRole),
+      ),
+    [supervisors, functionalRole],
+  );
 
   return (
     <form action={formAction} className="card p-6">
@@ -88,7 +108,13 @@ export function UserManageForm({
           <input id="fullName" className="input" name="fullName" defaultValue={initialValues?.fullName ?? ""} required />
         </div>
 
-        <div className="md:col-span-2">
+        <div>
+          <FormLabel htmlFor="username" required>Username</FormLabel>
+          <input id="username" className="input" name="username" defaultValue={initialValues?.username ?? ""} required />
+          <p className="mt-1 text-xs text-slate-500">Used for login. Use letters, numbers, dot, underscore, or hyphen.</p>
+        </div>
+
+        <div>
           <FormLabel htmlFor="email" required>Email</FormLabel>
           <input id="email" className="input" name="email" type="email" defaultValue={initialValues?.email ?? ""} required />
         </div>
@@ -118,7 +144,14 @@ export function UserManageForm({
 
         <div>
           <FormLabel htmlFor="functionalRole" required>Functional role</FormLabel>
-          <select id="functionalRole" className="input" name="functionalRole" defaultValue={initialValues?.functionalRole ?? "DEVELOPER"} required>
+          <select
+            id="functionalRole"
+            className="input"
+            name="functionalRole"
+            value={functionalRole}
+            onChange={(e) => setFunctionalRole(e.target.value as typeof functionalRoles[number])}
+            required
+          >
             {functionalRoles.map((role) => (
               <option key={role} value={role}>{role.replaceAll("_", " ")}</option>
             ))}
@@ -159,16 +192,21 @@ export function UserManageForm({
           </div>
         ) : null}
 
-        {canHaveTeamLeads ? (
+        {canHaveSupervisors ? (
           <div className="md:col-span-2">
-            <FormLabel htmlFor="teamLeadIds" required>Assign Team Lead(s)</FormLabel>
-            <select id="teamLeadIds" className="input min-h-36" name="teamLeadIds" multiple required defaultValue={initialValues?.teamLeadIds ?? []}>
-              {teamLeads.map((lead) => (
-                <option key={lead.id} value={lead.id}>{lead.fullName}</option>
+            <FormLabel htmlFor="supervisorIds" required>Assign Supervisor(s)</FormLabel>
+            <select id="supervisorIds" className="input min-h-36" name="supervisorIds" multiple required defaultValue={initialValues?.supervisorIds ?? []}>
+              {filteredSupervisors.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.fullName} · {person.userType.replaceAll("_", " ")}
+                  {person.userType === "MANAGER" && person.functionalRole
+                    ? ` · ${person.functionalRole.replaceAll("_", " ")}`
+                    : ""}
+                </option>
               ))}
             </select>
             <p className="mt-2 text-xs text-slate-500">
-              Employees must have at least one Team Lead. Hold Ctrl/Cmd to select multiple Team Leads.
+              Employees must have at least one assigned Team Lead or a Manager with the same functional role. Hold Ctrl/Cmd to select multiple supervisors.
             </p>
           </div>
         ) : null}

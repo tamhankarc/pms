@@ -5,7 +5,10 @@ import type { CurrentUser } from "@/lib/auth-types";
 type UserLike =
   | SessionUser
   | CurrentUser
-  | { userType: UserType | CurrentUser["userType"] }
+  | {
+      userType: UserType | CurrentUser["userType"];
+      functionalRole?: SessionUser["functionalRole"] | null;
+    }
   | UserType
   | null
   | undefined;
@@ -16,31 +19,40 @@ function getUserType(user: UserLike) {
   return user.userType;
 }
 
+function getFunctionalRole(user: UserLike) {
+  if (!user || typeof user === "string" || !("functionalRole" in user)) return undefined;
+  return user.functionalRole ?? undefined;
+}
+
 export const PROJECT_MANAGERS: UserType[] = ["ADMIN", "MANAGER"];
 export const MANAGER: UserType[] = ["ADMIN", "MANAGER"];
 
 export function isAdmin(user: UserLike) {
-  return getUserType(user) === "ADMIN";
+  return getUserType(user) == "ADMIN";
 }
 
 export function isManager(user: UserLike) {
-  return getUserType(user) === "MANAGER";
+  return getUserType(user) == "MANAGER";
 }
 
 export function isTeamLead(user: UserLike) {
-  return getUserType(user) === "TEAM_LEAD";
+  return getUserType(user) == "TEAM_LEAD";
 }
 
 export function isEmployee(user: UserLike) {
-  return getUserType(user) === "EMPLOYEE";
+  return getUserType(user) == "EMPLOYEE";
 }
 
 export function isReportViewer(user: UserLike) {
-  return getUserType(user) === "REPORT_VIEWER";
+  return getUserType(user) == "REPORT_VIEWER";
+}
+
+export function isRoleScopedManager(user: UserLike) {
+  return isManager(user) && getFunctionalRole(user) != "PROJECT_MANAGER";
 }
 
 export function canComprehensivelyModerateProject(user: UserLike) {
-  return isAdmin(user) || isManager(user);
+  return isAdmin(user) || (isManager(user) && !isRoleScopedManager(user));
 }
 
 export function canFullyModerateProject(user: UserLike) {

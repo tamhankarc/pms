@@ -69,6 +69,10 @@ export default async function EditTimeEntryPage({
               <div className="mt-1 text-sm text-slate-900">{entry.status}</div>
             </div>
             <div>
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Task name</div>
+              <div className="mt-1 text-sm text-slate-900">{entry.taskName}</div>
+            </div>
+            <div>
               <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Current time</div>
               <div className="mt-1 text-sm text-slate-900">{entry.minutesSpent} minutes</div>
             </div>
@@ -99,6 +103,11 @@ export default async function EditTimeEntryPage({
               defaultValue={new Date(entry.workDate).toISOString().slice(0, 10)}
               required
             />
+          </div>
+
+          <div>
+            <label className="label">Task name <span className="text-red-600">*</span></label>
+            <input className="input" name="taskName" defaultValue={entry.taskName} required />
           </div>
 
           <div>

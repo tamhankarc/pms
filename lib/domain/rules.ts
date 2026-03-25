@@ -4,16 +4,16 @@ export function assertProjectHasAtLeastOneCountry(countryIds: string[]) {
   }
 }
 
-export function assertEmployeeHasAtLeastOneTeamLead(teamLeadIds: string[]) {
-  if (!Array.isArray(teamLeadIds) || teamLeadIds.length < 1) {
-    throw new Error("An employee must be assigned to at least one Team Lead.");
+export function assertEmployeeHasAtLeastOneSupervisor(supervisorIds: string[]) {
+  if (!Array.isArray(supervisorIds) || supervisorIds.length < 1) {
+    throw new Error("An employee must be assigned to at least one Team Lead or Manager.");
   }
 }
 
 export function assertUniqueIds(ids: string[], label: string) {
   const cleaned = ids.filter(Boolean);
   const unique = new Set(cleaned);
-  if (cleaned.length !== unique.size) {
+  if (cleaned.length != unique.size) {
     throw new Error(`Duplicate ${label} values are not allowed.`);
   }
 }

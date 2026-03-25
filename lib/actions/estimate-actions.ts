@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { canFullyModerateProject } from "@/lib/permissions";
+import { canFullyModerateProject, isRoleScopedManager } from "@/lib/permissions";
 
 const estimateSchema = z.object({
   projectId: z.string().min(1),
@@ -100,7 +100,7 @@ export async function reviewEstimateAction(formData: FormData) {
 
   let canReview = canFullyModerateProject(user);
 
-  if (!canReview && user.userType === "TEAM_LEAD") {
+  if (!canReview && (user.userType === "TEAM_LEAD" || isRoleScopedManager(user))) {
     const assignment = await db.employeeTeamLead.findFirst({
       where: {
         teamLeadId: user.id,
@@ -165,10 +165,6 @@ export async function updateEstimateAction(formData: FormData) {
 
   const isOwner = estimate.employeeId === user.id;
   const canOverride = canFullyModerateProject(user);
-
-  if (!isOwner && !canOverride) {
-    throw new Error("You are not allowed to update this estimate.");
-  }
 
   if (!isOwner && !canOverride) {
     throw new Error("You are not allowed to update this estimate.");

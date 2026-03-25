@@ -39,13 +39,14 @@ export default async function UsersPage({
   const userType = toUserTypeFilter(params.userType);
   const showCreate = params.create === "1";
 
-  const [users, teamLeads, groups] = await Promise.all([
+  const [users, supervisorRows, groups] = await Promise.all([
     db.user.findMany({
       where: {
         ...(q
           ? {
               OR: [
                 { fullName: { contains: q } },
+                { username: { contains: q } },
                 { email: { contains: q } },
                 { designation: { contains: q } },
                 { employeeCode: { contains: q } },
@@ -63,9 +64,18 @@ export default async function UsersPage({
       orderBy: { createdAt: "desc" },
     }),
     db.user.findMany({
-      where: { userType: "TEAM_LEAD", isActive: true },
-      orderBy: { fullName: "asc" },
-      select: { id: true, fullName: true, email: true },
+      where: {
+        isActive: true,
+        userType: { in: ["TEAM_LEAD", "MANAGER"] },
+      },
+      orderBy: [{ userType: "asc" }, { fullName: "asc" }],
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        userType: true,
+        functionalRole: true,
+      },
     }),
     db.employeeGroup.findMany({
       where: { isActive: true },
@@ -74,11 +84,24 @@ export default async function UsersPage({
     }),
   ]);
 
+  const supervisors = supervisorRows
+    .filter(
+      (person): person is typeof person & { userType: "TEAM_LEAD" | "MANAGER" } =>
+        person.userType === "TEAM_LEAD" || person.userType === "MANAGER",
+    )
+    .map((person) => ({
+      id: person.id,
+      fullName: person.fullName,
+      email: person.email,
+      userType: person.userType,
+      functionalRole: person.functionalRole,
+    }));
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Users"
-        description="Create and manage users, roles, employee groups, Team Lead assignment, employee code, designation, joining date, and active status."
+        description="Create and manage users, roles, employee groups, supervisor assignment, employee code, designation, joining date, and active status."
         actions={
           canManageUsers(currentUser) ? (
             <Link className="btn-primary" href="/users?create=1">
@@ -90,7 +113,12 @@ export default async function UsersPage({
 
       <div className="card p-4">
         <form className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]" method="get">
-          <input className="input" name="q" defaultValue={q} placeholder="Search by name, email, designation, or employee code" />
+          <input
+            className="input"
+            name="q"
+            defaultValue={q}
+            placeholder="Search by name, username, email, designation, or employee code"
+          />
           <select className="input" name="status" defaultValue={status}>
             <option value="all">All statuses</option>
             <option value="active">Active only</option>
@@ -104,12 +132,19 @@ export default async function UsersPage({
             <option value="ADMIN">Admin</option>
             <option value="REPORT_VIEWER">Report Viewer</option>
           </select>
-          <button className="btn-secondary" type="submit">Apply</button>
+          <button className="btn-secondary" type="submit">
+            Apply
+          </button>
         </form>
       </div>
 
       {showCreate && canManageUsers(currentUser) ? (
-        <UserManageForm mode="create" teamLeads={teamLeads} groups={groups} action={createUserAction} />
+        <UserManageForm
+          mode="create"
+          supervisors={supervisors}
+          groups={groups}
+          action={createUserAction}
+        />
       ) : null}
 
       <div className="table-wrap">
@@ -122,7 +157,7 @@ export default async function UsersPage({
               <th className="table-cell">Employee code</th>
               <th className="table-cell">Designation</th>
               <th className="table-cell">Joining date</th>
-              <th className="table-cell">Groups / Team Leads</th>
+              <th className="table-cell">Groups / Supervisors</th>
               <th className="table-cell">Status</th>
               <th className="table-cell">Action</th>
             </tr>
@@ -132,20 +167,28 @@ export default async function UsersPage({
               <tr key={user.id}>
                 <td className="table-cell">
                   <div className="font-medium text-slate-900">{user.fullName}</div>
+                  <div className="text-xs text-slate-500">{user.username}</div>
                   <div className="text-xs text-slate-500">{user.email}</div>
                 </td>
                 <td className="table-cell">{user.userType.replaceAll("_", " ")}</td>
-                <td className="table-cell">{(user.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}</td>
+                <td className="table-cell">
+                  {(user.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}
+                </td>
                 <td className="table-cell">{user.employeeCode || "—"}</td>
                 <td className="table-cell">{user.designation || "—"}</td>
-                <td className="table-cell">{user.joiningDate ? new Date(user.joiningDate).toLocaleDateString() : "—"}</td>
+                <td className="table-cell">
+                  {user.joiningDate ? new Date(user.joiningDate).toLocaleDateString() : "—"}
+                </td>
                 <td className="table-cell">
                   <div className="text-xs text-slate-600">
                     Groups: {user.employeeGroups.map((g) => g.employeeGroup.name).join(", ") || "—"}
                   </div>
                   {user.userType === "EMPLOYEE" ? (
                     <div className="mt-1 text-xs text-slate-600">
-                      Leads: {user.teamLeadAssignmentsAsEmployee.map((t) => t.teamLead.fullName).join(", ") || "—"}
+                      Supervisors:{" "}
+                      {user.teamLeadAssignmentsAsEmployee
+                        .map((t) => `${t.teamLead.fullName} (${t.teamLead.userType.replaceAll("_", " ")})`)
+                        .join(", ") || "—"}
                     </div>
                   ) : null}
                 </td>
