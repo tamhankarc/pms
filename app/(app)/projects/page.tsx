@@ -1,0 +1,131 @@
+import Link from "next/link";
+import { PageHeader } from "@/components/ui/page-header";
+import { requireUser } from "@/lib/auth";
+import { getVisibleProjects } from "@/lib/queries";
+import { canCreateProjects } from "@/lib/permissions";
+import { toggleProjectStatusAction } from "@/lib/actions/project-actions";
+
+export default async function ProjectsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ q?: string; status?: string; billingModel?: string }>;
+}) {
+  const user = await requireUser();
+  const params = (await searchParams) ?? {};
+  const q = params.q?.trim().toLowerCase() ?? "";
+  const status = params.status ?? "all";
+  const billingModel = params.billingModel ?? "all";
+
+  const allProjects = await getVisibleProjects(user);
+  const projects = allProjects.filter((project) => {
+    const matchesQ =
+      !q ||
+      project.name.toLowerCase().includes(q) ||
+      (project.code ?? "").toLowerCase().includes(q) ||
+      project.client.name.toLowerCase().includes(q) ||
+      (project.movie?.title ?? "").toLowerCase().includes(q);
+
+    const matchesStatus = status === "all" ? true : project.status === status;
+    const matchesBilling = billingModel === "all" ? true : project.billingModel === billingModel;
+    return matchesQ && matchesStatus && matchesBilling;
+  });
+
+  return (
+    <div>
+      <PageHeader
+        title="Projects"
+        description="Project records hold billing model, client, optional movie, countries, employee-group visibility, and commercial tracking."
+        actions={
+          canCreateProjects(user) ? (
+            <Link className="btn-primary" href="/projects/new">
+              Create project
+            </Link>
+          ) : null
+        }
+      />
+
+      <div className="mb-6 card p-4">
+        <form className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]" method="get">
+          <input className="input" name="q" defaultValue={q} placeholder="Search by project, code, client, or movie" />
+          <select className="input" name="status" defaultValue={status}>
+            <option value="all">All statuses</option>
+            <option value="DRAFT">Draft</option>
+            <option value="ACTIVE">Active</option>
+            <option value="ON_HOLD">On Hold</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="ARCHIVED">Archived</option>
+          </select>
+          <select className="input" name="billingModel" defaultValue={billingModel}>
+            <option value="all">All billing models</option>
+            <option value="HOURLY">Hourly</option>
+            <option value="FIXED_FULL">Fixed - Full Project</option>
+            <option value="FIXED_MONTHLY">Fixed - Monthly</option>
+          </select>
+          <button className="btn-secondary" type="submit">Apply</button>
+        </form>
+      </div>
+
+      <div className="table-wrap">
+        <table className="table-base">
+          <thead className="table-head">
+            <tr>
+              <th className="table-cell">Project</th>
+              <th className="table-cell">Client</th>
+              <th className="table-cell">Movie</th>
+              <th className="table-cell">Billing</th>
+              <th className="table-cell">Groups</th>
+              <th className="table-cell">Status</th>
+              <th className="table-cell">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {projects.map((project) => (
+              <tr key={project.id}>
+                <td className="table-cell">
+                  <div className="font-medium text-slate-900">{project.name}</div>
+                  <div className="text-xs text-slate-500">{project.code ?? "—"}</div>
+                </td>
+                <td className="table-cell">{project.client.name}</td>
+                <td className="table-cell">{project.movie?.title ?? "—"}</td>
+                <td className="table-cell">{project.billingModel.replaceAll("_", " ")}</td>
+                <td className="table-cell">
+                  {project.employeeGroups.map((g) => g.employeeGroup.name).join(", ") || "—"}
+                </td>
+                <td className="table-cell">
+                  <span className="badge-blue">{project.status.replaceAll("_", " ")}</span>
+                </td>
+                <td className="table-cell">
+                  <div className="flex gap-2">
+                    <Link className="btn-secondary text-xs" href={`/projects/${project.id}`}>
+                      View
+                    </Link>
+                    {canCreateProjects(user) ? (
+                      <>
+                        <Link className="btn-secondary text-xs" href={`/projects/${project.id}/edit`}>
+                          Edit
+                        </Link>
+                        <form action={toggleProjectStatusAction}>
+                          <input type="hidden" name="projectId" value={project.id} />
+                          <button className="btn-secondary text-xs">
+                            {project.isActive ? "Deactivate" : "Activate"}
+                          </button>
+                        </form>
+                      </>
+                    ) : null}
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {projects.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="table-cell text-center text-sm text-slate-500">
+                  No projects found.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
