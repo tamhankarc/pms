@@ -6,6 +6,27 @@ import { UserManageForm } from "@/components/forms/user-manage-form";
 import { createUserAction, toggleUserStatusAction } from "@/lib/actions/user-actions";
 import { db } from "@/lib/db";
 
+type UserTypeFilter =
+  | "all"
+  | "EMPLOYEE"
+  | "TEAM_LEAD"
+  | "MANAGER"
+  | "ADMIN"
+  | "REPORT_VIEWER";
+
+function toUserTypeFilter(value: string | undefined): UserTypeFilter {
+  switch (value) {
+    case "EMPLOYEE":
+    case "TEAM_LEAD":
+    case "MANAGER":
+    case "ADMIN":
+    case "REPORT_VIEWER":
+      return value;
+    default:
+      return "all";
+  }
+}
+
 export default async function UsersPage({
   searchParams,
 }: {
@@ -15,7 +36,7 @@ export default async function UsersPage({
   const params = (await searchParams) ?? {};
   const q = params.q?.trim() ?? "";
   const status = params.status ?? "all";
-  const userType = params.userType ?? "all";
+  const userType = toUserTypeFilter(params.userType);
   const showCreate = params.create === "1";
 
   const [users, teamLeads, groups] = await Promise.all([
@@ -33,7 +54,7 @@ export default async function UsersPage({
           : {}),
         ...(status === "active" ? { isActive: true } : {}),
         ...(status === "inactive" ? { isActive: false } : {}),
-        ...(userType !== "all" ? { userType: userType as any } : {}),
+        ...(userType !== "all" ? { userType } : {}),
       },
       include: {
         employeeGroups: { include: { employeeGroup: true } },

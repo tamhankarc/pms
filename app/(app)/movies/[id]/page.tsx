@@ -31,7 +31,7 @@ export default async function MovieEditPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Edit movie · ${movie.title}`}
+        title={`Edit movie Â· ${movie.title}`}
         description="Update movie details and client association."
         actions={<Link href="/movies" className="btn-secondary">Back to movies</Link>}
       />
