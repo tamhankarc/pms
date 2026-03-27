@@ -12,7 +12,8 @@ type UserTypeFilter =
   | "TEAM_LEAD"
   | "MANAGER"
   | "ADMIN"
-  | "REPORT_VIEWER";
+  | "REPORT_VIEWER"
+  | "ACCOUNTS";
 
 function toUserTypeFilter(value: string | undefined): UserTypeFilter {
   switch (value) {
@@ -21,6 +22,7 @@ function toUserTypeFilter(value: string | undefined): UserTypeFilter {
     case "MANAGER":
     case "ADMIN":
     case "REPORT_VIEWER":
+    case "ACCOUNTS":
       return value;
     default:
       return "all";
@@ -131,6 +133,7 @@ export default async function UsersPage({
             <option value="MANAGER">Manager</option>
             <option value="ADMIN">Admin</option>
             <option value="REPORT_VIEWER">Report Viewer</option>
+            <option value="ACCOUNTS">Accounts</option>
           </select>
           <button className="btn-secondary" type="submit">
             Apply
@@ -180,17 +183,27 @@ export default async function UsersPage({
                   {user.joiningDate ? new Date(user.joiningDate).toLocaleDateString() : "—"}
                 </td>
                 <td className="table-cell">
-                  <div className="text-xs text-slate-600">
-                    Groups: {user.employeeGroups.map((g) => g.employeeGroup.name).join(", ") || "—"}
-                  </div>
                   {user.userType === "EMPLOYEE" ? (
-                    <div className="mt-1 text-xs text-slate-600">
-                      Supervisors:{" "}
-                      {user.teamLeadAssignmentsAsEmployee
-                        .map((t) => `${t.teamLead.fullName} (${t.teamLead.userType.replaceAll("_", " ")})`)
-                        .join(", ") || "—"}
+                    <>
+                      <div className="text-xs text-slate-600">
+                        Groups: {user.employeeGroups.map((g) => g.employeeGroup.name).join(", ") || "—"}
+                      </div>
+                      <div className="mt-1 text-xs text-slate-600">
+                        Supervisors:{" "}
+                        {user.teamLeadAssignmentsAsEmployee
+                          .map((t) => `${t.teamLead.fullName} (${t.teamLead.userType.replaceAll("_", " ")})`)
+                          .join(", ") || "—"}
+                      </div>
+                    </>
+                  ) : user.userType === "TEAM_LEAD" ? (
+                    <div className="text-xs text-slate-600">
+                      Groups: {user.employeeGroups.map((g) => g.employeeGroup.name).join(", ") || "—"}
                     </div>
-                  ) : null}
+                  ) : user.userType === "ACCOUNTS" ? (
+                    <div className="text-xs text-slate-600">No groups or supervisors</div>
+                  ) : (
+                    <div className="text-xs text-slate-600">—</div>
+                  )}
                 </td>
                 <td className="table-cell">
                   <span className={user.isActive ? "badge-emerald" : "badge-slate"}>

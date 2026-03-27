@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { FormLabel } from "@/components/ui/form-label";
 
-const functionalRoles = [
+const operationalFunctionalRoles = [
   "DEVELOPER",
   "QA",
   "DESIGNER",
@@ -19,7 +19,12 @@ const userTypes = [
   "MANAGER",
   "ADMIN",
   "REPORT_VIEWER",
+  "ACCOUNTS",
 ] as const;
+
+type FunctionalRole =
+  | (typeof operationalFunctionalRoles)[number]
+  | "BILLING";
 
 export function UserCreateForm({
   teamLeads,
@@ -29,6 +34,24 @@ export function UserCreateForm({
   action: (formData: FormData) => Promise<void>;
 }) {
   const [userType, setUserType] = useState<(typeof userTypes)[number]>("EMPLOYEE");
+  const [functionalRole, setFunctionalRole] = useState<FunctionalRole>("DEVELOPER");
+
+  const availableFunctionalRoles = userType === "ACCOUNTS"
+    ? (["BILLING"] as const)
+    : operationalFunctionalRoles;
+
+  const showSupervisors = userType === "EMPLOYEE";
+
+  const supervisorOptions = useMemo(() => teamLeads, [teamLeads]);
+
+  function handleUserTypeChange(nextUserType: (typeof userTypes)[number]) {
+    setUserType(nextUserType);
+    if (nextUserType === "ACCOUNTS") {
+      setFunctionalRole("BILLING");
+    } else if (functionalRole === "BILLING") {
+      setFunctionalRole("DEVELOPER");
+    }
+  }
 
   return (
     <form action={action} className="card p-6">
@@ -65,7 +88,7 @@ export function UserCreateForm({
             className="input"
             name="userType"
             value={userType}
-            onChange={(e) => setUserType(e.target.value as (typeof userTypes)[number])}
+            onChange={(e) => handleUserTypeChange(e.target.value as (typeof userTypes)[number])}
           >
             {userTypes.map((type) => (
               <option key={type} value={type}>
@@ -77,8 +100,14 @@ export function UserCreateForm({
 
         <div>
           <FormLabel htmlFor="functionalRole" required>Functional role</FormLabel>
-          <select id="functionalRole" className="input" name="functionalRole" defaultValue="DEVELOPER">
-            {functionalRoles.map((role) => (
+          <select
+            id="functionalRole"
+            className="input"
+            name="functionalRole"
+            value={functionalRole}
+            onChange={(e) => setFunctionalRole(e.target.value as FunctionalRole)}
+          >
+            {availableFunctionalRoles.map((role) => (
               <option key={role} value={role}>
                 {role.replaceAll("_", " ")}
               </option>
@@ -91,19 +120,25 @@ export function UserCreateForm({
           <input id="phoneNumber" className="input" name="phoneNumber" />
         </div>
 
-        {userType === "EMPLOYEE" ? (
+        {showSupervisors ? (
           <div>
-            <FormLabel htmlFor="teamLeadIds" required>Assign Team Lead(s)</FormLabel>
+            <FormLabel htmlFor="teamLeadIds" required>Assign Supervisor(s)</FormLabel>
             <select id="teamLeadIds" className="input min-h-36" name="teamLeadIds" multiple required>
-              {teamLeads.map((lead) => (
+              {supervisorOptions.map((lead) => (
                 <option key={lead.id} value={lead.id}>
                   {lead.fullName} ({lead.email})
                 </option>
               ))}
             </select>
             <p className="mt-2 text-xs text-slate-500">
-              Hold Ctrl/Cmd to select multiple Team Leads.
+              Hold Ctrl/Cmd to select multiple supervisors.
             </p>
+          </div>
+        ) : null}
+
+        {userType === "ACCOUNTS" ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Accounts users are not assigned to groups or supervisors and will access only the billing dashboard.
           </div>
         ) : null}
 

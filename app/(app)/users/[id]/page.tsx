@@ -79,7 +79,15 @@ export default async function UserEditPage({
           username: user.username,
           email: user.email,
           userType: user.userType,
-          functionalRole: user.functionalRole ?? "OTHER",
+          functionalRole: (user.functionalRole ?? "OTHER") as
+            | "DEVELOPER"
+            | "QA"
+            | "DESIGNER"
+            | "LOCALIZATION"
+            | "DEVOPS"
+            | "PROJECT_MANAGER"
+            | "BILLING"
+            | "OTHER",
           employeeCode: user.employeeCode,
           designation: user.designation,
           joiningDate: user.joiningDate

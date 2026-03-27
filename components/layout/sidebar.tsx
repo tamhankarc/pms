@@ -50,13 +50,19 @@ const employeeItems = [
   { href: "/profile", label: "My Profile", icon: UserCog }
 ];
 
+const accountsItems = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+];
+
 export function Sidebar({ user }: { user: SessionUser }) {
   const items =
     user.userType === "EMPLOYEE"
       ? employeeItems
       : user.userType === "TEAM_LEAD"
         ? teamLeadItems
-        : fullItems.filter((item) => item.access !== "countries" || canManageCountries(user));
+        : user.userType === "ACCOUNTS"
+          ? accountsItems
+          : fullItems.filter((item) => item.access !== "countries" || canManageCountries(user));
 
   return (
     <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-slate-950 text-slate-100 lg:block">

@@ -4,7 +4,7 @@ import { useActionState, useMemo, useState } from "react";
 import { FormLabel } from "@/components/ui/form-label";
 import type { UserFormState } from "@/lib/actions/user-actions";
 
-const functionalRoles = [
+const operationalFunctionalRoles = [
   "DEVELOPER",
   "QA",
   "DESIGNER",
@@ -20,14 +20,19 @@ const userTypes = [
   "MANAGER",
   "ADMIN",
   "REPORT_VIEWER",
+  "ACCOUNTS",
 ] as const;
+
+type FunctionalRole =
+  | (typeof operationalFunctionalRoles)[number]
+  | "BILLING";
 
 type SupervisorOption = {
   id: string;
   fullName: string;
   email: string;
   userType: "TEAM_LEAD" | "MANAGER";
-  functionalRole: typeof functionalRoles[number] | null;
+  functionalRole: FunctionalRole | null;
 };
 
 type UserManageFormProps = {
@@ -40,8 +45,8 @@ type UserManageFormProps = {
     fullName?: string;
     username?: string;
     email?: string;
-    userType?: typeof userTypes[number];
-    functionalRole?: typeof functionalRoles[number];
+    userType?: (typeof userTypes)[number];
+    functionalRole?: FunctionalRole;
     employeeCode?: string | null;
     designation?: string | null;
     joiningDate?: string | null;
@@ -62,8 +67,8 @@ export function UserManageForm({
   initialValues,
 }: UserManageFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
-  const [userType, setUserType] = useState<typeof userTypes[number]>(initialValues?.userType ?? "EMPLOYEE");
-  const [functionalRole, setFunctionalRole] = useState<typeof functionalRoles[number]>(initialValues?.functionalRole ?? "DEVELOPER");
+  const [userType, setUserType] = useState<(typeof userTypes)[number]>(initialValues?.userType ?? "EMPLOYEE");
+  const [functionalRole, setFunctionalRole] = useState<FunctionalRole>(initialValues?.functionalRole ?? "DEVELOPER");
 
   const canHaveGroups = useMemo(
     () => userType === "EMPLOYEE" || userType === "TEAM_LEAD",
@@ -71,6 +76,10 @@ export function UserManageForm({
   );
 
   const canHaveSupervisors = userType === "EMPLOYEE";
+
+  const availableFunctionalRoles = userType === "ACCOUNTS"
+    ? (["BILLING"] as const)
+    : operationalFunctionalRoles;
 
   const filteredSupervisors = useMemo(
     () =>
@@ -81,6 +90,15 @@ export function UserManageForm({
       ),
     [supervisors, functionalRole],
   );
+
+  function handleUserTypeChange(nextUserType: (typeof userTypes)[number]) {
+    setUserType(nextUserType);
+    if (nextUserType === "ACCOUNTS") {
+      setFunctionalRole("BILLING");
+    } else if (functionalRole === "BILLING") {
+      setFunctionalRole("DEVELOPER");
+    }
+  }
 
   return (
     <form action={formAction} className="card p-6">
@@ -133,7 +151,7 @@ export function UserManageForm({
             className="input"
             name="userType"
             value={userType}
-            onChange={(e) => setUserType(e.target.value as typeof userTypes[number])}
+            onChange={(e) => handleUserTypeChange(e.target.value as (typeof userTypes)[number])}
             required
           >
             {userTypes.map((type) => (
@@ -149,13 +167,16 @@ export function UserManageForm({
             className="input"
             name="functionalRole"
             value={functionalRole}
-            onChange={(e) => setFunctionalRole(e.target.value as typeof functionalRoles[number])}
+            onChange={(e) => setFunctionalRole(e.target.value as FunctionalRole)}
             required
           >
-            {functionalRoles.map((role) => (
+            {availableFunctionalRoles.map((role) => (
               <option key={role} value={role}>{role.replaceAll("_", " ")}</option>
             ))}
           </select>
+          {userType === "ACCOUNTS" ? (
+            <p className="mt-1 text-xs text-slate-500">Accounts users must use the Billing functional role.</p>
+          ) : null}
         </div>
 
         <div>
@@ -208,6 +229,12 @@ export function UserManageForm({
             <p className="mt-2 text-xs text-slate-500">
               Employees must have at least one assigned Team Lead or a Manager with the same functional role. Hold Ctrl/Cmd to select multiple supervisors.
             </p>
+          </div>
+        ) : null}
+
+        {userType === "ACCOUNTS" ? (
+          <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Accounts users are not assigned to employee groups or supervisors. They will only see the billing dashboard and can change their own password.
           </div>
         ) : null}
 

@@ -9,6 +9,9 @@ const EMPLOYEE_ALLOWED_PATHS = [
   "/estimates",
   "/profile",
 ];
+const ACCOUNTS_ALLOWED_PATHS = [
+  "/dashboard",
+];
 const TEAM_LEAD_BLOCKED_PATHS = [
   "/users",
   "/team-lead-assignments",
@@ -58,6 +61,13 @@ export async function middleware(request: NextRequest) {
 
   if (session?.userType === "EMPLOYEE") {
     const allowed = EMPLOYEE_ALLOWED_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+    if (!allowed) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+  }
+
+  if (session?.userType === "ACCOUNTS") {
+    const allowed = ACCOUNTS_ALLOWED_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
     if (!allowed) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }

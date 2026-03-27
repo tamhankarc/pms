@@ -47,6 +47,10 @@ export function isReportViewer(user: UserLike) {
   return getUserType(user) === "REPORT_VIEWER";
 }
 
+export function isAccounts(user: UserLike) {
+  return getUserType(user) === "ACCOUNTS";
+}
+
 export function isRoleScopedManager(user: UserLike) {
   return isManager(user) && getFunctionalRole(user) !== "PROJECT_MANAGER";
 }
@@ -81,4 +85,12 @@ export function canSeeAllProjects(user: UserLike) {
 
 export function canManageCountries(user: UserLike) {
   return isAdmin(user) || (isManager(user) && getFunctionalRole(user) === "PROJECT_MANAGER");
+}
+
+export function canSeeBillingDashboard(user: UserLike) {
+  return (
+    isAdmin(user) ||
+    (isManager(user) && getFunctionalRole(user) === "PROJECT_MANAGER") ||
+    (isAccounts(user) && getFunctionalRole(user) === "BILLING")
+  );
 }

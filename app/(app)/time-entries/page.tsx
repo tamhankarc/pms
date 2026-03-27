@@ -109,7 +109,7 @@ export default async function TimeEntriesPage() {
 
               <div>
                 <label className="label">Minutes spent <span className="text-red-600">*</span></label>
-                <input className="input" type="number" name="minutesSpent" min="15" step="15" required />
+                <input className="input" type="number" name="minutesSpent" min="5" required />
               </div>
 
               <div>

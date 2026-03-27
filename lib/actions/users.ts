@@ -15,6 +15,7 @@ type FunctionalRole =
   | "LOCALIZATION"
   | "DEVOPS"
   | "PROJECT_MANAGER"
+  | "BILLING"
   | "OTHER";
 
 type CreateEmployeeInput = {

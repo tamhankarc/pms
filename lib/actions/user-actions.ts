@@ -9,7 +9,7 @@ import {
   assertUniqueIds,
 } from "@/lib/domain/rules";
 
-const functionalRoles = [
+const operationalRoles = [
   "DEVELOPER",
   "QA",
   "DESIGNER",
@@ -19,13 +19,21 @@ const functionalRoles = [
   "OTHER",
 ] as const;
 
+const functionalRoles = [
+  ...operationalRoles,
+  "BILLING",
+] as const;
+
 const userTypes = [
   "ADMIN",
   "MANAGER",
   "TEAM_LEAD",
   "EMPLOYEE",
   "REPORT_VIEWER",
+  "ACCOUNTS",
 ] as const;
+
+type FunctionalRole = (typeof functionalRoles)[number];
 
 export type UserFormState = {
   success?: boolean;
@@ -58,7 +66,16 @@ function normalizeGroupIds(userType: typeof userTypes[number], groupIds: string[
   return [];
 }
 
-async function validateSupervisors(supervisorIds: string[], employeeFunctionalRole: (typeof functionalRoles)[number]) {
+function validateUserTypeRoleCombination(userType: typeof userTypes[number], functionalRole: FunctionalRole) {
+  if (userType === "ACCOUNTS" && functionalRole !== "BILLING") {
+    throw new Error("Accounts users must use the Billing functional role.");
+  }
+  if (userType !== "ACCOUNTS" && functionalRole === "BILLING") {
+    throw new Error("The Billing functional role can only be used with the Accounts user type.");
+  }
+}
+
+async function validateSupervisors(supervisorIds: string[], employeeFunctionalRole: FunctionalRole) {
   if (supervisorIds.length === 0) return false;
 
   const supervisors = await db.user.findMany({
@@ -111,6 +128,8 @@ export async function createUserAction(
     if (actor.userType !== "ADMIN" && (parsed.data.userType === "MANAGER" || parsed.data.userType === "ADMIN")) {
       return { success: false, error: "Only Admin can create Manager or Admin users." };
     }
+
+    validateUserTypeRoleCombination(parsed.data.userType, parsed.data.functionalRole);
 
     const supervisorIds = parsed.data.userType === "EMPLOYEE"
       ? formData.getAll("supervisorIds").map(String).filter(Boolean)
@@ -206,6 +225,8 @@ export async function updateUserAction(
     if (actor.userType !== "ADMIN" && (parsed.data.userType === "MANAGER" || parsed.data.userType === "ADMIN")) {
       return { success: false, error: "Only Admin can assign Manager or Admin user type." };
     }
+
+    validateUserTypeRoleCombination(parsed.data.userType, parsed.data.functionalRole);
 
     const supervisorIds = parsed.data.userType === "EMPLOYEE"
       ? formData.getAll("supervisorIds").map(String).filter(Boolean)

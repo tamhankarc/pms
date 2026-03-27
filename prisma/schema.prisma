@@ -13,6 +13,7 @@ enum UserType {
   TEAM_LEAD
   EMPLOYEE
   REPORT_VIEWER
+  ACCOUNTS
 }
 
 enum FunctionalRoleCode {
@@ -22,6 +23,7 @@ enum FunctionalRoleCode {
   LOCALIZATION
   DEVOPS
   PROJECT_MANAGER
+  BILLING
   OTHER
 }
 

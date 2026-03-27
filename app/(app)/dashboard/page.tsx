@@ -1,23 +1,126 @@
 import { FolderKanban, Hourglass, ClipboardList, TimerReset } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
+import { ChangePasswordForm } from "@/components/forms/change-password-form";
 import { requireUser } from "@/lib/auth";
-import { getDashboardStats, getManagedEmployees, getVisibleProjects } from "@/lib/queries";
+import {
+  getBillingDashboardData,
+  getDashboardStats,
+  getManagedEmployees,
+  getVisibleProjects,
+} from "@/lib/queries";
 import { formatMinutes } from "@/lib/utils";
+import { canSeeBillingDashboard } from "@/lib/permissions";
+import type { BillingModel } from "@prisma/client";
 
-export default async function DashboardPage() {
+function getCurrentMonthValue() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{
+    billingMonth?: string;
+    billingProjectId?: string;
+    billingModel?: string;
+  }>;
+}) {
   const user = await requireUser();
-
-  const [stats, projects, managedEmployees] = await Promise.all([
-    getDashboardStats(user),
-    getVisibleProjects(user),
-    user.userType === "TEAM_LEAD"
-      ? getManagedEmployees(user.id)
-      : Promise.resolve([]),
-  ]);
+  const params = (await searchParams) ?? {};
+  const billingMonth = params.billingMonth && /^\d{4}-\d{2}$/.test(params.billingMonth)
+    ? params.billingMonth
+    : getCurrentMonthValue();
+  const billingProjectId = params.billingProjectId ?? "";
+  const billingModel = (params.billingModel ?? "") as BillingModel | "";
 
   const isEmployee = user.userType === "EMPLOYEE";
   const isTeamLead = user.userType === "TEAM_LEAD";
+  const isAccountsBilling = user.userType === "ACCOUNTS" && user.functionalRole === "BILLING";
+  const showBillingDashboard = canSeeBillingDashboard(user);
+
+  const [stats, projects, managedEmployees, billingData] = await Promise.all([
+    isAccountsBilling ? Promise.resolve(null) : getDashboardStats(user),
+    isAccountsBilling ? Promise.resolve([]) : getVisibleProjects(user),
+    user.userType === "TEAM_LEAD"
+      ? getManagedEmployees(user.id)
+      : Promise.resolve([]),
+    showBillingDashboard
+      ? getBillingDashboardData(user, billingMonth, billingProjectId || undefined, billingModel)
+      : Promise.resolve({ rows: [], projectOptions: [] }),
+  ]);
+
+  if (isAccountsBilling) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Dashboard"
+          description="Billing dashboard showing project hours by selected month."
+        />
+
+        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+          <section className="card p-6">
+            <h2 className="section-title">Project billing hours</h2>
+            <p className="section-subtitle">
+              Filter by project, billing type, and month to review hours worked across projects.
+            </p>
+
+            <form className="mt-5 grid gap-3 md:grid-cols-[220px_1fr_220px_auto]" method="get">
+              <input className="input" type="month" name="billingMonth" defaultValue={billingMonth} />
+              <select className="input" name="billingProjectId" defaultValue={billingProjectId}>
+                <option value="">All projects</option>
+                {billingData.projectOptions.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+              <select className="input" name="billingModel" defaultValue={billingModel}>
+                <option value="">All billing types</option>
+                <option value="HOURLY">Hourly</option>
+                <option value="FIXED_FULL">Fixed - Full Project</option>
+                <option value="FIXED_MONTHLY">Fixed - Monthly</option>
+              </select>
+              <button className="btn-secondary" type="submit">Apply</button>
+            </form>
+
+            <div className="mt-5 overflow-x-auto">
+              <table className="table-base">
+                <thead className="table-head">
+                  <tr>
+                    <th className="table-cell">Project name</th>
+                    <th className="table-cell">Billing type</th>
+                    <th className="table-cell">Hours worked</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {billingData.rows.map((row) => (
+                    <tr key={row.projectId}>
+                      <td className="table-cell">{row.projectName}</td>
+                      <td className="table-cell">{row.billingModel.replaceAll("_", " ")}</td>
+                      <td className="table-cell">{row.workedHours}</td>
+                    </tr>
+                  ))}
+                  {billingData.rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="table-cell text-center text-sm text-slate-500">
+                        No projects found for the selected filters.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <ChangePasswordForm />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -30,22 +133,22 @@ export default async function DashboardPage() {
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Visible projects"
-            value={String(stats.projects)}
+            value={String(stats?.projects ?? 0)}
             icon={<FolderKanban className="h-5 w-5" />}
           />
           <StatCard
             label="Approved effort"
-            value={formatMinutes(stats.approvedMinutes)}
+            value={formatMinutes(stats?.approvedMinutes ?? 0)}
             icon={<Hourglass className="h-5 w-5" />}
           />
           <StatCard
             label="Approved billable effort"
-            value={formatMinutes(stats.approvedBillableMinutes)}
+            value={formatMinutes(stats?.approvedBillableMinutes ?? 0)}
             icon={<TimerReset className="h-5 w-5" />}
           />
           <StatCard
             label="Pending time entries"
-            value={String(stats.pendingEntries)}
+            value={String(stats?.pendingEntries ?? 0)}
             icon={<ClipboardList className="h-5 w-5" />}
           />
         </div>
@@ -136,6 +239,62 @@ export default async function DashboardPage() {
           )}
         </section>
       </div>
+
+      {showBillingDashboard ? (
+        <section className="mt-8 card p-6">
+          <h2 className="section-title">Project billing hours</h2>
+          <p className="section-subtitle">
+            Review project-level hours worked by month. This section is available to Admins, Project Managers, and Billing Accounts.
+          </p>
+
+          <form className="mt-5 grid gap-3 md:grid-cols-[220px_1fr_220px_auto]" method="get">
+            <input className="input" type="month" name="billingMonth" defaultValue={billingMonth} />
+            <select className="input" name="billingProjectId" defaultValue={billingProjectId}>
+              <option value="">All projects</option>
+              {billingData.projectOptions.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+            <select className="input" name="billingModel" defaultValue={billingModel}>
+              <option value="">All billing types</option>
+              <option value="HOURLY">Hourly</option>
+              <option value="FIXED_FULL">Fixed - Full Project</option>
+              <option value="FIXED_MONTHLY">Fixed - Monthly</option>
+            </select>
+            <button className="btn-secondary" type="submit">Apply</button>
+          </form>
+
+          <div className="mt-5 overflow-x-auto">
+            <table className="table-base">
+              <thead className="table-head">
+                <tr>
+                  <th className="table-cell">Project name</th>
+                  <th className="table-cell">Billing type</th>
+                  <th className="table-cell">Hours worked</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {billingData.rows.map((row) => (
+                  <tr key={row.projectId}>
+                    <td className="table-cell">{row.projectName}</td>
+                    <td className="table-cell">{row.billingModel.replaceAll("_", " ")}</td>
+                    <td className="table-cell">{row.workedHours}</td>
+                  </tr>
+                ))}
+                {billingData.rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="table-cell text-center text-sm text-slate-500">
+                      No projects found for the selected filters.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
