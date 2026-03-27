@@ -143,6 +143,7 @@ export default async function TimeEntriesPage({
             <tr>
               <th className="table-cell">Employee</th>
               <th className="table-cell">Project / Task</th>
+              <th className="table-cell">Work Date</th>
               <th className="table-cell">Time</th>
               <th className="table-cell">Status</th>
               <th className="table-cell">Action</th>
@@ -166,6 +167,9 @@ export default async function TimeEntriesPage({
                     <div className="text-xs text-slate-500">
                       {entry.countryId ? countryMap.get(entry.countryId) ?? "—" : "No specific country"}
                     </div>
+                  </td>
+                  <td className="table-cell">
+                    {new Date(entry.workDate).toLocaleDateString()}
                   </td>
                   <td className="table-cell">{formatMinutes(entry.minutesSpent)}</td>
                   <td className="table-cell">
