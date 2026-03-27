@@ -18,11 +18,18 @@ import { logoutAction } from "@/lib/actions/auth-actions";
 import type { SessionUser } from "@/lib/auth";
 import { canManageCountries } from "@/lib/permissions";
 
-const fullItems = [
+export type SidebarNavItem = {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  access?: "countries";
+};
+
+const fullItems: SidebarNavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/clients", label: "Clients", icon: Building2 },
   { href: "/movies", label: "Movies", icon: Clapperboard },
-  { href: "/countries", label: "Countries", icon: Globe2, access: "countries" as const },
+  { href: "/countries", label: "Countries", icon: Globe2, access: "countries" },
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/employee-groups", label: "Employee Groups", icon: Users },
   { href: "/users", label: "Users", icon: ShieldCheck },
@@ -34,7 +41,7 @@ const fullItems = [
   { href: "/change-password", label: "Change Password", icon: KeyRound },
 ];
 
-const teamLeadItems = [
+const teamLeadItems: SidebarNavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/clients", label: "Clients", icon: Building2 },
   { href: "/movies", label: "Movies", icon: Clapperboard },
@@ -46,7 +53,7 @@ const teamLeadItems = [
   { href: "/change-password", label: "Change Password", icon: KeyRound },
 ];
 
-const employeeItems = [
+const employeeItems: SidebarNavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/time-entries", label: "Time Entries", icon: TimerReset },
   { href: "/estimates", label: "Estimates", icon: ClipboardCheck },
@@ -54,20 +61,23 @@ const employeeItems = [
   { href: "/change-password", label: "Change Password", icon: KeyRound },
 ];
 
-const accountsItems = [
+const accountsItems: SidebarNavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/change-password", label: "Change Password", icon: KeyRound },
 ];
 
+export function getSidebarItems(user: SessionUser): SidebarNavItem[] {
+  return user.userType === "EMPLOYEE"
+    ? employeeItems
+    : user.userType === "TEAM_LEAD"
+      ? teamLeadItems
+      : user.userType === "ACCOUNTS"
+        ? accountsItems
+        : fullItems.filter((item) => item.access !== "countries" || canManageCountries(user));
+}
+
 export function Sidebar({ user }: { user: SessionUser }) {
-  const items =
-    user.userType === "EMPLOYEE"
-      ? employeeItems
-      : user.userType === "TEAM_LEAD"
-        ? teamLeadItems
-        : user.userType === "ACCOUNTS"
-          ? accountsItems
-          : fullItems.filter((item) => item.access !== "countries" || canManageCountries(user));
+  const items = getSidebarItems(user);
 
   return (
     <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-slate-950 text-slate-100 lg:block">
