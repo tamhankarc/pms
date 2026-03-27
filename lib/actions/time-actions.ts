@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { canFullyModerateProject } from "@/lib/permissions";
+import { canFullyModerateProject, isRoleScopedManager } from "@/lib/permissions";
 
 const timeSchema = z.object({
   projectId: z.string().min(1),
@@ -16,20 +16,24 @@ const timeSchema = z.object({
   notes: z.string().optional(),
 });
 
-async function userCanLogAgainstProject(userId: string, projectId: string) {
+async function userCanLogAgainstProject(user: Awaited<ReturnType<typeof requireUser>>, projectId: string) {
   const count = await db.project.count({
     where: {
       id: projectId,
       isActive: true,
-      employeeGroups: {
-        some: {
-          employeeGroup: {
-            users: {
-              some: { userId },
+      ...(isRoleScopedManager(user)
+        ? {}
+        : {
+            employeeGroups: {
+              some: {
+                employeeGroup: {
+                  users: {
+                    some: { userId: user.id },
+                  },
+                },
+              },
             },
-          },
-        },
-      },
+          }),
     },
   });
   return count > 0;
@@ -50,7 +54,11 @@ export async function createTimeEntryAction(formData: FormData) {
 
   if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || "Invalid time entry payload");
 
-  const canUseProject = await userCanLogAgainstProject(user.id, parsed.data.projectId);
+  if (!["EMPLOYEE", "TEAM_LEAD"].includes(user.userType) && !isRoleScopedManager(user)) {
+    throw new Error("You are not allowed to submit time entries.");
+  }
+
+  const canUseProject = await userCanLogAgainstProject(user, parsed.data.projectId);
   if (!canUseProject) {
     throw new Error("You can only add time entries to your assigned projects.");
   }

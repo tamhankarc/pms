@@ -1,4 +1,3 @@
-import { ChangePasswordForm } from "@/components/forms/change-password-form";
 import { ProfileForm } from "@/components/forms/profile-form";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/auth";
@@ -29,12 +28,11 @@ export default async function ProfilePage() {
     <div>
       <PageHeader
         title="My profile"
-        description="Update your contact details, address information, and password. Core employee identity fields are read-only."
+        description="Update your contact details and address information. Core employee identity fields are read-only."
       />
 
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="max-w-4xl">
         <ProfileForm user={user} />
-        <ChangePasswordForm />
       </div>
     </div>
   );

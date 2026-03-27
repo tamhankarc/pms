@@ -7,6 +7,7 @@ import {
   Clapperboard,
   FolderKanban,
   Globe2,
+  KeyRound,
   LayoutDashboard,
   ShieldCheck,
   TimerReset,
@@ -29,7 +30,8 @@ const fullItems = [
   { href: "/estimates", label: "Estimates", icon: ClipboardCheck },
   { href: "/team-lead-assignments", label: "Team Lead Assignments", icon: BriefcaseBusiness },
   { href: "/reports", label: "Reports", icon: BarChart3 },
-  { href: "/profile", label: "My Profile", icon: UserCog }
+  { href: "/profile", label: "My Profile", icon: UserCog },
+  { href: "/change-password", label: "Change Password", icon: KeyRound },
 ];
 
 const teamLeadItems = [
@@ -40,18 +42,21 @@ const teamLeadItems = [
   { href: "/employee-groups", label: "Employee Groups", icon: Users },
   { href: "/time-entries", label: "Time Entries", icon: TimerReset },
   { href: "/estimates", label: "Estimates", icon: ClipboardCheck },
-  { href: "/profile", label: "My Profile", icon: UserCog }
+  { href: "/profile", label: "My Profile", icon: UserCog },
+  { href: "/change-password", label: "Change Password", icon: KeyRound },
 ];
 
 const employeeItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/time-entries", label: "Time Entries", icon: TimerReset },
   { href: "/estimates", label: "Estimates", icon: ClipboardCheck },
-  { href: "/profile", label: "My Profile", icon: UserCog }
+  { href: "/profile", label: "My Profile", icon: UserCog },
+  { href: "/change-password", label: "Change Password", icon: KeyRound },
 ];
 
 const accountsItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/change-password", label: "Change Password", icon: KeyRound },
 ];
 
 export function Sidebar({ user }: { user: SessionUser }) {

@@ -8,9 +8,11 @@ const EMPLOYEE_ALLOWED_PATHS = [
   "/time-entries",
   "/estimates",
   "/profile",
+  "/change-password",
 ];
 const ACCOUNTS_ALLOWED_PATHS = [
   "/dashboard",
+  "/change-password",
 ];
 const TEAM_LEAD_BLOCKED_PATHS = [
   "/users",

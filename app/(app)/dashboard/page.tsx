@@ -1,7 +1,6 @@
 import { FolderKanban, Hourglass, ClipboardList, TimerReset } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
-import { ChangePasswordForm } from "@/components/forms/change-password-form";
 import { requireUser } from "@/lib/auth";
 import {
   getBillingDashboardData,
@@ -61,63 +60,59 @@ export default async function DashboardPage({
           description="Billing dashboard showing project hours by selected month."
         />
 
-        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <section className="card p-6">
-            <h2 className="section-title">Project billing hours</h2>
-            <p className="section-subtitle">
-              Filter by project, billing type, and month to review hours worked across projects.
-            </p>
+        <section className="card p-6">
+          <h2 className="section-title">Project billing hours</h2>
+          <p className="section-subtitle">
+            Filter by project, billing type, and month to review hours worked across projects.
+          </p>
 
-            <form className="mt-5 grid gap-3 md:grid-cols-[220px_1fr_220px_auto]" method="get">
-              <input className="input" type="month" name="billingMonth" defaultValue={billingMonth} />
-              <select className="input" name="billingProjectId" defaultValue={billingProjectId}>
-                <option value="">All projects</option>
-                {billingData.projectOptions.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-              <select className="input" name="billingModel" defaultValue={billingModel}>
-                <option value="">All billing types</option>
-                <option value="HOURLY">Hourly</option>
-                <option value="FIXED_FULL">Fixed - Full Project</option>
-                <option value="FIXED_MONTHLY">Fixed - Monthly</option>
-              </select>
-              <button className="btn-secondary" type="submit">Apply</button>
-            </form>
+          <form className="mt-5 grid gap-3 md:grid-cols-[220px_1fr_220px_auto]" method="get">
+            <input className="input" type="month" name="billingMonth" defaultValue={billingMonth} />
+            <select className="input" name="billingProjectId" defaultValue={billingProjectId}>
+              <option value="">All projects</option>
+              {billingData.projectOptions.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+            <select className="input" name="billingModel" defaultValue={billingModel}>
+              <option value="">All billing types</option>
+              <option value="HOURLY">Hourly</option>
+              <option value="FIXED_FULL">Fixed - Full Project</option>
+              <option value="FIXED_MONTHLY">Fixed - Monthly</option>
+            </select>
+            <button className="btn-secondary" type="submit">Apply</button>
+          </form>
 
-            <div className="mt-5 overflow-x-auto">
-              <table className="table-base">
-                <thead className="table-head">
-                  <tr>
-                    <th className="table-cell">Project name</th>
-                    <th className="table-cell">Billing type</th>
-                    <th className="table-cell">Hours worked</th>
+          <div className="mt-5 overflow-x-auto">
+            <table className="table-base">
+              <thead className="table-head">
+                <tr>
+                  <th className="table-cell">Project name</th>
+                  <th className="table-cell">Billing type</th>
+                  <th className="table-cell">Hours worked</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {billingData.rows.map((row) => (
+                  <tr key={row.projectId}>
+                    <td className="table-cell">{row.projectName}</td>
+                    <td className="table-cell">{row.billingModel.replaceAll("_", " ")}</td>
+                    <td className="table-cell">{row.workedHours}</td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {billingData.rows.map((row) => (
-                    <tr key={row.projectId}>
-                      <td className="table-cell">{row.projectName}</td>
-                      <td className="table-cell">{row.billingModel.replaceAll("_", " ")}</td>
-                      <td className="table-cell">{row.workedHours}</td>
-                    </tr>
-                  ))}
-                  {billingData.rows.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="table-cell text-center text-sm text-slate-500">
-                        No projects found for the selected filters.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <ChangePasswordForm />
-        </div>
+                ))}
+                {billingData.rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="table-cell text-center text-sm text-slate-500">
+                      No projects found for the selected filters.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
     );
   }

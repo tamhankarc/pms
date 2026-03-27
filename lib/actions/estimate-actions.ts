@@ -17,7 +17,7 @@ const estimateSchema = z.object({
 export async function createEstimateAction(formData: FormData) {
   const user = await requireUser();
 
-  if (!["EMPLOYEE", "TEAM_LEAD"].includes(user.userType)) {
+  if (!["EMPLOYEE", "TEAM_LEAD"].includes(user.userType) && !isRoleScopedManager(user)) {
     throw new Error("You are not allowed to submit estimates.");
   }
 
@@ -34,15 +34,19 @@ export async function createEstimateAction(formData: FormData) {
   const project = await db.project.findFirst({
     where: {
       id: parsed.data.projectId,
-      employeeGroups: {
-        some: {
-          employeeGroup: {
-            users: {
-              some: { userId: user.id },
+      ...(isRoleScopedManager(user)
+        ? {}
+        : {
+            employeeGroups: {
+              some: {
+                employeeGroup: {
+                  users: {
+                    some: { userId: user.id },
+                  },
+                },
+              },
             },
-          },
-        },
-      },
+          }),
       isActive: true,
     },
     select: { id: true },

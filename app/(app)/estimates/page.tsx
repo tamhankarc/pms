@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { PageHeader } from "@/components/ui/page-header";
 import {
@@ -37,8 +38,14 @@ type EstimateRow = Prisma.EstimateGetPayload<{
   };
 }>;
 
-export default async function EstimatesPage() {
+export default async function EstimatesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ create?: string }>;
+}) {
   const user = await requireUser();
+  const params = (await searchParams) ?? {};
+  const showCreate = params.create === "1";
 
   const [projects, countries, assignments] = await Promise.all([
     getVisibleProjects(user),
@@ -83,9 +90,10 @@ export default async function EstimatesPage() {
 
   const countryMap = new Map(countries.map((country) => [country.id, country.name]));
   const managedIds = new Set(assignedScopedEmployeeIds);
+  const canCreate = user.userType === "EMPLOYEE" || user.userType === "TEAM_LEAD" || isRoleScopedManager(user);
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title="Estimates"
         description={
@@ -93,186 +101,184 @@ export default async function EstimatesPage() {
             ? "Role-scoped Managers can review estimates only for assigned employees whose functional role matches their own. Team Leads can review only assigned employees whose functional role matches their own. Project Managers and Admins can review across visible projects."
             : "Team Leads can review only assigned employees whose functional role matches their own. Project Managers and Admins can review across visible projects."
         }
+        actions={
+          canCreate ? (
+            <Link className="btn-primary" href="/estimates?create=1">
+              Add Estimate
+            </Link>
+          ) : null
+        }
       />
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        {(user.userType === "EMPLOYEE" || user.userType === "TEAM_LEAD") ? (
-          <form action={createEstimateAction} className="card p-6">
-            <h2 className="section-title">Submit estimate</h2>
+      {showCreate && canCreate ? (
+        <form action={createEstimateAction} className="card p-6">
+          <h2 className="section-title">Submit estimate</h2>
 
-            <div className="mt-5 space-y-4">
-              <div>
-                <label className="label">
-                  Project <span className="text-red-600">*</span>
-                </label>
-                <select className="input" name="projectId" required>
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="label">Country</label>
-                <select className="input" name="countryId">
-                  <option value="">No specific country</option>
-                  {countries.map((country) => (
-                    <option key={country.id} value={country.id}>
-                      {country.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="label">
-                  Work date <span className="text-red-600">*</span>
-                </label>
-                <input className="input" type="date" name="workDate" required />
-              </div>
-
-              <div>
-                <label className="label">
-                  Estimated minutes <span className="text-red-600">*</span>
-                </label>
-                <input
-                  className="input"
-                  type="number"
-                  name="estimatedMinutes"
-                  min="15"
-                  step="15"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="label">Notes</label>
-                <textarea className="input min-h-28" name="notes" />
-              </div>
-
-              <button className="btn-primary w-full">Submit estimate</button>
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="label">
+                Project <span className="text-red-600">*</span>
+              </label>
+              <select className="input" name="projectId" required>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
             </div>
-          </form>
-        ) : (
-          <div className="card p-6">
-            <h2 className="section-title">Estimate review</h2>
-            <p className="section-subtitle">
-              {isRoleScopedManager(user)
-                ? "This manager account is role-scoped and can review only assigned employees with a matching functional role."
-                : "Project Managers and Admins can review submitted estimates across visible projects."}
-            </p>
+
+            <div>
+              <label className="label">Country</label>
+              <select className="input" name="countryId">
+                <option value="">No specific country</option>
+                {countries.map((country) => (
+                  <option key={country.id} value={country.id}>
+                    {country.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="label">
+                Work date <span className="text-red-600">*</span>
+              </label>
+              <input className="input" type="date" name="workDate" required />
+            </div>
+
+            <div>
+              <label className="label">
+                Estimated minutes <span className="text-red-600">*</span>
+              </label>
+              <input
+                className="input"
+                type="number"
+                name="estimatedMinutes"
+                min="15"
+                step="15"
+                required
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="label">Notes</label>
+              <textarea className="input min-h-28" name="notes" />
+            </div>
+
+            <div className="md:col-span-2">
+              <button className="btn-primary w-full md:w-auto">Submit estimate</button>
+            </div>
           </div>
-        )}
+        </form>
+      ) : null}
 
-        <div className="table-wrap">
-          <table className="table-base">
-            <thead className="table-head">
-              <tr>
-                <th className="table-cell">Employee</th>
-                <th className="table-cell">Project</th>
-                <th className="table-cell">Minutes</th>
-                <th className="table-cell">Status</th>
-                <th className="table-cell">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {estimates.map((estimate) => {
-                const canReview =
-                  canFullyModerateProject(user) ||
-                  ((user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) &&
-                    managedIds.has(estimate.employeeId) &&
-                    estimate.employee.functionalRole === user.functionalRole);
+      <div className="table-wrap">
+        <table className="table-base">
+          <thead className="table-head">
+            <tr>
+              <th className="table-cell">Employee</th>
+              <th className="table-cell">Project</th>
+              <th className="table-cell">Minutes</th>
+              <th className="table-cell">Status</th>
+              <th className="table-cell">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {estimates.map((estimate) => {
+              const canReview =
+                canFullyModerateProject(user) ||
+                ((user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) &&
+                  managedIds.has(estimate.employeeId) &&
+                  estimate.employee.functionalRole === user.functionalRole);
 
-                const canResubmit =
-                  estimate.employeeId === user.id && estimate.status === "REVISED";
+              const canResubmit =
+                estimate.employeeId === user.id && estimate.status === "REVISED";
 
-                const latestReview = estimate.reviews[0];
+              const latestReview = estimate.reviews[0];
 
-                return (
-                  <tr key={estimate.id}>
-                    <td className="table-cell align-top">
-                      <div className="font-medium text-slate-900">
-                        {estimate.employee.fullName}
+              return (
+                <tr key={estimate.id}>
+                  <td className="table-cell align-top">
+                    <div className="font-medium text-slate-900">
+                      {estimate.employee.fullName}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {estimate.countryId
+                        ? countryMap.get(estimate.countryId) ?? "—"
+                        : "No specific country"}
+                    </div>
+                    {latestReview?.remarks ? (
+                      <div className="mt-2 rounded-lg bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                        Review note: {latestReview.remarks}
                       </div>
-                      <div className="text-xs text-slate-500">
-                        {estimate.countryId
-                          ? countryMap.get(estimate.countryId) ?? "—"
-                          : "No specific country"}
+                    ) : null}
+                  </td>
+                  <td className="table-cell align-top">{estimate.project.name}</td>
+                  <td className="table-cell align-top">
+                    {formatMinutes(estimate.estimatedMinutes)}
+                  </td>
+                  <td className="table-cell align-top">
+                    <span
+                      className={
+                        estimate.status === "APPROVED"
+                          ? "badge-emerald"
+                          : estimate.status === "REJECTED"
+                            ? "badge-amber"
+                            : estimate.status === "REVISED"
+                              ? "badge-blue"
+                              : "badge-slate"
+                      }
+                    >
+                      {estimate.status}
+                    </span>
+                  </td>
+                  <td className="table-cell align-top">
+                    {canReview && estimate.status === "SUBMITTED" ? (
+                      <div className="flex flex-wrap gap-2">
+                        <form action={reviewEstimateAction}>
+                          <input type="hidden" name="estimateId" value={estimate.id} />
+                          <input type="hidden" name="action" value="APPROVED" />
+                          <button className="btn-secondary !px-3 !py-1.5 text-xs">
+                            Approve
+                          </button>
+                        </form>
+                        <form action={reviewEstimateAction}>
+                          <input type="hidden" name="estimateId" value={estimate.id} />
+                          <input type="hidden" name="action" value="REVISED" />
+                          <input
+                            type="hidden"
+                            name="comment"
+                            value="Please update and resubmit this estimate."
+                          />
+                          <button className="btn-secondary !px-3 !py-1.5 text-xs">
+                            Revise
+                          </button>
+                        </form>
                       </div>
-                      {latestReview?.remarks ? (
-                        <div className="mt-2 rounded-lg bg-amber-50 px-2 py-1 text-xs text-amber-800">
-                          Review note: {latestReview.remarks}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="table-cell align-top">{estimate.project.name}</td>
-                    <td className="table-cell align-top">
-                      {formatMinutes(estimate.estimatedMinutes)}
-                    </td>
-                    <td className="table-cell align-top">
-                      <span
-                        className={
-                          estimate.status === "APPROVED"
-                            ? "badge-emerald"
-                            : estimate.status === "REJECTED"
-                              ? "badge-amber"
-                              : estimate.status === "REVISED"
-                                ? "badge-blue"
-                                : "badge-slate"
-                        }
+                    ) : canResubmit ? (
+                      <a
+                        href={`/estimates/${estimate.id}/edit`}
+                        className="text-sm font-medium text-blue-600 hover:underline"
                       >
-                        {estimate.status}
-                      </span>
-                    </td>
-                    <td className="table-cell align-top">
-                      {canReview && estimate.status === "SUBMITTED" ? (
-                        <div className="flex flex-wrap gap-2">
-                          <form action={reviewEstimateAction}>
-                            <input type="hidden" name="estimateId" value={estimate.id} />
-                            <input type="hidden" name="action" value="APPROVED" />
-                            <button className="btn-secondary !px-3 !py-1.5 text-xs">
-                              Approve
-                            </button>
-                          </form>
-                          <form action={reviewEstimateAction}>
-                            <input type="hidden" name="estimateId" value={estimate.id} />
-                            <input type="hidden" name="action" value="REVISED" />
-                            <input
-                              type="hidden"
-                              name="comment"
-                              value="Please update and resubmit this estimate."
-                            />
-                            <button className="btn-secondary !px-3 !py-1.5 text-xs">
-                              Revise
-                            </button>
-                          </form>
-                        </div>
-                      ) : canResubmit ? (
-                        <a
-                          href={`/estimates/${estimate.id}/edit`}
-                          className="text-sm font-medium text-blue-600 hover:underline"
-                        >
-                          Edit &amp; Resubmit
-                        </a>
-                      ) : (
-                        <span className="text-xs text-slate-400">—</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {estimates.length === 0 ? (
-                <tr>
-                  <td className="table-cell text-center text-sm text-slate-500" colSpan={5}>
-                    No estimates found.
+                        Edit &amp; Resubmit
+                      </a>
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
+                    )}
                   </td>
                 </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
+              );
+            })}
+            {estimates.length === 0 ? (
+              <tr>
+                <td className="table-cell text-center text-sm text-slate-500" colSpan={5}>
+                  No estimates found.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
       </div>
     </div>
   );
