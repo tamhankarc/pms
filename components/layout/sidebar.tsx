@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { logoutAction } from "@/lib/actions/auth-actions";
 import type { SessionUser } from "@/lib/auth";
-import { canManageCountries } from "@/lib/permissions";
+import { canManageCountries, isRoleScopedManager } from "@/lib/permissions";
 
 export type SidebarNavItem = {
   href: string;
@@ -69,7 +69,7 @@ const accountsItems: SidebarNavItem[] = [
 export function getSidebarItems(user: SessionUser): SidebarNavItem[] {
   return user.userType === "EMPLOYEE"
     ? employeeItems
-    : user.userType === "TEAM_LEAD"
+    : user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
       ? teamLeadItems
       : user.userType === "ACCOUNTS"
         ? accountsItems
