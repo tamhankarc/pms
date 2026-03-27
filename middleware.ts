@@ -13,6 +13,7 @@ const TEAM_LEAD_BLOCKED_PATHS = [
   "/users",
   "/team-lead-assignments",
   "/reports",
+  "/countries",
 ];
 
 async function getSessionPayload(request: NextRequest) {
@@ -22,7 +23,7 @@ async function getSessionPayload(request: NextRequest) {
 
   try {
     const verified = await jwtVerify(token, new TextEncoder().encode(secret));
-    return verified.payload as { userType?: string } | null;
+    return verified.payload as { userType?: string; functionalRole?: string } | null;
   } catch {
     return null;
   }
@@ -65,6 +66,15 @@ export async function middleware(request: NextRequest) {
   if (session?.userType === "TEAM_LEAD") {
     const blocked = TEAM_LEAD_BLOCKED_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
     if (blocked) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+  }
+
+  if (pathname === "/countries" || pathname.startsWith("/countries/")) {
+    const allowed =
+      session?.userType === "ADMIN" ||
+      (session?.userType === "MANAGER" && session?.functionalRole === "PROJECT_MANAGER");
+    if (!allowed) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   }

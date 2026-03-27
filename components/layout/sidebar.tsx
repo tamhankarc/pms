@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   Clapperboard,
   FolderKanban,
+  Globe2,
   LayoutDashboard,
   ShieldCheck,
   TimerReset,
@@ -14,11 +15,13 @@ import {
 } from "lucide-react";
 import { logoutAction } from "@/lib/actions/auth-actions";
 import type { SessionUser } from "@/lib/auth";
+import { canManageCountries } from "@/lib/permissions";
 
 const fullItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/clients", label: "Clients", icon: Building2 },
   { href: "/movies", label: "Movies", icon: Clapperboard },
+  { href: "/countries", label: "Countries", icon: Globe2, access: "countries" as const },
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/employee-groups", label: "Employee Groups", icon: Users },
   { href: "/users", label: "Users", icon: ShieldCheck },
@@ -53,7 +56,7 @@ export function Sidebar({ user }: { user: SessionUser }) {
       ? employeeItems
       : user.userType === "TEAM_LEAD"
         ? teamLeadItems
-        : fullItems;
+        : fullItems.filter((item) => item.access !== "countries" || canManageCountries(user));
 
   return (
     <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-slate-950 text-slate-100 lg:block">

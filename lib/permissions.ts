@@ -28,27 +28,27 @@ export const PROJECT_MANAGERS: UserType[] = ["ADMIN", "MANAGER"];
 export const MANAGER: UserType[] = ["ADMIN", "MANAGER"];
 
 export function isAdmin(user: UserLike) {
-  return getUserType(user) == "ADMIN";
+  return getUserType(user) === "ADMIN";
 }
 
 export function isManager(user: UserLike) {
-  return getUserType(user) == "MANAGER";
+  return getUserType(user) === "MANAGER";
 }
 
 export function isTeamLead(user: UserLike) {
-  return getUserType(user) == "TEAM_LEAD";
+  return getUserType(user) === "TEAM_LEAD";
 }
 
 export function isEmployee(user: UserLike) {
-  return getUserType(user) == "EMPLOYEE";
+  return getUserType(user) === "EMPLOYEE";
 }
 
 export function isReportViewer(user: UserLike) {
-  return getUserType(user) == "REPORT_VIEWER";
+  return getUserType(user) === "REPORT_VIEWER";
 }
 
 export function isRoleScopedManager(user: UserLike) {
-  return isManager(user) && getFunctionalRole(user) != "PROJECT_MANAGER";
+  return isManager(user) && getFunctionalRole(user) !== "PROJECT_MANAGER";
 }
 
 export function canComprehensivelyModerateProject(user: UserLike) {
@@ -77,4 +77,8 @@ export function canCreateProjects(user: UserLike) {
 
 export function canSeeAllProjects(user: UserLike) {
   return isAdmin(user) || isManager(user) || isTeamLead(user) || isReportViewer(user);
+}
+
+export function canManageCountries(user: UserLike) {
+  return isAdmin(user) || (isManager(user) && getFunctionalRole(user) === "PROJECT_MANAGER");
 }
