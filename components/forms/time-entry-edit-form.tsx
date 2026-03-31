@@ -143,8 +143,7 @@ export function TimeEntryEditForm({
             className="input"
             type="number"
             name="minutesSpent"
-            min="15"
-            step="15"
+            min="5"
             defaultValue={entry.minutesSpent}
             required
           />
