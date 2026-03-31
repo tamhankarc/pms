@@ -317,24 +317,35 @@ const teamLeadAssignmentSchema = z.object({
   employeeId: z.string().min(1),
 });
 
-export async function assignTeamLeadAction(formData: FormData) {
-  const actor = await requireUserTypes(["ADMIN", "MANAGER"]);
+export type TeamLeadAssignmentState = {
+  success?: boolean;
+  error?: string;
+};
 
-  const parsed = teamLeadAssignmentSchema.safeParse({
-    teamLeadId: formData.get("teamLeadId"),
-    employeeId: formData.get("employeeId"),
-  });
+export async function assignTeamLeadAction(
+  _prevState: TeamLeadAssignmentState,
+  formData: FormData,
+): Promise<TeamLeadAssignmentState> {
+  try {
+    const actor = await requireUserTypes(["ADMIN", "MANAGER"]);
 
-  if (!parsed.success) throw new Error("Invalid assignment payload");
+    const parsed = teamLeadAssignmentSchema.safeParse({
+      teamLeadId: formData.get("teamLeadId"),
+      employeeId: formData.get("employeeId"),
+    });
 
-  const employee = await db.user.findUnique({
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.issues[0]?.message || "Invalid assignment payload" };
+    }
+
+    const employee = await db.user.findUnique({
     where: { id: parsed.data.employeeId },
     select: { id: true, userType: true, functionalRole: true },
   });
 
-  if (!employee || employee.userType !== "EMPLOYEE") {
-    throw new Error("Selected user is not an employee.");
-  }
+    if (!employee || employee.userType !== "EMPLOYEE") {
+      return { success: false, error: "Selected user is not an employee." };
+    }
 
   const supervisor = await db.user.findUnique({
     where: { id: parsed.data.teamLeadId },
@@ -348,11 +359,11 @@ export async function assignTeamLeadAction(formData: FormData) {
       (supervisor.userType === "MANAGER" && supervisor.functionalRole === employee.functionalRole)
     );
 
-  if (!validSupervisor) {
-    throw new Error("Selected supervisor must be a Team Lead or a Manager with the same functional role as the employee.");
-  }
+    if (!validSupervisor) {
+      return { success: false, error: "Selected supervisor must be a Team Lead or a Manager with the same functional role as the employee." };
+    }
 
-  await db.employeeTeamLead.upsert({
+    await db.employeeTeamLead.upsert({
     where: {
       employeeId_teamLeadId: {
         employeeId: parsed.data.employeeId,
@@ -369,7 +380,11 @@ export async function assignTeamLeadAction(formData: FormData) {
     },
   });
 
-  revalidatePath("/team-lead-assignments");
-  revalidatePath("/users");
-  revalidatePath("/dashboard");
+    revalidatePath("/team-lead-assignments");
+    revalidatePath("/users");
+    revalidatePath("/dashboard");
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
+  }
 }

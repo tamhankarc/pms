@@ -1,15 +1,13 @@
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { PageHeader } from "@/components/ui/page-header";
-import {
-  createEstimateAction,
-  reviewEstimateAction,
-} from "@/lib/actions/estimate-actions";
+import { reviewEstimateAction } from "@/lib/actions/estimate-actions";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatMinutes } from "@/lib/utils";
 import { canFullyModerateProject, isManager } from "@/lib/permissions";
 import { getVisibleProjects } from "@/lib/queries";
+import { EstimateCreateForm } from "@/components/forms/estimate-create-form";
 
 const estimateWithRelations = {
   include: {
@@ -111,66 +109,10 @@ export default async function EstimatesPage({
       />
 
       {showCreate && canCreate ? (
-        <form action={createEstimateAction} className="card p-6">
-          <h2 className="section-title">Submit estimate</h2>
-
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="label">
-                Project <span className="text-red-600">*</span>
-              </label>
-              <select className="input" name="projectId" required>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="label">Country</label>
-              <select className="input" name="countryId">
-                <option value="">No specific country</option>
-                {countries.map((country) => (
-                  <option key={country.id} value={country.id}>
-                    {country.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="label">
-                Work date <span className="text-red-600">*</span>
-              </label>
-              <input className="input" type="date" name="workDate" required />
-            </div>
-
-            <div>
-              <label className="label">
-                Estimated minutes <span className="text-red-600">*</span>
-              </label>
-              <input
-                className="input"
-                type="number"
-                name="estimatedMinutes"
-                min="15"
-                step="15"
-                required
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="label">Notes</label>
-              <textarea className="input min-h-28" name="notes" />
-            </div>
-
-            <div className="md:col-span-2">
-              <button className="btn-primary w-full md:w-auto">Submit estimate</button>
-            </div>
-          </div>
-        </form>
+        <EstimateCreateForm
+          projects={projects.map((project) => ({ id: project.id, name: project.name }))}
+          countries={countries.map((country) => ({ id: country.id, name: country.name }))}
+        />
       ) : null}
 
       <div className="table-wrap">

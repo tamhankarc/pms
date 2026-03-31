@@ -16,6 +16,11 @@ export type ProfileActionState = {
   message?: string;
 };
 
+export type PasswordActionState = {
+  success?: boolean;
+  message?: string;
+};
+
 const profileSchema = z.object({
   fullName: z.string().min(2, "Full name is required."),
   phoneNumber: z.string().trim().max(30).optional().or(z.literal("")),
@@ -111,35 +116,58 @@ const passwordSchema = z
     path: ["confirmPassword"],
   });
 
-export async function changePasswordAction(formData: FormData) {
-  const currentUser = await requireUser();
+export async function changePasswordAction(
+  _prevState: PasswordActionState,
+  formData: FormData,
+): Promise<PasswordActionState> {
+  try {
+    const currentUser = await requireUser();
 
-  const parsed = passwordSchema.safeParse({
-    currentPassword: String(formData.get("currentPassword") ?? ""),
-    newPassword: String(formData.get("newPassword") ?? ""),
-    confirmPassword: String(formData.get("confirmPassword") ?? ""),
-  });
+    const parsed = passwordSchema.safeParse({
+      currentPassword: String(formData.get("currentPassword") ?? ""),
+      newPassword: String(formData.get("newPassword") ?? ""),
+      confirmPassword: String(formData.get("confirmPassword") ?? ""),
+    });
 
-  if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message || "Invalid password payload");
+    if (!parsed.success) {
+      return {
+        success: false,
+        message: parsed.error.issues[0]?.message || "Invalid password payload",
+      };
+    }
+
+    const user = await db.user.findUnique({ where: { id: currentUser.id } });
+    if (!user) {
+      return { success: false, message: "User not found." };
+    }
+
+    const isValid = await verifyPassword(parsed.data.currentPassword, user.passwordHash);
+    if (!isValid) {
+      return { success: false, message: "Current password is incorrect." };
+    }
+
+    const passwordHash = await hashPassword(parsed.data.newPassword);
+    await db.user.update({
+      where: { id: currentUser.id },
+      data: { passwordHash },
+    });
+
+    const session = await getSession();
+    if (session) {
+      await createSession(session);
+    }
+
+    revalidatePath("/profile");
+    revalidatePath("/change-password");
+
+    return {
+      success: true,
+      message: "Password updated successfully.",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Something went wrong.",
+    };
   }
-
-  const user = await db.user.findUnique({ where: { id: currentUser.id } });
-  if (!user) throw new Error("User not found.");
-
-  const isValid = await verifyPassword(parsed.data.currentPassword, user.passwordHash);
-  if (!isValid) throw new Error("Current password is incorrect.");
-
-  const passwordHash = await hashPassword(parsed.data.newPassword);
-  await db.user.update({
-    where: { id: currentUser.id },
-    data: { passwordHash },
-  });
-
-  const session = await getSession();
-  if (session) {
-    await createSession(session);
-  }
-
-  revalidatePath("/profile");
 }

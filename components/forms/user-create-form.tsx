@@ -26,6 +26,27 @@ type FunctionalRole =
   | (typeof operationalFunctionalRoles)[number]
   | "BILLING";
 
+function PasswordField() {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <div>
+      <FormLabel htmlFor="password" required>Temporary password</FormLabel>
+      <div className="relative">
+        <input id="password" className="input pr-24" name="password" type={visible ? "text" : "password"} required />
+        <button
+          type="button"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-600 hover:text-slate-900"
+          onClick={() => setVisible((current) => !current)}
+          aria-label={`${visible ? "Hide" : "Show"} temporary password`}
+        >
+          {visible ? "Hide" : "Show"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function UserCreateForm({
   teamLeads,
   action,
@@ -76,10 +97,7 @@ export function UserCreateForm({
           <input id="email" className="input" name="email" type="email" required />
         </div>
 
-        <div>
-          <FormLabel htmlFor="password" required>Temporary password</FormLabel>
-          <input id="password" className="input" name="password" type="password" required />
-        </div>
+        <PasswordField />
 
         <div>
           <FormLabel htmlFor="userType" required>User type</FormLabel>

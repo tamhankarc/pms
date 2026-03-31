@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
-import { updateTimeEntryAction } from "@/lib/actions/time-actions";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getVisibleProjects } from "@/lib/queries";
 import { canFullyModerateProject } from "@/lib/permissions";
+import { TimeEntryEditForm } from "@/components/forms/time-entry-edit-form";
 
 export default async function EditTimeEntryPage({
   params,
@@ -14,7 +15,7 @@ export default async function EditTimeEntryPage({
   const { id } = await params;
   const user = await requireUser();
 
-  const [entry, countries] = await Promise.all([
+  const [entry, countries, projects] = await Promise.all([
     db.timeEntry.findUnique({
       where: { id },
       include: {
@@ -26,6 +27,7 @@ export default async function EditTimeEntryPage({
       where: { isActive: true },
       orderBy: { name: "asc" },
     }),
+    getVisibleProjects(user),
   ]);
 
   if (!entry) notFound();
@@ -39,6 +41,7 @@ export default async function EditTimeEntryPage({
 
   const canEdit =
     canFullyModerateProject(user) ||
+    entry.employeeId === user.id ||
     (user.userType === "TEAM_LEAD" && Boolean(assignment));
 
   if (!canEdit) {
@@ -49,7 +52,7 @@ export default async function EditTimeEntryPage({
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
         title="Edit time entry"
-        description="Submitted time entries can be corrected only by assigned Team Leads, Admins, or Managers."
+        description="Employees can edit their own time entries. Team Leads, Admins, and Managers can also correct submitted time entries where permitted."
         actions={<Link href="/time-entries" className="btn-secondary">Back to time entries</Link>}
       />
 
@@ -79,62 +82,26 @@ export default async function EditTimeEntryPage({
           </div>
         </div>
 
-        <form action={updateTimeEntryAction} className="space-y-4">
-          <input type="hidden" name="entryId" value={entry.id} />
-
-          <div>
-            <label className="label">Country</label>
-            <select className="input" name="countryId" defaultValue={entry.countryId ?? ""}>
-              <option value="">No specific country</option>
-              {countries.map((country) => (
-                <option key={country.id} value={country.id}>
-                  {country.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="label">Work date <span className="text-red-600">*</span></label>
-            <input
-              className="input"
-              type="date"
-              name="workDate"
-              defaultValue={new Date(entry.workDate).toISOString().slice(0, 10)}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="label">Task name <span className="text-red-600">*</span></label>
-            <input className="input" name="taskName" defaultValue={entry.taskName} required />
-          </div>
-
-          <div>
-            <label className="label">Minutes spent <span className="text-red-600">*</span></label>
-            <input
-              className="input"
-              type="number"
-              name="minutesSpent"
-              min="15"
-              step="15"
-              defaultValue={entry.minutesSpent}
-              required
-            />
-          </div>
-
-          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <input id="isBillable" type="checkbox" name="isBillable" value="true" defaultChecked={entry.isBillable} />
-            <label htmlFor="isBillable" className="text-sm text-slate-700">Billable entry</label>
-          </div>
-
-          <div>
-            <label className="label">Notes</label>
-            <textarea className="input min-h-28" name="notes" defaultValue={entry.notes ?? ""} />
-          </div>
-
-          <button className="btn-primary w-full">Save changes</button>
-        </form>
+        <TimeEntryEditForm
+          entry={{
+            id: entry.id,
+            clientId: entry.project.clientId,
+            projectId: entry.projectId,
+            countryId: entry.countryId,
+            workDate: entry.workDate,
+            taskName: entry.taskName,
+            minutesSpent: entry.minutesSpent,
+            isBillable: entry.isBillable,
+            notes: entry.notes,
+          }}
+          countries={countries.map((country) => ({ id: country.id, name: country.name }))}
+          projects={projects.map((project) => ({
+            id: project.id,
+            name: project.name,
+            clientId: project.clientId,
+            clientName: project.client.name,
+          }))}
+        />
       </div>
     </div>
   );

@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
-import { createTimeEntryAction } from "@/lib/actions/time-actions";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getVisibleProjects } from "@/lib/queries";
 import { formatMinutes } from "@/lib/utils";
+import { TimeEntryCreateForm } from "@/components/forms/time-entry-create-form";
 import { canFullyModerateProject, isManager } from "@/lib/permissions";
 
 export default async function TimeEntriesPage({
@@ -70,8 +70,8 @@ export default async function TimeEntriesPage({
         title="Time entries"
         description={
           isManager(user)
-            ? "Employees, Team Leads, and Managers can submit time entries. Submitted entries can be edited by assigned Team Leads, Project Managers, Admins, or assigned Managers with the same functional role."
-            : "Employees and Team Leads can submit time entries. Submitted entries can be edited only by assigned Team Leads, Admins, or Managers."
+            ? "Employees, Team Leads, and Managers can submit time entries. Employees can edit their own entries, and submitted entries can also be edited by assigned Team Leads, Project Managers, Admins, or assigned Managers with the same functional role."
+            : "Employees and Team Leads can submit time entries. Employees can edit their own entries, and submitted entries can also be edited by assigned Team Leads, Admins, or Managers."
         }
         actions={
           canCreate ? (
@@ -83,58 +83,15 @@ export default async function TimeEntriesPage({
       />
 
       {showCreate && canCreate ? (
-        <form action={createTimeEntryAction} className="card p-6">
-          <h2 className="section-title">Submit time entry</h2>
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="label">Project <span className="text-red-600">*</span></label>
-              <select className="input" name="projectId" required>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="label">Country</label>
-              <select className="input" name="countryId">
-                <option value="">No specific country</option>
-                {countries.map((country) => (
-                  <option key={country.id} value={country.id}>
-                    {country.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="label">Work date <span className="text-red-600">*</span></label>
-              <input className="input" type="date" name="workDate" required />
-            </div>
-
-            <div>
-              <label className="label">Task name <span className="text-red-600">*</span></label>
-              <input className="input" name="taskName" required />
-            </div>
-
-            <div>
-              <label className="label">Minutes spent <span className="text-red-600">*</span></label>
-              <input className="input" type="number" name="minutesSpent" min="5" required />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="label">Notes</label>
-              <textarea className="input min-h-28" name="notes" />
-            </div>
-
-            <div className="md:col-span-2">
-              <input type="hidden" name="isBillable" value="true" />
-              <button className="btn-primary w-full md:w-auto">Submit entry</button>
-            </div>
-          </div>
-        </form>
+        <TimeEntryCreateForm
+          projects={projects.map((project) => ({
+            id: project.id,
+            name: project.name,
+            clientId: project.clientId,
+            clientName: project.client.name,
+          }))}
+          countries={countries.map((country) => ({ id: country.id, name: country.name }))}
+        />
       ) : null}
 
       <div className="table-wrap">
@@ -153,6 +110,7 @@ export default async function TimeEntriesPage({
             {entries.map((entry) => {
               const canEdit =
                 canFullyModerateProject(user) ||
+                entry.employeeId === user.id ||
                 ((user.userType === "TEAM_LEAD" || isManager(user)) && managedIds.has(entry.employeeId));
 
               return (

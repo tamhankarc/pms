@@ -59,6 +59,32 @@ type UserManageFormProps = {
 
 const initialState: UserFormState = {};
 
+
+function PasswordField({
+  defaultVisible = false,
+}: {
+  defaultVisible?: boolean;
+}) {
+  const [visible, setVisible] = useState(defaultVisible);
+
+  return (
+    <div className="md:col-span-2">
+      <FormLabel htmlFor="password" required>Temporary password</FormLabel>
+      <div className="relative">
+        <input id="password" className="input pr-24" name="password" type={visible ? "text" : "password"} required />
+        <button
+          type="button"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-600 hover:text-slate-900"
+          onClick={() => setVisible((current) => !current)}
+          aria-label={`${visible ? "Hide" : "Show"} temporary password`}
+        >
+          {visible ? "Hide" : "Show"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function UserManageForm({
   mode,
   action,
@@ -137,12 +163,7 @@ export function UserManageForm({
           <input id="email" className="input" name="email" type="email" defaultValue={initialValues?.email ?? ""} required />
         </div>
 
-        {mode === "create" ? (
-          <div className="md:col-span-2">
-            <FormLabel htmlFor="password" required>Temporary password</FormLabel>
-            <input id="password" className="input" name="password" type="password" required />
-          </div>
-        ) : null}
+        {mode === "create" ? <PasswordField /> : null}
 
         <div>
           <FormLabel htmlFor="userType" required>User type</FormLabel>
