@@ -16,24 +16,31 @@ export default async function TimeEntriesPage({
   const params = (await searchParams) ?? {};
   const showCreate = params.create === "1";
 
-  const [projects, countries, supervisorEmployeeIds] = await Promise.all([
+  const [projects, countries, supervisorAssignments, allActiveEmployees] = await Promise.all([
     getVisibleProjects(user),
     db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
-    (user.userType === "TEAM_LEAD" || isManager(user))
+    user.userType === "TEAM_LEAD"
       ? db.employeeTeamLead.findMany({
           where: { teamLeadId: user.id },
           include: {
             employee: {
-              select: { id: true, functionalRole: true },
+              select: { id: true, fullName: true, functionalRole: true, userType: true, isActive: true },
             },
           },
+        })
+      : Promise.resolve([]),
+    isManager(user)
+      ? db.user.findMany({
+          where: { isActive: true, userType: "EMPLOYEE" },
+          select: { id: true, fullName: true, userType: true },
+          orderBy: { fullName: "asc" },
         })
       : Promise.resolve([]),
   ]);
 
   const visibleProjectIds = projects.map((project) => project.id);
   const safeProjectIds = visibleProjectIds.length ? visibleProjectIds : ["__none__"];
-  const scopedEmployeeIds = supervisorEmployeeIds
+  const scopedEmployeeIds = supervisorAssignments
     .filter((row) => row.employee.functionalRole === user.functionalRole)
     .map((row) => row.employeeId);
 
@@ -46,8 +53,13 @@ export default async function TimeEntriesPage({
           }
         : user.userType === "TEAM_LEAD"
           ? {
-              employeeId: { in: scopedEmployeeIds.length ? scopedEmployeeIds : ["__none__"] },
-              projectId: { in: safeProjectIds },
+              OR: [
+                { employeeId: user.id, projectId: { in: safeProjectIds } },
+                {
+                  employeeId: { in: scopedEmployeeIds.length ? scopedEmployeeIds : ["__none__"] },
+                  projectId: { in: safeProjectIds },
+                },
+              ],
             }
           : {
               projectId: { in: safeProjectIds },
@@ -63,6 +75,33 @@ export default async function TimeEntriesPage({
   const countryMap = new Map(countries.map((country) => [country.id, country.name]));
   const managedIds = new Set(scopedEmployeeIds);
   const canCreate = user.userType === "EMPLOYEE" || user.userType === "TEAM_LEAD" || isManager(user);
+
+  const assignableEmployees =
+    user.userType === "TEAM_LEAD"
+      ? [
+          { id: user.id, fullName: user.fullName, userType: user.userType },
+          ...supervisorAssignments
+            .filter((row) => row.employee.functionalRole === user.functionalRole)
+            .map((row) => ({
+              id: row.employee.id,
+              fullName: row.employee.fullName,
+              userType: row.employee.userType,
+            })),
+        ]
+      : isManager(user)
+        ? [
+            { id: user.id, fullName: user.fullName, userType: user.userType },
+            ...allActiveEmployees.map((employee) => ({
+              id: employee.id,
+              fullName: employee.fullName,
+              userType: employee.userType,
+            })),
+          ]
+        : [{ id: user.id, fullName: user.fullName, userType: user.userType }];
+
+  const dedupedAssignableEmployees = Array.from(
+    new Map(assignableEmployees.map((employee) => [employee.id, employee])).values(),
+  );
 
   return (
     <div className="space-y-6">
@@ -91,6 +130,8 @@ export default async function TimeEntriesPage({
             clientName: project.client.name,
           }))}
           countries={countries.map((country) => ({ id: country.id, name: country.name }))}
+          assignableEmployees={dedupedAssignableEmployees}
+          defaultEmployeeId={user.id}
         />
       ) : null}
 
@@ -126,9 +167,7 @@ export default async function TimeEntriesPage({
                       {entry.countryId ? countryMap.get(entry.countryId) ?? "—" : "No specific country"}
                     </div>
                   </td>
-                  <td className="table-cell">
-                    {new Date(entry.workDate).toLocaleDateString()}
-                  </td>
+                  <td className="table-cell">{new Date(entry.workDate).toLocaleDateString()}</td>
                   <td className="table-cell">{formatMinutes(entry.minutesSpent)}</td>
                   <td className="table-cell">
                     <span className="badge-slate">{entry.status}</span>
@@ -147,7 +186,7 @@ export default async function TimeEntriesPage({
             })}
             {entries.length === 0 ? (
               <tr>
-                <td colSpan={5} className="table-cell text-center text-sm text-slate-500">
+                <td colSpan={6} className="table-cell text-center text-sm text-slate-500">
                   No time entries found.
                 </td>
               </tr>

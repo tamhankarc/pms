@@ -5,6 +5,7 @@ import {
   updateTimeEntryAction,
   type TimeEntryFormState,
 } from "@/lib/actions/time-actions";
+import { FormLabel } from "@/components/ui/form-label";
 
 type TimeEntryProjectOption = {
   id: string;
@@ -22,6 +23,8 @@ export function TimeEntryEditForm({
 }: {
   entry: {
     id: string;
+    employeeId: string;
+    employeeName: string;
     clientId: string;
     projectId: string;
     countryId: string | null;
@@ -38,7 +41,9 @@ export function TimeEntryEditForm({
   const clientOptions = useMemo(
     () =>
       Array.from(
-        new Map(projects.map((project) => [project.clientId, { id: project.clientId, name: project.clientName }])).values(),
+        new Map(
+          projects.map((project) => [project.clientId, { id: project.clientId, name: project.clientName }]),
+        ).values(),
       ),
     [projects],
   );
@@ -65,11 +70,25 @@ export function TimeEntryEditForm({
       ) : null}
 
       <input type="hidden" name="entryId" value={entry.id} />
+      <input type="hidden" name="employeeId" value={entry.employeeId} />
 
       <div className="grid gap-4 md:grid-cols-2">
+        <div className="md:col-span-2">
+          <FormLabel htmlFor="employeeName">Employee</FormLabel>
+          <input
+            id="employeeName"
+            className="input bg-slate-50"
+            value={entry.employeeName}
+            readOnly
+          />
+        </div>
+
         <div>
-          <label className="label">Client <span className="text-red-600">*</span></label>
+          <FormLabel htmlFor="clientId" required>
+            Client
+          </FormLabel>
           <select
+            id="clientId"
             className="input"
             name="clientId"
             required
@@ -82,7 +101,9 @@ export function TimeEntryEditForm({
               );
             }}
           >
-            <option value="" disabled>Select client</option>
+            <option value="" disabled>
+              Select client
+            </option>
             {clientOptions.map((client) => (
               <option key={client.id} value={client.id}>
                 {client.name}
@@ -92,8 +113,11 @@ export function TimeEntryEditForm({
         </div>
 
         <div>
-          <label className="label">Project <span className="text-red-600">*</span></label>
+          <FormLabel htmlFor="projectId" required>
+            Project
+          </FormLabel>
           <select
+            id="projectId"
             className="input"
             name="projectId"
             required
@@ -110,8 +134,8 @@ export function TimeEntryEditForm({
         </div>
 
         <div>
-          <label className="label">Country</label>
-          <select className="input" name="countryId" defaultValue={entry.countryId ?? ""}>
+          <FormLabel htmlFor="countryId">Country</FormLabel>
+          <select id="countryId" className="input" name="countryId" defaultValue={entry.countryId ?? ""}>
             <option value="">No specific country</option>
             {countries.map((country) => (
               <option key={country.id} value={country.id}>
@@ -122,8 +146,11 @@ export function TimeEntryEditForm({
         </div>
 
         <div>
-          <label className="label">Work date <span className="text-red-600">*</span></label>
+          <FormLabel htmlFor="workDate" required>
+            Work date
+          </FormLabel>
           <input
+            id="workDate"
             className="input"
             type="date"
             name="workDate"
@@ -133,13 +160,18 @@ export function TimeEntryEditForm({
         </div>
 
         <div>
-          <label className="label">Task name <span className="text-red-600">*</span></label>
-          <input className="input" name="taskName" defaultValue={entry.taskName} required />
+          <FormLabel htmlFor="taskName" required>
+            Task name
+          </FormLabel>
+          <input id="taskName" className="input" name="taskName" defaultValue={entry.taskName} required />
         </div>
 
         <div>
-          <label className="label">Minutes spent <span className="text-red-600">*</span></label>
+          <FormLabel htmlFor="minutesSpent" required>
+            Minutes spent
+          </FormLabel>
           <input
+            id="minutesSpent"
             className="input"
             type="number"
             name="minutesSpent"
@@ -156,8 +188,8 @@ export function TimeEntryEditForm({
       </div>
 
       <div>
-        <label className="label">Notes</label>
-        <textarea className="input min-h-28" name="notes" defaultValue={entry.notes ?? ""} />
+        <FormLabel htmlFor="notes">Notes</FormLabel>
+        <textarea id="notes" className="input min-h-28" name="notes" defaultValue={entry.notes ?? ""} />
       </div>
 
       <button className="btn-primary w-full" disabled={pending || filteredProjects.length === 0 || !selectedProjectId}>

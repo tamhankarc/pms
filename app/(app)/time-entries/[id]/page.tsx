@@ -85,6 +85,8 @@ export default async function EditTimeEntryPage({
         <TimeEntryEditForm
           entry={{
             id: entry.id,
+            employeeId: entry.employeeId,
+            employeeName: entry.employee.fullName,
             clientId: entry.project.clientId,
             projectId: entry.projectId,
             countryId: entry.countryId,

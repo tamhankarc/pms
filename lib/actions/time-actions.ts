@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { canFullyModerateProject, isRoleScopedManager } from "@/lib/permissions";
+import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/permissions";
 
 export type TimeEntryFormState = {
   success?: boolean;
@@ -12,6 +12,7 @@ export type TimeEntryFormState = {
 };
 
 const timeSchema = z.object({
+  employeeId: z.string().optional(),
   clientId: z.string().min(1, "Client is required."),
   projectId: z.string().min(1, "Project is required."),
   countryId: z.string().optional(),
@@ -21,7 +22,6 @@ const timeSchema = z.object({
   isBillable: z.coerce.boolean().default(true),
   notes: z.string().optional(),
 });
-
 
 async function validateProjectClient(projectId: string, clientId: string) {
   const project = await db.project.findUnique({
@@ -66,6 +66,37 @@ async function userCanLogAgainstProject(user: Awaited<ReturnType<typeof requireU
   return count > 0;
 }
 
+async function canActForEmployee(user: Awaited<ReturnType<typeof requireUser>>, employeeId: string) {
+  if (employeeId === user.id) return true;
+
+  if (canFullyModerateProject(user) || isManager(user)) {
+    const employee = await db.user.findUnique({
+      where: { id: employeeId },
+      select: { id: true, userType: true, isActive: true },
+    });
+
+    return Boolean(employee && employee.isActive && employee.userType === "EMPLOYEE");
+  }
+
+  if (user.userType === "TEAM_LEAD") {
+    const assignment = await db.employeeTeamLead.findFirst({
+      where: {
+        teamLeadId: user.id,
+        employeeId,
+        employee: {
+          isActive: true,
+          userType: "EMPLOYEE",
+        },
+      },
+      select: { employeeId: true },
+    });
+
+    return Boolean(assignment);
+  }
+
+  return false;
+}
+
 export async function createTimeEntryAction(
   _prevState: TimeEntryFormState,
   formData: FormData,
@@ -74,6 +105,7 @@ export async function createTimeEntryAction(
     const user = await requireUser();
 
     const parsed = timeSchema.safeParse({
+      employeeId: formData.get("employeeId") || user.id,
       clientId: formData.get("clientId"),
       projectId: formData.get("projectId"),
       countryId: formData.get("countryId") || undefined,
@@ -88,11 +120,14 @@ export async function createTimeEntryAction(
       return { success: false, error: parsed.error.issues[0]?.message || "Invalid time entry payload" };
     }
 
-    if (![
-      "EMPLOYEE",
-      "TEAM_LEAD",
-    ].includes(user.userType) && !isRoleScopedManager(user)) {
+    if (!["EMPLOYEE", "TEAM_LEAD"].includes(user.userType) && !isManager(user)) {
       return { success: false, error: "You are not allowed to submit time entries." };
+    }
+
+    const targetEmployeeId = parsed.data.employeeId || user.id;
+    const canSubmitForEmployee = await canActForEmployee(user, targetEmployeeId);
+    if (!canSubmitForEmployee) {
+      return { success: false, error: "You are not allowed to submit time entries for the selected employee." };
     }
 
     const validProjectClient = await validateProjectClient(parsed.data.projectId, parsed.data.clientId);
@@ -107,7 +142,7 @@ export async function createTimeEntryAction(
 
     await db.timeEntry.create({
       data: {
-        employeeId: user.id,
+        employeeId: targetEmployeeId,
         projectId: parsed.data.projectId,
         countryId: parsed.data.countryId || null,
         workDate: new Date(parsed.data.workDate),
@@ -128,6 +163,7 @@ export async function createTimeEntryAction(
 
 const updateTimeSchema = z.object({
   entryId: z.string().min(1),
+  employeeId: z.string().optional(),
   clientId: z.string().min(1, "Client is required."),
   projectId: z.string().min(1, "Project is required."),
   countryId: z.string().optional(),
@@ -147,6 +183,7 @@ export async function updateTimeEntryAction(
 
     const parsed = updateTimeSchema.safeParse({
       entryId: formData.get("entryId"),
+      employeeId: formData.get("employeeId") || undefined,
       clientId: formData.get("clientId"),
       projectId: formData.get("projectId"),
       countryId: formData.get("countryId") || undefined,
@@ -166,6 +203,10 @@ export async function updateTimeEntryAction(
     });
 
     if (!entry) return { success: false, error: "Time entry not found" };
+
+    if (parsed.data.employeeId && parsed.data.employeeId !== entry.employeeId) {
+      return { success: false, error: "Employee cannot be changed for an existing time entry." };
+    }
 
     const assignment = await db.employeeTeamLead.findFirst({
       where: {
