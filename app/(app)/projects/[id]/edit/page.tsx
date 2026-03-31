@@ -33,7 +33,7 @@ export default async function EditProjectPage({
     db.user.findMany({
       where: {
         isActive: true,
-        userType: { in: ["EMPLOYEE", "TEAM_LEAD"] },
+        userType: { in: ["EMPLOYEE", "TEAM_LEAD", "MANAGER"] },
       },
       orderBy: { fullName: "asc" },
       select: { id: true, fullName: true, userType: true, functionalRole: true },

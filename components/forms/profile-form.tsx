@@ -1,8 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import { updateProfileAction } from "@/lib/actions/profile-actions";
 import { FormLabel } from "@/components/ui/form-label";
+
+const initialState = {
+  success: false,
+  message: "",
+};
+
+function SubmitButton() {
+  return <button className="btn-primary mt-6">Save profile</button>;
+}
 
 export function ProfileForm({
   user,
@@ -21,31 +30,62 @@ export function ProfileForm({
     permanentSameAsCurrent: boolean;
   };
 }) {
+  const [state, formAction] = useActionState(updateProfileAction, initialState);
   const [sameAsCurrent, setSameAsCurrent] = useState(user.permanentSameAsCurrent);
   const [currentAddress, setCurrentAddress] = useState(user.currentAddress ?? "");
   const [permanentAddress, setPermanentAddress] = useState(user.permanentAddress ?? "");
 
   return (
-    <form action={updateProfileAction} className="card p-6">
+    <form action={formAction} className="card p-6">
       <h2 className="section-title">Update profile</h2>
       <p className="section-subtitle">
         You can update your phone number and address details here. Core user details are read-only.
       </p>
 
+      {state?.message ? (
+        <div
+          className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
+            state.success
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          {state.message}
+        </div>
+      ) : null}
+
       <div className="mt-5 grid gap-4 md:grid-cols-2">
         <div>
           <FormLabel htmlFor="fullName">Full name</FormLabel>
-          <input id="fullName" className="input bg-slate-50" defaultValue={user.fullName} disabled readOnly />
+          <input
+            id="fullName"
+            name="fullName"
+            className="input bg-slate-50"
+            defaultValue={user.fullName ?? ""}
+            readOnly
+          />
         </div>
 
         <div>
           <FormLabel htmlFor="email">Email</FormLabel>
-          <input id="email" className="input bg-slate-50" defaultValue={user.email} disabled readOnly />
+          <input
+            id="email"
+            className="input bg-slate-50"
+            defaultValue={user.email ?? ""}
+            disabled
+            readOnly
+          />
         </div>
 
         <div>
           <FormLabel htmlFor="userType">User type</FormLabel>
-          <input id="userType" className="input bg-slate-50" defaultValue={user.userType.replaceAll("_", " ")} disabled readOnly />
+          <input
+            id="userType"
+            className="input bg-slate-50"
+            defaultValue={user.userType.replaceAll("_", " ")}
+            disabled
+            readOnly
+          />
         </div>
 
         <div>
@@ -61,12 +101,24 @@ export function ProfileForm({
 
         <div>
           <FormLabel htmlFor="employeeCode">Employee code</FormLabel>
-          <input id="employeeCode" className="input bg-slate-50" defaultValue={user.employeeCode ?? ""} disabled readOnly />
+          <input
+            id="employeeCode"
+            className="input bg-slate-50"
+            defaultValue={user.employeeCode ?? ""}
+            disabled
+            readOnly
+          />
         </div>
 
         <div>
           <FormLabel htmlFor="designation">Designation</FormLabel>
-          <input id="designation" className="input bg-slate-50" defaultValue={user.designation ?? ""} disabled readOnly />
+          <input
+            id="designation"
+            className="input bg-slate-50"
+            defaultValue={user.designation ?? ""}
+            disabled
+            readOnly
+          />
         </div>
 
         <div className="md:col-span-2">
@@ -82,7 +134,12 @@ export function ProfileForm({
 
         <div className="md:col-span-2">
           <FormLabel htmlFor="phoneNumber">Phone number</FormLabel>
-          <input id="phoneNumber" className="input" name="phoneNumber" defaultValue={user.phoneNumber ?? ""} />
+          <input
+            id="phoneNumber"
+            className="input"
+            name="phoneNumber"
+            defaultValue={user.phoneNumber ?? ""}
+          />
         </div>
 
         <div className="md:col-span-2">
@@ -123,7 +180,7 @@ export function ProfileForm({
         </div>
       </div>
 
-      <button className="btn-primary mt-6">Save profile</button>
+      <SubmitButton />
     </form>
   );
 }
