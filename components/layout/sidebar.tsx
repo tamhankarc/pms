@@ -14,7 +14,6 @@ import {
   UserCog,
   Users
 } from "lucide-react";
-import { logoutAction } from "@/lib/actions/auth-actions";
 import type { SessionUser } from "@/lib/auth";
 import { canManageCountries, isRoleScopedManager } from "@/lib/permissions";
 

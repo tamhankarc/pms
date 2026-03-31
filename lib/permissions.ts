@@ -56,7 +56,7 @@ export function isRoleScopedManager(user: UserLike) {
 }
 
 export function canComprehensivelyModerateProject(user: UserLike) {
-  return isAdmin(user) || (isManager(user) && !isRoleScopedManager(user));
+  return isAdmin(user) || isManager(user);
 }
 
 export function canFullyModerateProject(user: UserLike) {
@@ -72,7 +72,7 @@ export function canAssignTeamLeads(user: UserLike) {
 }
 
 export function canCreateOrEditProject(user: UserLike) {
-  return isAdmin(user) || isManager(user);
+  return isAdmin(user) || isManager(user) || isTeamLead(user);
 }
 
 export function canCreateProjects(user: UserLike) {

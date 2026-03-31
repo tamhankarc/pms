@@ -34,7 +34,7 @@ export default async function ProjectsPage({
     <div>
       <PageHeader
         title="Projects"
-        description="Project records hold billing model, client, optional movie, countries, employee-group visibility, and commercial tracking."
+        description="Project records hold billing model, client, optional movie, countries, assignment mode, and commercial tracking."
         actions={
           canCreateProjects(user) ? (
             <Link className="btn-primary" href="/projects/new">
@@ -73,7 +73,7 @@ export default async function ProjectsPage({
               <th className="table-cell">Client</th>
               <th className="table-cell">Movie</th>
               <th className="table-cell">Billing</th>
-              <th className="table-cell">Groups</th>
+              <th className="table-cell">Assignment</th>
               <th className="table-cell">Status</th>
               <th className="table-cell">Action</th>
             </tr>
@@ -89,7 +89,9 @@ export default async function ProjectsPage({
                 <td className="table-cell">{project.movie?.title ?? "—"}</td>
                 <td className="table-cell">{project.billingModel.replaceAll("_", " ")}</td>
                 <td className="table-cell">
-                  {project.employeeGroups.map((g) => g.employeeGroup.name).join(", ") || "—"}
+                  {project.assignedUsers.length > 0
+                    ? `Users: ${project.assignedUsers.map((row) => row.user.fullName).join(", ")}`
+                    : `Groups: ${project.employeeGroups.map((g) => g.employeeGroup.name).join(", ") || "—"}`}
                 </td>
                 <td className="table-cell">
                   <span className="badge-blue">{project.status.replaceAll("_", " ")}</span>

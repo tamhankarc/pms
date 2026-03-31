@@ -11,7 +11,7 @@ export default async function EditProjectPage({
 }) {
   const { id } = await params;
 
-  const [project, countries, employeeGroups] = await Promise.all([
+  const [project, countries, employeeGroups, assignableUsers] = await Promise.all([
     db.project.findUnique({
       where: { id },
       include: {
@@ -19,6 +19,7 @@ export default async function EditProjectPage({
         movie: true,
         countries: true,
         employeeGroups: true,
+        assignedUsers: true,
       },
     }),
     db.country.findMany({
@@ -28,6 +29,14 @@ export default async function EditProjectPage({
     db.employeeGroup.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
+    }),
+    db.user.findMany({
+      where: {
+        isActive: true,
+        userType: { in: ["EMPLOYEE", "TEAM_LEAD"] },
+      },
+      orderBy: { fullName: "asc" },
+      select: { id: true, fullName: true, userType: true, functionalRole: true },
     }),
   ]);
 
@@ -47,6 +56,7 @@ export default async function EditProjectPage({
         lockedMovieTitle={project.movie?.title ?? null}
         countries={countries}
         employeeGroups={employeeGroups}
+        assignableUsers={assignableUsers}
         initialValues={{
           name: project.name,
           billingModel: project.billingModel,
@@ -55,7 +65,9 @@ export default async function EditProjectPage({
           status: project.status,
           description: project.description,
           countryIds: project.countries.map((item) => item.countryId),
+          assignmentType: project.assignedUsers.length > 0 ? "USER" : "GROUP",
           employeeGroupIds: project.employeeGroups.map((item) => item.employeeGroupId),
+          directUserIds: project.assignedUsers.map((item) => item.userId),
         }}
       />
     </div>

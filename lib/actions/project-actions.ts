@@ -21,7 +21,9 @@ const projectSchema = z.object({
   status: z.enum(["DRAFT", "ACTIVE", "ON_HOLD", "COMPLETED", "ARCHIVED"]),
   description: z.string().optional(),
   countryIds: z.array(z.string()).min(1, "At least one country is required."),
-  employeeGroupIds: z.array(z.string()).min(1, "At least one employee group is required."),
+  assignmentType: z.enum(["GROUP", "USER"]),
+  employeeGroupIds: z.array(z.string()).optional().default([]),
+  directUserId: z.string().optional().default(""),
 });
 
 async function validateMovieForClient(clientId: string, movieId?: string | null) {
@@ -31,6 +33,32 @@ async function validateMovieForClient(clientId: string, movieId?: string | null)
     select: { id: true, clientId: true, isActive: true },
   });
   return Boolean(movie && movie.clientId === clientId && movie.isActive);
+}
+
+async function validateAssignableUsers(userIds: string[]) {
+  if (userIds.length === 0) return true;
+  const count = await db.user.count({
+    where: {
+      id: { in: userIds },
+      isActive: true,
+      userType: { in: ["EMPLOYEE", "TEAM_LEAD"] },
+    },
+  });
+  return count === userIds.length;
+}
+
+function validateAssignmentSelection(data: {
+  assignmentType: "GROUP" | "USER";
+  employeeGroupIds: string[];
+  directUserId: string;
+}) {
+  if (data.assignmentType === "GROUP" && data.employeeGroupIds.length === 0) {
+    return "At least one employee group is required.";
+  }
+  if (data.assignmentType === "USER" && !data.directUserId) {
+    return "An individual assignee is required.";
+  }
+  return null;
 }
 
 export async function createProjectAction(
@@ -50,7 +78,9 @@ export async function createProjectAction(
       status: formData.get("status"),
       description: formData.get("description") || "",
       countryIds: formData.getAll("countryIds"),
+      assignmentType: formData.get("assignmentType"),
       employeeGroupIds: formData.getAll("employeeGroupIds"),
+      directUserId: String(formData.get("directUserId") || ""),
     });
 
     if (!parsed.success) {
@@ -61,6 +91,21 @@ export async function createProjectAction(
     }
 
     const data = parsed.data;
+    const assignmentError = validateAssignmentSelection(data);
+    if (assignmentError) {
+      return { success: false, error: assignmentError };
+    }
+
+    const validDirectUsers = await validateAssignableUsers(
+      data.directUserId ? [data.directUserId] : [],
+    );
+    if (!validDirectUsers) {
+      return {
+        success: false,
+        error: "Only active Employees and Team Leads can be assigned individually.",
+      };
+    }
+
     const movieValid = await validateMovieForClient(data.clientId, data.movieId);
     if (!movieValid) {
       return { success: false, error: "Selected movie does not belong to the selected client." };
@@ -86,14 +131,26 @@ export async function createProjectAction(
         countries: {
           create: data.countryIds.map((countryId) => ({ countryId })),
         },
-        employeeGroups: {
-          create: data.employeeGroupIds.map((employeeGroupId) => ({ employeeGroupId })),
-        },
+        employeeGroups:
+          data.assignmentType === "GROUP"
+            ? {
+                create: data.employeeGroupIds.map((employeeGroupId) => ({ employeeGroupId })),
+              }
+            : undefined,
+        assignedUsers:
+          data.assignmentType === "USER" && data.directUserId
+            ? {
+                create: [{ userId: data.directUserId }],
+              }
+            : undefined,
       },
     });
 
     revalidatePath("/projects");
     revalidatePath("/projects/new");
+    revalidatePath("/dashboard");
+    revalidatePath("/time-entries");
+    revalidatePath("/estimates");
     return { success: true };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
@@ -108,7 +165,9 @@ const projectUpdateSchema = z.object({
   status: z.enum(["DRAFT", "ACTIVE", "ON_HOLD", "COMPLETED", "ARCHIVED"]),
   description: z.string().optional(),
   countryIds: z.array(z.string()).min(1, "At least one country is required."),
-  employeeGroupIds: z.array(z.string()).min(1, "At least one employee group is required."),
+  assignmentType: z.enum(["GROUP", "USER"]),
+  employeeGroupIds: z.array(z.string()).optional().default([]),
+  directUserId: z.string().optional().default(""),
 });
 
 export async function updateProjectAction(
@@ -127,7 +186,9 @@ export async function updateProjectAction(
       status: formData.get("status"),
       description: formData.get("description") || "",
       countryIds: formData.getAll("countryIds"),
+      assignmentType: formData.get("assignmentType"),
       employeeGroupIds: formData.getAll("employeeGroupIds"),
+      directUserId: String(formData.get("directUserId") || ""),
     });
 
     if (!parsed.success) {
@@ -138,6 +199,20 @@ export async function updateProjectAction(
     }
 
     const data = parsed.data;
+    const assignmentError = validateAssignmentSelection(data);
+    if (assignmentError) {
+      return { success: false, error: assignmentError };
+    }
+
+    const validDirectUsers = await validateAssignableUsers(
+      data.directUserId ? [data.directUserId] : [],
+    );
+    if (!validDirectUsers) {
+      return {
+        success: false,
+        error: "Only active Employees and Team Leads can be assigned individually.",
+      };
+    }
 
     await db.$transaction(async (tx) => {
       await tx.project.update({
@@ -160,18 +235,31 @@ export async function updateProjectAction(
       });
 
       await tx.projectEmployeeGroup.deleteMany({ where: { projectId } });
-      await tx.projectEmployeeGroup.createMany({
-        data: data.employeeGroupIds.map((employeeGroupId) => ({
-          projectId,
-          employeeGroupId,
-        })),
-        skipDuplicates: true,
-      });
+      if (data.assignmentType === "GROUP" && data.employeeGroupIds.length > 0) {
+        await tx.projectEmployeeGroup.createMany({
+          data: data.employeeGroupIds.map((employeeGroupId) => ({
+            projectId,
+            employeeGroupId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      await tx.projectUserAssignment.deleteMany({ where: { projectId } });
+      if (data.assignmentType === "USER" && data.directUserId) {
+        await tx.projectUserAssignment.createMany({
+          data: [{ projectId, userId: data.directUserId }],
+          skipDuplicates: true,
+        });
+      }
     });
 
     revalidatePath("/projects");
     revalidatePath(`/projects/${projectId}`);
     revalidatePath(`/projects/${projectId}/edit`);
+    revalidatePath("/dashboard");
+    revalidatePath("/time-entries");
+    revalidatePath("/estimates");
     return { success: true };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };

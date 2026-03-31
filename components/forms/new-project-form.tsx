@@ -11,6 +11,7 @@ type Client = { id: string; name: string };
 type Movie = { id: string; title: string; clientId: string };
 type Country = { id: string; name: string };
 type EmployeeGroup = { id: string; name: string };
+type AssignableUser = { id: string; fullName: string; userType: string; functionalRole: string | null };
 
 const initialState: ProjectFormState = {};
 
@@ -19,16 +20,19 @@ export function NewProjectForm({
   movies,
   countries,
   employeeGroups,
+  assignableUsers,
 }: {
   clients: Client[];
   movies: Movie[];
   countries: Country[];
   employeeGroups: EmployeeGroup[];
+  assignableUsers: AssignableUser[];
 }) {
   const [billingModel, setBillingModel] = useState<
     "HOURLY" | "FIXED_FULL" | "FIXED_MONTHLY"
   >("HOURLY");
   const [clientId, setClientId] = useState("");
+  const [assignmentType, setAssignmentType] = useState<"GROUP" | "USER">("GROUP");
 
   const [state, formAction, pending] = useActionState(
     createProjectAction,
@@ -165,17 +169,57 @@ export function NewProjectForm({
             Select at least one country. Hold Ctrl/Cmd to select multiple countries.
           </p>
         </div>
+        
+        <div className="space-y-6">
+          <div>
+            <FormLabel htmlFor="assignmentType" required>Assignment type</FormLabel>
+            <select
+              id="assignmentType"
+              className="input"
+              name="assignmentType"
+              value={assignmentType}
+              onChange={(e) => setAssignmentType(e.target.value as "GROUP" | "USER")}
+              required
+            >
+              <option value="GROUP">Employee group</option>
+              <option value="USER">Individual user</option>
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Choose whether this project is assigned through employee groups or directly to specific users.
+            </p>
+          </div>
 
-        <div>
-          <FormLabel htmlFor="employeeGroupIds" required>Employee groups</FormLabel>
-          <select id="employeeGroupIds" className="input min-h-32" name="employeeGroupIds" multiple required>
-            {employeeGroups.map((group) => (
-              <option key={group.id} value={group.id}>{group.name}</option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-slate-500">
-            Select at least one group. These groups define project visibility for operational users.
-          </p>
+          <div>
+            {assignmentType === "GROUP" ? (
+              <>
+                <FormLabel htmlFor="employeeGroupIds" required>Employee groups</FormLabel>
+                <select id="employeeGroupIds" className="input min-h-32" name="employeeGroupIds" multiple required>
+                  {employeeGroups.map((group) => (
+                    <option key={group.id} value={group.id}>{group.name}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-slate-500">
+                  Select at least one group. These groups define project visibility for operational users.
+                </p>
+              </>
+            ) : (
+              <>
+                <FormLabel htmlFor="directUserId" required>Assigned Individual</FormLabel>
+                <select id="directUserId" className="input" name="directUserId" required>
+                  <option value="">Select user</option>
+                  {assignableUsers.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.fullName} · {user.userType.replaceAll("_", " ")}
+                      {user.functionalRole ? ` · ${user.functionalRole.replaceAll("_", " ")}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-slate-500">
+                  Select one active Employee or Team Lead.
+                </p>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

@@ -24,15 +24,26 @@ async function userCanLogAgainstProject(user: Awaited<ReturnType<typeof requireU
       ...(isRoleScopedManager(user)
         ? {}
         : {
-            employeeGroups: {
-              some: {
-                employeeGroup: {
-                  users: {
-                    some: { userId: user.id },
+            OR: [
+              {
+                employeeGroups: {
+                  some: {
+                    employeeGroup: {
+                      users: {
+                        some: { userId: user.id },
+                      },
+                    },
                   },
                 },
               },
-            },
+              {
+                assignedUsers: {
+                  some: {
+                    userId: user.id,
+                  },
+                },
+              },
+            ],
           }),
     },
   });

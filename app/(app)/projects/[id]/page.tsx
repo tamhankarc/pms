@@ -18,6 +18,7 @@ export default async function ProjectDetailPage({
       movie: true,
       countries: { include: { country: true } },
       employeeGroups: { include: { employeeGroup: true } },
+      assignedUsers: { include: { user: true } },
       billingTransactions: { orderBy: { createdAt: "desc" } },
       timeEntries: true,
     },
@@ -90,9 +91,19 @@ export default async function ProjectDetailPage({
                 </dd>
               </div>
               <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Employee groups</dt>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">Assignment type</dt>
                 <dd className="mt-1 text-sm text-slate-800">
-                  {project.employeeGroups.map((g) => g.employeeGroup.name).join(", ") || "—"}
+                  {project.assignedUsers.length > 0 ? "Individual users" : "Employee groups"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">
+                  {project.assignedUsers.length > 0 ? "Assigned users" : "Employee groups"}
+                </dt>
+                <dd className="mt-1 text-sm text-slate-800">
+                  {project.assignedUsers.length > 0
+                    ? project.assignedUsers.map((row) => row.user.fullName).join(", ")
+                    : project.employeeGroups.map((g) => g.employeeGroup.name).join(", ") || "—"}
                 </dd>
               </div>
               <div>

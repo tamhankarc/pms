@@ -37,15 +37,26 @@ export async function createEstimateAction(formData: FormData) {
       ...(isRoleScopedManager(user)
         ? {}
         : {
-            employeeGroups: {
-              some: {
-                employeeGroup: {
-                  users: {
-                    some: { userId: user.id },
+            OR: [
+              {
+                employeeGroups: {
+                  some: {
+                    employeeGroup: {
+                      users: {
+                        some: { userId: user.id },
+                      },
+                    },
                   },
                 },
               },
-            },
+              {
+                assignedUsers: {
+                  some: {
+                    userId: user.id,
+                  },
+                },
+              },
+            ],
           }),
       isActive: true,
     },

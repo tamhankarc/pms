@@ -9,6 +9,7 @@ import {
 
 type Country = { id: string; name: string };
 type EmployeeGroup = { id: string; name: string };
+type AssignableUser = { id: string; fullName: string; userType: string; functionalRole: string | null };
 
 const initialState: ProjectFormState = {};
 
@@ -17,6 +18,7 @@ export function ProjectEditForm({
   initialValues,
   countries,
   employeeGroups,
+  assignableUsers,
   lockedClientName,
   lockedMovieTitle,
 }: {
@@ -29,14 +31,18 @@ export function ProjectEditForm({
     status: "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "ARCHIVED";
     description: string | null;
     countryIds: string[];
+    assignmentType: "GROUP" | "USER";
     employeeGroupIds: string[];
+    directUserIds: string[];
   };
   countries: Country[];
   employeeGroups: EmployeeGroup[];
+  assignableUsers: AssignableUser[];
   lockedClientName: string;
   lockedMovieTitle?: string | null;
 }) {
   const [billingModel, setBillingModel] = useState(initialValues.billingModel);
+  const [assignmentType, setAssignmentType] = useState<"GROUP" | "USER">(initialValues.assignmentType);
   const [state, formAction, pending] = useActionState(
     updateProjectAction.bind(null, projectId),
     initialState,
@@ -144,15 +150,59 @@ export function ProjectEditForm({
         </div>
 
         <div>
-          <FormLabel htmlFor="employeeGroupIds" required>Employee groups</FormLabel>
-          <select id="employeeGroupIds" className="input min-h-32" name="employeeGroupIds" multiple defaultValue={initialValues.employeeGroupIds} required>
-            {employeeGroups.map((group) => (
-              <option key={group.id} value={group.id}>{group.name}</option>
-            ))}
+          <FormLabel htmlFor="assignmentType" required>Assignment type</FormLabel>
+          <select
+            id="assignmentType"
+            className="input"
+            name="assignmentType"
+            value={assignmentType}
+            onChange={(e) => setAssignmentType(e.target.value as "GROUP" | "USER")}
+            required
+          >
+            <option value="GROUP">Employee group</option>
+            <option value="USER">Individual user</option>
           </select>
           <p className="mt-1 text-xs text-slate-500">
-            Select at least one group. These groups define project visibility for operational users.
+            Switch between group-based visibility and direct individual assignment.
           </p>
+        </div>
+
+        <div>
+          {assignmentType === "GROUP" ? (
+            <>
+              <FormLabel htmlFor="employeeGroupIds" required>Employee groups</FormLabel>
+              <select id="employeeGroupIds" className="input min-h-32" name="employeeGroupIds" multiple defaultValue={initialValues.employeeGroupIds} required>
+                {employeeGroups.map((group) => (
+                  <option key={group.id} value={group.id}>{group.name}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">
+                Select at least one group. These groups define project visibility for operational users.
+              </p>
+            </>
+          ) : (
+            <>
+              <FormLabel htmlFor="directUserId" required>Assigned Individual</FormLabel>
+              <select
+                id="directUserId"
+                className="input"
+                name="directUserId"
+                defaultValue={initialValues.directUserIds[0] ?? ""}
+                required
+              >
+                <option value="">Select user</option>
+                {assignableUsers.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.fullName} · {user.userType.replaceAll("_", " ")}
+                    {user.functionalRole ? ` · ${user.functionalRole.replaceAll("_", " ")}` : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">
+                Select one active Employee or Team Lead.
+              </p>
+            </>
+          )}
         </div>
       </div>
 

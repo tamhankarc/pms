@@ -12,27 +12,42 @@ import { formatMinutes } from "@/lib/utils";
 import { canSeeBillingDashboard } from "@/lib/permissions";
 import type { BillingModel } from "@prisma/client";
 
-function getCurrentMonthValue() {
+function toDateInputValue(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getDefaultBillingRange() {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return {
+    startDate: toDateInputValue(start),
+    endDate: toDateInputValue(end),
+  };
+}
+
+function normalizeDateInput(value?: string) {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
 }
 
 export default async function DashboardPage({
   searchParams,
 }: {
   searchParams?: Promise<{
-    billingMonth?: string;
+    billingStartDate?: string;
+    billingEndDate?: string;
     billingProjectId?: string;
     billingModel?: string;
   }>;
 }) {
   const user = await requireUser();
   const params = (await searchParams) ?? {};
-  const billingMonth = params.billingMonth && /^\d{4}-\d{2}$/.test(params.billingMonth)
-    ? params.billingMonth
-    : getCurrentMonthValue();
+  const defaultBillingRange = getDefaultBillingRange();
+  const billingStartDate = normalizeDateInput(params.billingStartDate) ?? defaultBillingRange.startDate;
+  const billingEndDate = normalizeDateInput(params.billingEndDate) ?? defaultBillingRange.endDate;
   const billingProjectId = params.billingProjectId ?? "";
   const billingModel = (params.billingModel ?? "") as BillingModel | "";
 
@@ -48,7 +63,7 @@ export default async function DashboardPage({
       ? getManagedEmployees(user.id)
       : Promise.resolve([]),
     showBillingDashboard
-      ? getBillingDashboardData(user, billingMonth, billingProjectId || undefined, billingModel)
+      ? getBillingDashboardData(user, billingStartDate, billingEndDate, billingProjectId || undefined, billingModel)
       : Promise.resolve({ rows: [], projectOptions: [] }),
   ]);
 
@@ -57,17 +72,18 @@ export default async function DashboardPage({
       <div className="space-y-6">
         <PageHeader
           title="Dashboard"
-          description="Billing dashboard showing project hours by selected month."
+          description="Billing dashboard showing project hours by selected date range."
         />
 
         <section className="card p-6">
           <h2 className="section-title">Project billing hours</h2>
           <p className="section-subtitle">
-            Filter by project, billing type, and month to review hours worked across projects.
+            Filter by start date, end date, project, and billing type to review hours worked across projects.
           </p>
 
-          <form className="mt-5 grid gap-3 md:grid-cols-[220px_1fr_220px_auto]" method="get">
-            <input className="input" type="month" name="billingMonth" defaultValue={billingMonth} />
+          <form className="mt-5 grid gap-3 md:grid-cols-[180px_180px_1fr_220px_auto]" method="get">
+            <input className="input" type="date" name="billingStartDate" defaultValue={billingStartDate} />
+            <input className="input" type="date" name="billingEndDate" defaultValue={billingEndDate} />
             <select className="input" name="billingProjectId" defaultValue={billingProjectId}>
               <option value="">All projects</option>
               {billingData.projectOptions.map((project) => (
@@ -153,7 +169,7 @@ export default async function DashboardPage({
         <section className="card p-6">
           <h2 className="section-title">Recent projects</h2>
           <p className="section-subtitle">
-            Visibility respects employee groups, except for Admin, Manager, Team Lead, and Report Viewer accounts.
+            Visibility respects employee groups or direct individual assignment, except for Admin, Manager, Team Lead, and Report Viewer accounts.
           </p>
 
           <div className="mt-5 overflow-x-auto">
@@ -239,11 +255,12 @@ export default async function DashboardPage({
         <section className="mt-8 card p-6">
           <h2 className="section-title">Project billing hours</h2>
           <p className="section-subtitle">
-            Review project-level hours worked by month. This section is available to Admins, Project Managers, and Billing Accounts.
+            Review project-level hours worked for a selected date range. This section is available to Admins, Project Managers, and Billing Accounts.
           </p>
 
-          <form className="mt-5 grid gap-3 md:grid-cols-[220px_1fr_220px_auto]" method="get">
-            <input className="input" type="month" name="billingMonth" defaultValue={billingMonth} />
+          <form className="mt-5 grid gap-3 md:grid-cols-[180px_180px_1fr_220px_auto]" method="get">
+            <input className="input" type="date" name="billingStartDate" defaultValue={billingStartDate} />
+            <input className="input" type="date" name="billingEndDate" defaultValue={billingEndDate} />
             <select className="input" name="billingProjectId" defaultValue={billingProjectId}>
               <option value="">All projects</option>
               {billingData.projectOptions.map((project) => (

@@ -10,6 +10,7 @@ export async function getVisibleProjects(user: SessionUser) {
     movie: true,
     countries: { include: { country: true } },
     employeeGroups: { include: { employeeGroup: true } },
+    assignedUsers: { include: { user: true } },
   } as const;
 
   if (canSeeAllProjects(user)) {
@@ -21,17 +22,28 @@ export async function getVisibleProjects(user: SessionUser) {
 
   return db.project.findMany({
     where: {
-      employeeGroups: {
-        some: {
-          employeeGroup: {
-            users: {
-              some: {
-                userId: user.id,
+      OR: [
+        {
+          employeeGroups: {
+            some: {
+              employeeGroup: {
+                users: {
+                  some: {
+                    userId: user.id,
+                  },
+                },
               },
             },
           },
         },
-      },
+        {
+          assignedUsers: {
+            some: {
+              userId: user.id,
+            },
+          },
+        },
+      ],
     },
     include,
     orderBy: { createdAt: "desc" },
@@ -97,16 +109,18 @@ export async function getManagedEmployees(teamLeadId: string) {
   });
 }
 
-function getMonthRange(month: string) {
-  const [year, mon] = month.split("-").map(Number);
-  const start = new Date(Date.UTC(year, mon - 1, 1, 0, 0, 0));
-  const end = new Date(Date.UTC(year, mon, 1, 0, 0, 0));
-  return { start, end };
+function getDateRange(startDate: string, endDate: string) {
+  const [startYear, startMonth, startDay] = startDate.split("-").map(Number);
+  const [endYear, endMonth, endDay] = endDate.split("-").map(Number);
+  const start = new Date(Date.UTC(startYear, startMonth - 1, startDay, 0, 0, 0));
+  const endExclusive = new Date(Date.UTC(endYear, endMonth - 1, endDay + 1, 0, 0, 0));
+  return { start, endExclusive };
 }
 
 export async function getBillingDashboardData(
   user: SessionUser,
-  month: string,
+  startDate: string,
+  endDate: string,
   selectedProjectId?: string,
   selectedBillingModel?: BillingModel | "",
 ) {
@@ -123,7 +137,7 @@ export async function getBillingDashboardData(
     };
   }
 
-  const { start, end } = getMonthRange(month);
+  const { start, endExclusive } = getDateRange(startDate, endDate);
 
   const allProjects = await db.project.findMany({
     select: {
@@ -152,7 +166,7 @@ export async function getBillingDashboardData(
       projectId: { in: targetIds },
       workDate: {
         gte: start,
-        lt: end,
+        lt: endExclusive,
       },
     },
   });
