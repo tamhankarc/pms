@@ -106,12 +106,6 @@ export function Sidebar({ user }: { user: SessionUser }) {
             );
           })}
         </nav>
-
-        <form action={logoutAction} className="border-t border-slate-800 p-4">
-          <button className="btn-secondary w-full border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800">
-            Sign out
-          </button>
-        </form>
       </div>
     </aside>
   );
