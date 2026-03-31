@@ -8,7 +8,7 @@ import {
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatMinutes } from "@/lib/utils";
-import { canFullyModerateProject, isRoleScopedManager } from "@/lib/permissions";
+import { canFullyModerateProject, isManager } from "@/lib/permissions";
 import { getVisibleProjects } from "@/lib/queries";
 
 const estimateWithRelations = {
@@ -53,7 +53,7 @@ export default async function EstimatesPage({
       where: { isActive: true },
       orderBy: { name: "asc" },
     }),
-    (user.userType === "TEAM_LEAD" || isRoleScopedManager(user))
+    (user.userType === "TEAM_LEAD" || isManager(user))
       ? db.employeeTeamLead.findMany({
           where: { teamLeadId: user.id },
           include: {
@@ -78,7 +78,7 @@ export default async function EstimatesPage({
             employeeId: user.id,
             projectId: { in: safeProjectIds },
           }
-        : user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
+        : user.userType === "TEAM_LEAD"
           ? {
               employeeId: { in: assignedScopedEmployeeIds.length ? assignedScopedEmployeeIds : ["__none__"] },
               projectId: { in: safeProjectIds },
@@ -90,14 +90,14 @@ export default async function EstimatesPage({
 
   const countryMap = new Map(countries.map((country) => [country.id, country.name]));
   const managedIds = new Set(assignedScopedEmployeeIds);
-  const canCreate = user.userType === "EMPLOYEE" || user.userType === "TEAM_LEAD" || isRoleScopedManager(user);
+  const canCreate = user.userType === "EMPLOYEE" || user.userType === "TEAM_LEAD" || isManager(user);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Estimates"
         description={
-          isRoleScopedManager(user)
+          isManager(user)
             ? "Role-scoped Managers can review estimates only for assigned employees whose functional role matches their own. Team Leads can review only assigned employees whose functional role matches their own. Project Managers and Admins can review across visible projects."
             : "Team Leads can review only assigned employees whose functional role matches their own. Project Managers and Admins can review across visible projects."
         }
@@ -188,7 +188,7 @@ export default async function EstimatesPage({
             {estimates.map((estimate) => {
               const canReview =
                 canFullyModerateProject(user) ||
-                ((user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) &&
+                ((user.userType === "TEAM_LEAD" || isManager(user)) &&
                   managedIds.has(estimate.employeeId) &&
                   estimate.employee.functionalRole === user.functionalRole);
 

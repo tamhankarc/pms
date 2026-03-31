@@ -44,7 +44,7 @@ export default async function TimeEntriesPage({
             employeeId: user.id,
             projectId: { in: safeProjectIds },
           }
-        : user.userType === "TEAM_LEAD" || isManager(user)
+        : user.userType === "TEAM_LEAD"
           ? {
               employeeId: { in: scopedEmployeeIds.length ? scopedEmployeeIds : ["__none__"] },
               projectId: { in: safeProjectIds },
