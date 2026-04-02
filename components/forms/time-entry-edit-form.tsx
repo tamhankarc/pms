@@ -6,12 +6,35 @@ import {
   type TimeEntryFormState,
 } from "@/lib/actions/time-actions";
 import { FormLabel } from "@/components/ui/form-label";
+import Link from "next/link";
 
 type TimeEntryProjectOption = {
   id: string;
   name: string;
   clientId: string;
   clientName: string;
+  showCountriesInTimeEntries: boolean;
+  showMoviesInEntries: boolean;
+  showLanguagesInEntries: boolean;
+};
+
+type TimeEntrySubProjectOption = {
+  id: string;
+  name: string;
+  projectId: string;
+  assignedUserIds: string[];
+};
+
+type MovieOption = {
+  id: string;
+  title: string;
+  clientId: string;
+};
+
+type LanguageOption = {
+  id: string;
+  name: string;
+  code: string;
 };
 
 const initialState: TimeEntryFormState = {};
@@ -19,7 +42,10 @@ const initialState: TimeEntryFormState = {};
 export function TimeEntryEditForm({
   entry,
   countries,
+  movies,
+  languages,
   projects,
+  subProjects,
 }: {
   entry: {
     id: string;
@@ -27,7 +53,10 @@ export function TimeEntryEditForm({
     employeeName: string;
     clientId: string;
     projectId: string;
+    subProjectId: string | null;
     countryId: string | null;
+    movieId: string | null;
+    languageId: string | null;
     workDate: Date;
     taskName: string;
     minutesSpent: number;
@@ -35,25 +64,56 @@ export function TimeEntryEditForm({
     notes: string | null;
   };
   countries: { id: string; name: string }[];
+  movies: MovieOption[];
+  languages: LanguageOption[];
   projects: TimeEntryProjectOption[];
+  subProjects: TimeEntrySubProjectOption[];
 }) {
   const [state, formAction, pending] = useActionState(updateTimeEntryAction, initialState);
+
   const clientOptions = useMemo(
     () =>
       Array.from(
         new Map(
-          projects.map((project) => [project.clientId, { id: project.clientId, name: project.clientName }]),
+          projects.map((project) => [
+            project.clientId,
+            { id: project.clientId, name: project.clientName },
+          ]),
         ).values(),
       ),
     [projects],
   );
+
   const [selectedClientId, setSelectedClientId] = useState(entry.clientId);
   const [selectedProjectId, setSelectedProjectId] = useState(entry.projectId);
+  const [selectedSubProjectId, setSelectedSubProjectId] = useState(entry.subProjectId ?? "");
 
   const filteredProjects = useMemo(
     () => projects.filter((project) => project.clientId === selectedClientId),
     [projects, selectedClientId],
   );
+
+  const filteredSubProjects = useMemo(
+    () =>
+      subProjects.filter(
+        (subProject) =>
+          subProject.projectId === selectedProjectId &&
+          subProject.assignedUserIds.includes(entry.employeeId),
+      ),
+    [subProjects, selectedProjectId, entry.employeeId],
+  );
+
+  const filteredMovies = useMemo(
+    () => movies.filter((movie) => movie.clientId === selectedClientId),
+    [movies, selectedClientId],
+  );
+
+  const selectedProject = projects.find((project) => project.id === selectedProjectId);
+  const showCountryField = Boolean(selectedProject?.showCountriesInTimeEntries);
+  const showMovieField = Boolean(selectedProject?.showMoviesInEntries);
+  const showLanguageField = Boolean(selectedProject?.showLanguagesInEntries);
+  const countryRequired = showCountryField;
+  const languageRequired = showLanguageField;
 
   return (
     <form action={formAction} className="space-y-4">
@@ -75,12 +135,7 @@ export function TimeEntryEditForm({
       <div className="grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
           <FormLabel htmlFor="employeeName">Employee</FormLabel>
-          <input
-            id="employeeName"
-            className="input bg-slate-50"
-            value={entry.employeeName}
-            readOnly
-          />
+          <input id="employeeName" className="input bg-slate-50" value={entry.employeeName} readOnly />
         </div>
 
         <div>
@@ -91,19 +146,16 @@ export function TimeEntryEditForm({
             id="clientId"
             className="input"
             name="clientId"
-            required
             value={selectedClientId}
-            onChange={(event) => {
-              const nextClientId = event.target.value;
+            onChange={(e) => {
+              const nextClientId = e.target.value;
+              const nextProjectId = projects.find((project) => project.clientId === nextClientId)?.id ?? "";
               setSelectedClientId(nextClientId);
-              setSelectedProjectId(
-                projects.find((project) => project.clientId === nextClientId)?.id ?? "",
-              );
+              setSelectedProjectId(nextProjectId);
+              setSelectedSubProjectId("");
             }}
+            required
           >
-            <option value="" disabled>
-              Select client
-            </option>
             {clientOptions.map((client) => (
               <option key={client.id} value={client.id}>
                 {client.name}
@@ -120,11 +172,13 @@ export function TimeEntryEditForm({
             id="projectId"
             className="input"
             name="projectId"
-            required
             value={selectedProjectId}
-            onChange={(event) => setSelectedProjectId(event.target.value)}
+            onChange={(e) => {
+              setSelectedProjectId(e.target.value);
+              setSelectedSubProjectId("");
+            }}
+            required
           >
-            {filteredProjects.length === 0 ? <option value="">No projects available</option> : null}
             {filteredProjects.map((project) => (
               <option key={project.id} value={project.id}>
                 {project.name}
@@ -134,16 +188,80 @@ export function TimeEntryEditForm({
         </div>
 
         <div>
-          <FormLabel htmlFor="countryId">Country</FormLabel>
-          <select id="countryId" className="input" name="countryId" defaultValue={entry.countryId ?? ""}>
-            <option value="">No specific country</option>
-            {countries.map((country) => (
-              <option key={country.id} value={country.id}>
-                {country.name}
+          <FormLabel htmlFor="subProjectId">Sub Project</FormLabel>
+          <select
+            id="subProjectId"
+            className="input"
+            name="subProjectId"
+            value={selectedSubProjectId}
+            onChange={(e) => setSelectedSubProjectId(e.target.value)}
+          >
+            <option value="">No Sub Project</option>
+            {filteredSubProjects.map((subProject) => (
+              <option key={subProject.id} value={subProject.id}>
+                {subProject.name}
               </option>
             ))}
           </select>
         </div>
+
+        {showCountryField ? (
+          <div>
+            <FormLabel htmlFor="countryId" required={countryRequired}>
+              Country
+            </FormLabel>
+            <select
+              id="countryId"
+              className="input"
+              name="countryId"
+              defaultValue={entry.countryId ?? ""}
+              required={countryRequired}
+            >
+              <option value="">Select country</option>
+              {countries.map((country) => (
+                <option key={country.id} value={country.id}>
+                  {country.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
+        {showMovieField ? (
+          <div>
+            <FormLabel htmlFor="movieId">Movie</FormLabel>
+            <select id="movieId" className="input" name="movieId" defaultValue={entry.movieId ?? ""}>
+              <option value="">No specific movie</option>
+              {filteredMovies.map((movie) => (
+                <option key={movie.id} value={movie.id}>
+                  {movie.title}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
+        {showLanguageField ? (
+          <div>
+            <FormLabel htmlFor="languageId" required={languageRequired}>
+              Language
+            </FormLabel>
+            <select
+              id="languageId"
+              className="input"
+              name="languageId"
+              defaultValue={entry.languageId ?? ""}
+              required={languageRequired}
+            >
+              <option value="">Select language</option>
+              {languages.map((language) => (
+                <option key={language.id} value={language.id}>
+                  {language.name} ({language.code})
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
 
         <div>
           <FormLabel htmlFor="workDate" required>
@@ -152,49 +270,56 @@ export function TimeEntryEditForm({
           <input
             id="workDate"
             className="input"
-            type="date"
             name="workDate"
+            type="date"
             defaultValue={new Date(entry.workDate).toISOString().slice(0, 10)}
             required
           />
         </div>
 
         <div>
+          <FormLabel htmlFor="minutesSpent" required>
+            Time spent (minutes)
+          </FormLabel>
+          <input
+            id="minutesSpent"
+            className="input"
+            name="minutesSpent"
+            type="number"
+            min="1"
+            step="1"
+            defaultValue={entry.minutesSpent}
+            required
+          />
+        </div>
+
+        <div className="md:col-span-2">
           <FormLabel htmlFor="taskName" required>
             Task name
           </FormLabel>
           <input id="taskName" className="input" name="taskName" defaultValue={entry.taskName} required />
         </div>
 
-        <div>
-          <FormLabel htmlFor="minutesSpent" required>
-            Minutes spent
-          </FormLabel>
-          <input
-            id="minutesSpent"
-            className="input"
-            type="number"
-            name="minutesSpent"
-            min="5"
-            defaultValue={entry.minutesSpent}
-            required
-          />
+        <div className="md:col-span-2">
+          <FormLabel htmlFor="notes">Notes</FormLabel>
+          <textarea id="notes" className="input min-h-24" name="notes" defaultValue={entry.notes ?? ""} />
         </div>
+
+        <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <input type="hidden" name="isBillable" value="false" />
+          <input type="checkbox" name="isBillable" value="true" defaultChecked={entry.isBillable} />
+          Billable time
+        </label>
       </div>
 
-      <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-        <input id="isBillable" type="checkbox" name="isBillable" value="true" defaultChecked={entry.isBillable} />
-        <label htmlFor="isBillable" className="text-sm text-slate-700">Billable entry</label>
+      <div className="flex gap-3">
+        <Link href="/time-entries" className="btn-secondary">
+          Cancel
+        </Link>
+        <button className="btn-primary" type="submit" disabled={pending}>
+          {pending ? "Saving..." : "Save changes"}
+        </button>
       </div>
-
-      <div>
-        <FormLabel htmlFor="notes">Notes</FormLabel>
-        <textarea id="notes" className="input min-h-28" name="notes" defaultValue={entry.notes ?? ""} />
-      </div>
-
-      <button className="btn-primary w-full" disabled={pending || filteredProjects.length === 0 || !selectedProjectId}>
-        {pending ? "Saving..." : "Save changes"}
-      </button>
     </form>
   );
 }

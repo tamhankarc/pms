@@ -12,6 +12,16 @@ type TimeEntryProjectOption = {
   name: string;
   clientId: string;
   clientName: string;
+  showCountriesInTimeEntries: boolean;
+  showMoviesInEntries: boolean;
+  showLanguagesInEntries: boolean;
+};
+
+type TimeEntrySubProjectOption = {
+  id: string;
+  name: string;
+  projectId: string;
+  assignedUserIds: string[];
 };
 
 type TimeEntryEmployeeOption = {
@@ -20,16 +30,34 @@ type TimeEntryEmployeeOption = {
   userType: string;
 };
 
+type MovieOption = {
+  id: string;
+  title: string;
+  clientId: string;
+};
+
+type LanguageOption = {
+  id: string;
+  name: string;
+  code: string;
+};
+
 const initialState: TimeEntryFormState = {};
 
 export function TimeEntryCreateForm({
   projects,
+  subProjects,
   countries,
+  movies,
+  languages,
   assignableEmployees = [],
   defaultEmployeeId,
 }: {
   projects: TimeEntryProjectOption[];
+  subProjects: TimeEntrySubProjectOption[];
   countries: { id: string; name: string }[];
+  movies: MovieOption[];
+  languages: LanguageOption[];
   assignableEmployees?: TimeEntryEmployeeOption[];
   defaultEmployeeId?: string;
 }) {
@@ -39,7 +67,10 @@ export function TimeEntryCreateForm({
     () =>
       Array.from(
         new Map(
-          projects.map((project) => [project.clientId, { id: project.clientId, name: project.clientName }]),
+          projects.map((project) => [
+            project.clientId,
+            { id: project.clientId, name: project.clientName },
+          ]),
         ).values(),
       ),
     [projects],
@@ -53,13 +84,35 @@ export function TimeEntryCreateForm({
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(
     defaultEmployeeId ?? assignableEmployees[0]?.id ?? "",
   );
+  const [selectedSubProjectId, setSelectedSubProjectId] = useState("");
 
   const filteredProjects = useMemo(
     () => projects.filter((project) => project.clientId === selectedClientId),
     [projects, selectedClientId],
   );
 
+  const filteredSubProjects = useMemo(
+    () =>
+      subProjects.filter(
+        (subProject) =>
+          subProject.projectId === selectedProjectId &&
+          (!selectedEmployeeId || subProject.assignedUserIds.includes(selectedEmployeeId)),
+      ),
+    [subProjects, selectedProjectId, selectedEmployeeId],
+  );
+
+  const filteredMovies = useMemo(
+    () => movies.filter((movie) => movie.clientId === selectedClientId),
+    [movies, selectedClientId],
+  );
+
   const showEmployeeField = assignableEmployees.length > 1;
+  const selectedProject = projects.find((project) => project.id === selectedProjectId);
+  const showCountryField = Boolean(selectedProject?.showCountriesInTimeEntries);
+  const showMovieField = Boolean(selectedProject?.showMoviesInEntries);
+  const showLanguageField = Boolean(selectedProject?.showLanguagesInEntries);
+  const countryRequired = showCountryField;
+  const languageRequired = showLanguageField;
 
   return (
     <form action={formAction} className="card p-6">
@@ -86,18 +139,20 @@ export function TimeEntryCreateForm({
               className="input"
               name="employeeId"
               value={selectedEmployeeId}
-              onChange={(event) => setSelectedEmployeeId(event.target.value)}
+              onChange={(e) => {
+                setSelectedEmployeeId(e.target.value);
+                setSelectedSubProjectId("");
+              }}
             >
               {assignableEmployees.map((employee) => (
                 <option key={employee.id} value={employee.id}>
-                  {employee.fullName}
-                  {employee.userType !== "EMPLOYEE" ? ` · ${employee.userType.replaceAll("_", " ")}` : ""}
+                  {employee.fullName} · {employee.userType.replaceAll("_", " ")}
                 </option>
               ))}
             </select>
           </div>
         ) : (
-          <input type="hidden" name="employeeId" value={selectedEmployeeId || defaultEmployeeId || ""} />
+          <input type="hidden" name="employeeId" value={selectedEmployeeId} />
         )}
 
         <div>
@@ -108,19 +163,16 @@ export function TimeEntryCreateForm({
             id="clientId"
             className="input"
             name="clientId"
-            required
             value={selectedClientId}
-            onChange={(event) => {
-              const nextClientId = event.target.value;
+            onChange={(e) => {
+              const nextClientId = e.target.value;
+              const nextProjectId = projects.find((project) => project.clientId === nextClientId)?.id ?? "";
               setSelectedClientId(nextClientId);
-              setSelectedProjectId(
-                projects.find((project) => project.clientId === nextClientId)?.id ?? "",
-              );
+              setSelectedProjectId(nextProjectId);
+              setSelectedSubProjectId("");
             }}
+            required
           >
-            <option value="" disabled>
-              Select client
-            </option>
             {clientOptions.map((client) => (
               <option key={client.id} value={client.id}>
                 {client.name}
@@ -137,11 +189,13 @@ export function TimeEntryCreateForm({
             id="projectId"
             className="input"
             name="projectId"
-            required
             value={selectedProjectId}
-            onChange={(event) => setSelectedProjectId(event.target.value)}
+            onChange={(e) => {
+              setSelectedProjectId(e.target.value);
+              setSelectedSubProjectId("");
+            }}
+            required
           >
-            {filteredProjects.length === 0 ? <option value="">No projects available</option> : null}
             {filteredProjects.map((project) => (
               <option key={project.id} value={project.id}>
                 {project.name}
@@ -151,50 +205,104 @@ export function TimeEntryCreateForm({
         </div>
 
         <div>
-          <FormLabel htmlFor="countryId">Country</FormLabel>
-          <select id="countryId" className="input" name="countryId" defaultValue="">
-            <option value="">No specific country</option>
-            {countries.map((country) => (
-              <option key={country.id} value={country.id}>
-                {country.name}
+          <FormLabel htmlFor="subProjectId">Sub Project</FormLabel>
+          <select
+            id="subProjectId"
+            className="input"
+            name="subProjectId"
+            value={selectedSubProjectId}
+            onChange={(e) => setSelectedSubProjectId(e.target.value)}
+          >
+            <option value="">No Sub Project</option>
+            {filteredSubProjects.map((subProject) => (
+              <option key={subProject.id} value={subProject.id}>
+                {subProject.name}
               </option>
             ))}
           </select>
         </div>
 
+        {showCountryField ? (
+          <div>
+            <FormLabel htmlFor="countryId" required={countryRequired}>
+              Country
+            </FormLabel>
+            <select id="countryId" className="input" name="countryId" defaultValue="" required={countryRequired}>
+              <option value="">Select country</option>
+              {countries.map((country) => (
+                <option key={country.id} value={country.id}>
+                  {country.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
+        {showMovieField ? (
+          <div>
+            <FormLabel htmlFor="movieId">Movie</FormLabel>
+            <select id="movieId" className="input" name="movieId" defaultValue="">
+              <option value="">No specific movie</option>
+              {filteredMovies.map((movie) => (
+                <option key={movie.id} value={movie.id}>
+                  {movie.title}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
+        {showLanguageField ? (
+          <div>
+            <FormLabel htmlFor="languageId" required={languageRequired}>
+              Language
+            </FormLabel>
+            <select id="languageId" className="input" name="languageId" defaultValue="" required={languageRequired}>
+              <option value="">Select language</option>
+              {languages.map((language) => (
+                <option key={language.id} value={language.id}>
+                  {language.name} ({language.code})
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
         <div>
           <FormLabel htmlFor="workDate" required>
             Work date
           </FormLabel>
-          <input id="workDate" className="input" type="date" name="workDate" required />
+          <input id="workDate" className="input" name="workDate" type="date" required />
         </div>
 
         <div>
+          <FormLabel htmlFor="minutesSpent" required>
+            Time spent (minutes)
+          </FormLabel>
+          <input id="minutesSpent" className="input" name="minutesSpent" type="number" min="1" step="1" required />
+        </div>
+
+        <div className="md:col-span-2">
           <FormLabel htmlFor="taskName" required>
             Task name
           </FormLabel>
           <input id="taskName" className="input" name="taskName" required />
         </div>
 
-        <div>
-          <FormLabel htmlFor="minutesSpent" required>
-            Minutes spent
-          </FormLabel>
-          <input id="minutesSpent" className="input" type="number" name="minutesSpent" min="5" required />
-        </div>
-
         <div className="md:col-span-2">
           <FormLabel htmlFor="notes">Notes</FormLabel>
-          <textarea id="notes" className="input min-h-28" name="notes" />
+          <textarea id="notes" className="input min-h-24" name="notes" />
         </div>
 
+        <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <input type="hidden" name="isBillable" value="false" />
+          <input type="checkbox" name="isBillable" value="true" defaultChecked />
+          Billable time
+        </label>
+
         <div className="md:col-span-2">
-          <input type="hidden" name="isBillable" value="true" />
-          <button
-            className="btn-primary w-full md:w-auto"
-            disabled={pending || filteredProjects.length === 0 || !selectedProjectId}
-          >
-            {pending ? "Submitting..." : "Submit entry"}
+          <button className="btn-primary w-full md:w-auto" disabled={pending}>
+            {pending ? "Submitting..." : "Submit time entry"}
           </button>
         </div>
       </div>

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { hashPassword, requireUserTypes } from "@/lib/auth";
+import { hashPassword, requireUserTypesForAction } from "@/lib/auth";
 import {
   assertEmployeeHasAtLeastOneSupervisor,
   assertUniqueIds,
@@ -57,14 +57,8 @@ const baseSchema = z.object({
   designation: z.string().trim().max(120).optional().or(z.literal("")),
   joiningDate: z.string().optional().or(z.literal("")),
   phoneNumber: z.string().trim().max(30).optional().or(z.literal("")),
-  groupIds: z.array(z.string()).optional().default([]),
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
-
-function normalizeGroupIds(userType: typeof userTypes[number], groupIds: string[]) {
-  if (userType === "EMPLOYEE" || userType === "TEAM_LEAD") return groupIds;
-  return [];
-}
 
 function validateUserTypeRoleCombination(userType: typeof userTypes[number], functionalRole: FunctionalRole) {
   if (userType === "ACCOUNTS" && functionalRole !== "BILLING") {
@@ -104,7 +98,7 @@ export async function createUserAction(
   formData: FormData,
 ): Promise<UserFormState> {
   try {
-    const actor = await requireUserTypes(["ADMIN", "MANAGER"]);
+    const actor = await requireUserTypesForAction(["ADMIN", "MANAGER"]);
 
     const parsed = baseSchema.safeParse({
       fullName: formData.get("fullName"),
@@ -117,12 +111,14 @@ export async function createUserAction(
       designation: formData.get("designation") || "",
       joiningDate: formData.get("joiningDate") || "",
       phoneNumber: formData.get("phoneNumber"),
-      groupIds: formData.getAll("groupIds").map(String),
       isActive: formData.get("isActive") ?? "on",
     });
 
     if (!parsed.success || !parsed.data.password) {
-      return { success: false, error: parsed.success ? "Password is required." : parsed.error.issues[0]?.message };
+      return {
+        success: false,
+        error: parsed.success ? "Password is required." : parsed.error.issues[0]?.message,
+      };
     }
 
     if (actor.userType !== "ADMIN" && (parsed.data.userType === "MANAGER" || parsed.data.userType === "ADMIN")) {
@@ -131,21 +127,22 @@ export async function createUserAction(
 
     validateUserTypeRoleCombination(parsed.data.userType, parsed.data.functionalRole);
 
-    const supervisorIds = parsed.data.userType === "EMPLOYEE"
-      ? formData.getAll("supervisorIds").map(String).filter(Boolean)
-      : [];
+    const supervisorIds =
+      parsed.data.userType === "EMPLOYEE"
+        ? formData.getAll("supervisorIds").map(String).filter(Boolean)
+        : [];
 
     if (parsed.data.userType === "EMPLOYEE") {
       assertEmployeeHasAtLeastOneSupervisor(supervisorIds);
       assertUniqueIds(supervisorIds, "supervisor");
       const valid = await validateSupervisors(supervisorIds, parsed.data.functionalRole);
       if (!valid) {
-        return { success: false, error: "Supervisors must be Team Leads or Managers with the same functional role as the employee." };
+        return {
+          success: false,
+          error: "Supervisors must be Team Leads or Managers with the same functional role as the employee.",
+        };
       }
     }
-
-    const groupIds = normalizeGroupIds(parsed.data.userType, parsed.data.groupIds);
-    assertUniqueIds(groupIds, "employee group");
 
     const passwordHash = await hashPassword(parsed.data.password);
 
@@ -166,16 +163,6 @@ export async function createUserAction(
         },
       });
 
-      if (groupIds.length > 0) {
-        await tx.userEmployeeGroup.createMany({
-          data: groupIds.map((employeeGroupId) => ({
-            userId: user.id,
-            employeeGroupId,
-          })),
-          skipDuplicates: true,
-        });
-      }
-
       if (parsed.data.userType === "EMPLOYEE") {
         await tx.employeeTeamLead.createMany({
           data: supervisorIds.map((teamLeadId) => ({
@@ -190,7 +177,6 @@ export async function createUserAction(
 
     revalidatePath("/users");
     revalidatePath("/team-lead-assignments");
-    revalidatePath("/employee-groups");
     return { success: true };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
@@ -202,7 +188,7 @@ export async function updateUserAction(
   formData: FormData,
 ): Promise<UserFormState> {
   try {
-    const actor = await requireUserTypes(["ADMIN", "MANAGER"]);
+    const actor = await requireUserTypesForAction(["ADMIN", "MANAGER"]);
     const parsed = baseSchema.safeParse({
       id: formData.get("id"),
       fullName: formData.get("fullName"),
@@ -214,12 +200,14 @@ export async function updateUserAction(
       designation: formData.get("designation") || "",
       joiningDate: formData.get("joiningDate") || "",
       phoneNumber: formData.get("phoneNumber"),
-      groupIds: formData.getAll("groupIds").map(String),
       isActive: formData.get("isActive") ?? undefined,
     });
 
     if (!parsed.success || !parsed.data.id) {
-      return { success: false, error: parsed.success ? "User is required." : parsed.error.issues[0]?.message };
+      return {
+        success: false,
+        error: parsed.success ? "User is required." : parsed.error.issues[0]?.message,
+      };
     }
 
     if (actor.userType !== "ADMIN" && (parsed.data.userType === "MANAGER" || parsed.data.userType === "ADMIN")) {
@@ -228,21 +216,22 @@ export async function updateUserAction(
 
     validateUserTypeRoleCombination(parsed.data.userType, parsed.data.functionalRole);
 
-    const supervisorIds = parsed.data.userType === "EMPLOYEE"
-      ? formData.getAll("supervisorIds").map(String).filter(Boolean)
-      : [];
+    const supervisorIds =
+      parsed.data.userType === "EMPLOYEE"
+        ? formData.getAll("supervisorIds").map(String).filter(Boolean)
+        : [];
 
     if (parsed.data.userType === "EMPLOYEE") {
       assertEmployeeHasAtLeastOneSupervisor(supervisorIds);
       assertUniqueIds(supervisorIds, "supervisor");
       const valid = await validateSupervisors(supervisorIds, parsed.data.functionalRole);
       if (!valid) {
-        return { success: false, error: "Supervisors must be Team Leads or Managers with the same functional role as the employee." };
+        return {
+          success: false,
+          error: "Supervisors must be Team Leads or Managers with the same functional role as the employee.",
+        };
       }
     }
-
-    const groupIds = normalizeGroupIds(parsed.data.userType, parsed.data.groupIds);
-    assertUniqueIds(groupIds, "employee group");
 
     await db.$transaction(async (tx) => {
       await tx.user.update({
@@ -261,18 +250,8 @@ export async function updateUserAction(
         },
       });
 
-      await tx.userEmployeeGroup.deleteMany({ where: { userId: parsed.data.id! } });
-      if (groupIds.length > 0) {
-        await tx.userEmployeeGroup.createMany({
-          data: groupIds.map((employeeGroupId) => ({
-            userId: parsed.data.id!,
-            employeeGroupId,
-          })),
-          skipDuplicates: true,
-        });
-      }
-
       await tx.employeeTeamLead.deleteMany({ where: { employeeId: parsed.data.id! } });
+
       if (parsed.data.userType === "EMPLOYEE" && supervisorIds.length > 0) {
         await tx.employeeTeamLead.createMany({
           data: supervisorIds.map((teamLeadId) => ({
@@ -288,7 +267,6 @@ export async function updateUserAction(
     revalidatePath("/users");
     revalidatePath(`/users/${parsed.data.id}`);
     revalidatePath("/team-lead-assignments");
-    revalidatePath("/employee-groups");
     return { success: true };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
@@ -296,7 +274,7 @@ export async function updateUserAction(
 }
 
 export async function toggleUserStatusAction(formData: FormData) {
-  await requireUserTypes(["ADMIN", "MANAGER"]);
+  await requireUserTypesForAction(["ADMIN", "MANAGER"]);
   const userId = String(formData.get("userId") || "");
   if (!userId) throw new Error("User is required.");
 
@@ -327,7 +305,7 @@ export async function assignTeamLeadAction(
   formData: FormData,
 ): Promise<TeamLeadAssignmentState> {
   try {
-    const actor = await requireUserTypes(["ADMIN", "MANAGER"]);
+    const actor = await requireUserTypesForAction(["ADMIN", "MANAGER"]);
 
     const parsed = teamLeadAssignmentSchema.safeParse({
       teamLeadId: formData.get("teamLeadId"),
@@ -339,46 +317,49 @@ export async function assignTeamLeadAction(
     }
 
     const employee = await db.user.findUnique({
-    where: { id: parsed.data.employeeId },
-    select: { id: true, userType: true, functionalRole: true },
-  });
+      where: { id: parsed.data.employeeId },
+      select: { id: true, userType: true, functionalRole: true },
+    });
 
     if (!employee || employee.userType !== "EMPLOYEE") {
       return { success: false, error: "Selected user is not an employee." };
     }
 
-  const supervisor = await db.user.findUnique({
-    where: { id: parsed.data.teamLeadId },
-    select: { id: true, userType: true, functionalRole: true },
-  });
+    const supervisor = await db.user.findUnique({
+      where: { id: parsed.data.teamLeadId },
+      select: { id: true, userType: true, functionalRole: true },
+    });
 
-  const validSupervisor =
-    supervisor &&
-    (
-      supervisor.userType === "TEAM_LEAD" ||
-      (supervisor.userType === "MANAGER" && supervisor.functionalRole === employee.functionalRole)
-    );
+    const validSupervisor =
+      supervisor &&
+      (
+        supervisor.userType === "TEAM_LEAD" ||
+        (supervisor.userType === "MANAGER" && supervisor.functionalRole === employee.functionalRole)
+      );
 
     if (!validSupervisor) {
-      return { success: false, error: "Selected supervisor must be a Team Lead or a Manager with the same functional role as the employee." };
+      return {
+        success: false,
+        error: "Selected supervisor must be a Team Lead or a Manager with the same functional role as the employee.",
+      };
     }
 
     await db.employeeTeamLead.upsert({
-    where: {
-      employeeId_teamLeadId: {
+      where: {
+        employeeId_teamLeadId: {
+          employeeId: parsed.data.employeeId,
+          teamLeadId: parsed.data.teamLeadId,
+        },
+      },
+      create: {
         employeeId: parsed.data.employeeId,
         teamLeadId: parsed.data.teamLeadId,
+        assignedById: actor.id,
       },
-    },
-    create: {
-      employeeId: parsed.data.employeeId,
-      teamLeadId: parsed.data.teamLeadId,
-      assignedById: actor.id,
-    },
-    update: {
-      assignedById: actor.id,
-    },
-  });
+      update: {
+        assignedById: actor.id,
+      },
+    });
 
     revalidatePath("/team-lead-assignments");
     revalidatePath("/users");

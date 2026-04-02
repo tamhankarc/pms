@@ -25,13 +25,3 @@ export async function assertProjectAllowsNewEntries(projectId: string) {
   assertReviewableProjectState(project.status, project.isActive);
   return project;
 }
-
-export async function assertProjectHasCountriesInDb(projectId: string) {
-  const count = await db.projectCountry.count({
-    where: { projectId },
-  });
-
-  if (count < 1) {
-    throw new Error("A project must have at least one country.");
-  }
-}

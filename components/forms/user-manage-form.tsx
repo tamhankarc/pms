@@ -39,7 +39,6 @@ type UserManageFormProps = {
   mode: "create" | "edit";
   action: (state: UserFormState, formData: FormData) => Promise<UserFormState>;
   supervisors: SupervisorOption[];
-  groups: { id: string; name: string }[];
   initialValues?: {
     id?: string;
     fullName?: string;
@@ -52,7 +51,6 @@ type UserManageFormProps = {
     joiningDate?: string | null;
     phoneNumber?: string | null;
     isActive?: boolean;
-    groupIds?: string[];
     supervisorIds?: string[];
   };
 };
@@ -89,17 +87,11 @@ export function UserManageForm({
   mode,
   action,
   supervisors,
-  groups,
   initialValues,
 }: UserManageFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [userType, setUserType] = useState<(typeof userTypes)[number]>(initialValues?.userType ?? "EMPLOYEE");
   const [functionalRole, setFunctionalRole] = useState<FunctionalRole>(initialValues?.functionalRole ?? "DEVELOPER");
-
-  const canHaveGroups = useMemo(
-    () => userType === "EMPLOYEE" || userType === "TEAM_LEAD",
-    [userType],
-  );
 
   const canHaveSupervisors = userType === "EMPLOYEE";
 
@@ -220,19 +212,6 @@ export function UserManageForm({
           <input id="phoneNumber" className="input" name="phoneNumber" defaultValue={initialValues?.phoneNumber ?? ""} />
         </div>
 
-        {canHaveGroups ? (
-          <div className="md:col-span-2">
-            <FormLabel htmlFor="groupIds">Employee groups</FormLabel>
-            <select id="groupIds" className="input min-h-32" name="groupIds" multiple defaultValue={initialValues?.groupIds ?? []}>
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>{group.name}</option>
-              ))}
-            </select>
-            <p className="mt-2 text-xs text-slate-500">
-              Employee groups apply only to Employees and Team Leads.
-            </p>
-          </div>
-        ) : null}
 
         {canHaveSupervisors ? (
           <div className="md:col-span-2">
@@ -255,7 +234,7 @@ export function UserManageForm({
 
         {userType === "ACCOUNTS" ? (
           <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Accounts users are not assigned to employee groups or supervisors. They will only see the billing dashboard and can change their own password.
+            Accounts users are not assigned to supervisors. They will only see the billing dashboard and can change their own password.
           </div>
         ) : null}
 

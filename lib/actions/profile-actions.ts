@@ -6,7 +6,7 @@ import {
   createSession,
   getSession,
   hashPassword,
-  requireUser,
+  requireUserForAction,
   verifyPassword,
 } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -36,7 +36,7 @@ export async function updateProfileAction(
   formData: FormData,
 ): Promise<ProfileActionState> {
   try {
-    const currentUser = await requireUser();
+    const currentUser = await requireUserForAction();
 
     const parsed = profileSchema.safeParse({
       fullName: String(formData.get("fullName") ?? ""),
@@ -121,7 +121,7 @@ export async function changePasswordAction(
   formData: FormData,
 ): Promise<PasswordActionState> {
   try {
-    const currentUser = await requireUser();
+    const currentUser = await requireUserForAction();
 
     const parsed = passwordSchema.safeParse({
       currentPassword: String(formData.get("currentPassword") ?? ""),

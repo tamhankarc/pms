@@ -11,63 +11,58 @@ export default async function EditProjectPage({
 }) {
   const { id } = await params;
 
-  const [project, countries, employeeGroups, assignableUsers] = await Promise.all([
-    db.project.findUnique({
-      where: { id },
-      include: {
-        client: true,
-        movie: true,
-        countries: true,
-        employeeGroups: true,
-        assignedUsers: true,
-      },
-    }),
-    db.country.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-    }),
-    db.employeeGroup.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-    }),
-    db.user.findMany({
-      where: {
-        isActive: true,
-        userType: { in: ["EMPLOYEE", "TEAM_LEAD", "MANAGER"] },
-      },
-      orderBy: { fullName: "asc" },
-      select: { id: true, fullName: true, userType: true, functionalRole: true },
-    }),
-  ]);
+  const project = await db.project.findUnique({
+    where: { id },
+    include: {
+      client: true,
+      projectType: true,
+    },
+  });
 
   if (!project) notFound();
+
+  const projectTypes = project.client.enableProjectTypes
+    ? await db.projectType.findMany({
+        where: {
+          clientId: project.clientId,
+          isActive: true,
+        },
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          clientId: true,
+        },
+      })
+    : [];
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
         title="Edit project"
-        description="Client and Movie are locked after project creation."
-        actions={<Link href={`/projects/${project.id}`} className="btn-secondary">Back to project</Link>}
+        description="Client remains locked after creation."
+        actions={
+          <Link href={`/projects/${project.id}`} className="btn-secondary">
+            Back to project
+          </Link>
+        }
       />
 
       <ProjectEditForm
         projectId={project.id}
         lockedClientName={project.client.name}
-        lockedMovieTitle={project.movie?.title ?? null}
-        countries={countries}
-        employeeGroups={employeeGroups}
-        assignableUsers={assignableUsers}
+        projectTypes={projectTypes}
+        clientUsesProjectTypes={project.client.enableProjectTypes}
         initialValues={{
+          projectTypeId: project.projectTypeId,
           name: project.name,
           billingModel: project.billingModel,
-          fixedContractHours: project.fixedContractHours == null ? null : Number(project.fixedContractHours),
-          fixedMonthlyHours: project.fixedMonthlyHours == null ? null : Number(project.fixedMonthlyHours),
+          fixedContractHours:
+            project.fixedContractHours == null ? null : Number(project.fixedContractHours),
+          fixedMonthlyHours:
+            project.fixedMonthlyHours == null ? null : Number(project.fixedMonthlyHours),
           status: project.status,
           description: project.description,
-          countryIds: project.countries.map((item) => item.countryId),
-          assignmentType: project.assignedUsers.length > 0 ? "USER" : "GROUP",
-          employeeGroupIds: project.employeeGroups.map((item) => item.employeeGroupId),
-          directUserIds: project.assignedUsers.map((item) => item.userId),
         }}
       />
     </div>

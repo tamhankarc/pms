@@ -16,27 +16,35 @@ export default async function TimeEntriesPage({
   const params = (await searchParams) ?? {};
   const showCreate = params.create === "1";
 
-  const [projects, countries, supervisorAssignments, allActiveEmployees] = await Promise.all([
-    getVisibleProjects(user),
-    db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
-    user.userType === "TEAM_LEAD"
-      ? db.employeeTeamLead.findMany({
-          where: { teamLeadId: user.id },
-          include: {
-            employee: {
-              select: { id: true, fullName: true, functionalRole: true, userType: true, isActive: true },
+  const [projects, countries, movies, languages, supervisorAssignments, allActiveEmployees, allSubProjects] =
+    await Promise.all([
+      getVisibleProjects(user),
+      db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+      db.movie.findMany({ where: { isActive: true }, orderBy: { title: "asc" } }),
+      db.language.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+      user.userType === "TEAM_LEAD"
+        ? db.employeeTeamLead.findMany({
+            where: { teamLeadId: user.id },
+            include: {
+              employee: {
+                select: { id: true, fullName: true, functionalRole: true, userType: true, isActive: true },
+              },
             },
-          },
-        })
-      : Promise.resolve([]),
-    isManager(user)
-      ? db.user.findMany({
-          where: { isActive: true, userType: "EMPLOYEE" },
-          select: { id: true, fullName: true, userType: true },
-          orderBy: { fullName: "asc" },
-        })
-      : Promise.resolve([]),
-  ]);
+          })
+        : Promise.resolve([]),
+      isManager(user)
+        ? db.user.findMany({
+            where: { isActive: true, userType: "EMPLOYEE" },
+            select: { id: true, fullName: true, userType: true },
+            orderBy: { fullName: "asc" },
+          })
+        : Promise.resolve([]),
+      db.subProject.findMany({
+        where: { isActive: true },
+        include: { assignments: true },
+        orderBy: { name: "asc" },
+      }),
+    ]);
 
   const visibleProjectIds = projects.map((project) => project.id);
   const safeProjectIds = visibleProjectIds.length ? visibleProjectIds : ["__none__"];
@@ -66,7 +74,10 @@ export default async function TimeEntriesPage({
             },
     include: {
       employee: true,
-      project: true,
+      project: { include: { client: true } },
+      subProject: true,
+      movie: true,
+      language: true,
     },
     orderBy: { createdAt: "desc" },
     take: 50,
@@ -128,8 +139,23 @@ export default async function TimeEntriesPage({
             name: project.name,
             clientId: project.clientId,
             clientName: project.client.name,
+            showCountriesInTimeEntries: project.client.showCountriesInTimeEntries,
+            showMoviesInEntries: project.client.showMoviesInEntries,
+            showLanguagesInEntries: project.client.showLanguagesInEntries,
+          }))}
+          subProjects={allSubProjects.map((subProject) => ({
+            id: subProject.id,
+            name: subProject.name,
+            projectId: subProject.projectId,
+            assignedUserIds: subProject.assignments.map((row) => row.userId),
           }))}
           countries={countries.map((country) => ({ id: country.id, name: country.name }))}
+          movies={movies.map((movie) => ({ id: movie.id, title: movie.title, clientId: movie.clientId }))}
+          languages={languages.map((language) => ({
+            id: language.id,
+            name: language.name,
+            code: language.code,
+          }))}
           assignableEmployees={dedupedAssignableEmployees}
           defaultEmployeeId={user.id}
         />
@@ -162,19 +188,27 @@ export default async function TimeEntriesPage({
                   </td>
                   <td className="table-cell">
                     {entry.project.name}
-                    <div className="text-xs text-slate-500">{entry.taskName}</div>
+                    <div className="text-xs text-slate-500">{entry.subProject?.name ?? "No Sub Project"}</div>
                     <div className="text-xs text-slate-500">
                       {entry.countryId ? countryMap.get(entry.countryId) ?? "—" : "No specific country"}
                     </div>
+                    <div className="text-xs text-slate-500">
+                      {entry.movie?.title ?? "No specific movie"}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {entry.language ? `${entry.language.name} (${entry.language.code})` : "No specific language"}
+                    </div>
                   </td>
-                  <td className="table-cell">{new Date(entry.workDate).toLocaleDateString()}</td>
+                  <td className="table-cell">
+                    {new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(entry.workDate)}
+                  </td>
                   <td className="table-cell">{formatMinutes(entry.minutesSpent)}</td>
                   <td className="table-cell">
-                    <span className="badge-slate">{entry.status}</span>
+                    <span className="badge-blue">{entry.status}</span>
                   </td>
                   <td className="table-cell">
                     {canEdit ? (
-                      <Link href={`/time-entries/${entry.id}`} className="text-sm font-medium text-blue-600 hover:underline">
+                      <Link href={`/time-entries/${entry.id}`} className="btn-secondary text-xs">
                         Edit
                       </Link>
                     ) : (
@@ -186,7 +220,7 @@ export default async function TimeEntriesPage({
             })}
             {entries.length === 0 ? (
               <tr>
-                <td colSpan={6} className="table-cell text-center text-sm text-slate-500">
+                <td className="table-cell text-center text-sm text-slate-500" colSpan={6}>
                   No time entries found.
                 </td>
               </tr>

@@ -19,7 +19,6 @@ async function main() {
   const employeeHash = await bcrypt.hash("Employee@123", 10);
   const viewerHash = await bcrypt.hash("Viewer@123", 10);
 
-  // Users
   const admin = await prisma.user.upsert({
     where: { email: "admin@company.com" },
     update: {},
@@ -104,7 +103,6 @@ async function main() {
     },
   });
 
-  // Client
   const client = await prisma.client.upsert({
     where: { code: "WB" },
     update: {},
@@ -112,24 +110,54 @@ async function main() {
       name: "Warner Bros",
       code: "WB",
       isActive: true,
+      showCountriesInTimeEntries: true,
+      showMoviesInEntries: true,
+      showLanguagesInEntries: true,
+      enableProjectTypes: true,
     },
   });
 
-  // Movie (optional project linkage use-case)
-  const movie = await prisma.movie.create({
-    data: {
-      clientId: client.id,
-      title: "Sample Movie",
-      code: "SM001",
+  const movie = await prisma.movie
+    .create({
+      data: {
+        clientId: client.id,
+        title: "Sample Movie",
+        code: "SM001",
+        isActive: true,
+      },
+    })
+    .catch(async () => {
+      return prisma.movie.findFirstOrThrow({
+        where: { code: "SM001" },
+      });
+    });
+
+  const language = await prisma.language.upsert({
+    where: { code: "EN" },
+    update: {},
+    create: {
+      name: "English",
+      code: "EN",
       isActive: true,
     },
-  }).catch(async () => {
-    return prisma.movie.findFirstOrThrow({
-      where: { code: "SM001" },
-    });
   });
 
-  // Countries
+  const projectType = await prisma.projectType.upsert({
+    where: {
+      clientId_name: {
+        clientId: client.id,
+        name: "Marketing",
+      },
+    },
+    update: {},
+    create: {
+      clientId: client.id,
+      name: "Marketing",
+      code: "MKT",
+      isActive: true,
+    },
+  });
+
   const india = await prisma.country.upsert({
     where: { isoCode: "IN" },
     update: {},
@@ -150,36 +178,6 @@ async function main() {
     },
   });
 
-  // Employee Group
-  const deliveryGroup = await prisma.employeeGroup.upsert({
-    where: { code: "CORE-DEL" },
-    update: {},
-    create: {
-      name: "Core Delivery",
-      code: "CORE-DEL",
-      description: "Primary implementation and delivery team",
-      isActive: true,
-    },
-  });
-
-  // User ↔ Group mappings
-  for (const user of [teamLead, employee1, employee2]) {
-    await prisma.userEmployeeGroup.upsert({
-      where: {
-        userId_employeeGroupId: {
-          userId: user.id,
-          employeeGroupId: deliveryGroup.id,
-        },
-      },
-      update: {},
-      create: {
-        userId: user.id,
-        employeeGroupId: deliveryGroup.id,
-      },
-    });
-  }
-
-  // Employee ↔ Team Lead mappings
   for (const employee of [employee1, employee2]) {
     await prisma.employeeTeamLead.upsert({
       where: {
@@ -197,13 +195,12 @@ async function main() {
     });
   }
 
-  // Project
   const project = await prisma.project.upsert({
     where: { code: "PMS-WB-001" },
     update: {},
     create: {
       clientId: client.id,
-      movieId: movie.id,
+      projectTypeId: projectType.id,
       code: "PMS-WB-001",
       name: "WB Global Marketing Platform",
       description: "Seeded fixed monthly project",
@@ -217,44 +214,49 @@ async function main() {
     },
   });
 
-  // Project ↔ Countries
-  for (const country of [india, usa]) {
-    await prisma.projectCountry.upsert({
+  const subProject = await prisma.subProject.upsert({
+    where: {
+      projectId_name: {
+        projectId: project.id,
+        name: "Core Delivery",
+      },
+    },
+    update: {
+      description: "Primary implementation and delivery team",
+      isActive: true,
+    },
+    create: {
+      projectId: project.id,
+      name: "Core Delivery",
+      description: "Primary implementation and delivery team",
+      isActive: true,
+    },
+  });
+
+  for (const user of [teamLead, employee1, employee2, manager]) {
+    await prisma.subProjectAssignment.upsert({
       where: {
-        projectId_countryId: {
-          projectId: project.id,
-          countryId: country.id,
+        subProjectId_userId: {
+          subProjectId: subProject.id,
+          userId: user.id,
         },
       },
       update: {},
       create: {
-        projectId: project.id,
-        countryId: country.id,
+        subProjectId: subProject.id,
+        userId: user.id,
       },
     });
   }
 
-  // Project ↔ Employee Group
-  await prisma.projectEmployeeGroup.upsert({
-    where: {
-      projectId_employeeGroupId: {
-        projectId: project.id,
-        employeeGroupId: deliveryGroup.id,
-      },
-    },
-    update: {},
-    create: {
-      projectId: project.id,
-      employeeGroupId: deliveryGroup.id,
-    },
-  });
-
-  // Estimate
   const estimate = await prisma.estimate.create({
     data: {
       projectId: project.id,
+      subProjectId: subProject.id,
       employeeId: employee1.id,
       countryId: india.id,
+      movieId: movie.id,
+      languageId: language.id,
       workDate: new Date(),
       estimatedMinutes: 480,
       notes: "Homepage redesign estimate",
@@ -262,7 +264,6 @@ async function main() {
     },
   });
 
-  // Estimate Review
   await prisma.estimateReview.create({
     data: {
       estimateId: estimate.id,
@@ -272,12 +273,14 @@ async function main() {
     },
   });
 
-  // Time Entry
   const timeEntry = await prisma.timeEntry.create({
     data: {
       projectId: project.id,
+      subProjectId: subProject.id,
       employeeId: employee1.id,
       countryId: india.id,
+      movieId: movie.id,
+      languageId: language.id,
       workDate: new Date(),
       taskName: "Dashboard metrics implementation",
       minutesSpent: 240,
@@ -287,7 +290,6 @@ async function main() {
     },
   });
 
-  // Time Entry Review
   await prisma.timeEntryReview.create({
     data: {
       timeEntryId: timeEntry.id,
@@ -297,7 +299,6 @@ async function main() {
     },
   });
 
-  // Billing Transactions
   await prisma.billingTransaction.create({
     data: {
       projectId: project.id,

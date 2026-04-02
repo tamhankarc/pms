@@ -18,13 +18,6 @@ export default async function CountryEditPage({
   const { id } = await params;
   const country = await db.country.findUnique({
     where: { id },
-    include: {
-      projects: {
-        include: {
-          project: { select: { id: true, name: true, code: true } },
-        },
-      },
-    },
   });
 
   if (!country) notFound();
@@ -34,21 +27,14 @@ export default async function CountryEditPage({
       <PageHeader
         title={`Edit country · ${country.name}`}
         description="Update country details and active status."
-        actions={<Link href="/countries" className="btn-secondary">Back to countries</Link>}
+        actions={
+          <Link href="/countries" className="btn-secondary">
+            Back to countries
+          </Link>
+        }
       />
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-        <div className="card p-6">
-          <h2 className="section-title">Linked projects</h2>
-          <div className="mt-5 space-y-2">
-            {country.projects.length > 0 ? country.projects.map((row) => (
-              <div key={row.id} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                {row.project.name}{row.project.code ? ` · ${row.project.code}` : ""}
-              </div>
-            )) : <div className="text-sm text-slate-500">No linked projects.</div>}
-          </div>
-        </div>
-
+      <div className="max-w-3xl">
         <CountryForm
           mode="edit"
           action={updateCountryAction}

@@ -169,7 +169,7 @@ export default async function DashboardPage({
         <section className="card p-6">
           <h2 className="section-title">Recent projects</h2>
           <p className="section-subtitle">
-            Visibility respects employee groups or direct individual assignment, except for Admin, Manager, Team Lead, and Report Viewer accounts.
+            Visibility respects direct project assignment, except for Admin, Manager, Team Lead, and Report Viewer accounts.
           </p>
 
           <div className="mt-5 overflow-x-auto">
@@ -179,7 +179,7 @@ export default async function DashboardPage({
                   <th className="table-cell">Project</th>
                   <th className="table-cell">Client</th>
                   <th className="table-cell">Billing</th>
-                  <th className="table-cell">Countries</th>
+                  <th className="table-cell">Assigned To</th>
                   <th className="table-cell">Status</th>
                 </tr>
               </thead>
@@ -193,7 +193,7 @@ export default async function DashboardPage({
                     <td className="table-cell">{project.client.name}</td>
                     <td className="table-cell">{project.billingModel.replaceAll("_", " ")}</td>
                     <td className="table-cell">
-                      {project.countries.map((c) => c.country.name).join(", ")}
+                      {project.assignedUsers.map((row) => row.user.fullName).join(", ") || "—"}
                     </td>
                     <td className="table-cell">
                       <span className="badge-blue">{project.status.replaceAll("_", " ")}</span>
@@ -229,9 +229,6 @@ export default async function DashboardPage({
                   <p className="font-medium text-slate-900">{row.employee.fullName}</p>
                   <p className="text-sm text-slate-500">
                     {(row.employee.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}
-                  </p>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Groups: {row.employee.employeeGroups.map((g) => g.employeeGroup.name).join(", ") || "—"}
                   </p>
                 </li>
               ))}

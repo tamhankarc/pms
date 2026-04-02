@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requireUserForAction } from "@/lib/auth";
 import { canManageCountries } from "@/lib/permissions";
 
 export type CountryFormState = {
@@ -19,7 +19,7 @@ const countrySchema = z.object({
 });
 
 async function requireCountryAccess() {
-  const user = await requireUser();
+  const user = await requireUserForAction();
   if (!canManageCountries(user)) {
     throw new Error("You are not allowed to manage countries.");
   }

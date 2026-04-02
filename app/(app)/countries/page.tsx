@@ -32,9 +32,6 @@ export default async function CountriesPage({
       ...(status === "active" ? { isActive: true } : {}),
       ...(status === "inactive" ? { isActive: false } : {}),
     },
-    include: {
-      projects: true,
-    },
     orderBy: { name: "asc" },
   });
 
@@ -42,7 +39,7 @@ export default async function CountriesPage({
     <div>
       <PageHeader
         title="Countries"
-        description="Create and maintain country masters used for project assignment and filtering. Only Admins and Project Managers can access this area."
+        description="Create and maintain country masters used in time entries and filtering. Only Admins and Project Managers can access this area."
       />
 
       <div className="mb-6 card p-4">
@@ -58,7 +55,9 @@ export default async function CountriesPage({
             <option value="active">Active only</option>
             <option value="inactive">Inactive only</option>
           </select>
-          <button className="btn-secondary" type="submit">Apply</button>
+          <button className="btn-secondary" type="submit">
+            Apply
+          </button>
         </form>
       </div>
 
@@ -69,7 +68,6 @@ export default async function CountriesPage({
               <tr>
                 <th className="table-cell">Country</th>
                 <th className="table-cell">ISO code</th>
-                <th className="table-cell">Linked projects</th>
                 <th className="table-cell">Status</th>
                 <th className="table-cell">Action</th>
               </tr>
@@ -81,7 +79,6 @@ export default async function CountriesPage({
                     <div className="font-medium text-slate-900">{country.name}</div>
                   </td>
                   <td className="table-cell">{country.isoCode || "—"}</td>
-                  <td className="table-cell">{country.projects.length}</td>
                   <td className="table-cell">
                     <span className={country.isActive ? "badge-emerald" : "badge-slate"}>
                       {country.isActive ? "Active" : "Inactive"}
@@ -104,7 +101,7 @@ export default async function CountriesPage({
               ))}
               {countries.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="table-cell text-center text-sm text-slate-500">
+                  <td colSpan={4} className="table-cell text-center text-sm text-slate-500">
                     No countries found.
                   </td>
                 </tr>

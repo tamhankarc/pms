@@ -12,11 +12,16 @@ export default async function EditEstimatePage({
   const { id } = await params;
   const user = await requireUser();
 
-  const [estimate, countries] = await Promise.all([
+  const [estimate, countries, movies, languages, projects, subProjects] = await Promise.all([
     db.estimate.findUnique({
       where: { id },
       include: {
-        project: true,
+        project: {
+          include: {
+            client: true,
+          },
+        },
+        subProject: true,
         employee: true,
         reviews: {
           include: {
@@ -29,6 +34,26 @@ export default async function EditEstimatePage({
     }),
     db.country.findMany({
       where: { isActive: true },
+      orderBy: { name: "asc" },
+    }),
+    db.movie.findMany({
+      where: { isActive: true },
+      orderBy: { title: "asc" },
+    }),
+    db.language.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+    }),
+    db.project.findMany({
+      where: { isActive: true },
+      include: {
+        client: true,
+      },
+      orderBy: { name: "asc" },
+    }),
+    db.subProject.findMany({
+      where: { isActive: true },
+      include: { assignments: true },
       orderBy: { name: "asc" },
     }),
   ]);
@@ -63,46 +88,34 @@ export default async function EditEstimatePage({
         <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="grid gap-3 md:grid-cols-2">
             <div>
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                Employee
-              </div>
-              <div className="mt-1 text-sm text-slate-900">
-                {estimate.employee.fullName}
-              </div>
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Employee</div>
+              <div className="mt-1 text-sm text-slate-900">{estimate.employee.fullName}</div>
             </div>
 
             <div>
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                Project
-              </div>
-              <div className="mt-1 text-sm text-slate-900">
-                {estimate.project.name}
-              </div>
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Project</div>
+              <div className="mt-1 text-sm text-slate-900">{estimate.project.name}</div>
             </div>
 
             <div>
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                Current status
-              </div>
-              <div className="mt-1 text-sm text-slate-900">
-                {estimate.status}
-              </div>
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Sub Project</div>
+              <div className="mt-1 text-sm text-slate-900">{estimate.subProject?.name ?? "No Sub Project"}</div>
             </div>
 
             <div>
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                Current estimate
-              </div>
-              <div className="mt-1 text-sm text-slate-900">
-                {estimate.estimatedMinutes} minutes
-              </div>
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Current status</div>
+              <div className="mt-1 text-sm text-slate-900">{estimate.status}</div>
+            </div>
+
+            <div>
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Current estimate</div>
+              <div className="mt-1 text-sm text-slate-900">{estimate.estimatedMinutes} minutes</div>
             </div>
           </div>
 
           {latestReview?.remarks ? (
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              <span className="font-medium">Latest review note:</span>{" "}
-              {latestReview.remarks}
+              <span className="font-medium">Latest review note:</span> {latestReview.remarks}
             </div>
           ) : null}
         </div>
@@ -110,12 +123,39 @@ export default async function EditEstimatePage({
         <EstimateEditForm
           estimate={{
             id: estimate.id,
+            employeeId: estimate.employeeId,
+            clientId: estimate.project.clientId,
+            projectId: estimate.projectId,
+            subProjectId: estimate.subProjectId,
             countryId: estimate.countryId,
+            movieId: estimate.movieId,
+            languageId: estimate.languageId,
             workDate: estimate.workDate,
             estimatedMinutes: estimate.estimatedMinutes,
             notes: estimate.notes,
           }}
+          projects={projects.map((project) => ({
+            id: project.id,
+            name: project.name,
+            clientId: project.clientId,
+            clientName: project.client.name,
+            showCountriesInTimeEntries: project.client.showCountriesInTimeEntries,
+            showMoviesInEntries: project.client.showMoviesInEntries,
+            showLanguagesInEntries: project.client.showLanguagesInEntries,
+          }))}
+          subProjects={subProjects.map((subProject) => ({
+            id: subProject.id,
+            name: subProject.name,
+            projectId: subProject.projectId,
+            assignedUserIds: subProject.assignments.map((row) => row.userId),
+          }))}
           countries={countries.map((country) => ({ id: country.id, name: country.name }))}
+          movies={movies.map((movie) => ({ id: movie.id, title: movie.title, clientId: movie.clientId }))}
+          languages={languages.map((language) => ({
+            id: language.id,
+            name: language.name,
+            code: language.code,
+          }))}
         />
 
         {estimate.reviews.length > 0 ? (
@@ -123,22 +163,14 @@ export default async function EditEstimatePage({
             <h2 className="section-title">Review History</h2>
             <div className="mt-4 space-y-3">
               {estimate.reviews.map((review) => (
-                <div
-                  key={review.id}
-                  className="rounded-xl border border-slate-200 px-4 py-3"
-                >
+                <div key={review.id} className="rounded-xl border border-slate-200 px-4 py-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-sm font-medium text-slate-900">
-                      {review.decisionStatus}
-                    </div>
+                    <div className="text-sm font-medium text-slate-900">{review.decisionStatus}</div>
                     <div className="text-xs text-slate-500">
-                      {review.reviewer.fullName} ·{" "}
-                      {new Date(review.reviewedAt).toLocaleString()}
+                      {review.reviewer.fullName} · {new Date(review.reviewedAt).toLocaleString()}
                     </div>
                   </div>
-                  <div className="mt-2 text-sm text-slate-700">
-                    {review.remarks || "No remarks."}
-                  </div>
+                  <div className="mt-2 text-sm text-slate-700">{review.remarks || "No remarks."}</div>
                 </div>
               ))}
             </div>

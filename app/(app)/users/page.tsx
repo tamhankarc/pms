@@ -41,7 +41,7 @@ export default async function UsersPage({
   const userType = toUserTypeFilter(params.userType);
   const showCreate = params.create === "1";
 
-  const [users, supervisorRows, groups] = await Promise.all([
+  const [users, supervisorRows] = await Promise.all([
     db.user.findMany({
       where: {
         ...(q
@@ -60,8 +60,7 @@ export default async function UsersPage({
         ...(userType !== "all" ? { userType } : {}),
       },
       include: {
-        employeeGroups: { include: { employeeGroup: true } },
-        teamLeadAssignmentsAsEmployee: { include: { teamLead: true } },
+        employeeSupervisors: { include: { teamLead: true } },
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -78,11 +77,6 @@ export default async function UsersPage({
         userType: true,
         functionalRole: true,
       },
-    }),
-    db.employeeGroup.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
     }),
   ]);
 
@@ -103,7 +97,7 @@ export default async function UsersPage({
     <div className="space-y-6">
       <PageHeader
         title="Users"
-        description="Create and manage users, roles, employee groups, supervisor assignment, employee code, designation, joining date, and active status."
+        description="Create and manage users, roles, supervisor assignment, employee code, designation, joining date, and active status."
         actions={
           canManageUsers(currentUser) ? (
             <Link className="btn-primary" href="/users?create=1">
@@ -145,7 +139,6 @@ export default async function UsersPage({
         <UserManageForm
           mode="create"
           supervisors={supervisors}
-          groups={groups}
           action={createUserAction}
         />
       ) : null}
@@ -160,7 +153,7 @@ export default async function UsersPage({
               <th className="table-cell">Employee code</th>
               <th className="table-cell">Designation</th>
               <th className="table-cell">Joining date</th>
-              <th className="table-cell">Groups / Supervisors</th>
+              <th className="table-cell">Supervisors</th>
               <th className="table-cell">Status</th>
               <th className="table-cell">Action</th>
             </tr>
@@ -184,20 +177,10 @@ export default async function UsersPage({
                 </td>
                 <td className="table-cell">
                   {user.userType === "EMPLOYEE" ? (
-                    <>
-                      <div className="text-xs text-slate-600">
-                        Groups: {user.employeeGroups.map((g) => g.employeeGroup.name).join(", ") || "—"}
-                      </div>
-                      <div className="mt-1 text-xs text-slate-600">
-                        Supervisors:{" "}
-                        {user.teamLeadAssignmentsAsEmployee
-                          .map((t) => `${t.teamLead.fullName} (${t.teamLead.userType.replaceAll("_", " ")})`)
-                          .join(", ") || "—"}
-                      </div>
-                    </>
-                  ) : user.userType === "TEAM_LEAD" ? (
-                    <div className="text-xs text-slate-600">
-                      Groups: {user.employeeGroups.map((g) => g.employeeGroup.name).join(", ") || "—"}
+                    <div className="mt-1 text-xs text-slate-600">
+                      {user.employeeSupervisors
+                        .map((t) => `${t.teamLead.fullName} (${t.teamLead.userType.replaceAll("_", " ")})`)
+                        .join(", ") || "—"}
                     </div>
                   ) : user.userType === "ACCOUNTS" ? (
                     <div className="text-xs text-slate-600">No groups or supervisors</div>

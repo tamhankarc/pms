@@ -69,15 +69,43 @@ export async function getSession() {
   }
 }
 
+/**
+ * Page/component guard version: redirects when unauthenticated.
+ */
 export async function requireUser() {
   const user = await getSession();
   if (!user) redirect("/login");
   return user;
 }
 
+/**
+ * Page/component guard version: redirects when unauthorized.
+ */
 export async function requireUserTypes(userTypes: UserType[]) {
   const user = await requireUser();
   if (!userTypes.includes(user.userType)) redirect("/dashboard");
+  return user;
+}
+
+/**
+ * Server action-safe version: throws normal errors instead of redirecting.
+ */
+export async function requireUserForAction() {
+  const user = await getSession();
+  if (!user) {
+    throw new Error("You must be signed in.");
+  }
+  return user;
+}
+
+/**
+ * Server action-safe version: throws normal errors instead of redirecting.
+ */
+export async function requireUserTypesForAction(userTypes: UserType[]) {
+  const user = await requireUserForAction();
+  if (!userTypes.includes(user.userType)) {
+    throw new Error("You do not have permission to perform this action.");
+  }
   return user;
 }
 

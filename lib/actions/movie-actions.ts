@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireUserTypes } from "@/lib/auth";
+import { requireUserTypesForAction } from "@/lib/auth";
 
 export type MovieFormState = {
   success?: boolean;
@@ -24,7 +24,7 @@ export async function createMovieAction(
   formData: FormData,
 ): Promise<MovieFormState> {
   try {
-    await requireUserTypes(["ADMIN", "MANAGER"]);
+    await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
 
     const parsed = movieSchema.safeParse({
       clientId: formData.get("clientId"),
@@ -67,7 +67,7 @@ export async function updateMovieAction(
   formData: FormData,
 ): Promise<MovieFormState> {
   try {
-    await requireUserTypes(["ADMIN", "MANAGER"]);
+    await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
 
     const parsed = movieSchema.safeParse({
       id: formData.get("id"),
@@ -109,7 +109,7 @@ export async function updateMovieAction(
 }
 
 export async function toggleMovieStatusAction(formData: FormData) {
-  await requireUserTypes(["ADMIN", "MANAGER"]);
+  await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
 
   const movieId = String(formData.get("movieId") || "");
   if (!movieId) throw new Error("Movie is required.");

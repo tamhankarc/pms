@@ -7,10 +7,14 @@ import type { BillingModel } from "@prisma/client";
 export async function getVisibleProjects(user: SessionUser) {
   const include = {
     client: true,
-    movie: true,
-    countries: { include: { country: true } },
-    employeeGroups: { include: { employeeGroup: true } },
+    projectType: true,
     assignedUsers: { include: { user: true } },
+    subProjects: {
+      include: {
+        assignments: { include: { user: true } },
+      },
+      orderBy: { name: "asc" as const },
+    },
   } as const;
 
   if (canSeeAllProjects(user)) {
@@ -24,26 +28,25 @@ export async function getVisibleProjects(user: SessionUser) {
     where: {
       OR: [
         {
-          employeeGroups: {
-            some: {
-              employeeGroup: {
-                users: {
-                  some: {
-                    userId: user.id,
-                  },
-                },
-              },
-            },
-          },
-        },
-        {
           assignedUsers: {
             some: {
               userId: user.id,
             },
           },
         },
+        {
+          subProjects: {
+            some: {
+              assignments: {
+                some: {
+                  userId: user.id,
+                },
+              },
+            },
+          },
+        },
       ],
+      isActive: true,
     },
     include,
     orderBy: { createdAt: "desc" },
@@ -99,11 +102,7 @@ export async function getManagedEmployees(teamLeadId: string) {
   return db.employeeTeamLead.findMany({
     where: { teamLeadId },
     include: {
-      employee: {
-        include: {
-          employeeGroups: { include: { employeeGroup: true } },
-        },
-      },
+      employee: true,
     },
     orderBy: { assignedAt: "desc" },
   });

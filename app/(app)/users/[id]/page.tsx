@@ -12,12 +12,11 @@ export default async function UserEditPage({
 }) {
   const { id } = await params;
 
-  const [user, supervisorRows, groups] = await Promise.all([
+  const [user, supervisorRows] = await Promise.all([
     db.user.findUnique({
       where: { id },
       include: {
-        employeeGroups: true,
-        teamLeadAssignmentsAsEmployee: true,
+        employeeSupervisors: true,
       },
     }),
     db.user.findMany({
@@ -33,11 +32,6 @@ export default async function UserEditPage({
         userType: true,
         functionalRole: true,
       },
-    }),
-    db.employeeGroup.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
     }),
   ]);
 
@@ -60,7 +54,7 @@ export default async function UserEditPage({
     <div className="space-y-6">
       <PageHeader
         title={`Edit user · ${user.fullName}`}
-        description="Update core user details, groups, supervisors, employee code, designation, joining date, and active status."
+        description="Update core user details, supervisors, employee code, designation, joining date, and active status."
         actions={
           <Link href="/users" className="btn-secondary">
             Back to users
@@ -72,7 +66,6 @@ export default async function UserEditPage({
         mode="edit"
         action={updateUserAction}
         supervisors={supervisors}
-        groups={groups}
         initialValues={{
           id: user.id,
           fullName: user.fullName,
@@ -95,8 +88,7 @@ export default async function UserEditPage({
             : null,
           phoneNumber: user.phoneNumber,
           isActive: user.isActive,
-          groupIds: user.employeeGroups.map((row) => row.employeeGroupId),
-          supervisorIds: user.teamLeadAssignmentsAsEmployee.map((row) => row.teamLeadId),
+          supervisorIds: user.employeeSupervisors.map((row) => row.teamLeadId),
         }}
       />
     </div>

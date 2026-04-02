@@ -17,16 +17,32 @@ export default async function ProjectsPage({
   const billingModel = params.billingModel ?? "all";
 
   const allProjects = await getVisibleProjects(user);
+
   const projects = allProjects.filter((project) => {
+    const assignedPeople = Array.from(
+      new Map<string, string>([
+        ...project.assignedUsers.map(
+          (row) => [row.user.id, row.user.fullName] as const,
+        ),
+        ...project.subProjects.flatMap((subProject) =>
+          subProject.assignments.map(
+            (row) => [row.user.id, row.user.fullName] as const,
+          ),
+        ),
+      ]).values(),
+    );
+
     const matchesQ =
       !q ||
       project.name.toLowerCase().includes(q) ||
       (project.code ?? "").toLowerCase().includes(q) ||
       project.client.name.toLowerCase().includes(q) ||
-      (project.movie?.title ?? "").toLowerCase().includes(q);
+      assignedPeople.some((name) => name.toLowerCase().includes(q));
 
     const matchesStatus = status === "all" ? true : project.status === status;
-    const matchesBilling = billingModel === "all" ? true : project.billingModel === billingModel;
+    const matchesBilling =
+      billingModel === "all" ? true : project.billingModel === billingModel;
+
     return matchesQ && matchesStatus && matchesBilling;
   });
 
@@ -34,7 +50,7 @@ export default async function ProjectsPage({
     <div>
       <PageHeader
         title="Projects"
-        description="Project records hold billing model, client, optional movie, countries, assignment mode, and commercial tracking."
+        description="Project records hold billing model, client, commercial tracking, and assigned people across project and sub-project levels."
         actions={
           canCreateProjects(user) ? (
             <Link className="btn-primary" href="/projects/new">
@@ -46,7 +62,12 @@ export default async function ProjectsPage({
 
       <div className="mb-6 card p-4">
         <form className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]" method="get">
-          <input className="input" name="q" defaultValue={q} placeholder="Search by project, code, client, or movie" />
+          <input
+            className="input"
+            name="q"
+            defaultValue={q}
+            placeholder="Search by project, code, client, or assigned person"
+          />
           <select className="input" name="status" defaultValue={status}>
             <option value="all">All statuses</option>
             <option value="DRAFT">Draft</option>
@@ -61,7 +82,9 @@ export default async function ProjectsPage({
             <option value="FIXED_FULL">Fixed - Full Project</option>
             <option value="FIXED_MONTHLY">Fixed - Monthly</option>
           </select>
-          <button className="btn-secondary" type="submit">Apply</button>
+          <button className="btn-secondary" type="submit">
+            Apply
+          </button>
         </form>
       </div>
 
@@ -71,56 +94,81 @@ export default async function ProjectsPage({
             <tr>
               <th className="table-cell">Project</th>
               <th className="table-cell">Client</th>
-              <th className="table-cell">Movie</th>
+              <th className="table-cell">Assigned People</th>
               <th className="table-cell">Billing</th>
-              <th className="table-cell">Assignment</th>
               <th className="table-cell">Status</th>
               <th className="table-cell">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {projects.map((project) => (
-              <tr key={project.id}>
-                <td className="table-cell">
-                  <div className="font-medium text-slate-900">{project.name}</div>
-                  <div className="text-xs text-slate-500">{project.code ?? "—"}</div>
-                </td>
-                <td className="table-cell">{project.client.name}</td>
-                <td className="table-cell">{project.movie?.title ?? "—"}</td>
-                <td className="table-cell">{project.billingModel.replaceAll("_", " ")}</td>
-                <td className="table-cell">
-                  {project.assignedUsers.length > 0
-                    ? `Users: ${project.assignedUsers.map((row) => row.user.fullName).join(", ")}`
-                    : `Groups: ${project.employeeGroups.map((g) => g.employeeGroup.name).join(", ") || "—"}`}
-                </td>
-                <td className="table-cell">
-                  <span className="badge-blue">{project.status.replaceAll("_", " ")}</span>
-                </td>
-                <td className="table-cell">
-                  <div className="flex gap-2">
-                    <Link className="btn-secondary text-xs" href={`/projects/${project.id}`}>
-                      View
-                    </Link>
-                    {canCreateProjects(user) ? (
-                      <>
-                        <Link className="btn-secondary text-xs" href={`/projects/${project.id}/edit`}>
-                          Edit
-                        </Link>
-                        <form action={toggleProjectStatusAction}>
-                          <input type="hidden" name="projectId" value={project.id} />
-                          <button className="btn-secondary text-xs">
-                            {project.isActive ? "Deactivate" : "Activate"}
-                          </button>
-                        </form>
-                      </>
-                    ) : null}
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {projects.map((project) => {
+              const assignedPeople = Array.from(
+                new Map<string, string>([
+                  ...project.assignedUsers.map(
+                    (row) => [row.user.id, row.user.fullName] as const,
+                  ),
+                  ...project.subProjects.flatMap((subProject) =>
+                    subProject.assignments.map(
+                      (row) => [row.user.id, row.user.fullName] as const,
+                    ),
+                  ),
+                ]).values(),
+              );
+
+              return (
+                <tr key={project.id}>
+                  <td className="table-cell">
+                    <div className="font-medium text-slate-900">{project.name}</div>
+                    <div className="text-xs text-slate-500">{project.code ?? "—"}</div>
+                  </td>
+                  <td className="table-cell">{project.client.name}</td>
+                  <td className="table-cell">
+                    {assignedPeople.length > 0 ? (
+                      <div className="text-sm text-slate-700">
+                        {assignedPeople.join(", ")}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-slate-400">—</span>
+                    )}
+                  </td>
+                  <td className="table-cell">
+                    {project.billingModel.replaceAll("_", " ")}
+                  </td>
+                  <td className="table-cell">
+                    <span className="badge-blue">
+                      {project.status.replaceAll("_", " ")}
+                    </span>
+                  </td>
+                  <td className="table-cell">
+                    <div className="flex gap-2">
+                      <Link className="btn-secondary text-xs" href={`/projects/${project.id}`}>
+                        View
+                      </Link>
+                      {canCreateProjects(user) ? (
+                        <>
+                          <Link
+                            className="btn-secondary text-xs"
+                            href={`/projects/${project.id}/edit`}
+                          >
+                            Edit
+                          </Link>
+                          <form action={toggleProjectStatusAction}>
+                            <input type="hidden" name="projectId" value={project.id} />
+                            <button className="btn-secondary text-xs">
+                              {project.isActive ? "Deactivate" : "Activate"}
+                            </button>
+                          </form>
+                        </>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+
             {projects.length === 0 ? (
               <tr>
-                <td colSpan={7} className="table-cell text-center text-sm text-slate-500">
+                <td colSpan={6} className="table-cell text-center text-sm text-slate-500">
                   No projects found.
                 </td>
               </tr>

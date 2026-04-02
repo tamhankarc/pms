@@ -61,7 +61,7 @@ export default async function ReportsPage({
       project.name.toLowerCase().includes(q) ||
       (project.code ?? "").toLowerCase().includes(q) ||
       project.client.name.toLowerCase().includes(q) ||
-      (project.movie?.title ?? "").toLowerCase().includes(q);
+      (project.projectType?.name ?? "").toLowerCase().includes(q);
 
     const matchesClient = clientId === "all" ? true : project.clientId === clientId;
     const matchesBilling = billingModel === "all" ? true : project.billingModel === billingModel;
@@ -207,7 +207,7 @@ export default async function ReportsPage({
             className="input"
             name="q"
             defaultValue={q}
-            placeholder="Search by project, code, client, or movie"
+            placeholder="Search by project, code, client, or project type"
           />
           <select className="input" name="clientId" defaultValue={clientId}>
             <option value="all">All clients</option>

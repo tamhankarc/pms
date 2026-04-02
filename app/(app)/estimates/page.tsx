@@ -12,7 +12,10 @@ import { EstimateCreateForm } from "@/components/forms/estimate-create-form";
 const estimateWithRelations = {
   include: {
     project: true,
+    subProject: true,
     employee: true,
+    movie: true,
+    language: true,
     reviews: {
       include: {
         reviewer: true,
@@ -27,7 +30,10 @@ const estimateWithRelations = {
 type EstimateRow = Prisma.EstimateGetPayload<{
   include: {
     project: true;
+    subProject: true;
     employee: true;
+    movie: true;
+    language: true;
     reviews: {
       include: {
         reviewer: true;
@@ -45,13 +51,21 @@ export default async function EstimatesPage({
   const params = (await searchParams) ?? {};
   const showCreate = params.create === "1";
 
-  const [projects, countries, assignments] = await Promise.all([
+  const [projects, countries, movies, languages, assignments, allSubProjects] = await Promise.all([
     getVisibleProjects(user),
     db.country.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
     }),
-    (user.userType === "TEAM_LEAD" || isManager(user))
+    db.movie.findMany({
+      where: { isActive: true },
+      orderBy: { title: "asc" },
+    }),
+    db.language.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+    }),
+    user.userType === "TEAM_LEAD" || isManager(user)
       ? db.employeeTeamLead.findMany({
           where: { teamLeadId: user.id },
           include: {
@@ -61,6 +75,11 @@ export default async function EstimatesPage({
           },
         })
       : Promise.resolve([]),
+    db.subProject.findMany({
+      where: { isActive: true },
+      include: { assignments: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   const safeProjectIds = projects.length ? projects.map((p) => p.id) : ["__none__"];
@@ -78,7 +97,9 @@ export default async function EstimatesPage({
           }
         : user.userType === "TEAM_LEAD"
           ? {
-              employeeId: { in: assignedScopedEmployeeIds.length ? assignedScopedEmployeeIds : ["__none__"] },
+              employeeId: {
+                in: assignedScopedEmployeeIds.length ? assignedScopedEmployeeIds : ["__none__"],
+              },
               projectId: { in: safeProjectIds },
             }
           : {
@@ -110,8 +131,29 @@ export default async function EstimatesPage({
 
       {showCreate && canCreate ? (
         <EstimateCreateForm
-          projects={projects.map((project) => ({ id: project.id, name: project.name }))}
+          projects={projects.map((project) => ({
+            id: project.id,
+            name: project.name,
+            clientId: project.clientId,
+            clientName: project.client.name,
+            showCountriesInTimeEntries: project.client.showCountriesInTimeEntries,
+            showMoviesInEntries: project.client.showMoviesInEntries,
+            showLanguagesInEntries: project.client.showLanguagesInEntries,
+          }))}
+          subProjects={allSubProjects.map((subProject) => ({
+            id: subProject.id,
+            name: subProject.name,
+            projectId: subProject.projectId,
+            assignedUserIds: subProject.assignments.map((row) => row.userId),
+          }))}
           countries={countries.map((country) => ({ id: country.id, name: country.name }))}
+          movies={movies.map((movie) => ({ id: movie.id, title: movie.title, clientId: movie.clientId }))}
+          languages={languages.map((language) => ({
+            id: language.id,
+            name: language.name,
+            code: language.code,
+          }))}
+          currentUserId={user.id}
         />
       ) : null}
 
@@ -142,13 +184,15 @@ export default async function EstimatesPage({
               return (
                 <tr key={estimate.id}>
                   <td className="table-cell align-top">
-                    <div className="font-medium text-slate-900">
-                      {estimate.employee.fullName}
+                    <div className="font-medium text-slate-900">{estimate.employee.fullName}</div>
+                    <div className="text-xs text-slate-500">
+                      {estimate.countryId ? countryMap.get(estimate.countryId) ?? "—" : "No specific country"}
                     </div>
                     <div className="text-xs text-slate-500">
-                      {estimate.countryId
-                        ? countryMap.get(estimate.countryId) ?? "—"
-                        : "No specific country"}
+                      {estimate.movie?.title ?? "No specific movie"}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {estimate.language ? `${estimate.language.name} (${estimate.language.code})` : "No specific language"}
                     </div>
                     {latestReview?.remarks ? (
                       <div className="mt-2 rounded-lg bg-amber-50 px-2 py-1 text-xs text-amber-800">
@@ -156,10 +200,11 @@ export default async function EstimatesPage({
                       </div>
                     ) : null}
                   </td>
-                  <td className="table-cell align-top">{estimate.project.name}</td>
                   <td className="table-cell align-top">
-                    {formatMinutes(estimate.estimatedMinutes)}
+                    {estimate.project.name}
+                    <div className="text-xs text-slate-500">{estimate.subProject?.name ?? "No Sub Project"}</div>
                   </td>
+                  <td className="table-cell align-top">{formatMinutes(estimate.estimatedMinutes)}</td>
                   <td className="table-cell align-top">
                     <span
                       className={
@@ -181,9 +226,7 @@ export default async function EstimatesPage({
                         <form action={reviewEstimateAction}>
                           <input type="hidden" name="estimateId" value={estimate.id} />
                           <input type="hidden" name="action" value="APPROVED" />
-                          <button className="btn-secondary !px-3 !py-1.5 text-xs">
-                            Approve
-                          </button>
+                          <button className="btn-secondary !px-3 !py-1.5 text-xs">Approve</button>
                         </form>
                         <form action={reviewEstimateAction}>
                           <input type="hidden" name="estimateId" value={estimate.id} />
@@ -193,18 +236,16 @@ export default async function EstimatesPage({
                             name="comment"
                             value="Please update and resubmit this estimate."
                           />
-                          <button className="btn-secondary !px-3 !py-1.5 text-xs">
-                            Revise
-                          </button>
+                          <button className="btn-secondary !px-3 !py-1.5 text-xs">Revise</button>
                         </form>
                       </div>
                     ) : canResubmit ? (
-                      <a
+                      <Link
                         href={`/estimates/${estimate.id}/edit`}
                         className="text-sm font-medium text-blue-600 hover:underline"
                       >
                         Edit &amp; Resubmit
-                      </a>
+                      </Link>
                     ) : (
                       <span className="text-xs text-slate-400">—</span>
                     )}

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requireUserForAction } from "@/lib/auth";
 import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/permissions";
 
 export type TimeEntryFormState = {
@@ -15,7 +15,10 @@ const timeSchema = z.object({
   employeeId: z.string().optional(),
   clientId: z.string().min(1, "Client is required."),
   projectId: z.string().min(1, "Project is required."),
+  subProjectId: z.string().optional(),
   countryId: z.string().optional(),
+  movieId: z.string().optional(),
+  languageId: z.string().optional(),
   workDate: z.string().min(1),
   taskName: z.string().trim().min(2, "Task name is required.").max(200),
   minutesSpent: z.coerce.number().int().positive(),
@@ -23,16 +26,21 @@ const timeSchema = z.object({
   notes: z.string().optional(),
 });
 
-async function validateProjectClient(projectId: string, clientId: string) {
-  const project = await db.project.findUnique({
-    where: { id: projectId },
-    select: { id: true, clientId: true, isActive: true },
-  });
+const timeUpdateSchema = timeSchema.extend({
+  entryId: z.string().min(1, "Time entry is required."),
+});
 
-  return Boolean(project && project.clientId === clientId && project.isActive);
+async function getProjectForClient(projectId: string, clientId: string) {
+  return db.project.findFirst({
+    where: { id: projectId, clientId, isActive: true },
+    include: { client: true },
+  });
 }
 
-async function userCanLogAgainstProject(user: Awaited<ReturnType<typeof requireUser>>, projectId: string) {
+async function userCanLogAgainstProject(
+  user: Awaited<ReturnType<typeof requireUserForAction>>,
+  projectId: string,
+) {
   const count = await db.project.count({
     where: {
       id: projectId,
@@ -42,20 +50,20 @@ async function userCanLogAgainstProject(user: Awaited<ReturnType<typeof requireU
         : {
             OR: [
               {
-                employeeGroups: {
+                assignedUsers: {
                   some: {
-                    employeeGroup: {
-                      users: {
-                        some: { userId: user.id },
-                      },
-                    },
+                    userId: user.id,
                   },
                 },
               },
               {
-                assignedUsers: {
+                subProjects: {
                   some: {
-                    userId: user.id,
+                    assignments: {
+                      some: {
+                        userId: user.id,
+                      },
+                    },
                   },
                 },
               },
@@ -63,10 +71,14 @@ async function userCanLogAgainstProject(user: Awaited<ReturnType<typeof requireU
           }),
     },
   });
+
   return count > 0;
 }
 
-async function canActForEmployee(user: Awaited<ReturnType<typeof requireUser>>, employeeId: string) {
+async function canActForEmployee(
+  user: Awaited<ReturnType<typeof requireUserForAction>>,
+  employeeId: string,
+) {
   if (employeeId === user.id) return true;
 
   if (canFullyModerateProject(user) || isManager(user)) {
@@ -97,54 +109,187 @@ async function canActForEmployee(user: Awaited<ReturnType<typeof requireUser>>, 
   return false;
 }
 
+async function validateSubProjectUsage({
+  projectId,
+  subProjectId,
+  employeeId,
+}: {
+  projectId: string;
+  subProjectId?: string;
+  employeeId: string;
+}) {
+  if (!subProjectId) return { valid: true as const };
+
+  const subProject = await db.subProject.findFirst({
+    where: {
+      id: subProjectId,
+      projectId,
+      isActive: true,
+      assignments: { some: { userId: employeeId } },
+    },
+    select: { id: true },
+  });
+
+  return subProject
+    ? { valid: true as const }
+    : {
+        valid: false as const,
+        error: "Selected Sub Project is invalid or the chosen employee is not assigned to it.",
+      };
+}
+
+async function validateClientFieldRequirements(
+  projectId: string,
+  {
+    countryId,
+    movieId,
+    languageId,
+    clientId,
+  }: {
+    countryId?: string;
+    movieId?: string;
+    languageId?: string;
+    clientId: string;
+  },
+) {
+  const project = await db.project.findUnique({
+    where: { id: projectId },
+    include: { client: true },
+  });
+
+  if (!project) {
+    return { valid: false as const, error: "Project not found." };
+  }
+
+  if (project.clientId !== clientId) {
+    return { valid: false as const, error: "Selected project does not belong to the selected client." };
+  }
+
+  if (project.client.showCountriesInTimeEntries && !countryId) {
+    return { valid: false as const, error: "Country is required for the selected client." };
+  }
+
+  if (project.client.showLanguagesInEntries && !languageId) {
+    return { valid: false as const, error: "Language is required for the selected client." };
+  }
+
+  if (!project.client.showCountriesInTimeEntries && countryId) {
+    return { valid: false as const, error: "Country is not enabled for the selected client." };
+  }
+
+  if (!project.client.showMoviesInEntries && movieId) {
+    return { valid: false as const, error: "Movie is not enabled for the selected client." };
+  }
+
+  if (!project.client.showLanguagesInEntries && languageId) {
+    return { valid: false as const, error: "Language is not enabled for the selected client." };
+  }
+
+  if (movieId) {
+    const movie = await db.movie.findFirst({
+      where: {
+        id: movieId,
+        clientId: project.clientId,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+
+    if (!movie) {
+      return { valid: false as const, error: "Selected movie does not belong to the selected client." };
+    }
+  }
+
+  if (languageId) {
+    const language = await db.language.findFirst({
+      where: {
+        id: languageId,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+
+    if (!language) {
+      return { valid: false as const, error: "Selected language is invalid." };
+    }
+  }
+
+  return { valid: true as const };
+}
+
 export async function createTimeEntryAction(
   _prevState: TimeEntryFormState,
   formData: FormData,
 ): Promise<TimeEntryFormState> {
   try {
-    const user = await requireUser();
+    const user = await requireUserForAction();
 
     const parsed = timeSchema.safeParse({
       employeeId: formData.get("employeeId") || user.id,
       clientId: formData.get("clientId"),
       projectId: formData.get("projectId"),
+      subProjectId: formData.get("subProjectId") || undefined,
       countryId: formData.get("countryId") || undefined,
+      movieId: formData.get("movieId") || undefined,
+      languageId: formData.get("languageId") || undefined,
       workDate: formData.get("workDate"),
       taskName: formData.get("taskName"),
       minutesSpent: formData.get("minutesSpent"),
-      isBillable: formData.get("isBillable") === "true",
+      isBillable: formData.getAll("isBillable").includes("true"),
       notes: formData.get("notes") || "",
     });
 
     if (!parsed.success) {
-      return { success: false, error: parsed.error.issues[0]?.message || "Invalid time entry payload" };
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message || "Invalid time entry payload",
+      };
     }
 
-    if (!["EMPLOYEE", "TEAM_LEAD"].includes(user.userType) && !isManager(user)) {
-      return { success: false, error: "You are not allowed to submit time entries." };
+    const employeeId = parsed.data.employeeId || user.id;
+
+    const canAct = await canActForEmployee(user, employeeId);
+    if (!canAct) {
+      return { success: false, error: "You cannot add time for the selected employee." };
     }
 
-    const targetEmployeeId = parsed.data.employeeId || user.id;
-    const canSubmitForEmployee = await canActForEmployee(user, targetEmployeeId);
-    if (!canSubmitForEmployee) {
-      return { success: false, error: "You are not allowed to submit time entries for the selected employee." };
-    }
-
-    const validProjectClient = await validateProjectClient(parsed.data.projectId, parsed.data.clientId);
-    if (!validProjectClient) {
+    const project = await getProjectForClient(parsed.data.projectId, parsed.data.clientId);
+    if (!project) {
       return { success: false, error: "Selected project does not belong to the selected client." };
     }
 
+    const fieldCheck = await validateClientFieldRequirements(parsed.data.projectId, {
+      clientId: parsed.data.clientId,
+      countryId: parsed.data.countryId,
+      movieId: parsed.data.movieId,
+      languageId: parsed.data.languageId,
+    });
+    if (!fieldCheck.valid) {
+      return { success: false, error: fieldCheck.error };
+    }
+
     const canUseProject = await userCanLogAgainstProject(user, parsed.data.projectId);
-    if (!canUseProject) {
-      return { success: false, error: "You can only add time entries to your assigned projects." };
+    if (!canUseProject && !canFullyModerateProject(user)) {
+      return { success: false, error: "You can only use projects assigned to you for this time entry." };
+    }
+
+    const subProjectCheck = await validateSubProjectUsage({
+      projectId: parsed.data.projectId,
+      subProjectId: parsed.data.subProjectId,
+      employeeId,
+    });
+    if (!subProjectCheck.valid) {
+      return { success: false, error: subProjectCheck.error };
     }
 
     await db.timeEntry.create({
       data: {
-        employeeId: targetEmployeeId,
+        employeeId,
         projectId: parsed.data.projectId,
+        subProjectId: parsed.data.subProjectId || null,
         countryId: parsed.data.countryId || null,
+        movieId: parsed.data.movieId || null,
+        languageId: parsed.data.languageId || null,
         workDate: new Date(parsed.data.workDate),
         taskName: parsed.data.taskName,
         minutesSpent: parsed.data.minutesSpent,
@@ -157,45 +302,41 @@ export async function createTimeEntryAction(
     revalidatePath("/time-entries");
     return { success: true };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Something went wrong.",
+    };
   }
 }
-
-const updateTimeSchema = z.object({
-  entryId: z.string().min(1),
-  employeeId: z.string().optional(),
-  clientId: z.string().min(1, "Client is required."),
-  projectId: z.string().min(1, "Project is required."),
-  countryId: z.string().optional(),
-  workDate: z.string().min(1),
-  taskName: z.string().trim().min(2, "Task name is required.").max(200),
-  minutesSpent: z.coerce.number().int().positive(),
-  isBillable: z.coerce.boolean().default(true),
-  notes: z.string().optional(),
-});
 
 export async function updateTimeEntryAction(
   _prevState: TimeEntryFormState,
   formData: FormData,
 ): Promise<TimeEntryFormState> {
   try {
-    const user = await requireUser();
+    const user = await requireUserForAction();
 
-    const parsed = updateTimeSchema.safeParse({
+    const parsed = timeUpdateSchema.safeParse({
       entryId: formData.get("entryId"),
-      employeeId: formData.get("employeeId") || undefined,
+      employeeId: formData.get("employeeId"),
       clientId: formData.get("clientId"),
       projectId: formData.get("projectId"),
+      subProjectId: formData.get("subProjectId") || undefined,
       countryId: formData.get("countryId") || undefined,
+      movieId: formData.get("movieId") || undefined,
+      languageId: formData.get("languageId") || undefined,
       workDate: formData.get("workDate"),
       taskName: formData.get("taskName"),
       minutesSpent: formData.get("minutesSpent"),
-      isBillable: formData.get("isBillable") === "true",
+      isBillable: formData.getAll("isBillable").includes("true"),
       notes: formData.get("notes") || "",
     });
 
     if (!parsed.success) {
-      return { success: false, error: parsed.error.issues[0]?.message || "Invalid time entry update payload" };
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message || "Invalid time entry update payload",
+      };
     }
 
     const entry = await db.timeEntry.findUnique({
@@ -218,15 +359,25 @@ export async function updateTimeEntryAction(
     const canEdit =
       canFullyModerateProject(user) ||
       entry.employeeId === user.id ||
-      (user.userType === "TEAM_LEAD" && Boolean(assignment));
+      ((user.userType === "TEAM_LEAD" || isManager(user)) && Boolean(assignment));
 
     if (!canEdit) {
       return { success: false, error: "You do not have edit access for this time entry." };
     }
 
-    const validProjectClient = await validateProjectClient(parsed.data.projectId, parsed.data.clientId);
-    if (!validProjectClient) {
+    const project = await getProjectForClient(parsed.data.projectId, parsed.data.clientId);
+    if (!project) {
       return { success: false, error: "Selected project does not belong to the selected client." };
+    }
+
+    const fieldCheck = await validateClientFieldRequirements(parsed.data.projectId, {
+      clientId: parsed.data.clientId,
+      countryId: parsed.data.countryId,
+      movieId: parsed.data.movieId,
+      languageId: parsed.data.languageId,
+    });
+    if (!fieldCheck.valid) {
+      return { success: false, error: fieldCheck.error };
     }
 
     const canUseProject = await userCanLogAgainstProject(user, parsed.data.projectId);
@@ -234,11 +385,23 @@ export async function updateTimeEntryAction(
       return { success: false, error: "You can only use projects assigned to you for this time entry." };
     }
 
+    const subProjectCheck = await validateSubProjectUsage({
+      projectId: parsed.data.projectId,
+      subProjectId: parsed.data.subProjectId,
+      employeeId: entry.employeeId,
+    });
+    if (!subProjectCheck.valid) {
+      return { success: false, error: subProjectCheck.error };
+    }
+
     await db.timeEntry.update({
       where: { id: entry.id },
       data: {
         projectId: parsed.data.projectId,
+        subProjectId: parsed.data.subProjectId || null,
         countryId: parsed.data.countryId || null,
+        movieId: parsed.data.movieId || null,
+        languageId: parsed.data.languageId || null,
         workDate: new Date(parsed.data.workDate),
         taskName: parsed.data.taskName,
         minutesSpent: parsed.data.minutesSpent,
@@ -251,6 +414,9 @@ export async function updateTimeEntryAction(
     revalidatePath(`/time-entries/${entry.id}`);
     return { success: true };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Something went wrong.",
+    };
   }
 }

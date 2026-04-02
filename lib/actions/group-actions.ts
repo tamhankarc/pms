@@ -2,8 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { db } from "@/lib/db";
-import { requireUserTypes } from "@/lib/auth";
+import { requireUserTypesForAction } from "@/lib/auth";
 
 export type EmployeeGroupFormState = {
   success?: boolean;
@@ -18,23 +17,15 @@ const groupSchema = z.object({
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
 
-async function validateAssignableUsers(userIds: string[]) {
-  if (userIds.length === 0) return true;
-  const count = await db.user.count({
-    where: {
-      id: { in: userIds },
-      userType: { in: ["EMPLOYEE", "TEAM_LEAD"] },
-    },
-  });
-  return count === userIds.length;
-}
+const REMOVED_FEATURE_MESSAGE =
+  "Employee Groups have been removed. Use Sub Projects and personnel assignment instead.";
 
 export async function createEmployeeGroupAction(
   _prevState: EmployeeGroupFormState,
   formData: FormData,
 ): Promise<EmployeeGroupFormState> {
   try {
-    await requireUserTypes(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+    await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
 
     const parsed = groupSchema.safeParse({
       name: formData.get("name"),
@@ -44,40 +35,23 @@ export async function createEmployeeGroupAction(
     });
 
     if (!parsed.success) {
-      return { success: false, error: parsed.error.issues[0]?.message || "Invalid employee group payload." };
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message || "Invalid employee group payload.",
+      };
     }
 
-    const validUsers = await validateAssignableUsers(parsed.data.userIds);
-    if (!validUsers) {
-      return { success: false, error: "Only Employees and Team Leads can be assigned to a group." };
-    }
-
-    await db.$transaction(async (tx) => {
-      const group = await tx.employeeGroup.create({
-        data: {
-          name: parsed.data.name,
-          description: parsed.data.description || null,
-          isActive: Boolean(parsed.data.isActive),
-        },
-      });
-
-      if (parsed.data.userIds.length > 0) {
-        await tx.userEmployeeGroup.createMany({
-          data: parsed.data.userIds.map((userId) => ({
-            userId,
-            employeeGroupId: group.id,
-          })),
-          skipDuplicates: true,
-        });
-      }
-    });
-
-    revalidatePath("/employee-groups");
-    revalidatePath("/projects/new");
+    revalidatePath("/sub-project");
     revalidatePath("/projects");
-    return { success: true };
+    return {
+      success: false,
+      error: REMOVED_FEATURE_MESSAGE,
+    };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Something went wrong.",
+    };
   }
 }
 
@@ -86,7 +60,7 @@ export async function updateEmployeeGroupAction(
   formData: FormData,
 ): Promise<EmployeeGroupFormState> {
   try {
-    await requireUserTypes(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+    await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
 
     const parsed = groupSchema.safeParse({
       id: formData.get("id"),
@@ -97,62 +71,33 @@ export async function updateEmployeeGroupAction(
     });
 
     if (!parsed.success || !parsed.data.id) {
-      return { success: false, error: parsed.success ? "Employee group is required." : parsed.error.issues[0]?.message };
+      return {
+        success: false,
+        error: parsed.success
+          ? "Employee group is required."
+          : parsed.error.issues[0]?.message,
+      };
     }
 
-    const validUsers = await validateAssignableUsers(parsed.data.userIds);
-    if (!validUsers) {
-      return { success: false, error: "Only Employees and Team Leads can be assigned to a group." };
-    }
-
-    await db.$transaction(async (tx) => {
-      await tx.employeeGroup.update({
-        where: { id: parsed.data.id! },
-        data: {
-          name: parsed.data.name,
-          description: parsed.data.description || null,
-          isActive: Boolean(parsed.data.isActive),
-        },
-      });
-
-      await tx.userEmployeeGroup.deleteMany({
-        where: { employeeGroupId: parsed.data.id! },
-      });
-
-      if (parsed.data.userIds.length > 0) {
-        await tx.userEmployeeGroup.createMany({
-          data: parsed.data.userIds.map((userId) => ({
-            userId,
-            employeeGroupId: parsed.data.id!,
-          })),
-          skipDuplicates: true,
-        });
-      }
-    });
-
-    revalidatePath("/employee-groups");
-    revalidatePath(`/employee-groups/${parsed.data.id}`);
-    revalidatePath("/projects/new");
+    revalidatePath("/sub-project");
     revalidatePath("/projects");
-    return { success: true };
+    return {
+      success: false,
+      error: REMOVED_FEATURE_MESSAGE,
+    };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Something went wrong.",
+    };
   }
 }
 
 export async function toggleEmployeeGroupStatusAction(formData: FormData) {
-  await requireUserTypes(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+  await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+
   const groupId = String(formData.get("groupId") || "");
   if (!groupId) throw new Error("Employee group is required.");
 
-  const group = await db.employeeGroup.findUnique({ where: { id: groupId } });
-  if (!group) throw new Error("Employee group not found.");
-
-  await db.employeeGroup.update({
-    where: { id: groupId },
-    data: { isActive: !group.isActive },
-  });
-
-  revalidatePath("/employee-groups");
-  revalidatePath(`/employee-groups/${groupId}`);
+  throw new Error(REMOVED_FEATURE_MESSAGE);
 }
