@@ -120,7 +120,7 @@ export function SearchableCombobox({
         )}
       >
         <span className="min-w-0 flex-1 truncate">{selectedOption?.label ?? placeholder}</span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 text-bold" />
+        <ChevronDown className="h-4 w-4 shrink-0 text-slate-700 text-bold" />
       </button>
 
       {isOpen ? (
