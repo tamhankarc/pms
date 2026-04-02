@@ -6,6 +6,7 @@ import {
   type EstimateFormState,
 } from "@/lib/actions/estimate-actions";
 import { FormLabel } from "@/components/ui/form-label";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import Link from "next/link";
 
 type EstimateProjectOption = {
@@ -24,6 +25,12 @@ type EstimateSubProjectOption = {
   name: string;
   projectId: string;
   assignedUserIds: string[];
+};
+
+type EstimateEmployeeOption = {
+  id: string;
+  fullName: string;
+  userType: string;
 };
 
 type MovieOption = {
@@ -47,11 +54,13 @@ export function EstimateEditForm({
   countries,
   movies,
   languages,
+  assignableEmployees = [],
   allowUnassignedSubProjects = false,
 }: {
   estimate: {
     id: string;
     employeeId: string;
+    employeeName: string;
     employeeUserType: string;
     clientId: string;
     projectId: string;
@@ -68,6 +77,7 @@ export function EstimateEditForm({
   countries: { id: string; name: string }[];
   movies: MovieOption[];
   languages: LanguageOption[];
+  assignableEmployees?: EstimateEmployeeOption[];
   allowUnassignedSubProjects?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(updateEstimateAction, initialState);
@@ -87,6 +97,7 @@ export function EstimateEditForm({
 
   const [selectedClientId, setSelectedClientId] = useState(estimate.clientId);
   const [selectedProjectId, setSelectedProjectId] = useState(estimate.projectId);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(estimate.employeeId);
   const [selectedSubProjectId, setSelectedSubProjectId] = useState(estimate.subProjectId ?? "");
 
   const filteredProjects = useMemo(
@@ -94,13 +105,17 @@ export function EstimateEditForm({
     [projects, selectedClientId],
   );
 
+  const selectedEmployee =
+    assignableEmployees.find((employee) => employee.id === selectedEmployeeId) ??
+    ({ id: estimate.employeeId, fullName: estimate.employeeName, userType: estimate.employeeUserType } as EstimateEmployeeOption);
+
   const bypassAssignmentForEstimateEmployee =
     allowUnassignedSubProjects &&
-    (estimate.employeeUserType === "MANAGER" || estimate.employeeUserType === "TEAM_LEAD");
+    (selectedEmployee.userType === "MANAGER" || selectedEmployee.userType === "TEAM_LEAD");
 
   const selectedProjectOption = projects.find((project) => project.id === selectedProjectId);
   const estimateEmployeeHasProjectAssignment = Boolean(
-    selectedProjectOption?.assignedUserIds.includes(estimate.employeeId),
+    selectedEmployeeId && selectedProjectOption?.assignedUserIds.includes(selectedEmployeeId),
   );
 
   const filteredSubProjects = useMemo(
@@ -108,12 +123,12 @@ export function EstimateEditForm({
       subProjects.filter((subProject) => {
         if (subProject.projectId !== selectedProjectId) return false;
         if (bypassAssignmentForEstimateEmployee || estimateEmployeeHasProjectAssignment) return true;
-        return subProject.assignedUserIds.includes(estimate.employeeId);
+        return subProject.assignedUserIds.includes(selectedEmployeeId);
       }),
     [
       subProjects,
       selectedProjectId,
-      estimate.employeeId,
+      selectedEmployeeId,
       bypassAssignmentForEstimateEmployee,
       estimateEmployeeHasProjectAssignment,
     ],
@@ -124,6 +139,7 @@ export function EstimateEditForm({
     [movies, selectedClientId],
   );
 
+  const showEmployeeField = assignableEmployees.length > 0;
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const showCountryField = Boolean(selectedProject?.showCountriesInTimeEntries);
   const showMovieField = Boolean(selectedProject?.showMoviesInEntries);
@@ -148,6 +164,36 @@ export function EstimateEditForm({
       <input type="hidden" name="estimateId" value={estimate.id} />
 
       <div className="grid gap-4 md:grid-cols-2">
+        {showEmployeeField ? (
+          <div className="md:col-span-2">
+            <FormLabel htmlFor="employeeId">Employee</FormLabel>
+            <select
+              id="employeeId"
+              className="input"
+              name="employeeId"
+              value={selectedEmployeeId}
+              onChange={(e) => {
+                setSelectedEmployeeId(e.target.value);
+                setSelectedSubProjectId("");
+              }}
+            >
+              {assignableEmployees.map((employee) => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.fullName} · {employee.userType.replaceAll("_", " ")}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <>
+            <input type="hidden" name="employeeId" value={selectedEmployeeId} />
+            <div className="md:col-span-2">
+              <FormLabel htmlFor="employeeName">Employee</FormLabel>
+              <input id="employeeName" className="input bg-slate-50" value={estimate.employeeName} readOnly />
+            </div>
+          </>
+        )}
+
         <div>
           <FormLabel htmlFor="clientId" required>
             Client
@@ -178,23 +224,24 @@ export function EstimateEditForm({
           <FormLabel htmlFor="projectId" required>
             Project
           </FormLabel>
-          <select
+          <SearchableCombobox
             id="projectId"
-            className="input"
             name="projectId"
             value={selectedProjectId}
-            onChange={(e) => {
-              setSelectedProjectId(e.target.value);
+            onValueChange={(nextValue) => {
+              setSelectedProjectId(nextValue);
               setSelectedSubProjectId("");
             }}
+            options={filteredProjects.map((project) => ({
+              value: project.id,
+              label: project.name,
+              keywords: project.clientName,
+            }))}
+            placeholder="Select project"
+            searchPlaceholder="Search projects..."
+            emptyLabel="No projects found."
             required
-          >
-            {filteredProjects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
+          />
         </div>
 
         <div>
@@ -282,22 +329,22 @@ export function EstimateEditForm({
             className="input"
             type="date"
             name="workDate"
-            defaultValue={new Date(estimate.workDate).toISOString().slice(0, 10)}
+            defaultValue={estimate.workDate.toISOString().slice(0, 10)}
             required
           />
         </div>
 
         <div>
           <FormLabel htmlFor="estimatedMinutes" required>
-            Estimated minutes
+            Minutes
           </FormLabel>
           <input
             id="estimatedMinutes"
             className="input"
             type="number"
+            min={1}
+            step={1}
             name="estimatedMinutes"
-            min="15"
-            step="15"
             defaultValue={estimate.estimatedMinutes}
             required
           />
@@ -310,16 +357,17 @@ export function EstimateEditForm({
             className="input min-h-28"
             name="notes"
             defaultValue={estimate.notes ?? ""}
+            placeholder="Optional estimate context"
           />
         </div>
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex justify-between gap-3 pt-2">
         <Link href="/estimates" className="btn-secondary">
           Cancel
         </Link>
         <button className="btn-primary" type="submit" disabled={pending}>
-          {pending ? "Saving..." : "Resubmit estimate"}
+          {pending ? "Saving..." : "Save & Resubmit"}
         </button>
       </div>
     </form>

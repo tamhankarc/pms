@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { db } from "@/lib/db";
 import { toggleSubProjectStatusAction } from "@/lib/actions/sub-project-actions";
 
@@ -63,14 +64,22 @@ export default async function SubProjectPage({
             ))}
           </select>
 
-          <select className="input" name="projectId" defaultValue={selectedProjectId}>
-            <option value="">All projects</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name} · {project.client.name}
-              </option>
-            ))}
-          </select>
+          <SearchableCombobox
+            id="projectId"
+            name="projectId"
+            defaultValue={selectedProjectId}
+            options={[
+              { value: "", label: "All projects" },
+              ...projects.map((project) => ({
+                value: project.id,
+                label: `${project.name} · ${project.client.name}`,
+                keywords: `${project.name} ${project.client.name}`,
+              })),
+            ]}
+            placeholder="All projects"
+            searchPlaceholder="Search projects..."
+            emptyLabel="No projects found."
+          />
 
           <button className="btn-secondary" type="submit">
             Apply

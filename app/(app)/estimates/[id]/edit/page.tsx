@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { canFullyModerateProject } from "@/lib/permissions";
+import { canFullyModerateProject, isRoleScopedManager } from "@/lib/permissions";
 import { EstimateEditForm } from "@/components/forms/estimate-edit-form";
 
 export default async function EditEstimatePage({
@@ -12,7 +12,7 @@ export default async function EditEstimatePage({
   const { id } = await params;
   const user = await requireUser();
 
-  const [estimate, countries, movies, languages, projects, subProjects] = await Promise.all([
+  const [estimate, countries, movies, languages, projects, subProjects, supervisorAssignments, roleScopedUsers] = await Promise.all([
     db.estimate.findUnique({
       where: { id },
       include: {
@@ -57,6 +57,30 @@ export default async function EditEstimatePage({
       include: { assignments: true },
       orderBy: { name: "asc" },
     }),
+    user.userType === "TEAM_LEAD"
+      ? db.employeeTeamLead.findMany({
+          where: { teamLeadId: user.id },
+          include: {
+            employee: {
+              select: { id: true, fullName: true, userType: true, isActive: true },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    isRoleScopedManager(user)
+      ? db.user.findMany({
+          where: {
+            isActive: true,
+            functionalRole:
+              user.functionalRole && user.functionalRole !== "UNASSIGNED"
+                ? user.functionalRole
+                : undefined,
+            userType: { in: ["EMPLOYEE", "TEAM_LEAD"] },
+          },
+          select: { id: true, fullName: true, userType: true },
+          orderBy: [{ userType: "asc" }, { fullName: "asc" }],
+        })
+      : Promise.resolve([]),
   ]);
 
   if (!estimate) {
@@ -75,6 +99,39 @@ export default async function EditEstimatePage({
   }
 
   const latestReview = estimate.reviews[0];
+
+  const currentUserOption = {
+    id: user.id,
+    fullName: user.fullName,
+    userType: user.userType,
+  };
+
+  const assignableEmployees =
+    user.userType === "TEAM_LEAD"
+      ? [
+          currentUserOption,
+          ...supervisorAssignments
+            .filter((row) => row.employee.isActive)
+            .map((row) => ({
+              id: row.employee.id,
+              fullName: row.employee.fullName,
+              userType: row.employee.userType,
+            })),
+        ]
+      : isRoleScopedManager(user)
+        ? [
+            currentUserOption,
+            ...roleScopedUsers.map((row) => ({
+              id: row.id,
+              fullName: row.fullName,
+              userType: row.userType,
+            })),
+          ]
+        : [];
+
+  const dedupedAssignableEmployees = Array.from(
+    new Map(assignableEmployees.map((employee) => [employee.id, employee])).values(),
+  );
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -125,6 +182,7 @@ export default async function EditEstimatePage({
           estimate={{
             id: estimate.id,
             employeeId: estimate.employeeId,
+            employeeName: estimate.employee.fullName,
             employeeUserType: estimate.employee.userType,
             clientId: estimate.project.clientId,
             projectId: estimate.projectId,
@@ -159,6 +217,7 @@ export default async function EditEstimatePage({
             name: language.name,
             code: language.code,
           }))}
+          assignableEmployees={dedupedAssignableEmployees}
           allowUnassignedSubProjects
         />
 

@@ -6,6 +6,7 @@ import {
   type TimeEntryFormState,
 } from "@/lib/actions/time-actions";
 import { FormLabel } from "@/components/ui/form-label";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import Link from "next/link";
 
 type TimeEntryProjectOption = {
@@ -187,23 +188,24 @@ export function TimeEntryEditForm({
           <FormLabel htmlFor="projectId" required>
             Project
           </FormLabel>
-          <select
+          <SearchableCombobox
             id="projectId"
-            className="input"
             name="projectId"
             value={selectedProjectId}
-            onChange={(e) => {
-              setSelectedProjectId(e.target.value);
+            onValueChange={(nextValue) => {
+              setSelectedProjectId(nextValue);
               setSelectedSubProjectId("");
             }}
+            options={filteredProjects.map((project) => ({
+              value: project.id,
+              label: project.name,
+              keywords: project.clientName,
+            }))}
+            placeholder="Select project"
+            searchPlaceholder="Search projects..."
+            emptyLabel="No projects found."
             required
-          >
-            {filteredProjects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
+          />
         </div>
 
         <div>

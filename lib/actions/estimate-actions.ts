@@ -12,6 +12,7 @@ export type EstimateFormState = {
 };
 
 const estimateSchema = z.object({
+  employeeId: z.string().optional(),
   clientId: z.string().min(1, "Client is required."),
   projectId: z.string().min(1, "Project is required."),
   subProjectId: z.string().optional(),
@@ -158,6 +159,45 @@ async function validateClientFieldRequirements(
   return { valid: true as const };
 }
 
+async function canActForEstimateEmployee(
+  user: Awaited<ReturnType<typeof requireUserForAction>>,
+  employeeId: string,
+) {
+  if (employeeId === user.id) return true;
+
+  if (isRoleScopedManager(user)) {
+    const target = await db.user.findUnique({
+      where: { id: employeeId },
+      select: { id: true, userType: true, functionalRole: true, isActive: true },
+    });
+
+    return Boolean(
+      target &&
+        target.isActive &&
+        target.functionalRole === user.functionalRole &&
+        ["EMPLOYEE", "TEAM_LEAD"].includes(target.userType),
+    );
+  }
+
+  if (user.userType === "TEAM_LEAD") {
+    const assignment = await db.employeeTeamLead.findFirst({
+      where: {
+        teamLeadId: user.id,
+        employeeId,
+        employee: {
+          isActive: true,
+          userType: "EMPLOYEE",
+        },
+      },
+      select: { employeeId: true },
+    });
+
+    return Boolean(assignment);
+  }
+
+  return false;
+}
+
 async function userCanUseProject(
   user: Awaited<ReturnType<typeof requireUserForAction>>,
   projectId: string,
@@ -209,6 +249,7 @@ export async function createEstimateAction(
     }
 
     const parsed = estimateSchema.safeParse({
+      employeeId: formData.get("employeeId") || user.id,
       clientId: formData.get("clientId"),
       projectId: formData.get("projectId"),
       subProjectId: formData.get("subProjectId") || undefined,
@@ -227,6 +268,13 @@ export async function createEstimateAction(
       };
     }
 
+    const employeeId = parsed.data.employeeId || user.id;
+
+    const canAct = await canActForEstimateEmployee(user, employeeId);
+    if (!canAct) {
+      return { success: false, error: "You cannot submit estimates for the selected employee." };
+    }
+
     const canUseProject = await userCanUseProject(user, parsed.data.projectId);
     if (!canUseProject) {
       return { success: false, error: "You cannot submit estimates to this project." };
@@ -242,16 +290,16 @@ export async function createEstimateAction(
       return { success: false, error: fieldCheck.error };
     }
 
-    const subProjectCheck = await validateSubProject(parsed.data.projectId, parsed.data.subProjectId, user.id);
+    const subProjectCheck = await validateSubProject(parsed.data.projectId, parsed.data.subProjectId, employeeId);
     if (!subProjectCheck.valid) {
       return { success: false, error: subProjectCheck.error };
     }
 
     await db.estimate.create({
       data: {
+        employeeId,
         projectId: parsed.data.projectId,
         subProjectId: parsed.data.subProjectId || null,
-        employeeId: user.id,
         countryId: parsed.data.countryId || null,
         movieId: parsed.data.movieId || null,
         languageId: parsed.data.languageId || null,
@@ -281,6 +329,7 @@ export async function updateEstimateAction(
 
     const parsed = estimateUpdateSchema.safeParse({
       estimateId: formData.get("estimateId"),
+      employeeId: formData.get("employeeId"),
       clientId: formData.get("clientId"),
       projectId: formData.get("projectId"),
       subProjectId: formData.get("subProjectId") || undefined,
@@ -311,6 +360,12 @@ export async function updateEstimateAction(
       return { success: false, error: "You do not have edit access for this estimate." };
     }
 
+    const employeeId = parsed.data.employeeId || estimate.employeeId;
+    const canAct = await canActForEstimateEmployee(user, employeeId);
+    if (!canAct && !canFullyModerateProject(user)) {
+      return { success: false, error: "You cannot use the selected employee for this estimate." };
+    }
+
     if (!["DRAFT", "REVISED"].includes(estimate.status)) {
       return { success: false, error: "Only draft or revised estimates can be edited." };
     }
@@ -330,7 +385,7 @@ export async function updateEstimateAction(
       return { success: false, error: fieldCheck.error };
     }
 
-    const subProjectCheck = await validateSubProject(parsed.data.projectId, parsed.data.subProjectId, estimate.employeeId);
+    const subProjectCheck = await validateSubProject(parsed.data.projectId, parsed.data.subProjectId, employeeId);
     if (!subProjectCheck.valid) {
       return { success: false, error: subProjectCheck.error };
     }
@@ -338,6 +393,7 @@ export async function updateEstimateAction(
     await db.estimate.update({
       where: { id: estimate.id },
       data: {
+        employeeId,
         projectId: parsed.data.projectId,
         subProjectId: parsed.data.subProjectId || null,
         countryId: parsed.data.countryId || null,

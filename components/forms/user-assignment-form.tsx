@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FormLabel } from "@/components/ui/form-label";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import {
   saveUserAssignmentAction,
   type UserAssignmentState,
@@ -124,24 +125,23 @@ export function UserAssignmentForm({
           <FormLabel htmlFor="projectId" required>
             Project
           </FormLabel>
-          <select
+          <SearchableCombobox
             id="projectId"
             name="projectId"
-            className="input"
             value={projectId}
-            onChange={(e) => {
-              setProjectId(e.target.value);
+            onValueChange={(nextValue) => {
+              setProjectId(nextValue);
               setSubProjectId("");
             }}
+            options={filteredProjects.map((project) => ({
+              value: project.id,
+              label: project.name,
+            }))}
+            placeholder="Select project"
+            searchPlaceholder="Search projects..."
+            emptyLabel="No projects found."
             required
-          >
-            <option value="">Select project</option>
-            {filteredProjects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
+          />
         </div>
 
         <div>

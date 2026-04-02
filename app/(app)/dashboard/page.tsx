@@ -1,5 +1,6 @@
 import { FolderKanban, Hourglass, ClipboardList, TimerReset } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { StatCard } from "@/components/ui/stat-card";
 import { requireUser } from "@/lib/auth";
 import {
@@ -84,14 +85,18 @@ export default async function DashboardPage({
           <form className="mt-5 grid gap-3 md:grid-cols-[180px_180px_1fr_220px_auto]" method="get">
             <input className="input" type="date" name="billingStartDate" defaultValue={billingStartDate} />
             <input className="input" type="date" name="billingEndDate" defaultValue={billingEndDate} />
-            <select className="input" name="billingProjectId" defaultValue={billingProjectId}>
-              <option value="">All projects</option>
-              {billingData.projectOptions.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
+            <SearchableCombobox
+              id="billingProjectId"
+              name="billingProjectId"
+              defaultValue={billingProjectId}
+              options={[
+                { value: "", label: "All projects" },
+                ...billingData.projectOptions.map((project) => ({ value: project.id, label: project.name })),
+              ]}
+              placeholder="All projects"
+              searchPlaceholder="Search projects..."
+              emptyLabel="No projects found."
+            />
             <select className="input" name="billingModel" defaultValue={billingModel}>
               <option value="">All billing types</option>
               <option value="HOURLY">Hourly</option>
@@ -258,14 +263,18 @@ export default async function DashboardPage({
           <form className="mt-5 grid gap-3 md:grid-cols-[180px_180px_1fr_220px_auto]" method="get">
             <input className="input" type="date" name="billingStartDate" defaultValue={billingStartDate} />
             <input className="input" type="date" name="billingEndDate" defaultValue={billingEndDate} />
-            <select className="input" name="billingProjectId" defaultValue={billingProjectId}>
-              <option value="">All projects</option>
-              {billingData.projectOptions.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
+            <SearchableCombobox
+              id="billingProjectId"
+              name="billingProjectId"
+              defaultValue={billingProjectId}
+              options={[
+                { value: "", label: "All projects" },
+                ...billingData.projectOptions.map((project) => ({ value: project.id, label: project.name })),
+              ]}
+              placeholder="All projects"
+              searchPlaceholder="Search projects..."
+              emptyLabel="No projects found."
+            />
             <select className="input" name="billingModel" defaultValue={billingModel}>
               <option value="">All billing types</option>
               <option value="HOURLY">Hourly</option>

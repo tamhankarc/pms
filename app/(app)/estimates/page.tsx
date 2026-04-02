@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { PageHeader } from "@/components/ui/page-header";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatMinutes } from "@/lib/utils";
 import { reviewEstimateAction } from "@/lib/actions/estimate-actions";
-import { canFullyModerateProject, isManager } from "@/lib/permissions";
+import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/permissions";
 import { getVisibleProjects } from "@/lib/queries";
-import { EstimateCreateForm } from "@/components/forms/estimate-create-form";
 
 const estimateWithRelations = {
   include: {
@@ -45,29 +45,20 @@ type EstimateRow = Prisma.EstimateGetPayload<{
 export default async function EstimatesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ create?: string; clientId?: string; projectId?: string }>;
+  searchParams?: Promise<{ clientId?: string; projectId?: string }>;
 }) {
   const user = await requireUser();
   const params = (await searchParams) ?? {};
-  const showCreate = params.create === "1";
   const selectedClientId = params.clientId ?? "all";
   const selectedProjectId = params.projectId ?? "all";
 
-  const [projects, countries, movies, languages, assignments, allSubProjects] = await Promise.all([
+  const [projects, countries, assignments] = await Promise.all([
     getVisibleProjects(user),
     db.country.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
     }),
-    db.movie.findMany({
-      where: { isActive: true },
-      orderBy: { title: "asc" },
-    }),
-    db.language.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-    }),
-    user.userType === "TEAM_LEAD" || isManager(user)
+    user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
       ? db.employeeTeamLead.findMany({
           where: { teamLeadId: user.id },
           include: {
@@ -77,11 +68,6 @@ export default async function EstimatesPage({
           },
         })
       : Promise.resolve([]),
-    db.subProject.findMany({
-      where: { isActive: true },
-      include: { assignments: true },
-      orderBy: { name: "asc" },
-    }),
   ]);
 
   const filteredProjects = projects.filter((project) => {
@@ -103,12 +89,17 @@ export default async function EstimatesPage({
             employeeId: user.id,
             projectId: { in: safeProjectIds },
           }
-        : user.userType === "TEAM_LEAD"
+        : user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
           ? {
-              employeeId: {
-                in: assignedScopedEmployeeIds.length ? assignedScopedEmployeeIds : ["__none__"],
-              },
-              projectId: { in: safeProjectIds },
+              OR: [
+                { employeeId: user.id, projectId: { in: safeProjectIds } },
+                {
+                  employeeId: {
+                    in: assignedScopedEmployeeIds.length ? assignedScopedEmployeeIds : ["__none__"],
+                  },
+                  projectId: { in: safeProjectIds },
+                },
+              ],
             }
           : {
               projectId: { in: safeProjectIds },
@@ -117,7 +108,7 @@ export default async function EstimatesPage({
 
   const countryMap = new Map(countries.map((country) => [country.id, country.name]));
   const managedIds = new Set(assignedScopedEmployeeIds);
-  const canCreate = user.userType === "EMPLOYEE" || user.userType === "TEAM_LEAD" || isManager(user);
+  const canCreate = user.userType === "EMPLOYEE" || user.userType === "TEAM_LEAD" || isRoleScopedManager(user);
 
   const clientOptions = Array.from(
     new Map(projects.map((project) => [project.client.id, { id: project.client.id, name: project.client.name }])).values(),
@@ -138,7 +129,7 @@ export default async function EstimatesPage({
         }
         actions={
           canCreate ? (
-            <Link className="btn-primary" href="/estimates?create=1">
+            <Link className="btn-primary" href="/estimates/new">
               Add Estimate
             </Link>
           ) : null
@@ -156,17 +147,20 @@ export default async function EstimatesPage({
                 </option>
               ))}
             </select>
-            <select className="input" name="projectId" defaultValue={selectedProjectId}>
-              <option value="all">All projects</option>
-              {projectOptions.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
+            <SearchableCombobox
+              id="projectId"
+              name="projectId"
+              defaultValue={selectedProjectId}
+              options={[
+                { value: "all", label: "All projects" },
+                ...projectOptions.map((project) => ({ value: project.id, label: project.name })),
+              ]}
+              placeholder="All projects"
+              searchPlaceholder="Search projects..."
+              emptyLabel="No projects found."
+            />
           </div>
           <div className="flex gap-3">
-            {showCreate ? <input type="hidden" name="create" value="1" /> : null}
             <button className="btn-secondary" type="submit">
               Apply
             </button>
@@ -176,37 +170,6 @@ export default async function EstimatesPage({
           </div>
         </form>
       </div>
-
-      {showCreate && canCreate ? (
-        <EstimateCreateForm
-          projects={projects.map((project) => ({
-            id: project.id,
-            name: project.name,
-            clientId: project.clientId,
-            clientName: project.client.name,
-            showCountriesInTimeEntries: project.client.showCountriesInTimeEntries,
-            showMoviesInEntries: project.client.showMoviesInEntries,
-            showLanguagesInEntries: project.client.showLanguagesInEntries,
-            assignedUserIds: project.assignedUsers.map((assignment) => assignment.userId),
-          }))}
-          subProjects={allSubProjects.map((subProject) => ({
-            id: subProject.id,
-            name: subProject.name,
-            projectId: subProject.projectId,
-            assignedUserIds: subProject.assignments.map((row) => row.userId),
-          }))}
-          countries={countries.map((country) => ({ id: country.id, name: country.name }))}
-          movies={movies.map((movie) => ({ id: movie.id, title: movie.title, clientId: movie.clientId }))}
-          languages={languages.map((language) => ({
-            id: language.id,
-            name: language.name,
-            code: language.code,
-          }))}
-          currentUserId={user.id}
-          currentUserType={user.userType}
-          allowUnassignedSubProjects
-        />
-      ) : null}
 
       <div className="table-wrap">
         <table className="table-base">
@@ -228,7 +191,7 @@ export default async function EstimatesPage({
                   managedIds.has(estimate.employeeId) &&
                   estimate.employee.functionalRole === user.functionalRole);
 
-              const canResubmit = estimate.employeeId === user.id && estimate.status === "REVISED";
+              const canResubmit = (estimate.employeeId === user.id || canFullyModerateProject(user)) && ["REVISED", "DRAFT"].includes(estimate.status);
 
               const latestReview = estimate.reviews[0];
 
@@ -261,9 +224,9 @@ export default async function EstimatesPage({
                         estimate.status === "APPROVED"
                           ? "badge-emerald"
                           : estimate.status === "REJECTED"
-                            ? "badge-amber"
+                            ? "badge-rose"
                             : estimate.status === "REVISED"
-                              ? "badge-blue"
+                              ? "badge-amber"
                               : "badge-slate"
                       }
                     >
@@ -271,41 +234,35 @@ export default async function EstimatesPage({
                     </span>
                   </td>
                   <td className="table-cell align-top">
-                    {canReview && estimate.status === "SUBMITTED" ? (
-                      <div className="flex flex-wrap gap-2">
-                        <form action={reviewEstimateAction}>
-                          <input type="hidden" name="estimateId" value={estimate.id} />
-                          <input type="hidden" name="action" value="APPROVED" />
-                          <button className="btn-secondary !px-3 !py-1.5 text-xs">Approve</button>
-                        </form>
-                        <form action={reviewEstimateAction}>
-                          <input type="hidden" name="estimateId" value={estimate.id} />
-                          <input type="hidden" name="action" value="REVISED" />
-                          <input
-                            type="hidden"
-                            name="comment"
-                            value="Please update and resubmit this estimate."
-                          />
-                          <button className="btn-secondary !px-3 !py-1.5 text-xs">Revise</button>
-                        </form>
-                      </div>
-                    ) : canResubmit ? (
-                      <Link
-                        href={`/estimates/${estimate.id}/edit`}
-                        className="text-sm font-medium text-blue-600 hover:underline"
-                      >
-                        Edit &amp; Resubmit
-                      </Link>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {canReview && estimate.status === "SUBMITTED" ? (
+                        <>
+                          <form action={reviewEstimateAction}>
+                            <input type="hidden" name="estimateId" value={estimate.id} />
+                            <input type="hidden" name="action" value="APPROVED" />
+                            <button className="btn-secondary text-xs">Approve</button>
+                          </form>
+                          <form action={reviewEstimateAction}>
+                            <input type="hidden" name="estimateId" value={estimate.id} />
+                            <input type="hidden" name="action" value="REJECTED" />
+                            <button className="btn-secondary text-xs">Reject</button>
+                          </form>
+                        </>
+                      ) : null}
+                      {canResubmit ? (
+                        <Link className="btn-secondary text-xs" href={`/estimates/${estimate.id}/edit`}>
+                          Edit &amp; Resubmit
+                        </Link>
+                      ) : null}
+                      {!canReview && !canResubmit ? <span className="text-xs text-slate-400">No action</span> : null}
+                    </div>
                   </td>
                 </tr>
               );
             })}
             {estimates.length === 0 ? (
               <tr>
-                <td className="table-cell text-center text-sm text-slate-500" colSpan={6}>
+                <td colSpan={6} className="table-cell text-center text-sm text-slate-500">
                   No estimates found.
                 </td>
               </tr>

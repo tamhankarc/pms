@@ -81,6 +81,20 @@ async function canActForEmployee(
 ) {
   if (employeeId === user.id) return true;
 
+  if (isRoleScopedManager(user)) {
+    const target = await db.user.findUnique({
+      where: { id: employeeId },
+      select: { id: true, userType: true, functionalRole: true, isActive: true },
+    });
+
+    return Boolean(
+      target &&
+        target.isActive &&
+        target.functionalRole === user.functionalRole &&
+        ["EMPLOYEE", "TEAM_LEAD"].includes(target.userType),
+    );
+  }
+
   if (canFullyModerateProject(user) || isManager(user)) {
     const employee = await db.user.findUnique({
       where: { id: employeeId },

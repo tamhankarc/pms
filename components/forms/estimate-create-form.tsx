@@ -6,6 +6,7 @@ import {
   type EstimateFormState,
 } from "@/lib/actions/estimate-actions";
 import { FormLabel } from "@/components/ui/form-label";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
 type EstimateProjectOption = {
   id: string;
@@ -23,6 +24,12 @@ type EstimateSubProjectOption = {
   name: string;
   projectId: string;
   assignedUserIds: string[];
+};
+
+type EstimateEmployeeOption = {
+  id: string;
+  fullName: string;
+  userType: string;
 };
 
 type MovieOption = {
@@ -47,6 +54,8 @@ export function EstimateCreateForm({
   languages,
   currentUserId,
   currentUserType,
+  assignableEmployees = [],
+  defaultEmployeeId,
   allowUnassignedSubProjects = false,
 }: {
   projects: EstimateProjectOption[];
@@ -56,6 +65,8 @@ export function EstimateCreateForm({
   languages: LanguageOption[];
   currentUserId: string;
   currentUserType: string;
+  assignableEmployees?: EstimateEmployeeOption[];
+  defaultEmployeeId?: string;
   allowUnassignedSubProjects?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(createEstimateAction, initialState);
@@ -78,6 +89,9 @@ export function EstimateCreateForm({
   const [selectedProjectId, setSelectedProjectId] = useState(
     projects.find((project) => project.clientId === defaultClientId)?.id ?? "",
   );
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(
+    defaultEmployeeId ?? assignableEmployees[0]?.id ?? currentUserId,
+  );
   const [selectedSubProjectId, setSelectedSubProjectId] = useState("");
 
   const filteredProjects = useMemo(
@@ -85,28 +99,32 @@ export function EstimateCreateForm({
     [projects, selectedClientId],
   );
 
-  const bypassAssignmentForCurrentUser =
+  const selectedEmployee =
+    assignableEmployees.find((employee) => employee.id === selectedEmployeeId) ??
+    ({ id: currentUserId, fullName: "", userType: currentUserType } as EstimateEmployeeOption);
+
+  const bypassAssignmentForSelectedEmployee =
     allowUnassignedSubProjects &&
-    (currentUserType === "MANAGER" || currentUserType === "TEAM_LEAD");
+    (selectedEmployee?.userType === "MANAGER" || selectedEmployee?.userType === "TEAM_LEAD");
 
   const selectedProjectOption = projects.find((project) => project.id === selectedProjectId);
-  const currentUserHasProjectAssignment = Boolean(
-    selectedProjectOption?.assignedUserIds.includes(currentUserId),
+  const selectedEmployeeHasProjectAssignment = Boolean(
+    selectedEmployeeId && selectedProjectOption?.assignedUserIds.includes(selectedEmployeeId),
   );
 
   const filteredSubProjects = useMemo(
     () =>
       subProjects.filter((subProject) => {
         if (subProject.projectId !== selectedProjectId) return false;
-        if (bypassAssignmentForCurrentUser || currentUserHasProjectAssignment) return true;
-        return subProject.assignedUserIds.includes(currentUserId);
+        if (bypassAssignmentForSelectedEmployee || selectedEmployeeHasProjectAssignment) return true;
+        return !selectedEmployeeId || subProject.assignedUserIds.includes(selectedEmployeeId);
       }),
     [
       subProjects,
       selectedProjectId,
-      currentUserId,
-      bypassAssignmentForCurrentUser,
-      currentUserHasProjectAssignment,
+      selectedEmployeeId,
+      bypassAssignmentForSelectedEmployee,
+      selectedEmployeeHasProjectAssignment,
     ],
   );
 
@@ -115,6 +133,7 @@ export function EstimateCreateForm({
     [movies, selectedClientId],
   );
 
+  const showEmployeeField = assignableEmployees.length > 1;
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const showCountryField = Boolean(selectedProject?.showCountriesInTimeEntries);
   const showMovieField = Boolean(selectedProject?.showMoviesInEntries);
@@ -139,6 +158,30 @@ export function EstimateCreateForm({
       ) : null}
 
       <div className="mt-5 grid gap-4 md:grid-cols-2">
+        {showEmployeeField ? (
+          <div className="md:col-span-2">
+            <FormLabel htmlFor="employeeId">Employee</FormLabel>
+            <select
+              id="employeeId"
+              className="input"
+              name="employeeId"
+              value={selectedEmployeeId}
+              onChange={(e) => {
+                setSelectedEmployeeId(e.target.value);
+                setSelectedSubProjectId("");
+              }}
+            >
+              {assignableEmployees.map((employee) => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.fullName} · {employee.userType.replaceAll("_", " ")}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <input type="hidden" name="employeeId" value={selectedEmployeeId} />
+        )}
+
         <div>
           <FormLabel htmlFor="clientId" required>
             Client
@@ -169,23 +212,24 @@ export function EstimateCreateForm({
           <FormLabel htmlFor="projectId" required>
             Project
           </FormLabel>
-          <select
+          <SearchableCombobox
             id="projectId"
-            className="input"
             name="projectId"
-            required
             value={selectedProjectId}
-            onChange={(e) => {
-              setSelectedProjectId(e.target.value);
+            onValueChange={(nextValue) => {
+              setSelectedProjectId(nextValue);
               setSelectedSubProjectId("");
             }}
-          >
-            {filteredProjects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
+            options={filteredProjects.map((project) => ({
+              value: project.id,
+              label: project.name,
+              keywords: project.clientName,
+            }))}
+            placeholder="Select project"
+            searchPlaceholder="Search projects..."
+            emptyLabel="No projects found."
+            required
+          />
         </div>
 
         <div>
@@ -261,29 +305,21 @@ export function EstimateCreateForm({
 
         <div>
           <FormLabel htmlFor="estimatedMinutes" required>
-            Estimated minutes
+            Minutes
           </FormLabel>
-          <input
-            id="estimatedMinutes"
-            className="input"
-            type="number"
-            name="estimatedMinutes"
-            min="15"
-            step="15"
-            required
-          />
+          <input id="estimatedMinutes" className="input" type="number" min={1} step={1} name="estimatedMinutes" required />
         </div>
 
         <div className="md:col-span-2">
           <FormLabel htmlFor="notes">Notes</FormLabel>
-          <textarea id="notes" className="input min-h-28" name="notes" />
+          <textarea id="notes" className="input min-h-28" name="notes" placeholder="Optional estimate context" />
         </div>
+      </div>
 
-        <div className="md:col-span-2">
-          <button className="btn-primary w-full md:w-auto" disabled={pending}>
-            {pending ? "Submitting..." : "Submit estimate"}
-          </button>
-        </div>
+      <div className="mt-6 flex justify-end">
+        <button className="btn-primary" type="submit" disabled={pending}>
+          {pending ? "Submitting..." : "Submit Estimate"}
+        </button>
       </div>
     </form>
   );

@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { FormLabel } from "@/components/ui/form-label";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import type { SubProjectFormState } from "@/lib/actions/sub-project-actions";
 
 type ProjectOption = {
@@ -104,21 +105,21 @@ export function SubProjectForm({
           <FormLabel htmlFor="projectId" required>
             Project
           </FormLabel>
-          <select
+          <SearchableCombobox
             id="projectId"
-            className="input"
             name="projectId"
             value={projectId}
-            onChange={(event) => setProjectId(event.target.value)}
+            onValueChange={setProjectId}
+            options={filteredProjects.map((project) => ({
+              value: project.id,
+              label: `${project.name} · ${project.clientName}`,
+              keywords: `${project.name} ${project.clientName}`,
+            }))}
+            placeholder="Select project"
+            searchPlaceholder="Search projects..."
+            emptyLabel="No projects found."
             required
-          >
-            <option value="">Select project</option>
-            {filteredProjects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name} · {project.clientName}
-              </option>
-            ))}
-          </select>
+          />
         </div>
 
         <div>
