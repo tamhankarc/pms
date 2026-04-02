@@ -207,7 +207,7 @@ export default async function ReportsPage({
             className="input"
             name="q"
             defaultValue={q}
-            placeholder="Search by project, code, client, or project type"
+            placeholder="Search by project, client, or project type"
           />
           <select className="input" name="clientId" defaultValue={clientId}>
             <option value="all">All clients</option>

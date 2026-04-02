@@ -18,9 +18,9 @@ export function MovieForm({
   clients: Client[];
   action: (state: MovieFormState, formData: FormData) => Promise<MovieFormState>;
   initialValues?: {
+    id?: string;
     clientId: string;
     title: string;
-    code: string | null;
     description: string | null;
     isActive: boolean;
   };
@@ -31,9 +31,12 @@ export function MovieForm({
 
   return (
     <form action={formAction} className="card p-6">
+      {initialValues?.id ? <input type="hidden" name="id" value={initialValues.id} /> : null}
+
       <h2 className="section-title">{title}</h2>
       <p className="section-subtitle">
         Fields marked <span className="text-red-600">*</span> are required.
+        Movie code is generated automatically.
       </p>
 
       {state?.error ? (
@@ -50,7 +53,9 @@ export function MovieForm({
 
       <div className="mt-5 space-y-4">
         <div>
-          <FormLabel htmlFor="clientId" required>Client</FormLabel>
+          <FormLabel htmlFor="clientId" required>
+            Client
+          </FormLabel>
           <select id="clientId" name="clientId" className="input" defaultValue={initialValues?.clientId ?? ""} required>
             <option value="">Select client</option>
             {clients.map((client) => (
@@ -62,18 +67,20 @@ export function MovieForm({
         </div>
 
         <div>
-          <FormLabel htmlFor="title" required>Movie title</FormLabel>
+          <FormLabel htmlFor="title" required>
+            Movie title
+          </FormLabel>
           <input id="title" name="title" className="input" defaultValue={initialValues?.title ?? ""} required />
         </div>
 
         <div>
-          <FormLabel htmlFor="code">Movie code</FormLabel>
-          <input id="code" name="code" className="input" defaultValue={initialValues?.code ?? ""} />
-        </div>
-
-        <div>
           <FormLabel htmlFor="description">Description</FormLabel>
-          <textarea id="description" name="description" className="input min-h-28" defaultValue={initialValues?.description ?? ""} />
+          <textarea
+            id="description"
+            name="description"
+            className="input min-h-28"
+            defaultValue={initialValues?.description ?? ""}
+          />
         </div>
 
         <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">

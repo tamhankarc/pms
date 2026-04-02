@@ -23,10 +23,7 @@ export default async function MoviesPage({
       where: {
         ...(q
           ? {
-              OR: [
-                { title: { contains: q } },
-                { code: { contains: q } },
-              ],
+              title: { contains: q },
             }
           : {}),
         ...(status === "active" ? { isActive: true } : {}),
@@ -42,12 +39,12 @@ export default async function MoviesPage({
     <div>
       <PageHeader
         title="Movies"
-        description="Create and manage movies. Each movie belongs to exactly one client."
+        description="Create and manage movies. Each movie belongs to exactly one client. Movie code is generated automatically."
       />
 
       <div className="mb-6 card p-4">
         <form className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]" method="get">
-          <input className="input" name="q" defaultValue={q} placeholder="Search by movie title or code" />
+          <input className="input" name="q" defaultValue={q} placeholder="Search by movie title" />
           <select className="input" name="status" defaultValue={status}>
             <option value="all">All statuses</option>
             <option value="active">Active only</option>
@@ -56,10 +53,14 @@ export default async function MoviesPage({
           <select className="input" name="clientId" defaultValue={clientId}>
             <option value="all">All clients</option>
             {clients.map((client) => (
-              <option key={client.id} value={client.id}>{client.name}</option>
+              <option key={client.id} value={client.id}>
+                {client.name}
+              </option>
             ))}
           </select>
-          <button className="btn-secondary" type="submit">Apply</button>
+          <button className="btn-secondary" type="submit">
+            Apply
+          </button>
         </form>
       </div>
 
@@ -70,7 +71,6 @@ export default async function MoviesPage({
               <tr>
                 <th className="table-cell">Movie</th>
                 <th className="table-cell">Client</th>
-                <th className="table-cell">Code</th>
                 <th className="table-cell">Status</th>
                 <th className="table-cell">Action</th>
               </tr>
@@ -80,10 +80,8 @@ export default async function MoviesPage({
                 <tr key={movie.id}>
                   <td className="table-cell">
                     <div className="font-medium text-slate-900">{movie.title}</div>
-                    <div className="text-xs text-slate-500">{movie.description || "—"}</div>
                   </td>
                   <td className="table-cell">{movie.client.name}</td>
-                  <td className="table-cell">{movie.code || "—"}</td>
                   <td className="table-cell">
                     <span className={movie.isActive ? "badge-emerald" : "badge-slate"}>
                       {movie.isActive ? "Active" : "Inactive"}
@@ -91,7 +89,9 @@ export default async function MoviesPage({
                   </td>
                   <td className="table-cell">
                     <div className="flex gap-2">
-                      <Link href={`/movies/${movie.id}`} className="btn-secondary text-xs">Edit</Link>
+                      <Link href={`/movies/${movie.id}`} className="btn-secondary text-xs">
+                        Edit
+                      </Link>
                       <form action={toggleMovieStatusAction}>
                         <input type="hidden" name="movieId" value={movie.id} />
                         <button className="btn-secondary text-xs">
@@ -104,7 +104,7 @@ export default async function MoviesPage({
               ))}
               {movies.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="table-cell text-center text-sm text-slate-500">
+                  <td colSpan={4} className="table-cell text-center text-sm text-slate-500">
                     No movies found.
                   </td>
                 </tr>
@@ -113,12 +113,7 @@ export default async function MoviesPage({
           </table>
         </div>
 
-        <MovieForm
-          clients={clients}
-          action={createMovieAction}
-          title="Create movie"
-          submitLabel="Create movie"
-        />
+        <MovieForm clients={clients} action={createMovieAction} title="Create movie" submitLabel="Create movie" />
       </div>
     </div>
   );

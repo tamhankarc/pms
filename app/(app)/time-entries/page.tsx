@@ -10,11 +10,13 @@ import { canFullyModerateProject, isManager } from "@/lib/permissions";
 export default async function TimeEntriesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ create?: string }>;
+  searchParams?: Promise<{ create?: string; clientId?: string; projectId?: string }>;
 }) {
   const user = await requireUser();
   const params = (await searchParams) ?? {};
   const showCreate = params.create === "1";
+  const selectedClientId = params.clientId ?? "all";
+  const selectedProjectId = params.projectId ?? "all";
 
   const [projects, countries, movies, languages, supervisorAssignments, allActiveEmployees, allSubProjects] =
     await Promise.all([
@@ -46,7 +48,13 @@ export default async function TimeEntriesPage({
       }),
     ]);
 
-  const visibleProjectIds = projects.map((project) => project.id);
+  const filteredProjects = projects.filter((project) => {
+    const matchesClient = selectedClientId === "all" ? true : project.clientId === selectedClientId;
+    const matchesProject = selectedProjectId === "all" ? true : project.id === selectedProjectId;
+    return matchesClient && matchesProject;
+  });
+
+  const visibleProjectIds = filteredProjects.map((project) => project.id);
   const safeProjectIds = visibleProjectIds.length ? visibleProjectIds : ["__none__"];
   const scopedEmployeeIds = supervisorAssignments
     .filter((row) => row.employee.functionalRole === user.functionalRole)
@@ -114,6 +122,14 @@ export default async function TimeEntriesPage({
     new Map(assignableEmployees.map((employee) => [employee.id, employee])).values(),
   );
 
+  const clientOptions = Array.from(
+    new Map(projects.map((project) => [project.client.id, { id: project.client.id, name: project.client.name }])).values(),
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
+  const projectOptions = projects.filter((project) =>
+    selectedClientId === "all" ? true : project.clientId === selectedClientId,
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -131,6 +147,38 @@ export default async function TimeEntriesPage({
           ) : null
         }
       />
+
+      <div className="card p-4">
+        <form method="get" className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <div className="grid gap-3 md:grid-cols-2">
+            <select className="input" name="clientId" defaultValue={selectedClientId}>
+              <option value="all">All clients</option>
+              {clientOptions.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+            <select className="input" name="projectId" defaultValue={selectedProjectId}>
+              <option value="all">All projects</option>
+              {projectOptions.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex gap-3">
+            {showCreate ? <input type="hidden" name="create" value="1" /> : null}
+            <button className="btn-secondary" type="submit">
+              Apply
+            </button>
+            <Link className="btn-secondary" href="/time-entries">
+              Reset
+            </Link>
+          </div>
+        </form>
+      </div>
 
       {showCreate && canCreate ? (
         <TimeEntryCreateForm
@@ -166,6 +214,7 @@ export default async function TimeEntriesPage({
           <thead className="table-head">
             <tr>
               <th className="table-cell">Employee</th>
+              <th className="table-cell">Client</th>
               <th className="table-cell">Project / Task</th>
               <th className="table-cell">Work Date</th>
               <th className="table-cell">Time</th>
@@ -186,15 +235,14 @@ export default async function TimeEntriesPage({
                     <div className="font-medium text-slate-900">{entry.employee.fullName}</div>
                     <div className="text-xs text-slate-500">{entry.notes || "—"}</div>
                   </td>
+                  <td className="table-cell">{entry.project.client.name}</td>
                   <td className="table-cell">
                     {entry.project.name}
                     <div className="text-xs text-slate-500">{entry.subProject?.name ?? "No Sub Project"}</div>
                     <div className="text-xs text-slate-500">
                       {entry.countryId ? countryMap.get(entry.countryId) ?? "—" : "No specific country"}
                     </div>
-                    <div className="text-xs text-slate-500">
-                      {entry.movie?.title ?? "No specific movie"}
-                    </div>
+                    <div className="text-xs text-slate-500">{entry.movie?.title ?? "No specific movie"}</div>
                     <div className="text-xs text-slate-500">
                       {entry.language ? `${entry.language.name} (${entry.language.code})` : "No specific language"}
                     </div>
@@ -220,7 +268,7 @@ export default async function TimeEntriesPage({
             })}
             {entries.length === 0 ? (
               <tr>
-                <td className="table-cell text-center text-sm text-slate-500" colSpan={6}>
+                <td className="table-cell text-center text-sm text-slate-500" colSpan={7}>
                   No time entries found.
                 </td>
               </tr>

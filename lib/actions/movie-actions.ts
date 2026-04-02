@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserTypesForAction } from "@/lib/auth";
+import { generateMovieCode } from "@/lib/project-code";
 
 export type MovieFormState = {
   success?: boolean;
@@ -14,7 +15,6 @@ const movieSchema = z.object({
   id: z.string().optional(),
   clientId: z.string().min(1, "Client is required."),
   title: z.string().min(2, "Movie title is required."),
-  code: z.string().trim().optional(),
   description: z.string().optional(),
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
@@ -29,7 +29,6 @@ export async function createMovieAction(
     const parsed = movieSchema.safeParse({
       clientId: formData.get("clientId"),
       title: formData.get("title"),
-      code: formData.get("code") || "",
       description: formData.get("description") || "",
       isActive: formData.get("isActive") ?? "on",
     });
@@ -41,11 +40,13 @@ export async function createMovieAction(
       };
     }
 
+    const generatedCode = await generateMovieCode(parsed.data.clientId, parsed.data.title);
+
     await db.movie.create({
       data: {
         clientId: parsed.data.clientId,
-        title: parsed.data.title,
-        code: parsed.data.code?.trim() || null,
+        title: parsed.data.title.trim(),
+        code: generatedCode,
         description: parsed.data.description?.trim() || null,
         isActive: Boolean(parsed.data.isActive),
       },
@@ -53,6 +54,8 @@ export async function createMovieAction(
 
     revalidatePath("/movies");
     revalidatePath("/projects/new");
+    revalidatePath("/time-entries");
+    revalidatePath("/estimates");
     return { success: true };
   } catch (error) {
     return {
@@ -73,7 +76,6 @@ export async function updateMovieAction(
       id: formData.get("id"),
       clientId: formData.get("clientId"),
       title: formData.get("title"),
-      code: formData.get("code") || "",
       description: formData.get("description") || "",
       isActive: formData.get("isActive") ?? undefined,
     });
@@ -85,12 +87,23 @@ export async function updateMovieAction(
       };
     }
 
+    const existingMovie = await db.movie.findUnique({
+      where: { id: parsed.data.id },
+      select: { code: true },
+    });
+
+    if (!existingMovie) {
+      return { success: false, error: "Movie not found." };
+    }
+
+    const code = existingMovie.code?.trim() || (await generateMovieCode(parsed.data.clientId, parsed.data.title));
+
     await db.movie.update({
       where: { id: parsed.data.id },
       data: {
         clientId: parsed.data.clientId,
-        title: parsed.data.title,
-        code: parsed.data.code?.trim() || null,
+        title: parsed.data.title.trim(),
+        code,
         description: parsed.data.description?.trim() || null,
         isActive: Boolean(parsed.data.isActive),
       },
@@ -99,6 +112,8 @@ export async function updateMovieAction(
     revalidatePath("/movies");
     revalidatePath(`/movies/${parsed.data.id}`);
     revalidatePath("/projects/new");
+    revalidatePath("/time-entries");
+    revalidatePath("/estimates");
     return { success: true };
   } catch (error) {
     return {

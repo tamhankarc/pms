@@ -8,26 +8,26 @@ import { toggleProjectStatusAction } from "@/lib/actions/project-actions";
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ q?: string; status?: string; billingModel?: string }>;
+  searchParams?: Promise<{ q?: string; status?: string; billingModel?: string; clientId?: string }>;
 }) {
   const user = await requireUser();
   const params = (await searchParams) ?? {};
   const q = params.q?.trim().toLowerCase() ?? "";
   const status = params.status ?? "all";
   const billingModel = params.billingModel ?? "all";
+  const clientId = params.clientId ?? "all";
 
   const allProjects = await getVisibleProjects(user);
+  const clientOptions = Array.from(
+    new Map(allProjects.map((project) => [project.client.id, { id: project.client.id, name: project.client.name }])).values(),
+  ).sort((a, b) => a.name.localeCompare(b.name));
 
   const projects = allProjects.filter((project) => {
     const assignedPeople = Array.from(
       new Map<string, string>([
-        ...project.assignedUsers.map(
-          (row) => [row.user.id, row.user.fullName] as const,
-        ),
+        ...project.assignedUsers.map((row) => [row.user.id, row.user.fullName] as const),
         ...project.subProjects.flatMap((subProject) =>
-          subProject.assignments.map(
-            (row) => [row.user.id, row.user.fullName] as const,
-          ),
+          subProject.assignments.map((row) => [row.user.id, row.user.fullName] as const),
         ),
       ]).values(),
     );
@@ -40,10 +40,10 @@ export default async function ProjectsPage({
       assignedPeople.some((name) => name.toLowerCase().includes(q));
 
     const matchesStatus = status === "all" ? true : project.status === status;
-    const matchesBilling =
-      billingModel === "all" ? true : project.billingModel === billingModel;
+    const matchesBilling = billingModel === "all" ? true : project.billingModel === billingModel;
+    const matchesClient = clientId === "all" ? true : project.clientId === clientId;
 
-    return matchesQ && matchesStatus && matchesBilling;
+    return matchesQ && matchesStatus && matchesBilling && matchesClient;
   });
 
   return (
@@ -61,12 +61,12 @@ export default async function ProjectsPage({
       />
 
       <div className="mb-6 card p-4">
-        <form className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]" method="get">
+        <form className="grid gap-3 md:grid-cols-[1fr_180px_220px_220px_auto]" method="get">
           <input
             className="input"
             name="q"
             defaultValue={q}
-            placeholder="Search by project, code, client, or assigned person"
+            placeholder="Search by project, client, or assigned person"
           />
           <select className="input" name="status" defaultValue={status}>
             <option value="all">All statuses</option>
@@ -81,6 +81,14 @@ export default async function ProjectsPage({
             <option value="HOURLY">Hourly</option>
             <option value="FIXED_FULL">Fixed - Full Project</option>
             <option value="FIXED_MONTHLY">Fixed - Monthly</option>
+          </select>
+          <select className="input" name="clientId" defaultValue={clientId}>
+            <option value="all">All clients</option>
+            {clientOptions.map((client) => (
+              <option key={client.id} value={client.id}>
+                {client.name}
+              </option>
+            ))}
           </select>
           <button className="btn-secondary" type="submit">
             Apply
@@ -104,13 +112,9 @@ export default async function ProjectsPage({
             {projects.map((project) => {
               const assignedPeople = Array.from(
                 new Map<string, string>([
-                  ...project.assignedUsers.map(
-                    (row) => [row.user.id, row.user.fullName] as const,
-                  ),
+                  ...project.assignedUsers.map((row) => [row.user.id, row.user.fullName] as const),
                   ...project.subProjects.flatMap((subProject) =>
-                    subProject.assignments.map(
-                      (row) => [row.user.id, row.user.fullName] as const,
-                    ),
+                    subProject.assignments.map((row) => [row.user.id, row.user.fullName] as const),
                   ),
                 ]).values(),
               );
@@ -119,25 +123,18 @@ export default async function ProjectsPage({
                 <tr key={project.id}>
                   <td className="table-cell">
                     <div className="font-medium text-slate-900">{project.name}</div>
-                    <div className="text-xs text-slate-500">{project.code ?? "—"}</div>
                   </td>
                   <td className="table-cell">{project.client.name}</td>
                   <td className="table-cell">
                     {assignedPeople.length > 0 ? (
-                      <div className="text-sm text-slate-700">
-                        {assignedPeople.join(", ")}
-                      </div>
+                      <div className="text-sm text-slate-700">{assignedPeople.join(", ")}</div>
                     ) : (
                       <span className="text-sm text-slate-400">—</span>
                     )}
                   </td>
+                  <td className="table-cell">{project.billingModel.replaceAll("_", " ")}</td>
                   <td className="table-cell">
-                    {project.billingModel.replaceAll("_", " ")}
-                  </td>
-                  <td className="table-cell">
-                    <span className="badge-blue">
-                      {project.status.replaceAll("_", " ")}
-                    </span>
+                    <span className="badge-blue">{project.status.replaceAll("_", " ")}</span>
                   </td>
                   <td className="table-cell">
                     <div className="flex gap-2">
@@ -146,10 +143,7 @@ export default async function ProjectsPage({
                       </Link>
                       {canCreateProjects(user) ? (
                         <>
-                          <Link
-                            className="btn-secondary text-xs"
-                            href={`/projects/${project.id}/edit`}
-                          >
+                          <Link className="btn-secondary text-xs" href={`/projects/${project.id}/edit`}>
                             Edit
                           </Link>
                           <form action={toggleProjectStatusAction}>

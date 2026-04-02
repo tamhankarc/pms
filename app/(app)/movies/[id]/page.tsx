@@ -46,9 +46,9 @@ export default async function MovieEditPage({
           title={`Edit movie: ${movie.title}`}
           submitLabel="Save changes"
           initialValues={{
+            id: movie.id,
             clientId: movie.clientId,
             title: movie.title,
-            code: movie.code,
             description: movie.description,
             isActive: movie.isActive,
           }}

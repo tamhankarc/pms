@@ -18,10 +18,7 @@ export default async function ClientsPage({
     where: {
       ...(q
         ? {
-            OR: [
-              { name: { contains: q } },
-              { code: { contains: q } },
-            ],
+            name: { contains: q },
           }
         : {}),
       ...(status === "active" ? { isActive: true } : {}),
@@ -55,12 +52,7 @@ export default async function ClientsPage({
 
       <div className="mb-6 card p-4">
         <form className="grid gap-3 md:grid-cols-[1fr_180px_auto]" method="get">
-          <input
-            className="input"
-            name="q"
-            defaultValue={q}
-            placeholder="Search by client name or code"
-          />
+          <input className="input" name="q" defaultValue={q} placeholder="Search by client name" />
           <select className="input" name="status" defaultValue={status}>
             <option value="all">All statuses</option>
             <option value="active">Active only</option>
@@ -81,7 +73,6 @@ export default async function ClientsPage({
             <thead className="table-head">
               <tr>
                 <th className="table-cell">Client</th>
-                <th className="table-cell">Code</th>
                 <th className="table-cell">Projects</th>
                 <th className="table-cell">Movies</th>
                 <th className="table-cell">Project Types</th>
@@ -99,7 +90,6 @@ export default async function ClientsPage({
                       Created {client.createdAt.toLocaleDateString()}
                     </div>
                   </td>
-                  <td className="table-cell">{client.code || "—"}</td>
                   <td className="table-cell">{client.projects.length}</td>
                   <td className="table-cell">{client.movies.length}</td>
                   <td className="table-cell">
@@ -139,7 +129,7 @@ export default async function ClientsPage({
 
               {clients.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="table-cell text-center text-sm text-slate-500">
+                  <td colSpan={7} className="table-cell text-center text-sm text-slate-500">
                     No clients found.
                   </td>
                 </tr>
