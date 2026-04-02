@@ -48,6 +48,7 @@ export default async function EditEstimatePage({
       where: { isActive: true },
       include: {
         client: true,
+        assignedUsers: true,
       },
       orderBy: { name: "asc" },
     }),
@@ -124,6 +125,7 @@ export default async function EditEstimatePage({
           estimate={{
             id: estimate.id,
             employeeId: estimate.employeeId,
+            employeeUserType: estimate.employee.userType,
             clientId: estimate.project.clientId,
             projectId: estimate.projectId,
             subProjectId: estimate.subProjectId,
@@ -142,6 +144,7 @@ export default async function EditEstimatePage({
             showCountriesInTimeEntries: project.client.showCountriesInTimeEntries,
             showMoviesInEntries: project.client.showMoviesInEntries,
             showLanguagesInEntries: project.client.showLanguagesInEntries,
+            assignedUserIds: project.assignedUsers.map((assignment) => assignment.userId),
           }))}
           subProjects={subProjects.map((subProject) => ({
             id: subProject.id,
@@ -156,6 +159,7 @@ export default async function EditEstimatePage({
             name: language.name,
             code: language.code,
           }))}
+          allowUnassignedSubProjects
         />
 
         {estimate.reviews.length > 0 ? (

@@ -187,6 +187,7 @@ export default async function EstimatesPage({
             showCountriesInTimeEntries: project.client.showCountriesInTimeEntries,
             showMoviesInEntries: project.client.showMoviesInEntries,
             showLanguagesInEntries: project.client.showLanguagesInEntries,
+            assignedUserIds: project.assignedUsers.map((assignment) => assignment.userId),
           }))}
           subProjects={allSubProjects.map((subProject) => ({
             id: subProject.id,
@@ -202,6 +203,8 @@ export default async function EstimatesPage({
             code: language.code,
           }))}
           currentUserId={user.id}
+          currentUserType={user.userType}
+          allowUnassignedSubProjects
         />
       ) : null}
 

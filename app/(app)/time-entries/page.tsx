@@ -190,6 +190,7 @@ export default async function TimeEntriesPage({
             showCountriesInTimeEntries: project.client.showCountriesInTimeEntries,
             showMoviesInEntries: project.client.showMoviesInEntries,
             showLanguagesInEntries: project.client.showLanguagesInEntries,
+            assignedUserIds: project.assignedUsers.map((assignment) => assignment.userId),
           }))}
           subProjects={allSubProjects.map((subProject) => ({
             id: subProject.id,
@@ -206,6 +207,7 @@ export default async function TimeEntriesPage({
           }))}
           assignableEmployees={dedupedAssignableEmployees}
           defaultEmployeeId={user.id}
+          allowUnassignedSubProjects
         />
       ) : null}
 

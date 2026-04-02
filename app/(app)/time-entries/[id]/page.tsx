@@ -101,6 +101,7 @@ export default async function EditTimeEntryPage({
             id: entry.id,
             employeeId: entry.employeeId,
             employeeName: entry.employee.fullName,
+            employeeUserType: entry.employee.userType,
             clientId: entry.project.clientId,
             projectId: entry.projectId,
             subProjectId: entry.subProjectId,
@@ -128,6 +129,7 @@ export default async function EditTimeEntryPage({
             showCountriesInTimeEntries: project.client.showCountriesInTimeEntries,
             showMoviesInEntries: project.client.showMoviesInEntries,
             showLanguagesInEntries: project.client.showLanguagesInEntries,
+            assignedUserIds: project.assignedUsers.map((assignment) => assignment.userId),
           }))}
           subProjects={allSubProjects.map((subProject) => ({
             id: subProject.id,
@@ -135,6 +137,7 @@ export default async function EditTimeEntryPage({
             projectId: subProject.projectId,
             assignedUserIds: subProject.assignments.map((row) => row.userId),
           }))}
+          allowUnassignedSubProjects
         />
       </div>
     </div>

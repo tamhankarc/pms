@@ -16,6 +16,7 @@ type TimeEntryProjectOption = {
   showCountriesInTimeEntries: boolean;
   showMoviesInEntries: boolean;
   showLanguagesInEntries: boolean;
+  assignedUserIds: string[];
 };
 
 type TimeEntrySubProjectOption = {
@@ -46,11 +47,13 @@ export function TimeEntryEditForm({
   languages,
   projects,
   subProjects,
+  allowUnassignedSubProjects = false,
 }: {
   entry: {
     id: string;
     employeeId: string;
     employeeName: string;
+    employeeUserType: string;
     clientId: string;
     projectId: string;
     subProjectId: string | null;
@@ -68,6 +71,7 @@ export function TimeEntryEditForm({
   languages: LanguageOption[];
   projects: TimeEntryProjectOption[];
   subProjects: TimeEntrySubProjectOption[];
+  allowUnassignedSubProjects?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(updateTimeEntryAction, initialState);
 
@@ -93,14 +97,29 @@ export function TimeEntryEditForm({
     [projects, selectedClientId],
   );
 
+  const bypassAssignmentForEntryEmployee =
+    allowUnassignedSubProjects &&
+    (entry.employeeUserType === "MANAGER" || entry.employeeUserType === "TEAM_LEAD");
+
+  const selectedProjectOption = projects.find((project) => project.id === selectedProjectId);
+  const entryEmployeeHasProjectAssignment = Boolean(
+    selectedProjectOption?.assignedUserIds.includes(entry.employeeId),
+  );
+
   const filteredSubProjects = useMemo(
     () =>
-      subProjects.filter(
-        (subProject) =>
-          subProject.projectId === selectedProjectId &&
-          subProject.assignedUserIds.includes(entry.employeeId),
-      ),
-    [subProjects, selectedProjectId, entry.employeeId],
+      subProjects.filter((subProject) => {
+        if (subProject.projectId !== selectedProjectId) return false;
+        if (bypassAssignmentForEntryEmployee || entryEmployeeHasProjectAssignment) return true;
+        return subProject.assignedUserIds.includes(entry.employeeId);
+      }),
+    [
+      subProjects,
+      selectedProjectId,
+      entry.employeeId,
+      bypassAssignmentForEntryEmployee,
+      entryEmployeeHasProjectAssignment,
+    ],
   );
 
   const filteredMovies = useMemo(

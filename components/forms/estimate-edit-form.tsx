@@ -16,6 +16,7 @@ type EstimateProjectOption = {
   showCountriesInTimeEntries: boolean;
   showMoviesInEntries: boolean;
   showLanguagesInEntries: boolean;
+  assignedUserIds: string[];
 };
 
 type EstimateSubProjectOption = {
@@ -46,10 +47,12 @@ export function EstimateEditForm({
   countries,
   movies,
   languages,
+  allowUnassignedSubProjects = false,
 }: {
   estimate: {
     id: string;
     employeeId: string;
+    employeeUserType: string;
     clientId: string;
     projectId: string;
     subProjectId: string | null;
@@ -65,6 +68,7 @@ export function EstimateEditForm({
   countries: { id: string; name: string }[];
   movies: MovieOption[];
   languages: LanguageOption[];
+  allowUnassignedSubProjects?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(updateEstimateAction, initialState);
 
@@ -90,14 +94,29 @@ export function EstimateEditForm({
     [projects, selectedClientId],
   );
 
+  const bypassAssignmentForEstimateEmployee =
+    allowUnassignedSubProjects &&
+    (estimate.employeeUserType === "MANAGER" || estimate.employeeUserType === "TEAM_LEAD");
+
+  const selectedProjectOption = projects.find((project) => project.id === selectedProjectId);
+  const estimateEmployeeHasProjectAssignment = Boolean(
+    selectedProjectOption?.assignedUserIds.includes(estimate.employeeId),
+  );
+
   const filteredSubProjects = useMemo(
     () =>
-      subProjects.filter(
-        (subProject) =>
-          subProject.projectId === selectedProjectId &&
-          subProject.assignedUserIds.includes(estimate.employeeId),
-      ),
-    [subProjects, selectedProjectId, estimate.employeeId],
+      subProjects.filter((subProject) => {
+        if (subProject.projectId !== selectedProjectId) return false;
+        if (bypassAssignmentForEstimateEmployee || estimateEmployeeHasProjectAssignment) return true;
+        return subProject.assignedUserIds.includes(estimate.employeeId);
+      }),
+    [
+      subProjects,
+      selectedProjectId,
+      estimate.employeeId,
+      bypassAssignmentForEstimateEmployee,
+      estimateEmployeeHasProjectAssignment,
+    ],
   );
 
   const filteredMovies = useMemo(

@@ -15,6 +15,7 @@ type EstimateProjectOption = {
   showCountriesInTimeEntries: boolean;
   showMoviesInEntries: boolean;
   showLanguagesInEntries: boolean;
+  assignedUserIds: string[];
 };
 
 type EstimateSubProjectOption = {
@@ -45,6 +46,8 @@ export function EstimateCreateForm({
   movies,
   languages,
   currentUserId,
+  currentUserType,
+  allowUnassignedSubProjects = false,
 }: {
   projects: EstimateProjectOption[];
   subProjects: EstimateSubProjectOption[];
@@ -52,6 +55,8 @@ export function EstimateCreateForm({
   movies: MovieOption[];
   languages: LanguageOption[];
   currentUserId: string;
+  currentUserType: string;
+  allowUnassignedSubProjects?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(createEstimateAction, initialState);
 
@@ -80,14 +85,29 @@ export function EstimateCreateForm({
     [projects, selectedClientId],
   );
 
+  const bypassAssignmentForCurrentUser =
+    allowUnassignedSubProjects &&
+    (currentUserType === "MANAGER" || currentUserType === "TEAM_LEAD");
+
+  const selectedProjectOption = projects.find((project) => project.id === selectedProjectId);
+  const currentUserHasProjectAssignment = Boolean(
+    selectedProjectOption?.assignedUserIds.includes(currentUserId),
+  );
+
   const filteredSubProjects = useMemo(
     () =>
-      subProjects.filter(
-        (subProject) =>
-          subProject.projectId === selectedProjectId &&
-          subProject.assignedUserIds.includes(currentUserId),
-      ),
-    [subProjects, selectedProjectId, currentUserId],
+      subProjects.filter((subProject) => {
+        if (subProject.projectId !== selectedProjectId) return false;
+        if (bypassAssignmentForCurrentUser || currentUserHasProjectAssignment) return true;
+        return subProject.assignedUserIds.includes(currentUserId);
+      }),
+    [
+      subProjects,
+      selectedProjectId,
+      currentUserId,
+      bypassAssignmentForCurrentUser,
+      currentUserHasProjectAssignment,
+    ],
   );
 
   const filteredMovies = useMemo(

@@ -38,19 +38,48 @@ async function validateSubProject(
   subProjectId: string | undefined,
   employeeId: string,
 ) {
-  if (!subProjectId) return true;
+  if (!subProjectId) return { valid: true as const };
+
+  const employee = await db.user.findUnique({
+    where: { id: employeeId },
+    select: { userType: true },
+  });
+
+  const requiresAssignment = employee?.userType === "EMPLOYEE";
+
+  const hasProjectAssignment = requiresAssignment
+    ? Boolean(
+        await db.project.findFirst({
+          where: {
+            id: projectId,
+            isActive: true,
+            assignedUsers: { some: { userId: employeeId } },
+          },
+          select: { id: true },
+        }),
+      )
+    : false;
 
   const subProject = await db.subProject.findFirst({
     where: {
       id: subProjectId,
       projectId,
       isActive: true,
-      assignments: { some: { userId: employeeId } },
+      ...(requiresAssignment && !hasProjectAssignment
+        ? { assignments: { some: { userId: employeeId } } }
+        : {}),
     },
     select: { id: true },
   });
 
-  return Boolean(subProject);
+  return subProject
+    ? { valid: true as const }
+    : {
+        valid: false as const,
+        error: requiresAssignment
+          ? "Selected Sub Project is invalid or you do not have project/sub-project assignment."
+          : "Selected Sub Project is invalid for the selected project.",
+      };
 }
 
 async function validateClientFieldRequirements(
@@ -213,8 +242,9 @@ export async function createEstimateAction(
       return { success: false, error: fieldCheck.error };
     }
 
-    if (!(await validateSubProject(parsed.data.projectId, parsed.data.subProjectId, user.id))) {
-      return { success: false, error: "Selected Sub Project is invalid or not assigned to you." };
+    const subProjectCheck = await validateSubProject(parsed.data.projectId, parsed.data.subProjectId, user.id);
+    if (!subProjectCheck.valid) {
+      return { success: false, error: subProjectCheck.error };
     }
 
     await db.estimate.create({
@@ -300,8 +330,9 @@ export async function updateEstimateAction(
       return { success: false, error: fieldCheck.error };
     }
 
-    if (!(await validateSubProject(parsed.data.projectId, parsed.data.subProjectId, estimate.employeeId))) {
-      return { success: false, error: "Selected Sub Project is invalid or not assigned to you." };
+    const subProjectCheck = await validateSubProject(parsed.data.projectId, parsed.data.subProjectId, estimate.employeeId);
+    if (!subProjectCheck.valid) {
+      return { success: false, error: subProjectCheck.error };
     }
 
     await db.estimate.update({

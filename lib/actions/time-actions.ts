@@ -120,12 +120,34 @@ async function validateSubProjectUsage({
 }) {
   if (!subProjectId) return { valid: true as const };
 
+  const employee = await db.user.findUnique({
+    where: { id: employeeId },
+    select: { userType: true },
+  });
+
+  const requiresAssignment = employee?.userType === "EMPLOYEE";
+
+  const hasProjectAssignment = requiresAssignment
+    ? Boolean(
+        await db.project.findFirst({
+          where: {
+            id: projectId,
+            isActive: true,
+            assignedUsers: { some: { userId: employeeId } },
+          },
+          select: { id: true },
+        }),
+      )
+    : false;
+
   const subProject = await db.subProject.findFirst({
     where: {
       id: subProjectId,
       projectId,
       isActive: true,
-      assignments: { some: { userId: employeeId } },
+      ...(requiresAssignment && !hasProjectAssignment
+        ? { assignments: { some: { userId: employeeId } } }
+        : {}),
     },
     select: { id: true },
   });
@@ -134,7 +156,9 @@ async function validateSubProjectUsage({
     ? { valid: true as const }
     : {
         valid: false as const,
-        error: "Selected Sub Project is invalid or the chosen employee is not assigned to it.",
+        error: requiresAssignment
+          ? "Selected Sub Project is invalid or the chosen employee does not have project/sub-project assignment."
+          : "Selected Sub Project is invalid for the chosen project.",
       };
 }
 
