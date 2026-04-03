@@ -178,6 +178,35 @@ async function validateSubProjectUsage({
       };
 }
 
+
+async function employeeCanUseProject(projectId: string, employeeId: string) {
+  const employee = await db.user.findUnique({
+    where: { id: employeeId },
+    select: { userType: true },
+  });
+
+  if (!employee) return false;
+
+  const project = await db.project.findFirst({
+    where: {
+      id: projectId,
+      isActive: true,
+      status: { in: ["ACTIVE"] },
+      ...(employee.userType === "EMPLOYEE"
+        ? {
+            OR: [
+              { assignedUsers: { some: { userId: employeeId } } },
+              { subProjects: { some: { assignments: { some: { userId: employeeId } } } } },
+            ],
+          }
+        : {}),
+    },
+    select: { id: true },
+  });
+
+  return Boolean(project);
+}
+
 async function validateClientFieldRequirements(
   projectId: string,
   {
@@ -310,6 +339,14 @@ export async function createTimeEntryAction(
       return { success: false, error: "Selected project does not belong to the selected client." };
     }
 
+    const employeeCanUseSelectedProject = await employeeCanUseProject(parsed.data.projectId, employeeId);
+    if (!employeeCanUseSelectedProject) {
+      return {
+        success: false,
+        error: "Selected employee cannot use the chosen project. Please select a project assigned to that person.",
+      };
+    }
+
     const fieldCheck = await validateClientFieldRequirements(parsed.data.projectId, {
       clientId: parsed.data.clientId,
       countryId: parsed.data.countryId,
@@ -430,6 +467,14 @@ export async function updateTimeEntryAction(
     const project = await getProjectForClient(parsed.data.projectId, parsed.data.clientId);
     if (!project) {
       return { success: false, error: "Selected project does not belong to the selected client." };
+    }
+
+    const employeeCanUseSelectedProject = await employeeCanUseProject(parsed.data.projectId, entry.employeeId);
+    if (!employeeCanUseSelectedProject) {
+      return {
+        success: false,
+        error: "Selected employee cannot use the chosen project. Please select a project assigned to that person.",
+      };
     }
 
     const fieldCheck = await validateClientFieldRequirements(parsed.data.projectId, {

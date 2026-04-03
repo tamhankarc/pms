@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
-import { canFullyModerateProject, isRoleScopedManager } from "@/lib/permissions";
+import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/permissions";
 import { recordAuditLog } from "@/lib/audit";
 
 export type EstimateFormState = {
@@ -193,6 +193,15 @@ async function canActForEstimateEmployee(
     );
   }
 
+  if (canFullyModerateProject(user) || isManager(user)) {
+    const employee = await db.user.findUnique({
+      where: { id: employeeId },
+      select: { id: true, userType: true, isActive: true },
+    });
+
+    return Boolean(employee && employee.isActive && employee.userType === "EMPLOYEE");
+  }
+
   if (user.userType === "TEAM_LEAD") {
     const assignment = await db.employeeTeamLead.findFirst({
       where: {
@@ -252,6 +261,35 @@ async function userCanUseProject(
   return Boolean(project);
 }
 
+
+async function employeeCanUseProject(projectId: string, employeeId: string) {
+  const employee = await db.user.findUnique({
+    where: { id: employeeId },
+    select: { userType: true },
+  });
+
+  if (!employee) return false;
+
+  const project = await db.project.findFirst({
+    where: {
+      id: projectId,
+      isActive: true,
+      status: { in: ["ACTIVE", "ON_HOLD"] },
+      ...(employee.userType === "EMPLOYEE"
+        ? {
+            OR: [
+              { assignedUsers: { some: { userId: employeeId } } },
+              { subProjects: { some: { assignments: { some: { userId: employeeId } } } } },
+            ],
+          }
+        : {}),
+    },
+    select: { id: true },
+  });
+
+  return Boolean(project);
+}
+
 export async function createEstimateAction(
   _prevState: EstimateFormState,
   formData: FormData,
@@ -293,6 +331,14 @@ export async function createEstimateAction(
     const canUseProject = await userCanUseProject(user, parsed.data.projectId);
     if (!canUseProject) {
       return { success: false, error: "You cannot submit estimates to this project." };
+    }
+
+    const employeeCanUseSelectedProject = await employeeCanUseProject(parsed.data.projectId, employeeId);
+    if (!employeeCanUseSelectedProject) {
+      return {
+        success: false,
+        error: "Selected employee cannot use the chosen project. Please select a project assigned to that person.",
+      };
     }
 
     const fieldCheck = await validateClientFieldRequirements(parsed.data.projectId, {
@@ -398,6 +444,14 @@ export async function updateEstimateAction(
     const canUseProject = await userCanUseProject(user, parsed.data.projectId);
     if (!canUseProject && !canFullyModerateProject(user)) {
       return { success: false, error: "You cannot use this project for the estimate." };
+    }
+
+    const employeeCanUseSelectedProject = await employeeCanUseProject(parsed.data.projectId, estimate.employeeId);
+    if (!employeeCanUseSelectedProject) {
+      return {
+        success: false,
+        error: "Selected employee cannot use the chosen project. Please select a project assigned to that person.",
+      };
     }
 
     const fieldCheck = await validateClientFieldRequirements(parsed.data.projectId, {

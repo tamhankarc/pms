@@ -29,11 +29,6 @@ type EstimateSubProjectOption = {
   hideCountriesInEntries: boolean;
 };
 
-type EstimateEmployeeOption = {
-  id: string;
-  fullName: string;
-  userType: string;
-};
 
 type MovieOption = {
   id: string;
@@ -56,7 +51,6 @@ export function EstimateEditForm({
   countries,
   movies,
   languages,
-  assignableEmployees = [],
   allowUnassignedSubProjects = false,
 }: {
   estimate: {
@@ -79,7 +73,6 @@ export function EstimateEditForm({
   countries: { id: string; name: string }[];
   movies: MovieOption[];
   languages: LanguageOption[];
-  assignableEmployees?: EstimateEmployeeOption[];
   allowUnassignedSubProjects?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(updateEstimateAction, initialState);
@@ -99,7 +92,6 @@ export function EstimateEditForm({
 
   const [selectedClientId, setSelectedClientId] = useState(estimate.clientId);
   const [selectedProjectId, setSelectedProjectId] = useState(estimate.projectId);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState(estimate.employeeId);
   const [selectedSubProjectId, setSelectedSubProjectId] = useState(estimate.subProjectId ?? "");
 
   const filteredProjects = useMemo(
@@ -107,17 +99,13 @@ export function EstimateEditForm({
     [projects, selectedClientId],
   );
 
-  const selectedEmployee =
-    assignableEmployees.find((employee) => employee.id === selectedEmployeeId) ??
-    ({ id: estimate.employeeId, fullName: estimate.employeeName, userType: estimate.employeeUserType } as EstimateEmployeeOption);
-
   const bypassAssignmentForEstimateEmployee =
     allowUnassignedSubProjects &&
-    (selectedEmployee.userType === "MANAGER" || selectedEmployee.userType === "TEAM_LEAD");
+    (estimate.employeeUserType === "MANAGER" || estimate.employeeUserType === "TEAM_LEAD");
 
   const selectedProjectOption = projects.find((project) => project.id === selectedProjectId);
   const estimateEmployeeHasProjectAssignment = Boolean(
-    selectedEmployeeId && selectedProjectOption?.assignedUserIds.includes(selectedEmployeeId),
+    estimate.employeeId && selectedProjectOption?.assignedUserIds.includes(estimate.employeeId),
   );
 
   const filteredSubProjects = useMemo(
@@ -125,12 +113,12 @@ export function EstimateEditForm({
       subProjects.filter((subProject) => {
         if (subProject.projectId !== selectedProjectId) return false;
         if (bypassAssignmentForEstimateEmployee || estimateEmployeeHasProjectAssignment) return true;
-        return subProject.assignedUserIds.includes(selectedEmployeeId);
+        return subProject.assignedUserIds.includes(estimate.employeeId);
       }),
     [
       subProjects,
       selectedProjectId,
-      selectedEmployeeId,
+      estimate.employeeId,
       bypassAssignmentForEstimateEmployee,
       estimateEmployeeHasProjectAssignment,
     ],
@@ -141,7 +129,6 @@ export function EstimateEditForm({
     [movies, selectedClientId],
   );
 
-  const showEmployeeField = assignableEmployees.length > 0;
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const selectedSubProject = subProjects.find((subProject) => subProject.id === selectedSubProjectId);
   const showCountryField = Boolean(
@@ -171,35 +158,11 @@ export function EstimateEditForm({
       <input type="hidden" name="estimateId" value={estimate.id} />
 
       <div className="grid gap-4 md:grid-cols-2">
-        {showEmployeeField ? (
-          <div className="md:col-span-2">
-            <FormLabel htmlFor="employeeId">Employee</FormLabel>
-            <SearchableCombobox
-              id="employeeId"
-              name="employeeId"
-              value={selectedEmployeeId}
-              onValueChange={(nextValue) => {
-                setSelectedEmployeeId(nextValue);
-                setSelectedSubProjectId("");
-              }}
-              options={assignableEmployees.map((employee) => ({
-                value: employee.id,
-                label: `${employee.fullName} · ${employee.userType.replaceAll("_", " ")}`,
-              }))}
-              placeholder="Select employee"
-              searchPlaceholder="Search employees..."
-              emptyLabel="No employees found."
-            />
-          </div>
-        ) : (
-          <>
-            <input type="hidden" name="employeeId" value={selectedEmployeeId} />
-            <div className="md:col-span-2">
-              <FormLabel htmlFor="employeeName">Employee</FormLabel>
-              <input id="employeeName" className="input bg-slate-50" value={estimate.employeeName} readOnly />
-            </div>
-          </>
-        )}
+        <input type="hidden" name="employeeId" value={estimate.employeeId} />
+        <div className="md:col-span-2">
+          <FormLabel htmlFor="employeeName">Employee</FormLabel>
+          <input id="employeeName" className="input bg-slate-50" value={estimate.employeeName} readOnly />
+        </div>
 
         <div>
           <FormLabel htmlFor="clientId" required>

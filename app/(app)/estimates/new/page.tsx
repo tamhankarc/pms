@@ -4,12 +4,12 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { EstimateCreateForm } from "@/components/forms/estimate-create-form";
 import { getVisibleProjects } from "@/lib/queries";
-import { isRoleScopedManager } from "@/lib/permissions";
+import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/permissions";
 
 export default async function NewEstimatePage() {
   const user = await requireUser();
 
-  const [projects, countries, movies, languages, supervisorAssignments, roleScopedUsers, allSubProjects] =
+  const [projects, countries, movies, languages, supervisorAssignments, roleScopedUsers, allActiveEmployees, allSubProjects] =
     await Promise.all([
       getVisibleProjects(user, { allowedStatuses: ["ACTIVE", "ON_HOLD"] }),
       db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
@@ -39,6 +39,19 @@ export default async function NewEstimatePage() {
             orderBy: [{ userType: "asc" }, { fullName: "asc" }],
           })
         : Promise.resolve([]),
+      isManager(user) && !isRoleScopedManager(user)
+        ? db.user.findMany({
+            where: { isActive: true, userType: "EMPLOYEE" },
+            select: { id: true, fullName: true, userType: true },
+            orderBy: { fullName: "asc" },
+          })
+        : canFullyModerateProject(user)
+          ? db.user.findMany({
+              where: { isActive: true, userType: "EMPLOYEE" },
+              select: { id: true, fullName: true, userType: true },
+              orderBy: { fullName: "asc" },
+            })
+          : Promise.resolve([]),
       db.subProject.findMany({
         where: { isActive: true, project: { isActive: true, status: { in: ["ACTIVE", "ON_HOLD"] } } },
         include: { assignments: true },
@@ -73,7 +86,16 @@ export default async function NewEstimatePage() {
               userType: row.userType,
             })),
           ]
-        : [currentUserOption];
+        : isManager(user) || canFullyModerateProject(user)
+          ? [
+              currentUserOption,
+              ...allActiveEmployees.map((employee) => ({
+                id: employee.id,
+                fullName: employee.fullName,
+                userType: employee.userType,
+              })),
+            ]
+          : [currentUserOption];
 
   const dedupedAssignableEmployees = Array.from(
     new Map(assignableEmployees.map((employee) => [employee.id, employee])).values(),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import {
   createEstimateAction,
   type EstimateFormState,
@@ -96,11 +96,6 @@ export function EstimateCreateForm({
   );
   const [selectedSubProjectId, setSelectedSubProjectId] = useState("");
 
-  const filteredProjects = useMemo(
-    () => projects.filter((project) => project.clientId === selectedClientId),
-    [projects, selectedClientId],
-  );
-
   const selectedEmployee =
     assignableEmployees.find((employee) => employee.id === selectedEmployeeId) ??
     ({ id: currentUserId, fullName: "", userType: currentUserType } as EstimateEmployeeOption);
@@ -108,6 +103,23 @@ export function EstimateCreateForm({
   const bypassAssignmentForSelectedEmployee =
     allowUnassignedSubProjects &&
     (selectedEmployee?.userType === "MANAGER" || selectedEmployee?.userType === "TEAM_LEAD");
+
+  const filteredProjects = useMemo(
+    () =>
+      projects.filter((project) => {
+        if (project.clientId !== selectedClientId) return false;
+        if (bypassAssignmentForSelectedEmployee) return true;
+
+        const hasProjectAssignment = project.assignedUserIds.includes(selectedEmployeeId);
+        const hasSubProjectAssignment = subProjects.some(
+          (subProject) =>
+            subProject.projectId === project.id && subProject.assignedUserIds.includes(selectedEmployeeId),
+        );
+
+        return !selectedEmployeeId || hasProjectAssignment || hasSubProjectAssignment;
+      }),
+    [projects, selectedClientId, selectedEmployeeId, bypassAssignmentForSelectedEmployee, subProjects],
+  );
 
   const selectedProjectOption = projects.find((project) => project.id === selectedProjectId);
   const selectedEmployeeHasProjectAssignment = Boolean(
@@ -129,6 +141,18 @@ export function EstimateCreateForm({
       selectedEmployeeHasProjectAssignment,
     ],
   );
+
+  useEffect(() => {
+    if (selectedProjectId && filteredProjects.some((project) => project.id === selectedProjectId)) {
+      return;
+    }
+
+    const nextProjectId = filteredProjects[0]?.id ?? "";
+    if (nextProjectId !== selectedProjectId) {
+      setSelectedProjectId(nextProjectId);
+      setSelectedSubProjectId("");
+    }
+  }, [filteredProjects, selectedProjectId]);
 
   const filteredMovies = useMemo(
     () => movies.filter((movie) => movie.clientId === selectedClientId),

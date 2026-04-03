@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getVisibleProjects } from "@/lib/queries";
 import { TimeEntryCreateForm } from "@/components/forms/time-entry-create-form";
-import { isManager, isRoleScopedManager } from "@/lib/permissions";
+import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/permissions";
 
 export default async function NewTimeEntryPage() {
   const user = await requireUser();
@@ -41,11 +41,17 @@ export default async function NewTimeEntryPage() {
         : Promise.resolve([]),
       isManager(user) && !isRoleScopedManager(user)
         ? db.user.findMany({
-            where: { isActive: true, userType: "EMPLOYEE" },
+            where: { isActive: true },
             select: { id: true, fullName: true, userType: true },
             orderBy: { fullName: "asc" },
           })
-        : Promise.resolve([]),
+        : canFullyModerateProject(user)
+          ? db.user.findMany({
+              where: { isActive: true, userType: "EMPLOYEE" },
+              select: { id: true, fullName: true, userType: true },
+              orderBy: { fullName: "asc" },
+            })
+          : Promise.resolve([]),
       db.subProject.findMany({
         where: { isActive: true, project: { isActive: true, status: "ACTIVE" } },
         include: { assignments: true },
@@ -80,12 +86,15 @@ export default async function NewTimeEntryPage() {
               userType: row.userType,
             })),
           ]
-        : isManager(user)
-          ? allActiveEmployees.map((employee) => ({
-              id: employee.id,
-              fullName: employee.fullName,
-              userType: employee.userType,
-            }))
+        : isManager(user) || canFullyModerateProject(user)
+          ? [
+              currentUserOption,
+              ...allActiveEmployees.map((employee) => ({
+                id: employee.id,
+                fullName: employee.fullName,
+                userType: employee.userType,
+              }))
+            ]
           : [currentUserOption];
 
   const dedupedAssignableEmployees = Array.from(
