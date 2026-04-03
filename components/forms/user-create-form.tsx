@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { FormLabel } from "@/components/ui/form-label";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 
 const operationalFunctionalRoles = [
   "DEVELOPER",
@@ -22,16 +24,16 @@ const userTypes = [
   "ACCOUNTS",
 ] as const;
 
-type FunctionalRole =
-  | (typeof operationalFunctionalRoles)[number]
-  | "BILLING";
+type FunctionalRole = (typeof operationalFunctionalRoles)[number] | "BILLING";
 
 function PasswordField() {
   const [visible, setVisible] = useState(false);
 
   return (
     <div>
-      <FormLabel htmlFor="password" required>Temporary password</FormLabel>
+      <FormLabel htmlFor="password" required>
+        Temporary password
+      </FormLabel>
       <div className="relative">
         <input id="password" className="input pr-24" name="password" type={visible ? "text" : "password"} required />
         <button
@@ -56,14 +58,20 @@ export function UserCreateForm({
 }) {
   const [userType, setUserType] = useState<(typeof userTypes)[number]>("EMPLOYEE");
   const [functionalRole, setFunctionalRole] = useState<FunctionalRole>("DEVELOPER");
+  const [teamLeadIds, setTeamLeadIds] = useState<string[]>([]);
 
-  const availableFunctionalRoles = userType === "ACCOUNTS"
-    ? (["BILLING"] as const)
-    : operationalFunctionalRoles;
-
+  const availableFunctionalRoles = userType === "ACCOUNTS" ? (["BILLING"] as const) : operationalFunctionalRoles;
   const showSupervisors = userType === "EMPLOYEE";
 
-  const supervisorOptions = useMemo(() => teamLeads, [teamLeads]);
+  const supervisorOptions = useMemo(
+    () =>
+      teamLeads.map((lead) => ({
+        value: lead.id,
+        label: `${lead.fullName} (${lead.email})`,
+        keywords: `${lead.fullName} ${lead.email}`,
+      })),
+    [teamLeads],
+  );
 
   function handleUserTypeChange(nextUserType: (typeof userTypes)[number]) {
     setUserType(nextUserType);
@@ -72,10 +80,16 @@ export function UserCreateForm({
     } else if (functionalRole === "BILLING") {
       setFunctionalRole("DEVELOPER");
     }
+    if (nextUserType !== "EMPLOYEE") {
+      setTeamLeadIds([]);
+    }
   }
 
   return (
     <form action={action} className="card p-6">
+      <input type="hidden" name="userType" value={userType} />
+      <input type="hidden" name="functionalRole" value={functionalRole} />
+
       <h2 className="section-title">Create user</h2>
       <p className="section-subtitle">
         Fields marked <span className="text-red-600">*</span> are required.
@@ -83,54 +97,58 @@ export function UserCreateForm({
 
       <div className="mt-5 space-y-4">
         <div>
-          <FormLabel htmlFor="fullName" required>Full name</FormLabel>
+          <FormLabel htmlFor="fullName" required>
+            Full name
+          </FormLabel>
           <input id="fullName" className="input" name="fullName" required />
         </div>
 
         <div>
-          <FormLabel htmlFor="username" required>Username</FormLabel>
+          <FormLabel htmlFor="username" required>
+            Username
+          </FormLabel>
           <input id="username" className="input" name="username" required />
         </div>
 
         <div>
-          <FormLabel htmlFor="email" required>Email</FormLabel>
+          <FormLabel htmlFor="email" required>
+            Email
+          </FormLabel>
           <input id="email" className="input" name="email" type="email" required />
         </div>
 
         <PasswordField />
 
         <div>
-          <FormLabel htmlFor="userType" required>User type</FormLabel>
-          <select
+          <FormLabel htmlFor="userType" required>
+            User type
+          </FormLabel>
+          <SearchableCombobox
             id="userType"
-            className="input"
-            name="userType"
             value={userType}
-            onChange={(e) => handleUserTypeChange(e.target.value as (typeof userTypes)[number])}
-          >
-            {userTypes.map((type) => (
-              <option key={type} value={type}>
-                {type.replaceAll("_", " ")}
-              </option>
-            ))}
-          </select>
+            onValueChange={(value) => handleUserTypeChange(value as (typeof userTypes)[number])}
+            options={userTypes.map((type) => ({ value: type, label: type.replaceAll("_", " ") }))}
+            placeholder="Select user type"
+            searchPlaceholder="Search user types..."
+            emptyLabel="No user type found."
+            required
+          />
         </div>
 
         <div>
-          <FormLabel htmlFor="functionalRole" required>Functional role</FormLabel>
-          <select
+          <FormLabel htmlFor="functionalRole" required>
+            Functional role
+          </FormLabel>
+          <SearchableCombobox
             id="functionalRole"
-            className="input"
-            name="functionalRole"
             value={functionalRole}
-            onChange={(e) => setFunctionalRole(e.target.value as FunctionalRole)}
-          >
-            {availableFunctionalRoles.map((role) => (
-              <option key={role} value={role}>
-                {role.replaceAll("_", " ")}
-              </option>
-            ))}
-          </select>
+            onValueChange={(value) => setFunctionalRole(value as FunctionalRole)}
+            options={availableFunctionalRoles.map((role) => ({ value: role, label: role.replaceAll("_", " ") }))}
+            placeholder="Select functional role"
+            searchPlaceholder="Search functional roles..."
+            emptyLabel="No functional role found."
+            required
+          />
         </div>
 
         <div>
@@ -140,17 +158,20 @@ export function UserCreateForm({
 
         {showSupervisors ? (
           <div>
-            <FormLabel htmlFor="teamLeadIds" required>Assign Supervisor(s)</FormLabel>
-            <select id="teamLeadIds" className="input min-h-36" name="teamLeadIds" multiple required>
-              {supervisorOptions.map((lead) => (
-                <option key={lead.id} value={lead.id}>
-                  {lead.fullName} ({lead.email})
-                </option>
-              ))}
-            </select>
-            <p className="mt-2 text-xs text-slate-500">
-              Hold Ctrl/Cmd to select multiple supervisors.
-            </p>
+            <FormLabel htmlFor="teamLeadIds" required>
+              Assign Supervisor(s)
+            </FormLabel>
+            <SearchableMultiSelect
+              id="teamLeadIds"
+              name="teamLeadIds"
+              value={teamLeadIds}
+              onValueChange={setTeamLeadIds}
+              options={supervisorOptions}
+              placeholder="Select supervisor(s)"
+              searchPlaceholder="Search supervisors..."
+              emptyLabel="No supervisor found."
+              required
+            />
           </div>
         ) : null}
 

@@ -11,7 +11,7 @@ export default async function NewTimeEntryPage() {
 
   const [projects, countries, movies, languages, supervisorAssignments, roleScopedUsers, allActiveEmployees, allSubProjects] =
     await Promise.all([
-      getVisibleProjects(user),
+      getVisibleProjects(user, { allowedStatuses: ["ACTIVE"] }),
       db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
       db.movie.findMany({ where: { isActive: true }, orderBy: { title: "asc" } }),
       db.language.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
@@ -47,7 +47,7 @@ export default async function NewTimeEntryPage() {
           })
         : Promise.resolve([]),
       db.subProject.findMany({
-        where: { isActive: true },
+        where: { isActive: true, project: { isActive: true, status: "ACTIVE" } },
         include: { assignments: true },
         orderBy: { name: "asc" },
       }),

@@ -100,25 +100,21 @@ export function UserAssignmentForm({
           <FormLabel htmlFor="clientId" required>
             Client
           </FormLabel>
-          <select
+          <SearchableCombobox
             id="clientId"
             name="clientId"
-            className="input"
             value={clientId}
-            onChange={(e) => {
-              setClientId(e.target.value);
+            onValueChange={(nextValue) => {
+              setClientId(nextValue);
               setProjectId("");
               setSubProjectId("");
             }}
+            options={[{ value: "", label: "Select client" }, ...clients.map((client) => ({ value: client.id, label: client.name }))]}
+            placeholder="Select client"
+            searchPlaceholder="Search clients..."
+            emptyLabel="No clients found."
             required
-          >
-            <option value="">Select client</option>
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
+          />
         </div>
 
         <div>
@@ -146,20 +142,16 @@ export function UserAssignmentForm({
 
         <div>
           <FormLabel htmlFor="subProjectId">Sub Project</FormLabel>
-          <select
+          <SearchableCombobox
             id="subProjectId"
             name="subProjectId"
-            className="input"
             value={subProjectId}
-            onChange={(e) => setSubProjectId(e.target.value)}
-          >
-            <option value="">Project-level assignment</option>
-            {filteredSubProjects.map((subProject) => (
-              <option key={subProject.id} value={subProject.id}>
-                {subProject.name}
-              </option>
-            ))}
-          </select>
+            onValueChange={setSubProjectId}
+            options={[{ value: "", label: "Project-level assignment" }, ...filteredSubProjects.map((subProject) => ({ value: subProject.id, label: subProject.name }))]}
+            placeholder="Project-level assignment"
+            searchPlaceholder="Search sub projects..."
+            emptyLabel="No sub projects found."
+          />
         </div>
 
         <div>

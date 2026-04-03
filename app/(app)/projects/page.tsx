@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { requireUser } from "@/lib/auth";
 import { getVisibleProjects } from "@/lib/queries";
 import { canCreateProjects } from "@/lib/permissions";
@@ -68,28 +69,9 @@ export default async function ProjectsPage({
             defaultValue={q}
             placeholder="Search by project, client, or assigned person"
           />
-          <select className="input" name="status" defaultValue={status}>
-            <option value="all">All statuses</option>
-            <option value="DRAFT">Draft</option>
-            <option value="ACTIVE">Active</option>
-            <option value="ON_HOLD">On Hold</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="ARCHIVED">Archived</option>
-          </select>
-          <select className="input" name="billingModel" defaultValue={billingModel}>
-            <option value="all">All billing models</option>
-            <option value="HOURLY">Hourly</option>
-            <option value="FIXED_FULL">Fixed - Full Project</option>
-            <option value="FIXED_MONTHLY">Fixed - Monthly</option>
-          </select>
-          <select className="input" name="clientId" defaultValue={clientId}>
-            <option value="all">All clients</option>
-            {clientOptions.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
+          <SearchableCombobox id="status" name="status" defaultValue={status} options={[{ value: "all", label: "All statuses" },{ value: "DRAFT", label: "Draft" },{ value: "ACTIVE", label: "Active" },{ value: "ON_HOLD", label: "On Hold" },{ value: "COMPLETED", label: "Completed" },{ value: "ARCHIVED", label: "Archived" }]} placeholder="All statuses" searchPlaceholder="Search statuses..." emptyLabel="No statuses found." />
+          <SearchableCombobox id="billingModel" name="billingModel" defaultValue={billingModel} options={[{ value: "all", label: "All billing models" },{ value: "HOURLY", label: "Hourly" },{ value: "FIXED_FULL", label: "Fixed - Full Project" },{ value: "FIXED_MONTHLY", label: "Fixed - Monthly" }]} placeholder="All billing models" searchPlaceholder="Search billing models..." emptyLabel="No billing models found." />
+          <SearchableCombobox id="clientId" name="clientId" defaultValue={clientId} options={[{ value: "all", label: "All clients" }, ...clientOptions.map((client) => ({ value: client.id, label: client.name }))]} placeholder="All clients" searchPlaceholder="Search clients..." emptyLabel="No clients found." />
           <button className="btn-secondary" type="submit">
             Apply
           </button>

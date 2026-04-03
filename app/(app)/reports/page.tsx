@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { requireUser } from "@/lib/auth";
 import { getVisibleProjects } from "@/lib/queries";
 import { db } from "@/lib/db";
@@ -209,20 +210,32 @@ export default async function ReportsPage({
             defaultValue={q}
             placeholder="Search by project, client, or project type"
           />
-          <select className="input" name="clientId" defaultValue={clientId}>
-            <option value="all">All clients</option>
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
-          <select className="input" name="billingModel" defaultValue={billingModel}>
-            <option value="all">All billing models</option>
-            <option value="HOURLY">Hourly</option>
-            <option value="FIXED_FULL">Fixed - Full Project</option>
-            <option value="FIXED_MONTHLY">Fixed - Monthly</option>
-          </select>
+          <SearchableCombobox
+            id="clientId"
+            name="clientId"
+            defaultValue={clientId}
+            options={[
+              { value: "all", label: "All clients" },
+              ...clients.map((client) => ({ value: client.id, label: client.name })),
+            ]}
+            placeholder="All clients"
+            searchPlaceholder="Search clients..."
+            emptyLabel="No client found."
+          />
+          <SearchableCombobox
+            id="billingModel"
+            name="billingModel"
+            defaultValue={billingModel}
+            options={[
+              { value: "all", label: "All billing models" },
+              { value: "HOURLY", label: "Hourly" },
+              { value: "FIXED_FULL", label: "Fixed - Full Project" },
+              { value: "FIXED_MONTHLY", label: "Fixed - Monthly" },
+            ]}
+            placeholder="All billing models"
+            searchPlaceholder="Search billing models..."
+            emptyLabel="No billing model found."
+          />
           <button className="btn-secondary" type="submit">Apply</button>
         </form>
       </div>

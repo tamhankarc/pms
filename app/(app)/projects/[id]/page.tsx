@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { createBillingTransactionAction } from "@/lib/actions/project-actions";
 import { db } from "@/lib/db";
 import { formatMinutes } from "@/lib/utils";
@@ -175,12 +176,21 @@ export default async function ProjectDetailPage({
               <label className="label">
                 Type <span className="text-red-600">*</span>
               </label>
-              <select className="input" name="type" required>
-                <option value="PARTIAL_BILLING">Partial billing</option>
-                <option value="UPGRADE_PRE_COMPLETION">Upgrade before completion</option>
-                <option value="UPGRADE_POST_COMPLETION">Upgrade after completion</option>
-                <option value="ADJUSTMENT">Adjustment</option>
-              </select>
+              <SearchableCombobox
+                id="type"
+                name="type"
+                defaultValue="PARTIAL_BILLING"
+                required
+                options={[
+                  { value: "PARTIAL_BILLING", label: "Partial billing" },
+                  { value: "UPGRADE_PRE_COMPLETION", label: "Upgrade before completion" },
+                  { value: "UPGRADE_POST_COMPLETION", label: "Upgrade after completion" },
+                  { value: "ADJUSTMENT", label: "Adjustment" },
+                ]}
+                placeholder="Select type"
+                searchPlaceholder="Search transaction types..."
+                emptyLabel="No transaction type found."
+              />
             </div>
             <div>
               <label className="label">

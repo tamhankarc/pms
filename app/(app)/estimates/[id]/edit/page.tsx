@@ -45,7 +45,7 @@ export default async function EditEstimatePage({
       orderBy: { name: "asc" },
     }),
     db.project.findMany({
-      where: { isActive: true },
+      where: { isActive: true, status: { in: ["ACTIVE", "ON_HOLD"] } },
       include: {
         client: true,
         assignedUsers: true,
@@ -53,7 +53,7 @@ export default async function EditEstimatePage({
       orderBy: { name: "asc" },
     }),
     db.subProject.findMany({
-      where: { isActive: true },
+      where: { isActive: true, project: { isActive: true, status: { in: ["ACTIVE", "ON_HOLD"] } } },
       include: { assignments: true },
       orderBy: { name: "asc" },
     }),

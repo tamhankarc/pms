@@ -18,7 +18,7 @@ export default async function TimeEntriesPage({
   const selectedProjectId = params.projectId ?? "all";
 
   const [projects, countries, supervisorAssignments] = await Promise.all([
-    getVisibleProjects(user),
+    getVisibleProjects(user, { allowedStatuses: ["ACTIVE"] }),
     db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
       ? db.employeeTeamLead.findMany({
@@ -50,19 +50,30 @@ export default async function TimeEntriesPage({
         ? {
             employeeId: user.id,
             projectId: { in: safeProjectIds },
+            project: { is: { isActive: true, status: "ACTIVE" } },
+            OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
           }
         : user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
           ? {
               OR: [
-                { employeeId: user.id, projectId: { in: safeProjectIds } },
+                {
+                  employeeId: user.id,
+                  projectId: { in: safeProjectIds },
+                  project: { is: { isActive: true, status: "ACTIVE" } },
+                  OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
+                },
                 {
                   employeeId: { in: scopedEmployeeIds.length ? scopedEmployeeIds : ["__none__"] },
                   projectId: { in: safeProjectIds },
+                  project: { is: { isActive: true, status: "ACTIVE" } },
+                  OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
                 },
               ],
             }
           : {
               projectId: { in: safeProjectIds },
+              project: { is: { isActive: true, status: "ACTIVE" } },
+              OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
             },
     include: {
       employee: true,
@@ -105,14 +116,15 @@ export default async function TimeEntriesPage({
       <div className="card p-4">
         <form method="get" className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
           <div className="grid gap-3 md:grid-cols-2">
-            <select className="input" name="clientId" defaultValue={selectedClientId}>
-              <option value="all">All clients</option>
-              {clientOptions.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
+            <SearchableCombobox
+              id="clientId"
+              name="clientId"
+              defaultValue={selectedClientId}
+              options={[{ value: "all", label: "All clients" }, ...clientOptions.map((client) => ({ value: client.id, label: client.name }))]}
+              placeholder="All clients"
+              searchPlaceholder="Search clients..."
+              emptyLabel="No clients found."
+            />
             <SearchableCombobox
               id="projectId"
               name="projectId"

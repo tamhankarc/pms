@@ -36,9 +36,9 @@ export default async function EditTimeEntryPage({
       where: { isActive: true },
       orderBy: { name: "asc" },
     }),
-    getVisibleProjects(user),
+    getVisibleProjects(user, { allowedStatuses: ["ACTIVE"] }),
     db.subProject.findMany({
-      where: { isActive: true },
+      where: { isActive: true, project: { isActive: true, status: "ACTIVE" } },
       include: { assignments: true },
       orderBy: { name: "asc" },
     }),

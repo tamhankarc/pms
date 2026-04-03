@@ -18,7 +18,6 @@ const TEAM_LEAD_BLOCKED_PATHS = [
   "/users",
   "/team-lead-assignments",
   "/reports",
-  "/countries",
 ];
 
 async function getSessionPayload(request: NextRequest) {
@@ -84,8 +83,7 @@ export async function middleware(request: NextRequest) {
 
   if (pathname === "/countries" || pathname.startsWith("/countries/")) {
     const allowed =
-      session?.userType === "ADMIN" ||
-      (session?.userType === "MANAGER" && session?.functionalRole === "PROJECT_MANAGER");
+      session?.userType === "ADMIN" || session?.userType === "MANAGER" || session?.userType === "TEAM_LEAD";
     if (!allowed) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }

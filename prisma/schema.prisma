@@ -380,6 +380,23 @@ model TimeEntryReview {
   @@index([reviewerId])
 }
 
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Char(36)
+  actorId     String?
+  entityType  String
+  entityId    String?
+  actionType  String
+  description String?  @db.Text
+  beforeJson  String?  @db.LongText
+  afterJson   String?  @db.LongText
+  createdAt   DateTime @default(now())
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
 model BillingTransaction {
   id              String                 @id @default(cuid())
   projectId       String

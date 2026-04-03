@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { updateProjectAction, type ProjectFormState } from "@/lib/actions/project-actions";
 import { FormLabel } from "@/components/ui/form-label";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
 type ProjectType = {
   id: string;
@@ -11,6 +12,7 @@ type ProjectType = {
 };
 
 type BillingModel = "HOURLY" | "FIXED_FULL" | "FIXED_MONTHLY";
+type ProjectStatus = "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "ARCHIVED";
 
 const initialState: ProjectFormState = {};
 
@@ -31,16 +33,22 @@ export function ProjectEditForm({
     billingModel: BillingModel;
     fixedContractHours: number | null;
     fixedMonthlyHours: number | null;
-    status: "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "ARCHIVED";
+    status: ProjectStatus;
     description: string | null;
   };
 }) {
   const [billingModel, setBillingModel] = useState<BillingModel>(initialValues.billingModel);
+  const [projectTypeId, setProjectTypeId] = useState(initialValues.projectTypeId ?? "");
+  const [status, setStatus] = useState<ProjectStatus>(initialValues.status);
   const boundAction = updateProjectAction.bind(null, projectId);
   const [state, formAction, pending] = useActionState(boundAction, initialState);
 
   return (
     <form action={formAction} className="card p-6">
+      <input type="hidden" name="projectTypeId" value={projectTypeId} />
+      <input type="hidden" name="billingModel" value={billingModel} />
+      <input type="hidden" name="status" value={status} />
+
       <h2 className="section-title">Edit project</h2>
       <p className="section-subtitle">
         Client remains locked after creation. Fields marked <span className="text-red-600">*</span> are required.
@@ -69,20 +77,16 @@ export function ProjectEditForm({
             <FormLabel htmlFor="projectTypeId" required>
               Project type
             </FormLabel>
-            <select
+            <SearchableCombobox
               id="projectTypeId"
-              className="input"
-              name="projectTypeId"
-              defaultValue={initialValues.projectTypeId ?? ""}
+              value={projectTypeId}
+              onValueChange={setProjectTypeId}
+              options={projectTypes.map((type) => ({ value: type.id, label: type.name }))}
+              placeholder="Select project type"
+              searchPlaceholder="Search project types..."
+              emptyLabel="No project type found."
               required
-            >
-              <option value="">Select project type</option>
-              {projectTypes.map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
-            </select>
+            />
           </div>
         ) : null}
 
@@ -97,31 +101,42 @@ export function ProjectEditForm({
           <FormLabel htmlFor="billingModel" required>
             Billing model
           </FormLabel>
-          <select
+          <SearchableCombobox
             id="billingModel"
-            className="input"
-            name="billingModel"
             value={billingModel}
-            onChange={(e) => setBillingModel(e.target.value as BillingModel)}
+            onValueChange={(value) => setBillingModel(value as BillingModel)}
+            options={[
+              { value: "HOURLY", label: "Hourly" },
+              { value: "FIXED_FULL", label: "Fixed - Full Project" },
+              { value: "FIXED_MONTHLY", label: "Fixed - Monthly" },
+            ]}
+            placeholder="Select billing model"
+            searchPlaceholder="Search billing models..."
+            emptyLabel="No billing model found."
             required
-          >
-            <option value="HOURLY">Hourly</option>
-            <option value="FIXED_FULL">Fixed - Full Project</option>
-            <option value="FIXED_MONTHLY">Fixed - Monthly</option>
-          </select>
+          />
         </div>
 
         <div>
           <FormLabel htmlFor="status" required>
             Status
           </FormLabel>
-          <select id="status" className="input" name="status" defaultValue={initialValues.status} required>
-            <option value="DRAFT">Draft</option>
-            <option value="ACTIVE">Active</option>
-            <option value="ON_HOLD">On Hold</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="ARCHIVED">Archived</option>
-          </select>
+          <SearchableCombobox
+            id="status"
+            value={status}
+            onValueChange={(value) => setStatus(value as ProjectStatus)}
+            options={[
+              { value: "DRAFT", label: "Draft" },
+              { value: "ACTIVE", label: "Active" },
+              { value: "ON_HOLD", label: "On Hold" },
+              { value: "COMPLETED", label: "Completed" },
+              { value: "ARCHIVED", label: "Archived" },
+            ]}
+            placeholder="Select status"
+            searchPlaceholder="Search statuses..."
+            emptyLabel="No status found."
+            required
+          />
         </div>
 
         {billingModel === "FIXED_FULL" ? (

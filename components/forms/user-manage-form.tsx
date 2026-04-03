@@ -2,6 +2,8 @@
 
 import { useActionState, useMemo, useState } from "react";
 import { FormLabel } from "@/components/ui/form-label";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import type { UserFormState } from "@/lib/actions/user-actions";
 
 const operationalFunctionalRoles = [
@@ -23,9 +25,7 @@ const userTypes = [
   "ACCOUNTS",
 ] as const;
 
-type FunctionalRole =
-  | (typeof operationalFunctionalRoles)[number]
-  | "BILLING";
+type FunctionalRole = (typeof operationalFunctionalRoles)[number] | "BILLING";
 
 type SupervisorOption = {
   id: string;
@@ -57,7 +57,6 @@ type UserManageFormProps = {
 
 const initialState: UserFormState = {};
 
-
 function PasswordField({
   defaultVisible = false,
 }: {
@@ -67,7 +66,9 @@ function PasswordField({
 
   return (
     <div className="md:col-span-2">
-      <FormLabel htmlFor="password" required>Temporary password</FormLabel>
+      <FormLabel htmlFor="password" required>
+        Temporary password
+      </FormLabel>
       <div className="relative">
         <input id="password" className="input pr-24" name="password" type={visible ? "text" : "password"} required />
         <button
@@ -83,21 +84,15 @@ function PasswordField({
   );
 }
 
-export function UserManageForm({
-  mode,
-  action,
-  supervisors,
-  initialValues,
-}: UserManageFormProps) {
+export function UserManageForm({ mode, action, supervisors, initialValues }: UserManageFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [userType, setUserType] = useState<(typeof userTypes)[number]>(initialValues?.userType ?? "EMPLOYEE");
   const [functionalRole, setFunctionalRole] = useState<FunctionalRole>(initialValues?.functionalRole ?? "DEVELOPER");
+  const [supervisorIds, setSupervisorIds] = useState<string[]>(initialValues?.supervisorIds ?? []);
 
   const canHaveSupervisors = userType === "EMPLOYEE";
 
-  const availableFunctionalRoles = userType === "ACCOUNTS"
-    ? (["BILLING"] as const)
-    : operationalFunctionalRoles;
+  const availableFunctionalRoles = userType === "ACCOUNTS" ? (["BILLING"] as const) : operationalFunctionalRoles;
 
   const filteredSupervisors = useMemo(
     () =>
@@ -109,12 +104,29 @@ export function UserManageForm({
     [supervisors, functionalRole],
   );
 
+  const supervisorOptions = useMemo(
+    () =>
+      filteredSupervisors.map((person) => ({
+        value: person.id,
+        label: `${person.fullName} · ${person.userType.replaceAll("_", " ")}${
+          person.userType === "MANAGER" && person.functionalRole
+            ? ` · ${person.functionalRole.replaceAll("_", " ")}`
+            : ""
+        }`,
+        keywords: `${person.fullName} ${person.email} ${person.userType} ${person.functionalRole ?? ""}`,
+      })),
+    [filteredSupervisors],
+  );
+
   function handleUserTypeChange(nextUserType: (typeof userTypes)[number]) {
     setUserType(nextUserType);
     if (nextUserType === "ACCOUNTS") {
       setFunctionalRole("BILLING");
     } else if (functionalRole === "BILLING") {
       setFunctionalRole("DEVELOPER");
+    }
+    if (nextUserType !== "EMPLOYEE") {
+      setSupervisorIds([]);
     }
   }
 
@@ -128,9 +140,7 @@ export function UserManageForm({
       </p>
 
       {state?.error ? (
-        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {state.error}
-        </div>
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</div>
       ) : null}
       {state?.success ? (
         <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
@@ -140,53 +150,61 @@ export function UserManageForm({
 
       <div className="mt-5 grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
-          <FormLabel htmlFor="fullName" required>Full name</FormLabel>
+          <FormLabel htmlFor="fullName" required>
+            Full name
+          </FormLabel>
           <input id="fullName" className="input" name="fullName" defaultValue={initialValues?.fullName ?? ""} required />
         </div>
 
         <div>
-          <FormLabel htmlFor="username" required>Username</FormLabel>
+          <FormLabel htmlFor="username" required>
+            Username
+          </FormLabel>
           <input id="username" className="input" name="username" defaultValue={initialValues?.username ?? ""} required />
           <p className="mt-1 text-xs text-slate-500">Used for login. Use letters, numbers, dot, underscore, or hyphen.</p>
         </div>
 
         <div>
-          <FormLabel htmlFor="email" required>Email</FormLabel>
+          <FormLabel htmlFor="email" required>
+            Email
+          </FormLabel>
           <input id="email" className="input" name="email" type="email" defaultValue={initialValues?.email ?? ""} required />
         </div>
 
         {mode === "create" ? <PasswordField /> : null}
 
         <div>
-          <FormLabel htmlFor="userType" required>User type</FormLabel>
-          <select
+          <FormLabel htmlFor="userType" required>
+            User type
+          </FormLabel>
+          <SearchableCombobox
             id="userType"
-            className="input"
-            name="userType"
             value={userType}
-            onChange={(e) => handleUserTypeChange(e.target.value as (typeof userTypes)[number])}
+            onValueChange={(value) => handleUserTypeChange(value as (typeof userTypes)[number])}
+            options={userTypes.map((type) => ({ value: type, label: type.replaceAll("_", " ") }))}
+            placeholder="Select user type"
+            searchPlaceholder="Search user types..."
+            emptyLabel="No user type found."
             required
-          >
-            {userTypes.map((type) => (
-              <option key={type} value={type}>{type.replaceAll("_", " ")}</option>
-            ))}
-          </select>
+          />
+          <input type="hidden" name="userType" value={userType} />
         </div>
 
         <div>
-          <FormLabel htmlFor="functionalRole" required>Functional role</FormLabel>
-          <select
+          <FormLabel htmlFor="functionalRole" required>
+            Functional role
+          </FormLabel>
+          <SearchableCombobox
             id="functionalRole"
-            className="input"
-            name="functionalRole"
             value={functionalRole}
-            onChange={(e) => setFunctionalRole(e.target.value as FunctionalRole)}
+            onValueChange={(value) => setFunctionalRole(value as FunctionalRole)}
+            options={availableFunctionalRoles.map((role) => ({ value: role, label: role.replaceAll("_", " ") }))}
+            placeholder="Select functional role"
+            searchPlaceholder="Search functional roles..."
+            emptyLabel="No functional role found."
             required
-          >
-            {availableFunctionalRoles.map((role) => (
-              <option key={role} value={role}>{role.replaceAll("_", " ")}</option>
-            ))}
-          </select>
+          />
+          <input type="hidden" name="functionalRole" value={functionalRole} />
           {userType === "ACCOUNTS" ? (
             <p className="mt-1 text-xs text-slate-500">Accounts users must use the Billing functional role.</p>
           ) : null}
@@ -212,22 +230,24 @@ export function UserManageForm({
           <input id="phoneNumber" className="input" name="phoneNumber" defaultValue={initialValues?.phoneNumber ?? ""} />
         </div>
 
-
         {canHaveSupervisors ? (
           <div className="md:col-span-2">
-            <FormLabel htmlFor="supervisorIds" required>Assign Supervisor(s)</FormLabel>
-            <select id="supervisorIds" className="input min-h-36" name="supervisorIds" multiple required defaultValue={initialValues?.supervisorIds ?? []}>
-              {filteredSupervisors.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.fullName} · {person.userType.replaceAll("_", " ")}
-                  {person.userType === "MANAGER" && person.functionalRole
-                    ? ` · ${person.functionalRole.replaceAll("_", " ")}`
-                    : ""}
-                </option>
-              ))}
-            </select>
+            <FormLabel htmlFor="supervisorIds" required>
+              Assign Supervisor(s)
+            </FormLabel>
+            <SearchableMultiSelect
+              id="supervisorIds"
+              name="supervisorIds"
+              value={supervisorIds}
+              onValueChange={setSupervisorIds}
+              options={supervisorOptions}
+              placeholder="Select supervisor(s)"
+              searchPlaceholder="Search supervisors..."
+              emptyLabel="No supervisor found."
+              required
+            />
             <p className="mt-2 text-xs text-slate-500">
-              Employees must have at least one assigned Team Lead or a Manager with the same functional role. Hold Ctrl/Cmd to select multiple supervisors.
+              Employees must have at least one assigned Team Lead or a Manager with the same functional role.
             </p>
           </div>
         ) : null}

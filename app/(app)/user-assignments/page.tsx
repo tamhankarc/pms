@@ -135,14 +135,18 @@ export default async function UserAssignmentsPage({
 
       <div className="card p-4">
         <form method="get" className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto_auto]">
-          <select className="input" name="clientId" defaultValue={params.clientId ?? ""}>
-            <option value="">All clients</option>
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
+          <SearchableCombobox
+            id="clientId"
+            name="clientId"
+            defaultValue={params.clientId ?? ""}
+            options={[
+              { value: "", label: "All clients" },
+              ...clients.map((client) => ({ value: client.id, label: client.name })),
+            ]}
+            placeholder="All clients"
+            searchPlaceholder="Search clients..."
+            emptyLabel="No client found."
+          />
 
           <SearchableCombobox
             id="projectId"
@@ -161,14 +165,22 @@ export default async function UserAssignmentsPage({
             emptyLabel="No projects found."
           />
 
-          <select className="input" name="subProjectId" defaultValue={params.subProjectId ?? ""}>
-            <option value="">All sub projects</option>
-            {subProjects.map((subProject) => (
-              <option key={subProject.id} value={subProject.id}>
-                {subProject.name}
-              </option>
-            ))}
-          </select>
+          <SearchableCombobox
+            id="subProjectId"
+            name="subProjectId"
+            defaultValue={params.subProjectId ?? ""}
+            options={[
+              { value: "", label: "All sub projects" },
+              ...subProjects.map((subProject) => ({
+                value: subProject.id,
+                label: subProject.name,
+                keywords: `${subProject.name} ${subProject.project.name} ${subProject.project.client.name}`,
+              })),
+            ]}
+            placeholder="All sub projects"
+            searchPlaceholder="Search sub projects..."
+            emptyLabel="No sub project found."
+          />
 
           <button className="btn-secondary" type="submit">
             Apply

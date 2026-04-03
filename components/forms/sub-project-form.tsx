@@ -82,23 +82,17 @@ export function SubProjectForm({
           <FormLabel htmlFor="clientId" required>
             Client
           </FormLabel>
-          <select
+          <SearchableCombobox
             id="clientId"
-            className="input"
+            name="clientId"
             value={clientId}
-            onChange={(event) => {
-              const nextClientId = event.target.value;
-              setClientId(nextClientId);
-            }}
+            onValueChange={setClientId}
+            options={[{ value: "", label: "Select client" }, ...uniqueClients.map((client) => ({ value: client.id, label: client.name }))]}
+            placeholder="Select client"
+            searchPlaceholder="Search clients..."
+            emptyLabel="No clients found."
             required
-          >
-            <option value="">Select client</option>
-            {uniqueClients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
+          />
         </div>
 
         <div>

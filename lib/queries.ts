@@ -2,14 +2,18 @@ import "server-only";
 import { db } from "@/lib/db";
 import { canSeeAllProjects, canSeeBillingDashboard } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/auth";
-import type { BillingModel } from "@prisma/client";
+import type { BillingModel, ProjectStatus } from "@prisma/client";
 
-export async function getVisibleProjects(user: SessionUser) {
+export async function getVisibleProjects(
+  user: SessionUser,
+  options?: { allowedStatuses?: ProjectStatus[] },
+) {
   const include = {
     client: true,
     projectType: true,
     assignedUsers: { include: { user: true } },
     subProjects: {
+      where: { isActive: true },
       include: {
         assignments: { include: { user: true } },
       },
@@ -17,8 +21,14 @@ export async function getVisibleProjects(user: SessionUser) {
     },
   } as const;
 
+  const baseWhere = {
+    isActive: true,
+    ...(options?.allowedStatuses?.length ? { status: { in: options.allowedStatuses } } : {}),
+  };
+
   if (canSeeAllProjects(user)) {
     return db.project.findMany({
+      where: baseWhere,
       include,
       orderBy: { createdAt: "desc" },
     });
@@ -26,6 +36,7 @@ export async function getVisibleProjects(user: SessionUser) {
 
   return db.project.findMany({
     where: {
+      ...baseWhere,
       OR: [
         {
           assignedUsers: {
@@ -37,6 +48,7 @@ export async function getVisibleProjects(user: SessionUser) {
         {
           subProjects: {
             some: {
+              isActive: true,
               assignments: {
                 some: {
                   userId: user.id,
@@ -46,7 +58,6 @@ export async function getVisibleProjects(user: SessionUser) {
           },
         },
       ],
-      isActive: true,
     },
     include,
     orderBy: { createdAt: "desc" },

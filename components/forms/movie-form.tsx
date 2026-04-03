@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { FormLabel } from "@/components/ui/form-label";
 import type { MovieFormState } from "@/lib/actions/movie-actions";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
 const initialState: MovieFormState = {};
 
@@ -28,10 +29,21 @@ export function MovieForm({
   title: string;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
+  const [selectedClientId, setSelectedClientId] = useState(initialValues?.clientId ?? "");
+
+  const clientOptions = useMemo(
+    () =>
+      clients.map((client) => ({
+        value: client.id,
+        label: client.name,
+      })),
+    [clients],
+  );
 
   return (
     <form action={formAction} className="card p-6">
       {initialValues?.id ? <input type="hidden" name="id" value={initialValues.id} /> : null}
+      <input type="hidden" name="clientId" value={selectedClientId} />
 
       <h2 className="section-title">{title}</h2>
       <p className="section-subtitle">
@@ -56,14 +68,15 @@ export function MovieForm({
           <FormLabel htmlFor="clientId" required>
             Client
           </FormLabel>
-          <select id="clientId" name="clientId" className="input" defaultValue={initialValues?.clientId ?? ""} required>
-            <option value="">Select client</option>
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
+          <SearchableCombobox
+            id="clientId"
+            options={clientOptions}
+            value={selectedClientId}
+            onValueChange={setSelectedClientId}
+            placeholder="Select client"
+            searchPlaceholder="Search clients..."
+            emptyLabel="No client found."
+          />
         </div>
 
         <div>

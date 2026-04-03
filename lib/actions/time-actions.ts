@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
 import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/permissions";
+import { recordAuditLog } from "@/lib/audit";
 
 export type TimeEntryFormState = {
   success?: boolean;
@@ -32,7 +33,7 @@ const timeUpdateSchema = timeSchema.extend({
 
 async function getProjectForClient(projectId: string, clientId: string) {
   return db.project.findFirst({
-    where: { id: projectId, clientId, isActive: true },
+    where: { id: projectId, clientId, isActive: true, status: "ACTIVE" },
     include: { client: true },
   });
 }
@@ -45,6 +46,7 @@ async function userCanLogAgainstProject(
     where: {
       id: projectId,
       isActive: true,
+      status: "ACTIVE",
       ...(isRoleScopedManager(user)
         ? {}
         : {
@@ -203,6 +205,10 @@ async function validateClientFieldRequirements(
     return { valid: false as const, error: "Selected project does not belong to the selected client." };
   }
 
+  if (!project.isActive || project.status !== "ACTIVE") {
+    return { valid: false as const, error: "Time entries can only use active projects." };
+  }
+
   if (project.client.showCountriesInTimeEntries && !countryId) {
     return { valid: false as const, error: "Country is required for the selected client." };
   }
@@ -320,7 +326,7 @@ export async function createTimeEntryAction(
       return { success: false, error: subProjectCheck.error };
     }
 
-    await db.timeEntry.create({
+    const createdEntry = await db.timeEntry.create({
       data: {
         employeeId,
         projectId: parsed.data.projectId,
@@ -335,6 +341,15 @@ export async function createTimeEntryAction(
         notes: parsed.data.notes || null,
         status: "SUBMITTED",
       },
+    });
+
+    await recordAuditLog({
+      actorId: user.id,
+      entityType: "TimeEntry",
+      entityId: createdEntry.id,
+      action: "CREATE",
+      after: createdEntry,
+      description: "Created time entry",
     });
 
     revalidatePath("/time-entries");
@@ -432,7 +447,9 @@ export async function updateTimeEntryAction(
       return { success: false, error: subProjectCheck.error };
     }
 
-    await db.timeEntry.update({
+    const existingEntry = await db.timeEntry.findUnique({ where: { id: entry.id } });
+
+    const updatedEntry = await db.timeEntry.update({
       where: { id: entry.id },
       data: {
         projectId: parsed.data.projectId,
@@ -446,6 +463,16 @@ export async function updateTimeEntryAction(
         isBillable: parsed.data.isBillable,
         notes: parsed.data.notes || null,
       },
+    });
+
+    await recordAuditLog({
+      actorId: user.id,
+      entityType: "TimeEntry",
+      entityId: updatedEntry.id,
+      action: "UPDATE",
+      before: existingEntry,
+      after: updatedEntry,
+      description: "Updated time entry",
     });
 
     revalidatePath("/time-entries");

@@ -55,14 +55,18 @@ export default async function SubProjectPage({
 
       <div className="card p-4">
         <form method="get" className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
-          <select className="input" name="clientId" defaultValue={selectedClientId}>
-            <option value="">All clients</option>
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
+          <SearchableCombobox
+            id="clientId"
+            name="clientId"
+            defaultValue={selectedClientId}
+            options={[
+              { value: "", label: "All clients" },
+              ...clients.map((client) => ({ value: client.id, label: client.name })),
+            ]}
+            placeholder="All clients"
+            searchPlaceholder="Search clients..."
+            emptyLabel="No client found."
+          />
 
           <SearchableCombobox
             id="projectId"

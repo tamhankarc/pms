@@ -53,7 +53,7 @@ export default async function EstimatesPage({
   const selectedProjectId = params.projectId ?? "all";
 
   const [projects, countries, assignments] = await Promise.all([
-    getVisibleProjects(user),
+    getVisibleProjects(user, { allowedStatuses: ["ACTIVE", "ON_HOLD"] }),
     db.country.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
@@ -88,21 +88,32 @@ export default async function EstimatesPage({
         ? {
             employeeId: user.id,
             projectId: { in: safeProjectIds },
+            project: { is: { isActive: true, status: { in: ["ACTIVE", "ON_HOLD"] } } },
+            OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
           }
         : user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
           ? {
               OR: [
-                { employeeId: user.id, projectId: { in: safeProjectIds } },
+                {
+                  employeeId: user.id,
+                  projectId: { in: safeProjectIds },
+                  project: { is: { isActive: true, status: { in: ["ACTIVE", "ON_HOLD"] } } },
+                  OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
+                },
                 {
                   employeeId: {
                     in: assignedScopedEmployeeIds.length ? assignedScopedEmployeeIds : ["__none__"],
                   },
                   projectId: { in: safeProjectIds },
+                  project: { is: { isActive: true, status: { in: ["ACTIVE", "ON_HOLD"] } } },
+                  OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
                 },
               ],
             }
           : {
               projectId: { in: safeProjectIds },
+              project: { is: { isActive: true, status: { in: ["ACTIVE", "ON_HOLD"] } } },
+              OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
             },
   })) as EstimateRow[];
 
@@ -139,14 +150,15 @@ export default async function EstimatesPage({
       <div className="card p-4">
         <form method="get" className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
           <div className="grid gap-3 md:grid-cols-2">
-            <select className="input" name="clientId" defaultValue={selectedClientId}>
-              <option value="all">All clients</option>
-              {clientOptions.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
+            <SearchableCombobox
+              id="clientId"
+              name="clientId"
+              defaultValue={selectedClientId}
+              options={[{ value: "all", label: "All clients" }, ...clientOptions.map((client) => ({ value: client.id, label: client.name }))]}
+              placeholder="All clients"
+              searchPlaceholder="Search clients..."
+              emptyLabel="No clients found."
+            />
             <SearchableCombobox
               id="projectId"
               name="projectId"

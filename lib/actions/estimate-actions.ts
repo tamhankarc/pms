@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
 import { canFullyModerateProject, isRoleScopedManager } from "@/lib/permissions";
+import { recordAuditLog } from "@/lib/audit";
 
 export type EstimateFormState = {
   success?: boolean;
@@ -54,6 +55,7 @@ async function validateSubProject(
           where: {
             id: projectId,
             isActive: true,
+            status: { in: ["ACTIVE", "ON_HOLD"] },
             assignedUsers: { some: { userId: employeeId } },
           },
           select: { id: true },
@@ -108,6 +110,10 @@ async function validateClientFieldRequirements(
 
   if (project.clientId !== clientId) {
     return { valid: false as const, error: "Selected project does not belong to the selected client." };
+  }
+
+  if (!project.isActive || !["ACTIVE", "ON_HOLD"].includes(project.status)) {
+    return { valid: false as const, error: "Estimates can only use active or on-hold projects." };
   }
 
   if (project.client.showCountriesInTimeEntries && !countryId) {
@@ -205,6 +211,7 @@ async function userCanUseProject(
   const project = await db.project.findFirst({
     where: {
       id: projectId,
+      status: { in: ["ACTIVE", "ON_HOLD"] },
       ...(isRoleScopedManager(user)
         ? {}
         : {
@@ -295,7 +302,7 @@ export async function createEstimateAction(
       return { success: false, error: subProjectCheck.error };
     }
 
-    await db.estimate.create({
+    const createdEstimate = await db.estimate.create({
       data: {
         employeeId,
         projectId: parsed.data.projectId,
@@ -308,6 +315,15 @@ export async function createEstimateAction(
         notes: parsed.data.notes || null,
         status: "SUBMITTED",
       },
+    });
+
+    await recordAuditLog({
+      actorId: user.id,
+      entityType: "Estimate",
+      entityId: createdEstimate.id,
+      action: "CREATE",
+      after: createdEstimate,
+      description: "Created estimate",
     });
 
     revalidatePath("/estimates");
@@ -390,7 +406,9 @@ export async function updateEstimateAction(
       return { success: false, error: subProjectCheck.error };
     }
 
-    await db.estimate.update({
+    const existingEstimate = await db.estimate.findUnique({ where: { id: estimate.id } });
+
+    const updatedEstimate = await db.estimate.update({
       where: { id: estimate.id },
       data: {
         employeeId,
@@ -404,6 +422,16 @@ export async function updateEstimateAction(
         notes: parsed.data.notes || null,
         status: "SUBMITTED",
       },
+    });
+
+    await recordAuditLog({
+      actorId: user.id,
+      entityType: "Estimate",
+      entityId: updatedEstimate.id,
+      action: "UPDATE",
+      before: existingEstimate,
+      after: updatedEstimate,
+      description: "Updated estimate",
     });
 
     revalidatePath("/estimates");

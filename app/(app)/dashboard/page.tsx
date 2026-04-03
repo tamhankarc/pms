@@ -54,6 +54,7 @@ export default async function DashboardPage({
 
   const isEmployee = user.userType === "EMPLOYEE";
   const isTeamLead = user.userType === "TEAM_LEAD";
+  const isManager = user.userType === "MANAGER";
   const isAccountsBilling = user.userType === "ACCOUNTS" && user.functionalRole === "BILLING";
   const showBillingDashboard = canSeeBillingDashboard(user);
 
@@ -97,12 +98,20 @@ export default async function DashboardPage({
               searchPlaceholder="Search projects..."
               emptyLabel="No projects found."
             />
-            <select className="input" name="billingModel" defaultValue={billingModel}>
-              <option value="">All billing types</option>
-              <option value="HOURLY">Hourly</option>
-              <option value="FIXED_FULL">Fixed - Full Project</option>
-              <option value="FIXED_MONTHLY">Fixed - Monthly</option>
-            </select>
+            <SearchableCombobox
+              id="billingModel"
+              name="billingModel"
+              defaultValue={billingModel}
+              options={[
+                { value: "", label: "All billing types" },
+                { value: "HOURLY", label: "Hourly" },
+                { value: "FIXED_FULL", label: "Fixed - Full Project" },
+                { value: "FIXED_MONTHLY", label: "Fixed - Monthly" },
+              ]}
+              placeholder="All billing types"
+              searchPlaceholder="Search billing types..."
+              emptyLabel="No billing type found."
+            />
             <button className="btn-secondary" type="submit">Apply</button>
           </form>
 
@@ -145,7 +154,7 @@ export default async function DashboardPage({
         description="Delivery, effort, and moderation overview for the current workspace."
       />
 
-      {!isEmployee ? (
+      {!isEmployee && !isTeamLead && !isManager ? (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Visible projects"
@@ -163,8 +172,8 @@ export default async function DashboardPage({
             icon={<TimerReset className="h-5 w-5" />}
           />
           <StatCard
-            label="Pending time entries"
-            value={String(stats?.pendingEntries ?? 0)}
+            label="Pending estimates"
+            value={String(stats?.pendingEstimates ?? 0)}
             icon={<ClipboardList className="h-5 w-5" />}
           />
         </div>
@@ -275,12 +284,20 @@ export default async function DashboardPage({
               searchPlaceholder="Search projects..."
               emptyLabel="No projects found."
             />
-            <select className="input" name="billingModel" defaultValue={billingModel}>
-              <option value="">All billing types</option>
-              <option value="HOURLY">Hourly</option>
-              <option value="FIXED_FULL">Fixed - Full Project</option>
-              <option value="FIXED_MONTHLY">Fixed - Monthly</option>
-            </select>
+            <SearchableCombobox
+              id="billingModel"
+              name="billingModel"
+              defaultValue={billingModel}
+              options={[
+                { value: "", label: "All billing types" },
+                { value: "HOURLY", label: "Hourly" },
+                { value: "FIXED_FULL", label: "Fixed - Full Project" },
+                { value: "FIXED_MONTHLY", label: "Fixed - Monthly" },
+              ]}
+              placeholder="All billing types"
+              searchPlaceholder="Search billing types..."
+              emptyLabel="No billing type found."
+            />
             <button className="btn-secondary" type="submit">Apply</button>
           </form>
 

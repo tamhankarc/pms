@@ -161,22 +161,22 @@ export function EstimateCreateForm({
         {showEmployeeField ? (
           <div className="md:col-span-2">
             <FormLabel htmlFor="employeeId">Employee</FormLabel>
-            <select
+            <SearchableCombobox
               id="employeeId"
-              className="input"
               name="employeeId"
               value={selectedEmployeeId}
-              onChange={(e) => {
-                setSelectedEmployeeId(e.target.value);
+              onValueChange={(nextValue) => {
+                setSelectedEmployeeId(nextValue);
                 setSelectedSubProjectId("");
               }}
-            >
-              {assignableEmployees.map((employee) => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.fullName} · {employee.userType.replaceAll("_", " ")}
-                </option>
-              ))}
-            </select>
+              options={assignableEmployees.map((employee) => ({
+                value: employee.id,
+                label: `${employee.fullName} · ${employee.userType.replaceAll("_", " ")}`,
+              }))}
+              placeholder="Select employee"
+              searchPlaceholder="Search employees..."
+              emptyLabel="No employees found."
+            />
           </div>
         ) : (
           <input type="hidden" name="employeeId" value={selectedEmployeeId} />
@@ -186,26 +186,25 @@ export function EstimateCreateForm({
           <FormLabel htmlFor="clientId" required>
             Client
           </FormLabel>
-          <select
+          <SearchableCombobox
             id="clientId"
-            className="input"
             name="clientId"
             value={selectedClientId}
-            onChange={(e) => {
-              const nextClientId = e.target.value;
-              const nextProjectId = projects.find((project) => project.clientId === nextClientId)?.id ?? "";
-              setSelectedClientId(nextClientId);
+            onValueChange={(nextValue) => {
+              const nextProjectId = projects.find((project) => project.clientId === nextValue)?.id ?? "";
+              setSelectedClientId(nextValue);
               setSelectedProjectId(nextProjectId);
               setSelectedSubProjectId("");
             }}
+            options={clientOptions.map((client) => ({
+              value: client.id,
+              label: client.name,
+            }))}
+            placeholder="Select client"
+            searchPlaceholder="Search clients..."
+            emptyLabel="No clients found."
             required
-          >
-            {clientOptions.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
+          />
         </div>
 
         <div>
@@ -234,20 +233,22 @@ export function EstimateCreateForm({
 
         <div>
           <FormLabel htmlFor="subProjectId">Sub Project</FormLabel>
-          <select
+          <SearchableCombobox
             id="subProjectId"
-            className="input"
             name="subProjectId"
             value={selectedSubProjectId}
-            onChange={(e) => setSelectedSubProjectId(e.target.value)}
-          >
-            <option value="">No Sub Project</option>
-            {filteredSubProjects.map((subProject) => (
-              <option key={subProject.id} value={subProject.id}>
-                {subProject.name}
-              </option>
-            ))}
-          </select>
+            onValueChange={setSelectedSubProjectId}
+            options={[
+              { value: "", label: "No Sub Project" },
+              ...filteredSubProjects.map((subProject) => ({
+                value: subProject.id,
+                label: subProject.name,
+              })),
+            ]}
+            placeholder="No Sub Project"
+            searchPlaceholder="Search sub projects..."
+            emptyLabel="No sub projects found."
+          />
         </div>
 
         {showCountryField ? (
@@ -255,28 +256,37 @@ export function EstimateCreateForm({
             <FormLabel htmlFor="countryId" required={countryRequired}>
               Country
             </FormLabel>
-            <select id="countryId" className="input" name="countryId" defaultValue="" required={countryRequired}>
-              <option value="">Select country</option>
-              {countries.map((country) => (
-                <option key={country.id} value={country.id}>
-                  {country.name}
-                </option>
-              ))}
-            </select>
+            <SearchableCombobox
+              id="countryId"
+              name="countryId"
+              defaultValue=""
+              options={[
+                { value: "", label: "Select country" },
+                ...countries.map((country) => ({ value: country.id, label: country.name })),
+              ]}
+              placeholder="Select country"
+              searchPlaceholder="Search countries..."
+              emptyLabel="No countries found."
+              required={countryRequired}
+            />
           </div>
         ) : null}
 
         {showMovieField ? (
           <div>
             <FormLabel htmlFor="movieId">Movie</FormLabel>
-            <select id="movieId" className="input" name="movieId" defaultValue="">
-              <option value="">No specific movie</option>
-              {filteredMovies.map((movie) => (
-                <option key={movie.id} value={movie.id}>
-                  {movie.title}
-                </option>
-              ))}
-            </select>
+            <SearchableCombobox
+              id="movieId"
+              name="movieId"
+              defaultValue=""
+              options={[
+                { value: "", label: "No specific movie" },
+                ...filteredMovies.map((movie) => ({ value: movie.id, label: movie.title })),
+              ]}
+              placeholder="No specific movie"
+              searchPlaceholder="Search movies..."
+              emptyLabel="No movies found."
+            />
           </div>
         ) : null}
 
@@ -285,14 +295,19 @@ export function EstimateCreateForm({
             <FormLabel htmlFor="languageId" required={languageRequired}>
               Language
             </FormLabel>
-            <select id="languageId" className="input" name="languageId" defaultValue="" required={languageRequired}>
-              <option value="">Select language</option>
-              {languages.map((language) => (
-                <option key={language.id} value={language.id}>
-                  {language.name} ({language.code})
-                </option>
-              ))}
-            </select>
+            <SearchableCombobox
+              id="languageId"
+              name="languageId"
+              defaultValue=""
+              options={[
+                { value: "", label: "Select language" },
+                ...languages.map((language) => ({ value: language.id, label: `${language.name} (${language.code})` })),
+              ]}
+              placeholder="Select language"
+              searchPlaceholder="Search languages..."
+              emptyLabel="No languages found."
+              required={languageRequired}
+            />
           </div>
         ) : null}
 

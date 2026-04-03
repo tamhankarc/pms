@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { ClientForm } from "@/components/forms/client-form";
 import { createClientAction, toggleClientStatusAction } from "@/lib/actions/client-actions";
 import { db } from "@/lib/db";
@@ -53,11 +54,19 @@ export default async function ClientsPage({
       <div className="mb-6 card p-4">
         <form className="grid gap-3 md:grid-cols-[1fr_180px_auto]" method="get">
           <input className="input" name="q" defaultValue={q} placeholder="Search by client name" />
-          <select className="input" name="status" defaultValue={status}>
-            <option value="all">All statuses</option>
-            <option value="active">Active only</option>
-            <option value="inactive">Inactive only</option>
-          </select>
+          <SearchableCombobox
+            id="status"
+            name="status"
+            defaultValue={status}
+            options={[
+              { value: "all", label: "All statuses" },
+              { value: "active", label: "Active only" },
+              { value: "inactive", label: "Inactive only" },
+            ]}
+            placeholder="All statuses"
+            searchPlaceholder="Search statuses..."
+            emptyLabel="No statuses found."
+          />
           <div className="flex gap-3">
             {showCreate ? <input type="hidden" name="showCreate" value="1" /> : null}
             <button className="btn-secondary" type="submit">

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { requireUser } from "@/lib/auth";
 import { canManageUsers } from "@/lib/permissions";
 import { UserManageForm } from "@/components/forms/user-manage-form";
@@ -115,20 +116,36 @@ export default async function UsersPage({
             defaultValue={q}
             placeholder="Search by name, username, email, designation, or employee code"
           />
-          <select className="input" name="status" defaultValue={status}>
-            <option value="all">All statuses</option>
-            <option value="active">Active only</option>
-            <option value="inactive">Inactive only</option>
-          </select>
-          <select className="input" name="userType" defaultValue={userType}>
-            <option value="all">All user types</option>
-            <option value="EMPLOYEE">Employee</option>
-            <option value="TEAM_LEAD">Team Lead</option>
-            <option value="MANAGER">Manager</option>
-            <option value="ADMIN">Admin</option>
-            <option value="REPORT_VIEWER">Report Viewer</option>
-            <option value="ACCOUNTS">Accounts</option>
-          </select>
+          <SearchableCombobox
+            id="status"
+            name="status"
+            defaultValue={status}
+            options={[
+              { value: "all", label: "All statuses" },
+              { value: "active", label: "Active only" },
+              { value: "inactive", label: "Inactive only" },
+            ]}
+            placeholder="All statuses"
+            searchPlaceholder="Search statuses..."
+            emptyLabel="No status found."
+          />
+          <SearchableCombobox
+            id="userType"
+            name="userType"
+            defaultValue={userType}
+            options={[
+              { value: "all", label: "All user types" },
+              { value: "EMPLOYEE", label: "Employee" },
+              { value: "TEAM_LEAD", label: "Team Lead" },
+              { value: "MANAGER", label: "Manager" },
+              { value: "ADMIN", label: "Admin" },
+              { value: "REPORT_VIEWER", label: "Report Viewer" },
+              { value: "ACCOUNTS", label: "Accounts" },
+            ]}
+            placeholder="All user types"
+            searchPlaceholder="Search user types..."
+            emptyLabel="No user type found."
+          />
           <button className="btn-secondary" type="submit">
             Apply
           </button>

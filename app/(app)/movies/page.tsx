@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { db } from "@/lib/db";
 import { createMovieAction, toggleMovieStatusAction } from "@/lib/actions/movie-actions";
 import { MovieForm } from "@/components/forms/movie-form";
@@ -21,11 +22,7 @@ export default async function MoviesPage({
     }),
     db.movie.findMany({
       where: {
-        ...(q
-          ? {
-              title: { contains: q },
-            }
-          : {}),
+        ...(q ? { title: { contains: q } } : {}),
         ...(status === "active" ? { isActive: true } : {}),
         ...(status === "inactive" ? { isActive: false } : {}),
         ...(clientId !== "all" ? { clientId } : {}),
@@ -45,19 +42,31 @@ export default async function MoviesPage({
       <div className="mb-6 card p-4">
         <form className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]" method="get">
           <input className="input" name="q" defaultValue={q} placeholder="Search by movie title" />
-          <select className="input" name="status" defaultValue={status}>
-            <option value="all">All statuses</option>
-            <option value="active">Active only</option>
-            <option value="inactive">Inactive only</option>
-          </select>
-          <select className="input" name="clientId" defaultValue={clientId}>
-            <option value="all">All clients</option>
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
+          <SearchableCombobox
+            id="status"
+            name="status"
+            defaultValue={status}
+            options={[
+              { value: "all", label: "All statuses" },
+              { value: "active", label: "Active only" },
+              { value: "inactive", label: "Inactive only" },
+            ]}
+            placeholder="All statuses"
+            searchPlaceholder="Search statuses..."
+            emptyLabel="No status found."
+          />
+          <SearchableCombobox
+            id="clientId"
+            name="clientId"
+            defaultValue={clientId}
+            options={[
+              { value: "all", label: "All clients" },
+              ...clients.map((client) => ({ value: client.id, label: client.name })),
+            ]}
+            placeholder="All clients"
+            searchPlaceholder="Search clients..."
+            emptyLabel="No client found."
+          />
           <button className="btn-secondary" type="submit">
             Apply
           </button>

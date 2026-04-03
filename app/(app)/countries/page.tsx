@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { CountryForm } from "@/components/forms/country-form";
 import { createCountryAction, toggleCountryStatusAction } from "@/lib/actions/country-actions";
 import { db } from "@/lib/db";
@@ -50,11 +51,7 @@ export default async function CountriesPage({
             defaultValue={q}
             placeholder="Search by country name or ISO code"
           />
-          <select className="input" name="status" defaultValue={status}>
-            <option value="all">All statuses</option>
-            <option value="active">Active only</option>
-            <option value="inactive">Inactive only</option>
-          </select>
+          <SearchableCombobox id="status" name="status" defaultValue={status} options={[{ value: "all", label: "All statuses" }, { value: "active", label: "Active only" }, { value: "inactive", label: "Inactive only" }]} placeholder="All statuses" searchPlaceholder="Search statuses..." emptyLabel="No statuses found." />
           <button className="btn-secondary" type="submit">
             Apply
           </button>

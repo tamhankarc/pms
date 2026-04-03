@@ -11,7 +11,7 @@ export default async function NewEstimatePage() {
 
   const [projects, countries, movies, languages, supervisorAssignments, roleScopedUsers, allSubProjects] =
     await Promise.all([
-      getVisibleProjects(user),
+      getVisibleProjects(user, { allowedStatuses: ["ACTIVE", "ON_HOLD"] }),
       db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
       db.movie.findMany({ where: { isActive: true }, orderBy: { title: "asc" } }),
       db.language.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
@@ -40,7 +40,7 @@ export default async function NewEstimatePage() {
           })
         : Promise.resolve([]),
       db.subProject.findMany({
-        where: { isActive: true },
+        where: { isActive: true, project: { isActive: true, status: { in: ["ACTIVE", "ON_HOLD"] } } },
         include: { assignments: true },
         orderBy: { name: "asc" },
       }),
