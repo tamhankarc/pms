@@ -53,6 +53,7 @@ export default async function EditProjectPage({
         lockedClientName={project.client.name}
         projectTypes={projectTypes}
         clientUsesProjectTypes={project.client.enableProjectTypes}
+        clientShowsCountriesInEntries={project.client.showCountriesInTimeEntries}
         initialValues={{
           projectTypeId: project.projectTypeId,
           name: project.name,
@@ -63,6 +64,7 @@ export default async function EditProjectPage({
             project.fixedMonthlyHours == null ? null : Number(project.fixedMonthlyHours),
           status: project.status,
           description: project.description,
+          hideCountriesInEntries: project.hideCountriesInEntries,
         }}
       />
     </div>

@@ -37,6 +37,8 @@ export default async function NewSubProjectPage({
             name: project.name,
             clientId: project.clientId,
             clientName: project.client.name,
+            clientShowsCountriesInEntries: project.client.showCountriesInTimeEntries,
+            hideCountriesInEntries: project.hideCountriesInEntries,
           }))}
           action={createSubProjectAction}
           initialValues={{

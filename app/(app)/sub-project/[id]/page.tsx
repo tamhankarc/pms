@@ -41,6 +41,8 @@ export default async function SubProjectEditPage({ params }: { params: Promise<{
           name: project.name,
           clientId: project.clientId,
           clientName: project.client.name,
+          clientShowsCountriesInEntries: project.client.showCountriesInTimeEntries,
+          hideCountriesInEntries: project.hideCountriesInEntries,
         }))}
         action={updateSubProjectAction}
         initialValues={{
@@ -50,6 +52,7 @@ export default async function SubProjectEditPage({ params }: { params: Promise<{
           name: subProject.name,
           description: subProject.description,
           isActive: subProject.isActive,
+          hideCountriesInEntries: subProject.hideCountriesInEntries,
         }}
       />
     </div>

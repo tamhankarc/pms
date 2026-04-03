@@ -1,10 +1,174 @@
 "use server";
+
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserTypesForAction } from "@/lib/auth";
+
 export type SubProjectFormState = { success?: boolean; error?: string };
-const schema = z.object({ id: z.string().optional(), projectId: z.string().min(1, 'Project is required.'), name: z.string().trim().min(2, 'Sub Project name is required.'), description: z.string().optional(), isActive: z.union([z.literal('on'), z.literal('true'), z.literal('1')]).optional() });
-export async function createSubProjectAction(_prev: SubProjectFormState, formData: FormData): Promise<SubProjectFormState> { try { await requireUserTypesForAction(['ADMIN','MANAGER','TEAM_LEAD']); const parsed=schema.safeParse({ projectId:String(formData.get('projectId')??''), name:String(formData.get('name')??''), description:String(formData.get('description')??''), isActive:formData.get('isActive')??'on' }); if(!parsed.success) return {success:false,error:parsed.error.issues[0]?.message||'Invalid sub project payload.'}; await db.subProject.create({ data:{ projectId:parsed.data.projectId, name:parsed.data.name.trim(), description:parsed.data.description?.trim()||null, isActive:Boolean(parsed.data.isActive) } }); revalidatePath('/sub-project'); revalidatePath(`/projects/${parsed.data.projectId}`); revalidatePath('/user-assignments'); return {success:true}; } catch(error){ return {success:false,error:error instanceof Error?error.message:'Something went wrong.'}; } }
-export async function updateSubProjectAction(_prev: SubProjectFormState, formData: FormData): Promise<SubProjectFormState> { try { await requireUserTypesForAction(['ADMIN','MANAGER','TEAM_LEAD']); const parsed=schema.safeParse({ id:String(formData.get('id')??''), projectId:String(formData.get('projectId')??''), name:String(formData.get('name')??''), description:String(formData.get('description')??''), isActive:formData.get('isActive')??undefined }); if(!parsed.success||!parsed.data.id) return {success:false,error:parsed.success?'Sub Project is required.':parsed.error.issues[0]?.message}; await db.subProject.update({ where:{id:parsed.data.id}, data:{ projectId:parsed.data.projectId, name:parsed.data.name.trim(), description:parsed.data.description?.trim()||null, isActive:Boolean(parsed.data.isActive) } }); revalidatePath('/sub-project'); revalidatePath(`/sub-project/${parsed.data.id}`); revalidatePath(`/projects/${parsed.data.projectId}`); revalidatePath('/user-assignments'); return {success:true}; } catch(error){ return {success:false,error:error instanceof Error?error.message:'Something went wrong.'}; } }
-export async function toggleSubProjectStatusAction(formData: FormData) { await requireUserTypesForAction(['ADMIN','MANAGER','TEAM_LEAD']); const subProjectId=String(formData.get('subProjectId')||''); if(!subProjectId) throw new Error('Sub Project is required.'); const subProject=await db.subProject.findUnique({where:{id:subProjectId}}); if(!subProject) throw new Error('Sub Project not found.'); await db.subProject.update({where:{id:subProjectId},data:{isActive:!subProject.isActive}}); revalidatePath('/sub-project'); revalidatePath(`/sub-project/${subProjectId}`); }
+
+const schema = z.object({
+  id: z.string().optional(),
+  projectId: z.string().min(1, "Project is required."),
+  name: z.string().trim().min(2, "Sub Project name is required."),
+  description: z.string().optional(),
+  isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  hideCountriesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+});
+
+export async function createSubProjectAction(
+  _prev: SubProjectFormState,
+  formData: FormData,
+): Promise<SubProjectFormState> {
+  try {
+    await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+
+    const parsed = schema.safeParse({
+      projectId: String(formData.get("projectId") ?? ""),
+      name: String(formData.get("name") ?? ""),
+      description: String(formData.get("description") ?? ""),
+      isActive: formData.get("isActive") ?? "on",
+      hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
+    });
+
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message || "Invalid sub project payload.",
+      };
+    }
+
+    const project = await db.project.findUnique({
+      where: { id: parsed.data.projectId },
+      select: {
+        id: true,
+        client: { select: { showCountriesInTimeEntries: true } },
+      },
+    });
+
+    if (!project) {
+      return { success: false, error: "Project not found." };
+    }
+
+    await db.subProject.create({
+      data: {
+        projectId: parsed.data.projectId,
+        name: parsed.data.name.trim(),
+        description: parsed.data.description?.trim() || null,
+        isActive: Boolean(parsed.data.isActive),
+        hideCountriesInEntries: project.client.showCountriesInTimeEntries
+          ? Boolean(parsed.data.hideCountriesInEntries)
+          : false,
+      },
+    });
+
+    revalidatePath("/sub-project");
+    revalidatePath(`/projects/${parsed.data.projectId}`);
+    revalidatePath("/user-assignments");
+    revalidatePath("/time-entries");
+    revalidatePath("/estimates");
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Something went wrong.",
+    };
+  }
+}
+
+export async function updateSubProjectAction(
+  _prev: SubProjectFormState,
+  formData: FormData,
+): Promise<SubProjectFormState> {
+  try {
+    await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+
+    const parsed = schema.safeParse({
+      id: String(formData.get("id") ?? ""),
+      projectId: String(formData.get("projectId") ?? ""),
+      name: String(formData.get("name") ?? ""),
+      description: String(formData.get("description") ?? ""),
+      isActive: formData.get("isActive") ?? undefined,
+      hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
+    });
+
+    if (!parsed.success || !parsed.data.id) {
+      return {
+        success: false,
+        error: parsed.success
+          ? "Sub Project is required."
+          : parsed.error.issues[0]?.message,
+      };
+    }
+
+    const project = await db.project.findUnique({
+      where: { id: parsed.data.projectId },
+      select: {
+        id: true,
+        client: { select: { showCountriesInTimeEntries: true } },
+      },
+    });
+
+    if (!project) {
+      return { success: false, error: "Project not found." };
+    }
+
+    await db.subProject.update({
+      where: { id: parsed.data.id },
+      data: {
+        projectId: parsed.data.projectId,
+        name: parsed.data.name.trim(),
+        description: parsed.data.description?.trim() || null,
+        isActive: Boolean(parsed.data.isActive),
+        hideCountriesInEntries: project.client.showCountriesInTimeEntries
+          ? Boolean(parsed.data.hideCountriesInEntries)
+          : false,
+      },
+    });
+
+    revalidatePath("/sub-project");
+    revalidatePath(`/sub-project/${parsed.data.id}`);
+    revalidatePath(`/projects/${parsed.data.projectId}`);
+    revalidatePath("/user-assignments");
+    revalidatePath("/time-entries");
+    revalidatePath("/estimates");
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Something went wrong.",
+    };
+  }
+}
+
+export async function toggleSubProjectStatusAction(formData: FormData): Promise<void> {
+  await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+
+  const subProjectId = String(formData.get("subProjectId") ?? "");
+  if (!subProjectId) {
+    throw new Error("Sub Project is required.");
+  }
+
+  const subProject = await db.subProject.findUnique({
+    where: { id: subProjectId },
+    select: { id: true, isActive: true, projectId: true },
+  });
+
+  if (!subProject) {
+    throw new Error("Sub Project not found.");
+  }
+
+  await db.subProject.update({
+    where: { id: subProjectId },
+    data: { isActive: !subProject.isActive },
+  });
+
+  revalidatePath("/sub-project");
+  revalidatePath(`/sub-project/${subProjectId}`);
+  revalidatePath(`/projects/${subProject.projectId}`);
+  revalidatePath("/user-assignments");
+  revalidatePath("/time-entries");
+  revalidatePath("/estimates");
+}

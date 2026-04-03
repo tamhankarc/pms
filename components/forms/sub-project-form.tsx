@@ -10,6 +10,8 @@ type ProjectOption = {
   name: string;
   clientId: string;
   clientName: string;
+  clientShowsCountriesInEntries: boolean;
+  hideCountriesInEntries: boolean;
 };
 
 const initialState: SubProjectFormState = {};
@@ -30,6 +32,7 @@ export function SubProjectForm({
     name?: string;
     description?: string | null;
     isActive?: boolean;
+    hideCountriesInEntries?: boolean;
   };
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
@@ -40,6 +43,7 @@ export function SubProjectForm({
 
   const [clientId, setClientId] = useState(defaultClientId);
   const [projectId, setProjectId] = useState(initialValues?.projectId ?? "");
+  const [hideCountriesInEntries, setHideCountriesInEntries] = useState(initialValues?.hideCountriesInEntries ?? false);
 
   const filteredProjects = useMemo(() => {
     if (!clientId) return projects;
@@ -56,9 +60,20 @@ export function SubProjectForm({
     new Map(projects.map((project) => [project.clientId, { id: project.clientId, name: project.clientName }])).values(),
   ).sort((a, b) => a.name.localeCompare(b.name));
 
+  const selectedProject = projects.find((project) => project.id === projectId);
+  const canOverrideCountries = Boolean(selectedProject?.clientShowsCountriesInEntries);
+  const projectAlreadyHidesCountries = Boolean(selectedProject?.hideCountriesInEntries);
+
+  useEffect(() => {
+    if (!canOverrideCountries || projectAlreadyHidesCountries) {
+      setHideCountriesInEntries(false);
+    }
+  }, [canOverrideCountries, projectAlreadyHidesCountries]);
+
   return (
     <form action={formAction} className="card p-6">
       {mode === "edit" && initialValues?.id ? <input type="hidden" name="id" value={initialValues.id} /> : null}
+      {hideCountriesInEntries ? <input type="hidden" name="hideCountriesInEntries" value="on" /> : null}
 
       <h2 className="section-title">{mode === "create" ? "Create Sub Project" : "Edit Sub Project"}</h2>
       <p className="section-subtitle">
@@ -86,7 +101,11 @@ export function SubProjectForm({
             id="clientId"
             name="clientId"
             value={clientId}
-            onValueChange={setClientId}
+            onValueChange={(value) => {
+              setClientId(value);
+              setProjectId("");
+              setHideCountriesInEntries(false);
+            }}
             options={[{ value: "", label: "Select client" }, ...uniqueClients.map((client) => ({ value: client.id, label: client.name }))]}
             placeholder="Select client"
             searchPlaceholder="Search clients..."
@@ -103,7 +122,10 @@ export function SubProjectForm({
             id="projectId"
             name="projectId"
             value={projectId}
-            onValueChange={setProjectId}
+            onValueChange={(value) => {
+              setProjectId(value);
+              setHideCountriesInEntries(false);
+            }}
             options={filteredProjects.map((project) => ({
               value: project.id,
               label: `${project.name} · ${project.clientName}`,
@@ -116,6 +138,23 @@ export function SubProjectForm({
           />
         </div>
 
+        {canOverrideCountries ? (
+          <>
+            <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${projectAlreadyHidesCountries ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+              <input
+                type="checkbox"
+                checked={hideCountriesInEntries}
+                onChange={(event) => setHideCountriesInEntries(event.target.checked)}
+                disabled={projectAlreadyHidesCountries}
+              />
+              Hide country dropdown in Time Entries and Estimates for this sub project
+            </label>
+            {projectAlreadyHidesCountries ? (
+              <p className="text-sm text-amber-700">Countries are already hidden for this project, so the sub-project override is not needed.</p>
+            ) : null}
+          </>
+        ) : null}
+
         <div>
           <FormLabel htmlFor="name" required>
             Sub Project name
@@ -125,12 +164,7 @@ export function SubProjectForm({
 
         <div>
           <FormLabel htmlFor="description">Description</FormLabel>
-          <textarea
-            id="description"
-            className="input min-h-24"
-            name="description"
-            defaultValue={initialValues?.description ?? ""}
-          />
+          <textarea id="description" className="input min-h-24" name="description" defaultValue={initialValues?.description ?? ""} />
         </div>
 
         <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">

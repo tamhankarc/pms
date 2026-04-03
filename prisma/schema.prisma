@@ -204,6 +204,7 @@ model Project {
   updatedById        String?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
+  hideCountriesInEntries Boolean   @default(false)
 
   client      Client       @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   projectType ProjectType? @relation(fields: [projectTypeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -232,6 +233,7 @@ model SubProject {
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  hideCountriesInEntries Boolean @default(false)
 
   project     Project                @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   assignments SubProjectAssignment[]

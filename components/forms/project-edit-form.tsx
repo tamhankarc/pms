@@ -21,12 +21,14 @@ export function ProjectEditForm({
   lockedClientName,
   projectTypes,
   clientUsesProjectTypes,
+  clientShowsCountriesInEntries,
   initialValues,
 }: {
   projectId: string;
   lockedClientName: string;
   projectTypes: ProjectType[];
   clientUsesProjectTypes: boolean;
+  clientShowsCountriesInEntries: boolean;
   initialValues: {
     projectTypeId: string | null;
     name: string;
@@ -35,11 +37,13 @@ export function ProjectEditForm({
     fixedMonthlyHours: number | null;
     status: ProjectStatus;
     description: string | null;
+    hideCountriesInEntries: boolean;
   };
 }) {
   const [billingModel, setBillingModel] = useState<BillingModel>(initialValues.billingModel);
   const [projectTypeId, setProjectTypeId] = useState(initialValues.projectTypeId ?? "");
   const [status, setStatus] = useState<ProjectStatus>(initialValues.status);
+  const [hideCountriesInEntries, setHideCountriesInEntries] = useState(initialValues.hideCountriesInEntries);
   const boundAction = updateProjectAction.bind(null, projectId);
   const [state, formAction, pending] = useActionState(boundAction, initialState);
 
@@ -48,6 +52,7 @@ export function ProjectEditForm({
       <input type="hidden" name="projectTypeId" value={projectTypeId} />
       <input type="hidden" name="billingModel" value={billingModel} />
       <input type="hidden" name="status" value={status} />
+      {hideCountriesInEntries ? <input type="hidden" name="hideCountriesInEntries" value="on" /> : null}
 
       <h2 className="section-title">Edit project</h2>
       <p className="section-subtitle">
@@ -139,21 +144,23 @@ export function ProjectEditForm({
           />
         </div>
 
+        {clientShowsCountriesInEntries ? (
+          <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={hideCountriesInEntries}
+              onChange={(event) => setHideCountriesInEntries(event.target.checked)}
+            />
+            Hide country dropdown in Time Entries and Estimates for this project
+          </label>
+        ) : null}
+
         {billingModel === "FIXED_FULL" ? (
           <div className="md:col-span-2">
             <FormLabel htmlFor="fixedContractHours" required>
               Fixed contract hours
             </FormLabel>
-            <input
-              id="fixedContractHours"
-              className="input"
-              name="fixedContractHours"
-              type="number"
-              min="0"
-              step="0.25"
-              defaultValue={initialValues.fixedContractHours ?? ""}
-              required
-            />
+            <input id="fixedContractHours" className="input" name="fixedContractHours" type="number" min="0" step="0.25" defaultValue={initialValues.fixedContractHours ?? ""} required />
           </div>
         ) : null}
 
@@ -162,27 +169,13 @@ export function ProjectEditForm({
             <FormLabel htmlFor="fixedMonthlyHours" required>
               Fixed monthly hours
             </FormLabel>
-            <input
-              id="fixedMonthlyHours"
-              className="input"
-              name="fixedMonthlyHours"
-              type="number"
-              min="0"
-              step="0.25"
-              defaultValue={initialValues.fixedMonthlyHours ?? ""}
-              required
-            />
+            <input id="fixedMonthlyHours" className="input" name="fixedMonthlyHours" type="number" min="0" step="0.25" defaultValue={initialValues.fixedMonthlyHours ?? ""} required />
           </div>
         ) : null}
 
         <div className="md:col-span-2">
           <FormLabel htmlFor="description">Description</FormLabel>
-          <textarea
-            id="description"
-            className="input min-h-24"
-            name="description"
-            defaultValue={initialValues.description ?? ""}
-          />
+          <textarea id="description" className="input min-h-24" name="description" defaultValue={initialValues.description ?? ""} />
         </div>
 
         <div className="md:col-span-2">

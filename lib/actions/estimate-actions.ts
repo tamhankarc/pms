@@ -92,16 +92,18 @@ async function validateClientFieldRequirements(
     countryId,
     movieId,
     languageId,
+    subProjectId,
   }: {
     clientId: string;
     countryId?: string;
     movieId?: string;
     languageId?: string;
+    subProjectId?: string;
   },
 ) {
   const project = await db.project.findUnique({
     where: { id: projectId },
-    include: { client: true },
+    include: { client: true, subProjects: { select: { id: true, hideCountriesInEntries: true } } },
   });
 
   if (!project) {
@@ -116,7 +118,13 @@ async function validateClientFieldRequirements(
     return { valid: false as const, error: "Estimates can only use active or on-hold projects." };
   }
 
-  if (project.client.showCountriesInTimeEntries && !countryId) {
+  const subProject = subProjectId ? project.subProjects.find((row) => row.id === subProjectId) : null;
+  const countryEnabled =
+    project.client.showCountriesInTimeEntries &&
+    !project.hideCountriesInEntries &&
+    !subProject?.hideCountriesInEntries;
+
+  if (countryEnabled && !countryId) {
     return { valid: false as const, error: "Country is required for the selected client." };
   }
 
@@ -124,8 +132,8 @@ async function validateClientFieldRequirements(
     return { valid: false as const, error: "Language is required for the selected client." };
   }
 
-  if (!project.client.showCountriesInTimeEntries && countryId) {
-    return { valid: false as const, error: "Country is not enabled for the selected client." };
+  if (!countryEnabled && countryId) {
+    return { valid: false as const, error: "Country is not enabled for the selected project/sub-project." };
   }
 
   if (!project.client.showMoviesInEntries && movieId) {
@@ -292,6 +300,7 @@ export async function createEstimateAction(
       countryId: parsed.data.countryId,
       movieId: parsed.data.movieId,
       languageId: parsed.data.languageId,
+      subProjectId: parsed.data.subProjectId,
     });
     if (!fieldCheck.valid) {
       return { success: false, error: fieldCheck.error };
@@ -396,6 +405,7 @@ export async function updateEstimateAction(
       countryId: parsed.data.countryId,
       movieId: parsed.data.movieId,
       languageId: parsed.data.languageId,
+      subProjectId: parsed.data.subProjectId,
     });
     if (!fieldCheck.valid) {
       return { success: false, error: fieldCheck.error };

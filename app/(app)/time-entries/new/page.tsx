@@ -113,6 +113,7 @@ export default async function NewTimeEntryPage() {
             clientId: project.clientId,
             clientName: project.client.name,
             showCountriesInTimeEntries: project.client.showCountriesInTimeEntries,
+            hideCountriesInEntries: project.hideCountriesInEntries,
             showMoviesInEntries: project.client.showMoviesInEntries,
             showLanguagesInEntries: project.client.showLanguagesInEntries,
             assignedUserIds: project.assignedUsers.map((assignment) => assignment.userId),
@@ -122,6 +123,7 @@ export default async function NewTimeEntryPage() {
             name: subProject.name,
             projectId: subProject.projectId,
             assignedUserIds: subProject.assignments.map((row) => row.userId),
+            hideCountriesInEntries: subProject.hideCountriesInEntries,
           }))}
           countries={countries.map((country) => ({ id: country.id, name: country.name }))}
           movies={movies.map((movie) => ({ id: movie.id, title: movie.title, clientId: movie.clientId }))}

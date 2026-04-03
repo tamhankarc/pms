@@ -15,6 +15,7 @@ type TimeEntryProjectOption = {
   clientId: string;
   clientName: string;
   showCountriesInTimeEntries: boolean;
+  hideCountriesInEntries: boolean;
   showMoviesInEntries: boolean;
   showLanguagesInEntries: boolean;
   assignedUserIds: string[];
@@ -25,6 +26,7 @@ type TimeEntrySubProjectOption = {
   name: string;
   projectId: string;
   assignedUserIds: string[];
+  hideCountriesInEntries: boolean;
 };
 
 type MovieOption = {
@@ -129,7 +131,12 @@ export function TimeEntryEditForm({
   );
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
-  const showCountryField = Boolean(selectedProject?.showCountriesInTimeEntries);
+  const selectedSubProject = subProjects.find((subProject) => subProject.id === selectedSubProjectId);
+  const showCountryField = Boolean(
+    selectedProject?.showCountriesInTimeEntries &&
+      !selectedProject?.hideCountriesInEntries &&
+      !selectedSubProject?.hideCountriesInEntries,
+  );
   const showMovieField = Boolean(selectedProject?.showMoviesInEntries);
   const showLanguageField = Boolean(selectedProject?.showLanguagesInEntries);
   const countryRequired = showCountryField;

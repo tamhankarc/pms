@@ -9,6 +9,7 @@ type Client = {
   id: string;
   name: string;
   enableProjectTypes: boolean;
+  showCountriesInTimeEntries: boolean;
 };
 
 type ProjectType = {
@@ -18,7 +19,6 @@ type ProjectType = {
 };
 
 type BillingModel = "HOURLY" | "FIXED_FULL" | "FIXED_MONTHLY";
-
 type ProjectStatus = "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "ARCHIVED";
 
 const initialState: ProjectFormState = {};
@@ -34,6 +34,7 @@ export function NewProjectForm({
   const [clientId, setClientId] = useState("");
   const [projectTypeId, setProjectTypeId] = useState("");
   const [status, setStatus] = useState<ProjectStatus>("DRAFT");
+  const [hideCountriesInEntries, setHideCountriesInEntries] = useState(false);
   const [state, formAction, pending] = useActionState(createProjectAction, initialState);
 
   const selectedClient = clients.find((client) => client.id === clientId);
@@ -49,6 +50,7 @@ export function NewProjectForm({
       <input type="hidden" name="projectTypeId" value={projectTypeId} />
       <input type="hidden" name="billingModel" value={billingModel} />
       <input type="hidden" name="status" value={status} />
+      {hideCountriesInEntries ? <input type="hidden" name="hideCountriesInEntries" value="on" /> : null}
 
       <h2 className="section-title">Create project</h2>
       <p className="section-subtitle">
@@ -75,9 +77,10 @@ export function NewProjectForm({
           <SearchableCombobox
             id="clientId"
             value={clientId}
-            onValueChange={(nextValue) => {
-              setClientId(nextValue);
+            onValueChange={(value) => {
+              setClientId(value);
               setProjectTypeId("");
+              setHideCountriesInEntries(false);
             }}
             options={clients.map((client) => ({ value: client.id, label: client.name }))}
             placeholder="Select client"
@@ -154,20 +157,23 @@ export function NewProjectForm({
           />
         </div>
 
+        {selectedClient?.showCountriesInTimeEntries ? (
+          <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={hideCountriesInEntries}
+              onChange={(event) => setHideCountriesInEntries(event.target.checked)}
+            />
+            Hide country dropdown in Time Entries and Estimates for this project
+          </label>
+        ) : null}
+
         {billingModel === "FIXED_FULL" ? (
           <div className="md:col-span-2">
             <FormLabel htmlFor="fixedContractHours" required>
               Fixed contract hours
             </FormLabel>
-            <input
-              id="fixedContractHours"
-              className="input"
-              name="fixedContractHours"
-              type="number"
-              min="0"
-              step="0.25"
-              required
-            />
+            <input id="fixedContractHours" className="input" name="fixedContractHours" type="number" min="0" step="0.25" required />
           </div>
         ) : null}
 
@@ -176,15 +182,7 @@ export function NewProjectForm({
             <FormLabel htmlFor="fixedMonthlyHours" required>
               Fixed monthly hours
             </FormLabel>
-            <input
-              id="fixedMonthlyHours"
-              className="input"
-              name="fixedMonthlyHours"
-              type="number"
-              min="0"
-              step="0.25"
-              required
-            />
+            <input id="fixedMonthlyHours" className="input" name="fixedMonthlyHours" type="number" min="0" step="0.25" required />
           </div>
         ) : null}
 
