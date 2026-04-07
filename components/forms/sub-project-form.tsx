@@ -11,7 +11,9 @@ type ProjectOption = {
   clientId: string;
   clientName: string;
   clientShowsCountriesInEntries: boolean;
+  clientShowsMoviesInEntries: boolean;
   hideCountriesInEntries: boolean;
+  hideMoviesInEntries: boolean;
 };
 
 const initialState: SubProjectFormState = {};
@@ -33,6 +35,7 @@ export function SubProjectForm({
     description?: string | null;
     isActive?: boolean;
     hideCountriesInEntries?: boolean;
+    hideMoviesInEntries?: boolean;
   };
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
@@ -44,6 +47,7 @@ export function SubProjectForm({
   const [clientId, setClientId] = useState(defaultClientId);
   const [projectId, setProjectId] = useState(initialValues?.projectId ?? "");
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(initialValues?.hideCountriesInEntries ?? false);
+  const [hideMoviesInEntries, setHideMoviesInEntries] = useState(initialValues?.hideMoviesInEntries ?? false);
 
   const filteredProjects = useMemo(() => {
     if (!clientId) return projects;
@@ -62,7 +66,9 @@ export function SubProjectForm({
 
   const selectedProject = projects.find((project) => project.id === projectId);
   const canOverrideCountries = Boolean(selectedProject?.clientShowsCountriesInEntries);
+  const canOverrideMovies = Boolean(selectedProject?.clientShowsMoviesInEntries);
   const projectAlreadyHidesCountries = Boolean(selectedProject?.hideCountriesInEntries);
+  const projectAlreadyHidesMovies = Boolean(selectedProject?.hideMoviesInEntries);
 
   useEffect(() => {
     if (!canOverrideCountries || projectAlreadyHidesCountries) {
@@ -70,10 +76,17 @@ export function SubProjectForm({
     }
   }, [canOverrideCountries, projectAlreadyHidesCountries]);
 
+  useEffect(() => {
+    if (!canOverrideMovies || projectAlreadyHidesMovies) {
+      setHideMoviesInEntries(false);
+    }
+  }, [canOverrideMovies, projectAlreadyHidesMovies]);
+
   return (
     <form action={formAction} className="card p-6">
       {mode === "edit" && initialValues?.id ? <input type="hidden" name="id" value={initialValues.id} /> : null}
       {hideCountriesInEntries ? <input type="hidden" name="hideCountriesInEntries" value="on" /> : null}
+      {hideMoviesInEntries ? <input type="hidden" name="hideMoviesInEntries" value="on" /> : null}
 
       <h2 className="section-title">{mode === "create" ? "Create Sub Project" : "Edit Sub Project"}</h2>
       <p className="section-subtitle">
@@ -105,6 +118,7 @@ export function SubProjectForm({
               setClientId(value);
               setProjectId("");
               setHideCountriesInEntries(false);
+              setHideMoviesInEntries(false);
             }}
             options={[{ value: "", label: "Select client" }, ...uniqueClients.map((client) => ({ value: client.id, label: client.name }))]}
             placeholder="Select client"
@@ -125,6 +139,7 @@ export function SubProjectForm({
             onValueChange={(value) => {
               setProjectId(value);
               setHideCountriesInEntries(false);
+              setHideMoviesInEntries(false);
             }}
             options={filteredProjects.map((project) => ({
               value: project.id,
@@ -151,6 +166,24 @@ export function SubProjectForm({
             </label>
             {projectAlreadyHidesCountries ? (
               <p className="text-sm text-amber-700">Countries are already hidden for this project, so the sub-project override is not needed.</p>
+            ) : null}
+          </>
+        ) : null}
+
+
+        {canOverrideMovies ? (
+          <>
+            <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${projectAlreadyHidesMovies ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+              <input
+                type="checkbox"
+                checked={hideMoviesInEntries}
+                onChange={(event) => setHideMoviesInEntries(event.target.checked)}
+                disabled={projectAlreadyHidesMovies}
+              />
+              Hide movie dropdown in Time Entries and Estimates for this sub project
+            </label>
+            {projectAlreadyHidesMovies ? (
+              <p className="text-sm text-amber-700">Movies are already hidden for this project, so the sub-project override is not needed.</p>
             ) : null}
           </>
         ) : null}

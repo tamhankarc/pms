@@ -14,6 +14,7 @@ const schema = z.object({
   description: z.string().optional(),
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   hideCountriesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  hideMoviesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
 
 export async function createSubProjectAction(
@@ -29,6 +30,7 @@ export async function createSubProjectAction(
       description: String(formData.get("description") ?? ""),
       isActive: formData.get("isActive") ?? "on",
       hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
+      hideMoviesInEntries: formData.get("hideMoviesInEntries") ?? undefined,
     });
 
     if (!parsed.success) {
@@ -42,7 +44,7 @@ export async function createSubProjectAction(
       where: { id: parsed.data.projectId },
       select: {
         id: true,
-        client: { select: { showCountriesInTimeEntries: true } },
+        client: { select: { showCountriesInTimeEntries: true, showMoviesInEntries: true } },
       },
     });
 
@@ -58,6 +60,9 @@ export async function createSubProjectAction(
         isActive: Boolean(parsed.data.isActive),
         hideCountriesInEntries: project.client.showCountriesInTimeEntries
           ? Boolean(parsed.data.hideCountriesInEntries)
+          : false,
+        hideMoviesInEntries: project.client.showMoviesInEntries
+          ? Boolean(parsed.data.hideMoviesInEntries)
           : false,
       },
     });
@@ -91,6 +96,7 @@ export async function updateSubProjectAction(
       description: String(formData.get("description") ?? ""),
       isActive: formData.get("isActive") ?? undefined,
       hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
+      hideMoviesInEntries: formData.get("hideMoviesInEntries") ?? undefined,
     });
 
     if (!parsed.success || !parsed.data.id) {
@@ -106,7 +112,7 @@ export async function updateSubProjectAction(
       where: { id: parsed.data.projectId },
       select: {
         id: true,
-        client: { select: { showCountriesInTimeEntries: true } },
+        client: { select: { showCountriesInTimeEntries: true, showMoviesInEntries: true } },
       },
     });
 
@@ -123,6 +129,9 @@ export async function updateSubProjectAction(
         isActive: Boolean(parsed.data.isActive),
         hideCountriesInEntries: project.client.showCountriesInTimeEntries
           ? Boolean(parsed.data.hideCountriesInEntries)
+          : false,
+        hideMoviesInEntries: project.client.showMoviesInEntries
+          ? Boolean(parsed.data.hideMoviesInEntries)
           : false,
       },
     });

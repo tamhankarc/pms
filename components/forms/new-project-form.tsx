@@ -10,6 +10,7 @@ type Client = {
   name: string;
   enableProjectTypes: boolean;
   showCountriesInTimeEntries: boolean;
+  showMoviesInEntries: boolean;
 };
 
 type ProjectType = {
@@ -35,6 +36,7 @@ export function NewProjectForm({
   const [projectTypeId, setProjectTypeId] = useState("");
   const [status, setStatus] = useState<ProjectStatus>("DRAFT");
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(false);
+  const [hideMoviesInEntries, setHideMoviesInEntries] = useState(false);
   const [state, formAction, pending] = useActionState(createProjectAction, initialState);
 
   const selectedClient = clients.find((client) => client.id === clientId);
@@ -51,6 +53,7 @@ export function NewProjectForm({
       <input type="hidden" name="billingModel" value={billingModel} />
       <input type="hidden" name="status" value={status} />
       {hideCountriesInEntries ? <input type="hidden" name="hideCountriesInEntries" value="on" /> : null}
+      {hideMoviesInEntries ? <input type="hidden" name="hideMoviesInEntries" value="on" /> : null}
 
       <h2 className="section-title">Create project</h2>
       <p className="section-subtitle">
@@ -81,6 +84,7 @@ export function NewProjectForm({
               setClientId(value);
               setProjectTypeId("");
               setHideCountriesInEntries(false);
+              setHideMoviesInEntries(false);
             }}
             options={clients.map((client) => ({ value: client.id, label: client.name }))}
             placeholder="Select client"
@@ -165,6 +169,18 @@ export function NewProjectForm({
               onChange={(event) => setHideCountriesInEntries(event.target.checked)}
             />
             Hide country dropdown in Time Entries and Estimates for this project
+          </label>
+        ) : null}
+
+
+        {selectedClient?.showMoviesInEntries ? (
+          <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={hideMoviesInEntries}
+              onChange={(event) => setHideMoviesInEntries(event.target.checked)}
+            />
+            Hide movie dropdown in Time Entries and Estimates for this project
           </label>
         ) : null}
 

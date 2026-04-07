@@ -16,6 +16,7 @@ type EstimateProjectOption = {
   showCountriesInTimeEntries: boolean;
   hideCountriesInEntries: boolean;
   showMoviesInEntries: boolean;
+  hideMoviesInEntries: boolean;
   showLanguagesInEntries: boolean;
   assignedUserIds: string[];
 };
@@ -26,6 +27,7 @@ type EstimateSubProjectOption = {
   projectId: string;
   assignedUserIds: string[];
   hideCountriesInEntries: boolean;
+  hideMoviesInEntries: boolean;
 };
 
 type EstimateEmployeeOption = {
@@ -167,7 +169,11 @@ export function EstimateCreateForm({
       !selectedProject?.hideCountriesInEntries &&
       !selectedSubProject?.hideCountriesInEntries,
   );
-  const showMovieField = Boolean(selectedProject?.showMoviesInEntries);
+  const showMovieField = Boolean(
+    selectedProject?.showMoviesInEntries &&
+      !selectedProject?.hideMoviesInEntries &&
+      !selectedSubProject?.hideMoviesInEntries,
+  );
   const showLanguageField = Boolean(selectedProject?.showLanguagesInEntries);
   const countryRequired = showCountryField;
   const languageRequired = showLanguageField;

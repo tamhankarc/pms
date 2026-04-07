@@ -103,7 +103,7 @@ async function validateClientFieldRequirements(
 ) {
   const project = await db.project.findUnique({
     where: { id: projectId },
-    include: { client: true, subProjects: { select: { id: true, hideCountriesInEntries: true } } },
+    include: { client: true, subProjects: { select: { id: true, hideCountriesInEntries: true, hideMoviesInEntries: true } } },
   });
 
   if (!project) {
@@ -123,6 +123,10 @@ async function validateClientFieldRequirements(
     project.client.showCountriesInTimeEntries &&
     !project.hideCountriesInEntries &&
     !subProject?.hideCountriesInEntries;
+  const movieEnabled =
+    project.client.showMoviesInEntries &&
+    !project.hideMoviesInEntries &&
+    !subProject?.hideMoviesInEntries;
 
   if (countryEnabled && !countryId) {
     return { valid: false as const, error: "Country is required for the selected client." };
@@ -136,8 +140,8 @@ async function validateClientFieldRequirements(
     return { valid: false as const, error: "Country is not enabled for the selected project/sub-project." };
   }
 
-  if (!project.client.showMoviesInEntries && movieId) {
-    return { valid: false as const, error: "Movie is not enabled for the selected client." };
+  if (!movieEnabled && movieId) {
+    return { valid: false as const, error: "Movie is not enabled for the selected project/sub-project." };
   }
 
   if (!project.client.showLanguagesInEntries && languageId) {

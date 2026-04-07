@@ -16,6 +16,7 @@ type TimeEntryProjectOption = {
   showCountriesInTimeEntries: boolean;
   hideCountriesInEntries: boolean;
   showMoviesInEntries: boolean;
+  hideMoviesInEntries: boolean;
   showLanguagesInEntries: boolean;
   assignedUserIds: string[];
 };
@@ -26,6 +27,7 @@ type TimeEntrySubProjectOption = {
   projectId: string;
   assignedUserIds: string[];
   hideCountriesInEntries: boolean;
+  hideMoviesInEntries: boolean;
 };
 
 type TimeEntryEmployeeOption = {
@@ -160,7 +162,11 @@ export function TimeEntryCreateForm({
       !selectedProject?.hideCountriesInEntries &&
       !selectedSubProject?.hideCountriesInEntries,
   );
-  const showMovieField = Boolean(selectedProject?.showMoviesInEntries);
+  const showMovieField = Boolean(
+    selectedProject?.showMoviesInEntries &&
+      !selectedProject?.hideMoviesInEntries &&
+      !selectedSubProject?.hideMoviesInEntries,
+  );
   const showLanguageField = Boolean(selectedProject?.showLanguagesInEntries);
   const countryRequired = showCountryField;
   const languageRequired = showLanguageField;
@@ -357,7 +363,7 @@ export function TimeEntryCreateForm({
         </div>
 
         <div className="md:col-span-2">
-          <FormLabel htmlFor="notes">Notes</FormLabel>
+          <FormLabel htmlFor="notes">Task Description</FormLabel>
           <textarea id="notes" className="input min-h-24" name="notes" />
         </div>
 
