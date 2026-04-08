@@ -120,7 +120,10 @@ export default async function TimeEntriesPage({
               id="clientId"
               name="clientId"
               defaultValue={selectedClientId}
-              options={[{ value: "all", label: "All clients" }, ...clientOptions.map((client) => ({ value: client.id, label: client.name }))]}
+              options={[
+                { value: "all", label: "All clients" },
+                ...clientOptions.map((client) => ({ value: client.id, label: client.name })),
+              ]}
               placeholder="All clients"
               searchPlaceholder="Search clients..."
               emptyLabel="No clients found."
@@ -149,83 +152,104 @@ export default async function TimeEntriesPage({
         </form>
       </div>
 
-      <div className="table-wrap">
-        <table className="table-base min-w-[1150px]">
-          <thead className="table-head">
-            <tr>
-              <th className="table-cell">Employee</th>
-              <th className="table-cell">Client</th>
-              <th className="table-cell">Project / Task</th>
-              <th className="table-cell">Work Date</th>
-              <th className="table-cell">Time</th>
-              <th className="table-cell">Status</th>
-              <th className="table-cell w-[110px] whitespace-nowrap">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {entries.map((entry) => {
-              const canEdit =
-                canFullyModerateProject(user) ||
-                entry.employeeId === user.id ||
-                (user.userType === "TEAM_LEAD" && managedIds.has(entry.employeeId));
+      <div className="table-wrap overflow-x-auto">
+        <div className="min-w-[1320px]">
+          <table className="table-base w-full">
+            <thead className="table-head">
+              <tr>
+                <th className="table-cell min-w-[220px] whitespace-nowrap">Employee</th>
+                <th className="table-cell min-w-[150px] whitespace-nowrap">Client</th>
+                <th className="table-cell min-w-[340px]">Project / Task</th>
+                <th className="table-cell min-w-[110px] whitespace-nowrap">Work Date</th>
+                <th className="table-cell min-w-[90px] whitespace-nowrap">Time</th>
+                <th className="table-cell min-w-[120px] whitespace-nowrap">Status</th>
+                <th className="table-cell min-w-[120px] whitespace-nowrap">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {entries.map((entry) => {
+                const canEdit =
+                  canFullyModerateProject(user) ||
+                  entry.employeeId === user.id ||
+                  ((user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) &&
+                    managedIds.has(entry.employeeId));
 
-              return (
-                <tr key={entry.id}>
-                  <td className="table-cell">
-                    <div className="font-medium text-slate-900">{entry.employee.fullName}</div>
-                    <div className="text-xs text-slate-500">{entry.notes || "—"}</div>
-                  </td>
-                  <td className="table-cell">{entry.project.client.name}</td>
-                  <td className="table-cell">
-                    {entry.project.name}
-                    <div className="text-xs text-slate-500">{entry.subProject?.name ?? "No Sub Project"}</div>
-                    <div className="text-xs text-slate-500">{entry.taskName}</div>
-                    <div className="text-xs text-slate-500">
-                      {entry.countryId ? countryMap.get(entry.countryId) ?? "—" : "No specific country"}
-                    </div>
-                    <div className="text-xs text-slate-500">{entry.movie?.title ?? "No specific movie"}</div>
-                    <div className="text-xs text-slate-500">
-                      {entry.language ? `${entry.language.name} (${entry.language.code})` : "No specific language"}
-                    </div>
-                  </td>
-                  <td className="table-cell">{new Date(entry.workDate).toLocaleDateString()}</td>
-                  <td className="table-cell">{formatMinutes(entry.minutesSpent)}</td>
-                  <td className="table-cell">
-                    <span
-                      className={
-                        entry.status === "APPROVED"
-                          ? "badge-emerald"
-                          : entry.status === "REJECTED"
-                            ? "badge-rose"
-                            : entry.status === "REVISED"
-                              ? "badge-amber"
-                              : "badge-slate"
-                      }
-                    >
-                      {entry.status}
-                    </span>
-                  </td>
-                  <td className="table-cell w-[110px] whitespace-nowrap">
-                    {canEdit ? (
-                      <Link className="btn-secondary text-xs" href={`/time-entries/${entry.id}`}>
-                        Edit
-                      </Link>
-                    ) : (
-                      <span className="text-xs text-slate-400">No action</span>
-                    )}
+                return (
+                  <tr key={entry.id}>
+                    <td className="table-cell align-top min-w-[220px]">
+                      <div className="font-medium text-slate-900">{entry.employee.fullName}</div>
+                      <div className="text-xs text-slate-500 break-words">{entry.notes || "—"}</div>
+                    </td>
+
+                    <td className="table-cell align-top min-w-[150px]">
+                      <div className="break-words">{entry.project.client.name}</div>
+                    </td>
+
+                    <td className="table-cell align-top min-w-[340px]">
+                      <div className="font-medium text-slate-900 break-words">{entry.project.name}</div>
+                      <div className="text-xs text-slate-500 break-words">{entry.subProject?.name ?? "No Sub Project"}</div>
+                      <div className="text-xs text-slate-500 break-words">{entry.taskName}</div>
+                      <div className="text-xs text-slate-500 break-words">
+                        {entry.countryId ? countryMap.get(entry.countryId) ?? "—" : "No specific country"}
+                      </div>
+                      <div className="text-xs text-slate-500 break-words">{entry.movie?.title ?? "No specific movie"}</div>
+                      <div className="text-xs text-slate-500 break-words">
+                        {entry.language ? `${entry.language.name} (${entry.language.code})` : "No specific language"}
+                      </div>
+                    </td>
+
+                    <td className="table-cell align-top min-w-[110px] whitespace-nowrap">
+                      {new Date(entry.workDate).toLocaleDateString()}
+                    </td>
+
+                    <td className="table-cell align-top min-w-[90px] whitespace-nowrap">
+                      {formatMinutes(entry.minutesSpent)}
+                    </td>
+
+                    <td className="table-cell align-top min-w-[120px] whitespace-nowrap">
+                      <span
+                        className={
+                          entry.status === "APPROVED"
+                            ? "badge-emerald"
+                            : entry.status === "REJECTED"
+                              ? "badge-rose"
+                              : entry.status === "REVISED"
+                                ? "badge-amber"
+                                : "badge-slate"
+                        }
+                      >
+                        {entry.status}
+                      </span>
+                    </td>
+
+                    <td className="table-cell align-top min-w-[120px] whitespace-nowrap">
+                      {canEdit ? (
+                        <div className="flex items-center">
+                          <Link
+                            className="btn-secondary inline-flex whitespace-nowrap text-xs"
+                            href={`/time-entries/${entry.id}`}
+                          >
+                            Edit
+                          </Link>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400 whitespace-nowrap">No action</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {entries.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="table-cell text-center text-sm text-slate-500">
+                    No time entries found.
                   </td>
                 </tr>
-              );
-            })}
-            {entries.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="table-cell text-center text-sm text-slate-500">
-                  No time entries found.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
