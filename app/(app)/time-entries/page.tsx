@@ -90,7 +90,12 @@ export default async function TimeEntriesPage({
   const managedIds = new Set(scopedEmployeeIds);
 
   const clientOptions = Array.from(
-    new Map(projects.map((project) => [project.client.id, { id: project.client.id, name: project.client.name }])).values(),
+    new Map(
+      projects.map((project) => [
+        project.client.id,
+        { id: project.client.id, name: project.client.name },
+      ]),
+    ).values(),
   ).sort((a, b) => a.name.localeCompare(b.name));
 
   const projectOptions = projects.filter((project) =>
@@ -153,16 +158,16 @@ export default async function TimeEntriesPage({
       </div>
 
       <div className="table-wrap overflow-x-auto">
-        <table className="table-base w-max min-w-[1450px]">
+        <table className="table-base w-full min-w-[980px] xl:min-w-0">
           <thead className="table-head">
             <tr>
-              <th className="table-cell min-w-[240px] whitespace-nowrap">Employee</th>
-              <th className="table-cell min-w-[190px] whitespace-nowrap">Client</th>
-              <th className="table-cell min-w-[420px]">Project / Task</th>
-              <th className="table-cell min-w-[120px] whitespace-nowrap">Work Date</th>
-              <th className="table-cell min-w-[100px] whitespace-nowrap">Time</th>
-              <th className="table-cell min-w-[130px] whitespace-nowrap">Status</th>
-              <th className="table-cell min-w-[130px] whitespace-nowrap">Action</th>
+              <th className="table-cell min-w-[220px]">Employee</th>
+              <th className="table-cell min-w-[150px] hidden 2xl:table-cell">Client</th>
+              <th className="table-cell min-w-[320px]">Project / Task</th>
+              <th className="table-cell min-w-[110px] whitespace-nowrap">Work Date</th>
+              <th className="table-cell min-w-[90px] whitespace-nowrap">Time</th>
+              <th className="table-cell min-w-[120px] whitespace-nowrap">Status</th>
+              <th className="table-cell min-w-[110px] whitespace-nowrap">Action</th>
             </tr>
           </thead>
 
@@ -171,41 +176,55 @@ export default async function TimeEntriesPage({
               const canEdit =
                 canFullyModerateProject(user) ||
                 entry.employeeId === user.id ||
-                ((user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) && managedIds.has(entry.employeeId));
+                ((user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) &&
+                  managedIds.has(entry.employeeId));
 
               return (
                 <tr key={entry.id}>
-                  <td className="table-cell align-top min-w-[240px]">
-                    <div className="font-medium text-slate-900">{entry.employee.fullName}</div>
-                    <div className="break-words text-xs text-slate-500">{entry.notes || "—"}</div>
+                  <td className="table-cell align-top min-w-[220px]">
+                    <div className="font-medium text-slate-900 break-words">{entry.employee.fullName}</div>
+                    <div className="text-xs text-slate-500 break-words">{entry.notes || "—"}</div>
                   </td>
 
-                  <td className="table-cell align-top min-w-[190px]">
+                  <td className="table-cell align-top min-w-[150px] hidden 2xl:table-cell">
                     <div className="break-words">{entry.project.client.name}</div>
                   </td>
 
-                  <td className="table-cell align-top min-w-[420px]">
+                  <td className="table-cell align-top min-w-[320px]">
                     <div className="font-medium text-slate-900 break-words">{entry.project.name}</div>
-                    <div className="break-words text-xs text-slate-500">{entry.subProject?.name ?? "No Sub Project"}</div>
-                    <div className="break-words text-xs text-slate-500">{entry.taskName}</div>
-                    <div className="break-words text-xs text-slate-500">
+
+                    <div className="text-xs text-slate-500 break-words 2xl:hidden">
+                      {entry.project.client.name}
+                    </div>
+
+                    <div className="text-xs text-slate-500 break-words">
+                      {entry.subProject?.name ?? "No Sub Project"}
+                    </div>
+
+                    <div className="text-xs text-slate-500 break-words">{entry.taskName}</div>
+
+                    <div className="text-xs text-slate-500 break-words">
                       {entry.countryId ? countryMap.get(entry.countryId) ?? "—" : "No specific country"}
                     </div>
-                    <div className="break-words text-xs text-slate-500">{entry.movie?.title ?? "No specific movie"}</div>
-                    <div className="break-words text-xs text-slate-500">
+
+                    <div className="text-xs text-slate-500 break-words">
+                      {entry.movie?.title ?? "No specific movie"}
+                    </div>
+
+                    <div className="text-xs text-slate-500 break-words">
                       {entry.language ? `${entry.language.name} (${entry.language.code})` : "No specific language"}
                     </div>
                   </td>
 
-                  <td className="table-cell align-top min-w-[120px] whitespace-nowrap">
+                  <td className="table-cell align-top min-w-[110px] whitespace-nowrap">
                     {new Date(entry.workDate).toLocaleDateString()}
                   </td>
 
-                  <td className="table-cell align-top min-w-[100px] whitespace-nowrap">
+                  <td className="table-cell align-top min-w-[90px] whitespace-nowrap">
                     {formatMinutes(entry.minutesSpent)}
                   </td>
 
-                  <td className="table-cell align-top min-w-[130px] whitespace-nowrap">
+                  <td className="table-cell align-top min-w-[120px] whitespace-nowrap">
                     <span
                       className={
                         entry.status === "APPROVED"
@@ -221,16 +240,16 @@ export default async function TimeEntriesPage({
                     </span>
                   </td>
 
-                  <td className="table-cell align-top min-w-[130px] whitespace-nowrap">
+                  <td className="table-cell align-top min-w-[110px] whitespace-nowrap">
                     {canEdit ? (
                       <Link
-                        className="btn-secondary inline-flex min-w-[72px] justify-center whitespace-nowrap text-xs"
+                        className="btn-secondary inline-flex min-w-[68px] justify-center whitespace-nowrap text-xs"
                         href={`/time-entries/${entry.id}`}
                       >
                         Edit
                       </Link>
                     ) : (
-                      <span className="whitespace-nowrap text-xs text-slate-400">No action</span>
+                      <span className="text-xs text-slate-400 whitespace-nowrap">No action</span>
                     )}
                   </td>
                 </tr>
