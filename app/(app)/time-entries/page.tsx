@@ -155,7 +155,7 @@ export default async function TimeEntriesPage({
             <tr>
               <th className="table-cell">Employee</th>
               <th className="table-cell">Client</th>
-              <th className="table-cell min-w-[260px]">Project / Task</th>
+              <th className="table-cell">Project / Task</th>
               <th className="table-cell">Work Date</th>
               <th className="table-cell">Time</th>
               <th className="table-cell">Status</th>
@@ -176,7 +176,7 @@ export default async function TimeEntriesPage({
                     <div className="text-xs text-slate-500">{entry.notes || "—"}</div>
                   </td>
                   <td className="table-cell">{entry.project.client.name}</td>
-                  <td className="table-cell min-w-[260px]">
+                  <td className="table-cell">
                     {entry.project.name}
                     <div className="text-xs text-slate-500">{entry.subProject?.name ?? "No Sub Project"}</div>
                     <div className="text-xs text-slate-500">{entry.taskName}</div>
