@@ -150,16 +150,16 @@ export default async function TimeEntriesPage({
       </div>
 
       <div className="table-wrap">
-        <table className="table-base">
+        <table className="table-base min-w-[1150px]">
           <thead className="table-head">
             <tr>
               <th className="table-cell">Employee</th>
               <th className="table-cell">Client</th>
-              <th className="table-cell">Project / Task</th>
+              <th className="table-cell min-w-[260px]">Project / Task</th>
               <th className="table-cell">Work Date</th>
               <th className="table-cell">Time</th>
               <th className="table-cell">Status</th>
-              <th className="table-cell">Action</th>
+              <th className="table-cell w-[110px] whitespace-nowrap">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -176,7 +176,7 @@ export default async function TimeEntriesPage({
                     <div className="text-xs text-slate-500">{entry.notes || "—"}</div>
                   </td>
                   <td className="table-cell">{entry.project.client.name}</td>
-                  <td className="table-cell">
+                  <td className="table-cell min-w-[260px]">
                     {entry.project.name}
                     <div className="text-xs text-slate-500">{entry.subProject?.name ?? "No Sub Project"}</div>
                     <div className="text-xs text-slate-500">{entry.taskName}</div>
@@ -205,7 +205,7 @@ export default async function TimeEntriesPage({
                       {entry.status}
                     </span>
                   </td>
-                  <td className="table-cell">
+                  <td className="table-cell w-[110px] whitespace-nowrap">
                     {canEdit ? (
                       <Link className="btn-secondary text-xs" href={`/time-entries/${entry.id}`}>
                         Edit
