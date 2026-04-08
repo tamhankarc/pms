@@ -158,15 +158,14 @@ export default async function TimeEntriesPage({
       </div>
 
       <div className="table-wrap overflow-x-auto">
-        <table className="table-base w-full min-w-[980px] xl:min-w-0">
+        <table className="table-base w-full min-w-[1080px]">
           <thead className="table-head">
             <tr>
-              <th className="table-cell min-w-[220px]">Employee</th>
-              <th className="table-cell min-w-[150px] hidden 2xl:table-cell">Client</th>
-              <th className="table-cell min-w-[320px]">Project / Task</th>
+              <th className="table-cell min-w-[180px]">Employee</th>
+              <th className="table-cell min-w-[160px]">Client</th>
+              <th className="table-cell min-w-[360px]">Project / Task</th>
               <th className="table-cell min-w-[110px] whitespace-nowrap">Work Date</th>
               <th className="table-cell min-w-[90px] whitespace-nowrap">Time</th>
-              <th className="table-cell min-w-[120px] whitespace-nowrap">Status</th>
               <th className="table-cell min-w-[110px] whitespace-nowrap">Action</th>
             </tr>
           </thead>
@@ -181,36 +180,27 @@ export default async function TimeEntriesPage({
 
               return (
                 <tr key={entry.id}>
-                  <td className="table-cell align-top min-w-[220px]">
+                  <td className="table-cell align-top min-w-[180px] max-w-[180px]">
                     <div className="font-medium text-slate-900 break-words">{entry.employee.fullName}</div>
                     <div className="text-xs text-slate-500 break-words">{entry.notes || "—"}</div>
                   </td>
 
-                  <td className="table-cell align-top min-w-[150px] hidden 2xl:table-cell">
+                  <td className="table-cell align-top min-w-[160px] max-w-[160px]">
                     <div className="break-words">{entry.project.client.name}</div>
                   </td>
 
-                  <td className="table-cell align-top min-w-[320px]">
+                  <td className="table-cell align-top min-w-[360px]">
                     <div className="font-medium text-slate-900 break-words">{entry.project.name}</div>
-
-                    <div className="text-xs text-slate-500 break-words 2xl:hidden">
-                      {entry.project.client.name}
-                    </div>
-
                     <div className="text-xs text-slate-500 break-words">
                       {entry.subProject?.name ?? "No Sub Project"}
                     </div>
-
                     <div className="text-xs text-slate-500 break-words">{entry.taskName}</div>
-
                     <div className="text-xs text-slate-500 break-words">
                       {entry.countryId ? countryMap.get(entry.countryId) ?? "—" : "No specific country"}
                     </div>
-
                     <div className="text-xs text-slate-500 break-words">
                       {entry.movie?.title ?? "No specific movie"}
                     </div>
-
                     <div className="text-xs text-slate-500 break-words">
                       {entry.language ? `${entry.language.name} (${entry.language.code})` : "No specific language"}
                     </div>
@@ -222,22 +212,6 @@ export default async function TimeEntriesPage({
 
                   <td className="table-cell align-top min-w-[90px] whitespace-nowrap">
                     {formatMinutes(entry.minutesSpent)}
-                  </td>
-
-                  <td className="table-cell align-top min-w-[120px] whitespace-nowrap">
-                    <span
-                      className={
-                        entry.status === "APPROVED"
-                          ? "badge-emerald"
-                          : entry.status === "REJECTED"
-                            ? "badge-rose"
-                            : entry.status === "REVISED"
-                              ? "badge-amber"
-                              : "badge-slate"
-                      }
-                    >
-                      {entry.status}
-                    </span>
                   </td>
 
                   <td className="table-cell align-top min-w-[110px] whitespace-nowrap">
@@ -258,7 +232,7 @@ export default async function TimeEntriesPage({
 
             {entries.length === 0 ? (
               <tr>
-                <td colSpan={7} className="table-cell text-center text-sm text-slate-500">
+                <td colSpan={6} className="table-cell text-center text-sm text-slate-500">
                   No time entries found.
                 </td>
               </tr>
