@@ -5,11 +5,13 @@ import { requireUser } from "@/lib/auth";
 import { getVisibleProjects } from "@/lib/queries";
 import { canCreateProjects } from "@/lib/permissions";
 import { toggleProjectStatusAction } from "@/lib/actions/project-actions";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ q?: string; status?: string; billingModel?: string; clientId?: string }>;
+  searchParams?: Promise<{ q?: string; status?: string; billingModel?: string; clientId?: string; page?: string }>;
 }) {
   const user = await requireUser();
   const params = (await searchParams) ?? {};
@@ -17,6 +19,7 @@ export default async function ProjectsPage({
   const status = params.status ?? "all";
   const billingModel = params.billingModel ?? "all";
   const clientId = params.clientId ?? "all";
+  const page = parsePageParam(params.page);
 
   const allProjects = await getVisibleProjects(user);
   const clientOptions = Array.from(
@@ -46,6 +49,8 @@ export default async function ProjectsPage({
 
     return matchesQ && matchesStatus && matchesBilling && matchesClient;
   });
+
+  const { items: paginatedProjects, currentPage, totalPages, totalItems, pageSize } = paginateItems(projects, page, DEFAULT_PAGE_SIZE);
 
   return (
     <div>
@@ -91,7 +96,7 @@ export default async function ProjectsPage({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {projects.map((project) => {
+            {paginatedProjects.map((project) => {
               const assignedPeople = Array.from(
                 new Map<string, string>([
                   ...project.assignedUsers.map((row) => [row.user.id, row.user.fullName] as const),
@@ -151,6 +156,7 @@ export default async function ProjectsPage({
             ) : null}
           </tbody>
         </table>
+        <PaginationControls basePath="/projects" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, status, billingModel, clientId }} />
       </div>
     </div>
   );

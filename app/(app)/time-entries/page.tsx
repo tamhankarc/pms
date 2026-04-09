@@ -1,21 +1,24 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getVisibleProjects } from "@/lib/queries";
+import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 import { formatMinutes } from "@/lib/utils";
 import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/permissions";
 
 export default async function TimeEntriesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ clientId?: string; projectId?: string }>;
+  searchParams?: Promise<{ clientId?: string; projectId?: string; page?: string }>;
 }) {
   const user = await requireUser();
   const params = (await searchParams) ?? {};
   const selectedClientId = params.clientId ?? "all";
   const selectedProjectId = params.projectId ?? "all";
+  const page = parsePageParam(params.page);
 
   const [projects, countries, supervisorAssignments] = await Promise.all([
     getVisibleProjects(user, { allowedStatuses: ["ACTIVE"] }),
@@ -102,6 +105,12 @@ export default async function TimeEntriesPage({
     selectedClientId === "all" ? true : project.clientId === selectedClientId,
   );
 
+  const { items: paginatedEntries, currentPage, totalPages, totalItems, pageSize } = paginateItems(
+    entries,
+    page,
+    DEFAULT_PAGE_SIZE,
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -171,7 +180,7 @@ export default async function TimeEntriesPage({
           </thead>
 
           <tbody className="divide-y divide-slate-100">
-            {entries.map((entry) => {
+            {paginatedEntries.map((entry) => {
               const canEdit =
                 canFullyModerateProject(user) ||
                 entry.employeeId === user.id ||
@@ -208,7 +217,9 @@ export default async function TimeEntriesPage({
                       {entry.movie?.title ?? "No specific movie"}
                     </div>
                     <div className="text-[11px] xl:text-xs text-slate-500 break-words">
-                      {entry.language ? `${entry.language.name} (${entry.language.code})` : "No specific language"}
+                      {entry.language
+                        ? `${entry.language.name} (${entry.language.code})`
+                        : "No specific language"}
                     </div>
                   </td>
 
@@ -245,6 +256,15 @@ export default async function TimeEntriesPage({
             ) : null}
           </tbody>
         </table>
+
+        <PaginationControls
+          basePath="/time-entries"
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          searchParams={{ clientId: selectedClientId, projectId: selectedProjectId }}
+        />
       </div>
     </div>
   );

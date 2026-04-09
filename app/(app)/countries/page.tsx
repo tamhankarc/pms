@@ -7,11 +7,13 @@ import { createCountryAction, toggleCountryStatusAction } from "@/lib/actions/co
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { canManageCountries } from "@/lib/permissions";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
 export default async function CountriesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ q?: string; status?: string }>;
+  searchParams?: Promise<{ q?: string; status?: string; page?: string }>;
 }) {
   const user = await requireUser();
   if (!canManageCountries(user)) redirect("/dashboard");
@@ -19,8 +21,9 @@ export default async function CountriesPage({
   const params = (await searchParams) ?? {};
   const q = params.q?.trim() ?? "";
   const status = params.status ?? "all";
+  const page = parsePageParam(params.page);
 
-  const countries = await db.country.findMany({
+  const allCountries = await db.country.findMany({
     where: {
       ...(q
         ? {
@@ -35,6 +38,8 @@ export default async function CountriesPage({
     },
     orderBy: { name: "asc" },
   });
+
+  const { items: countries, currentPage, totalPages, totalItems, pageSize } = paginateItems(allCountries, page, DEFAULT_PAGE_SIZE);
 
   return (
     <div>
@@ -96,7 +101,7 @@ export default async function CountriesPage({
                   </td>
                 </tr>
               ))}
-              {countries.length === 0 ? (
+              {allCountries.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="table-cell text-center text-sm text-slate-500">
                     No countries found.
@@ -105,6 +110,7 @@ export default async function CountriesPage({
               ) : null}
             </tbody>
           </table>
+          <PaginationControls basePath="/countries" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, status }} />
         </div>
 
         <CountryForm mode="create" action={createCountryAction} />

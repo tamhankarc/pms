@@ -4,16 +4,19 @@ import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { db } from "@/lib/db";
 import { createMovieAction, toggleMovieStatusAction } from "@/lib/actions/movie-actions";
 import { MovieForm } from "@/components/forms/movie-form";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
 export default async function MoviesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ q?: string; status?: string; clientId?: string }>;
+  searchParams?: Promise<{ q?: string; status?: string; clientId?: string; page?: string }>;
 }) {
   const params = (await searchParams) ?? {};
   const q = params.q?.trim() ?? "";
   const status = params.status ?? "all";
   const clientId = params.clientId ?? "all";
+  const page = parsePageParam(params.page);
 
   const [clients, movies] = await Promise.all([
     db.client.findMany({
@@ -31,6 +34,8 @@ export default async function MoviesPage({
       orderBy: { title: "asc" },
     }),
   ]);
+
+  const { items: paginatedMovies, currentPage, totalPages, totalItems, pageSize } = paginateItems(movies, page, DEFAULT_PAGE_SIZE);
 
   return (
     <div>
@@ -85,7 +90,7 @@ export default async function MoviesPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {movies.map((movie) => (
+              {paginatedMovies.map((movie) => (
                 <tr key={movie.id}>
                   <td className="table-cell">
                     <div className="font-medium text-slate-900">{movie.title}</div>
@@ -120,6 +125,7 @@ export default async function MoviesPage({
               ) : null}
             </tbody>
           </table>
+          <PaginationControls basePath="/movies" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, status, clientId }} />
         </div>
 
         <MovieForm clients={clients} action={createMovieAction} title="Create movie" submitLabel="Create movie" />

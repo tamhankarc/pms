@@ -3,15 +3,18 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { db } from "@/lib/db";
 import { toggleSubProjectStatusAction } from "@/lib/actions/sub-project-actions";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
 export default async function SubProjectPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ clientId?: string; projectId?: string }>;
+  searchParams?: Promise<{ clientId?: string; projectId?: string; page?: string }>;
 }) {
   const params = (await searchParams) ?? {};
   const selectedClientId = params.clientId ?? "";
   const selectedProjectId = params.projectId ?? "";
+  const page = parsePageParam(params.page);
 
   const [projects, subProjects] = await Promise.all([
     db.project.findMany({
@@ -40,6 +43,8 @@ export default async function SubProjectPage({
     orderBy: { name: "asc" },
     select: { id: true, name: true },
   });
+
+  const { items: paginatedSubProjects, currentPage, totalPages, totalItems, pageSize } = paginateItems(subProjects, page, DEFAULT_PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -107,7 +112,7 @@ export default async function SubProjectPage({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {subProjects.map((subProject) => (
+            {paginatedSubProjects.map((subProject) => (
               <tr key={subProject.id}>
                 <td className="table-cell">
                   <div className="font-medium text-slate-900">{subProject.name}</div>
@@ -146,6 +151,7 @@ export default async function SubProjectPage({
             ) : null}
           </tbody>
         </table>
+        <PaginationControls basePath="/sub-project" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ clientId: selectedClientId || undefined, projectId: selectedProjectId || undefined }} />
       </div>
     </div>
   );

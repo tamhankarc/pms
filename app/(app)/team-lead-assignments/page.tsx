@@ -1,8 +1,17 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { db } from "@/lib/db";
 import { TeamLeadAssignmentForm } from "@/components/forms/team-lead-assignment-form";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
-export default async function TeamLeadAssignmentsPage() {
+export default async function TeamLeadAssignmentsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ page?: string }>
+}) {
+  const params = (await searchParams) ?? {};
+  const page = parsePageParam(params.page);
+
   const [supervisors, employees, assignments] = await Promise.all([
     db.user.findMany({
       where: {
@@ -24,6 +33,8 @@ export default async function TeamLeadAssignmentsPage() {
     }),
   ]);
 
+  const { items: paginatedAssignments, currentPage, totalPages, totalItems, pageSize } = paginateItems(assignments, page, DEFAULT_PAGE_SIZE);
+
   return (
     <div>
       <PageHeader
@@ -42,7 +53,7 @@ export default async function TeamLeadAssignmentsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {assignments.map((assignment) => (
+              {paginatedAssignments.map((assignment) => (
                 <tr key={assignment.id}>
                   <td className="table-cell font-medium text-slate-900">
                     {assignment.employee.fullName}
@@ -64,6 +75,7 @@ export default async function TeamLeadAssignmentsPage() {
               ) : null}
             </tbody>
           </table>
+          <PaginationControls basePath="/team-lead-assignments" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{}} />
         </div>
 
         <TeamLeadAssignmentForm

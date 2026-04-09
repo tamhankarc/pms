@@ -6,6 +6,8 @@ import { canManageUsers } from "@/lib/permissions";
 import { UserManageForm } from "@/components/forms/user-manage-form";
 import { createUserAction, toggleUserStatusAction } from "@/lib/actions/user-actions";
 import { db } from "@/lib/db";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
 type UserTypeFilter =
   | "all"
@@ -33,7 +35,7 @@ function toUserTypeFilter(value: string | undefined): UserTypeFilter {
 export default async function UsersPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ q?: string; status?: string; userType?: string; create?: string }>;
+  searchParams?: Promise<{ q?: string; status?: string; userType?: string; create?: string; page?: string }>;
 }) {
   const currentUser = await requireUser();
   const params = (await searchParams) ?? {};
@@ -41,6 +43,7 @@ export default async function UsersPage({
   const status = params.status ?? "all";
   const userType = toUserTypeFilter(params.userType);
   const showCreate = params.create === "1";
+  const page = parsePageParam(params.page);
 
   const [users, supervisorRows] = await Promise.all([
     db.user.findMany({
@@ -80,6 +83,8 @@ export default async function UsersPage({
       },
     }),
   ]);
+
+  const { items: paginatedUsers, currentPage, totalPages, totalItems, pageSize } = paginateItems(users, page, DEFAULT_PAGE_SIZE);
 
   const supervisors = supervisorRows
     .filter(
@@ -176,7 +181,7 @@ export default async function UsersPage({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {users.map((user) => (
+            {paginatedUsers.map((user) => (
               <tr key={user.id}>
                 <td className="table-cell">
                   <div className="font-medium text-slate-900">{user.fullName}</div>
@@ -234,6 +239,7 @@ export default async function UsersPage({
             ) : null}
           </tbody>
         </table>
+        <PaginationControls basePath="/users" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, status, userType: userType === "all" ? undefined : userType, create: showCreate ? "1" : undefined }} />
       </div>
     </div>
   );

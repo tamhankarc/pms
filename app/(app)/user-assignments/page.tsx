@@ -3,6 +3,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { UserAssignmentForm } from "@/components/forms/user-assignment-form";
 import { db } from "@/lib/db";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
 export default async function UserAssignmentsPage({
   searchParams,
@@ -14,9 +16,11 @@ export default async function UserAssignmentsPage({
     create?: string;
     scope?: string;
     id?: string;
+    page?: string;
   }>;
 }) {
   const params = (await searchParams) ?? {};
+  const page = parsePageParam(params.page);
 
   const [clients, projects, subProjects, users, projectAssignments, subProjectAssignments] = await Promise.all([
     db.client.findMany({
@@ -121,6 +125,30 @@ export default async function UserAssignmentsPage({
       .map((row) => [row.subProjectId, row]),
   ).values()];
 
+
+  const combinedRows = [
+    ...visibleProjectRows.map((row) => ({
+      key: `project-${row.projectId}`,
+      scope: "Project" as const,
+      clientName: row.project.client.name,
+      projectName: row.project.name,
+      subProjectName: "—",
+      users: projectAssignments.filter((assignment) => assignment.projectId === row.projectId).map((assignment) => assignment.user.fullName).join(", "),
+      href: `/user-assignments?scope=project&id=${row.projectId}`,
+    })),
+    ...visibleSubProjectRows.map((row) => ({
+      key: `subproject-${row.subProjectId}`,
+      scope: "Sub Project" as const,
+      clientName: row.subProject.project.client.name,
+      projectName: row.subProject.project.name,
+      subProjectName: row.subProject.name,
+      users: subProjectAssignments.filter((assignment) => assignment.subProjectId === row.subProjectId).map((assignment) => assignment.user.fullName).join(", "),
+      href: `/user-assignments?scope=subproject&id=${row.subProjectId}`,
+    })),
+  ];
+
+  const { items: paginatedRows, currentPage, totalPages, totalItems, pageSize } = paginateItems(combinedRows, page, DEFAULT_PAGE_SIZE);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -222,43 +250,22 @@ export default async function UserAssignmentsPage({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {visibleProjectRows.map((row) => {
-              const rows = projectAssignments.filter((assignment) => assignment.projectId === row.projectId);
-              return (
-                <tr key={`project-${row.projectId}`}>
-                  <td className="table-cell">Project</td>
-                  <td className="table-cell">{row.project.client.name}</td>
-                  <td className="table-cell">{row.project.name}</td>
-                  <td className="table-cell">—</td>
-                  <td className="table-cell">{rows.map((assignment) => assignment.user.fullName).join(", ")}</td>
-                  <td className="table-cell">
-                    <Link className="btn-secondary text-xs" href={`/user-assignments?scope=project&id=${row.projectId}`}>
-                      Edit
-                    </Link>
-                  </td>
-                </tr>
-              );
-            })}
+            {paginatedRows.map((row) => (
+              <tr key={row.key}>
+                <td className="table-cell">{row.scope}</td>
+                <td className="table-cell">{row.clientName}</td>
+                <td className="table-cell">{row.projectName}</td>
+                <td className="table-cell">{row.subProjectName}</td>
+                <td className="table-cell">{row.users}</td>
+                <td className="table-cell">
+                  <Link className="btn-secondary text-xs" href={row.href}>
+                    Edit
+                  </Link>
+                </td>
+              </tr>
+            ))}
 
-            {visibleSubProjectRows.map((row) => {
-              const rows = subProjectAssignments.filter((assignment) => assignment.subProjectId === row.subProjectId);
-              return (
-                <tr key={`subproject-${row.subProjectId}`}>
-                  <td className="table-cell">Sub Project</td>
-                  <td className="table-cell">{row.subProject.project.client.name}</td>
-                  <td className="table-cell">{row.subProject.project.name}</td>
-                  <td className="table-cell">{row.subProject.name}</td>
-                  <td className="table-cell">{rows.map((assignment) => assignment.user.fullName).join(", ")}</td>
-                  <td className="table-cell">
-                    <Link className="btn-secondary text-xs" href={`/user-assignments?scope=subproject&id=${row.subProjectId}`}>
-                      Edit
-                    </Link>
-                  </td>
-                </tr>
-              );
-            })}
-
-            {projectAssignments.length + subProjectAssignments.length === 0 ? (
+            {combinedRows.length === 0 ? (
               <tr>
                 <td colSpan={6} className="table-cell text-center text-sm text-slate-500">
                   No assignments found.
@@ -267,6 +274,7 @@ export default async function UserAssignmentsPage({
             ) : null}
           </tbody>
         </table>
+        <PaginationControls basePath="/user-assignments" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ clientId: params.clientId, projectId: params.projectId, subProjectId: params.subProjectId, create: params.create, scope: params.scope, id: params.id }} />
       </div>
     </div>
   );

@@ -8,6 +8,8 @@ import { formatMinutes } from "@/lib/utils";
 import { reviewEstimateAction } from "@/lib/actions/estimate-actions";
 import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/permissions";
 import { getVisibleProjects } from "@/lib/queries";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
 const estimateWithRelations = {
   include: {
@@ -45,12 +47,13 @@ type EstimateRow = Prisma.EstimateGetPayload<{
 export default async function EstimatesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ clientId?: string; projectId?: string }>;
+  searchParams?: Promise<{ clientId?: string; projectId?: string; page?: string }>;
 }) {
   const user = await requireUser();
   const params = (await searchParams) ?? {};
   const selectedClientId = params.clientId ?? "all";
   const selectedProjectId = params.projectId ?? "all";
+  const page = parsePageParam(params.page);
 
   const [projects, countries, assignments] = await Promise.all([
     getVisibleProjects(user, { allowedStatuses: ["ACTIVE", "ON_HOLD"] }),
@@ -129,6 +132,8 @@ export default async function EstimatesPage({
     selectedClientId === "all" ? true : project.clientId === selectedClientId,
   );
 
+  const { items: paginatedEstimates, currentPage, totalPages, totalItems, pageSize } = paginateItems(estimates, page, DEFAULT_PAGE_SIZE);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -196,7 +201,7 @@ export default async function EstimatesPage({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {estimates.map((estimate) => {
+            {paginatedEstimates.map((estimate) => {
               const canReview =
                 canFullyModerateProject(user) ||
                 ((user.userType === "TEAM_LEAD" || isManager(user)) &&
@@ -281,6 +286,7 @@ export default async function EstimatesPage({
             ) : null}
           </tbody>
         </table>
+        <PaginationControls basePath="/estimates" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ clientId: selectedClientId, projectId: selectedProjectId }} />
       </div>
     </div>
   );

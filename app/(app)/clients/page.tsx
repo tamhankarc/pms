@@ -4,18 +4,21 @@ import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { ClientForm } from "@/components/forms/client-form";
 import { createClientAction, toggleClientStatusAction } from "@/lib/actions/client-actions";
 import { db } from "@/lib/db";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
 export default async function ClientsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ q?: string; status?: string; showCreate?: string }>;
+  searchParams?: Promise<{ q?: string; status?: string; showCreate?: string; page?: string }>;
 }) {
   const params = (await searchParams) ?? {};
   const q = params.q?.trim() ?? "";
   const status = params.status ?? "all";
   const showCreate = params.showCreate === "1";
+  const page = parsePageParam(params.page);
 
-  const clients = await db.client.findMany({
+  const allClients = await db.client.findMany({
     where: {
       ...(q
         ? {
@@ -32,6 +35,8 @@ export default async function ClientsPage({
     },
     orderBy: { name: "asc" },
   });
+
+  const { items: clients, currentPage, totalPages, totalItems, pageSize } = paginateItems(allClients, page, DEFAULT_PAGE_SIZE);
 
   return (
     <div>
@@ -136,7 +141,7 @@ export default async function ClientsPage({
                 </tr>
               ))}
 
-              {clients.length === 0 ? (
+              {allClients.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="table-cell text-center text-sm text-slate-500">
                     No clients found.
@@ -145,6 +150,7 @@ export default async function ClientsPage({
               ) : null}
             </tbody>
           </table>
+          <PaginationControls basePath="/clients" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, status, showCreate: showCreate ? "1" : undefined }} />
         </div>
 
         {showCreate ? <ClientForm mode="create" action={createClientAction} /> : null}

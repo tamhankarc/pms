@@ -1,402 +1,555 @@
-import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { requireUser } from "@/lib/auth";
-import { getVisibleProjects } from "@/lib/queries";
 import { db } from "@/lib/db";
-import { formatMinutes } from "@/lib/utils";
+import { getVisibleProjects } from "@/lib/queries";
+import { isRoleScopedManager } from "@/lib/permissions";
+import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
-type RoleRow = {
-  projectId: string;
-  projectName: string;
+function toDateInputValue(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getDefaultRange() {
+  const now = new Date();
+  return {
+    fromDate: toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)),
+    toDate: toDateInputValue(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+  };
+}
+
+function normalizeDateInput(value?: string) {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
+}
+
+function formatHours(minutes: number) {
+  return (minutes / 60).toFixed(2);
+}
+
+function buildDateRange(fromDate: string, toDate: string) {
+  return {
+    fromBoundary: new Date(`${fromDate}T00:00:00`),
+    toBoundary: new Date(`${toDate}T23:59:59.999`),
+  };
+}
+
+type ClientHoursRow = {
+  clientId: string;
   clientName: string;
-  roleName: string;
-  approvedMinutes: number;
+  totalMinutes: number;
 };
 
-type MonthlyRow = {
-  projectId: string;
-  projectName: string;
+type ProjectHoursRow = {
   clientName: string;
-  monthKey: string;
-  approvedMinutes: number;
-  includedMinutes: number;
-  overageMinutes: number;
+  projectName: string;
+  subProjectName: string;
+  totalMinutes: number;
 };
 
-type FixedFullRow = {
-  projectId: string;
-  projectName: string;
+type EmployeeHoursRow = {
+  employeeId: string;
+  employeeName: string;
   clientName: string;
-  contractedMinutes: number;
-  approvedMinutes: number;
-  remainingMinutes: number;
-};
-
-type BillableRow = {
-  projectId: string;
   projectName: string;
-  clientName: string;
-  approvedBillableMinutes: number;
+  subProjectName: string;
+  totalMinutes: number;
 };
 
 export default async function ReportsPage({
   searchParams,
 }: {
   searchParams?: Promise<{
-    q?: string;
-    clientId?: string;
-    billingModel?: string;
+    clientFromDate?: string;
+    clientToDate?: string;
+    clientClientId?: string;
+    clientPage?: string;
+    projectFromDate?: string;
+    projectToDate?: string;
+    projectClientId?: string;
+    projectProjectId?: string;
+    projectPage?: string;
+    employeeFromDate?: string;
+    employeeToDate?: string;
+    employeeClientId?: string;
+    employeeProjectId?: string;
+    employeeId?: string;
+    employeePage?: string;
   }>;
 }) {
   const user = await requireUser();
   const params = (await searchParams) ?? {};
-  const q = (params.q ?? "").trim().toLowerCase();
-  const clientId = params.clientId ?? "all";
-  const billingModel = params.billingModel ?? "all";
+  const defaultRange = getDefaultRange();
+
+  const clientFromDate = normalizeDateInput(params.clientFromDate) ?? defaultRange.fromDate;
+  const clientToDate = normalizeDateInput(params.clientToDate) ?? defaultRange.toDate;
+  const clientClientId = params.clientClientId ?? "all";
+  const clientPage = parsePageParam(params.clientPage);
+
+  const projectFromDate = normalizeDateInput(params.projectFromDate) ?? defaultRange.fromDate;
+  const projectToDate = normalizeDateInput(params.projectToDate) ?? defaultRange.toDate;
+  const projectClientId = params.projectClientId ?? "all";
+  const projectProjectId = params.projectProjectId ?? "all";
+  const projectPage = parsePageParam(params.projectPage);
+
+  const employeeFromDate = normalizeDateInput(params.employeeFromDate) ?? defaultRange.fromDate;
+  const employeeToDate = normalizeDateInput(params.employeeToDate) ?? defaultRange.toDate;
+  const employeeClientId = params.employeeClientId ?? "all";
+  const employeeProjectId = params.employeeProjectId ?? "all";
+  const employeeId = params.employeeId ?? "all";
+  const employeePage = parsePageParam(params.employeePage);
 
   const visibleProjects = await getVisibleProjects(user);
-  const filteredProjects = visibleProjects.filter((project) => {
-    const matchesQ =
-      !q ||
-      project.name.toLowerCase().includes(q) ||
-      (project.code ?? "").toLowerCase().includes(q) ||
-      project.client.name.toLowerCase().includes(q) ||
-      (project.projectType?.name ?? "").toLowerCase().includes(q);
-
-    const matchesClient = clientId === "all" ? true : project.clientId === clientId;
-    const matchesBilling = billingModel === "all" ? true : project.billingModel === billingModel;
-
-    return matchesQ && matchesClient && matchesBilling;
-  });
-
-  const visibleProjectIds = filteredProjects.map((project) => project.id);
+  const visibleProjectIds = visibleProjects.map((project) => project.id);
   const safeProjectIds = visibleProjectIds.length ? visibleProjectIds : ["__none__"];
 
-  const [approvedEntries, approvedBillableEntries] = await Promise.all([
-    db.timeEntry.findMany({
-      where: {
-        projectId: { in: safeProjectIds },
-        status: "APPROVED",
-      },
-      include: {
-        project: { include: { client: true } },
-        employee: true,
-      },
-      orderBy: { workDate: "desc" },
-    }),
-    db.timeEntry.findMany({
-      where: {
-        projectId: { in: safeProjectIds },
-        status: "APPROVED",
-        isBillable: true,
-      },
-      include: {
-        project: { include: { client: true } },
-      },
-    }),
-  ]);
-
-  const clients = Array.from(
+  const clientOptions = Array.from(
     new Map(
-      visibleProjects.map((project) => [
-        project.client.id,
-        { id: project.client.id, name: project.client.name },
-      ]),
+      visibleProjects.map((project) => [project.client.id, { id: project.client.id, name: project.client.name }]),
     ).values(),
   ).sort((a, b) => a.name.localeCompare(b.name));
 
-  const roleMap = new Map<string, RoleRow>();
-  for (const entry of approvedEntries) {
-    const roleName = (entry.employee.functionalRole ?? "UNASSIGNED").replaceAll("_", " ");
-    const key = `${entry.projectId}__${roleName}`;
-    const existing = roleMap.get(key);
-    if (existing) {
-      existing.approvedMinutes += entry.minutesSpent;
-    } else {
-      roleMap.set(key, {
-        projectId: entry.projectId,
-        projectName: entry.project.name,
-        clientName: entry.project.client.name,
-        roleName,
-        approvedMinutes: entry.minutesSpent,
-      });
-    }
-  }
-  const effortByProjectRole = Array.from(roleMap.values()).sort((a, b) => {
-    if (a.projectName === b.projectName) return a.roleName.localeCompare(b.roleName);
-    return a.projectName.localeCompare(b.projectName);
-  });
+  const projectOptions = visibleProjects
+    .map((project) => ({ id: project.id, name: project.name, clientId: project.clientId }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
-  const monthlyMap = new Map<string, MonthlyRow>();
-  for (const entry of approvedEntries) {
-    if (entry.project.billingModel !== "FIXED_MONTHLY") continue;
-    const monthKey = new Date(entry.workDate).toISOString().slice(0, 7);
-    const key = `${entry.projectId}__${monthKey}`;
-    const includedMinutes = Number(entry.project.fixedMonthlyHours ?? 0) * 60;
-    const existing = monthlyMap.get(key);
-    if (existing) {
-      existing.approvedMinutes += entry.minutesSpent;
-      existing.overageMinutes = Math.max(existing.approvedMinutes - existing.includedMinutes, 0);
-    } else {
-      const approvedMinutes = entry.minutesSpent;
-      monthlyMap.set(key, {
-        projectId: entry.projectId,
-        projectName: entry.project.name,
-        clientName: entry.project.client.name,
-        monthKey,
-        approvedMinutes,
-        includedMinutes,
-        overageMinutes: Math.max(approvedMinutes - includedMinutes, 0),
-      });
-    }
-  }
-  const monthlyOverages = Array.from(monthlyMap.values()).sort((a, b) => {
-    if (a.monthKey === b.monthKey) return a.projectName.localeCompare(b.projectName);
-    return b.monthKey.localeCompare(a.monthKey);
-  });
-
-  const fixedFullMap = new Map<string, FixedFullRow>();
-  for (const project of filteredProjects.filter((item) => item.billingModel === "FIXED_FULL")) {
-    fixedFullMap.set(project.id, {
-      projectId: project.id,
-      projectName: project.name,
-      clientName: project.client.name,
-      contractedMinutes: Number(project.fixedContractHours ?? 0) * 60,
-      approvedMinutes: 0,
-      remainingMinutes: Number(project.fixedContractHours ?? 0) * 60,
-    });
-  }
-  for (const entry of approvedEntries) {
-    const row = fixedFullMap.get(entry.projectId);
-    if (!row) continue;
-    row.approvedMinutes += entry.minutesSpent;
-    row.remainingMinutes = Math.max(row.contractedMinutes - row.approvedMinutes, 0);
-  }
-  const fixedHoursBalance = Array.from(fixedFullMap.values()).sort((a, b) =>
-    a.projectName.localeCompare(b.projectName),
+  const projectFilterOptions = projectOptions.filter((project) =>
+    projectClientId === "all" ? true : project.clientId === projectClientId,
   );
 
-  const billableMap = new Map<string, BillableRow>();
-  for (const entry of approvedBillableEntries) {
-    const existing = billableMap.get(entry.projectId);
-    if (existing) {
-      existing.approvedBillableMinutes += entry.minutesSpent;
-    } else {
-      billableMap.set(entry.projectId, {
-        projectId: entry.projectId,
-        projectName: entry.project.name,
-        clientName: entry.project.client.name,
-        approvedBillableMinutes: entry.minutesSpent,
-      });
-    }
-  }
-  const billableSummary = Array.from(billableMap.values()).sort((a, b) =>
-    a.projectName.localeCompare(b.projectName),
+  const employeeProjectFilterOptions = projectOptions.filter((project) =>
+    employeeClientId === "all" ? true : project.clientId === employeeClientId,
   );
+
+  const supervisorAssignments =
+    user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
+      ? await db.employeeTeamLead.findMany({
+          where: { teamLeadId: user.id },
+          include: {
+            employee: {
+              select: {
+                id: true,
+                fullName: true,
+                functionalRole: true,
+                isActive: true,
+              },
+            },
+          },
+        })
+      : [];
+
+  const scopedEmployeeIds = supervisorAssignments
+    .filter((row) => row.employee.isActive && row.employee.functionalRole === user.functionalRole)
+    .map((row) => row.employeeId);
+
+  const visibleEmployeeIds =
+    user.userType === "EMPLOYEE"
+      ? [user.id]
+      : user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
+        ? Array.from(new Set([user.id, ...scopedEmployeeIds]))
+        : undefined;
+
+  const employeeWhereClause = visibleEmployeeIds
+    ? { employeeId: { in: visibleEmployeeIds.length ? visibleEmployeeIds : ["__none__"] } }
+    : {};
+
+  const [{ fromBoundary: clientFromBoundary, toBoundary: clientToBoundary }, { fromBoundary: projectFromBoundary, toBoundary: projectToBoundary }, { fromBoundary: employeeFromBoundary, toBoundary: employeeToBoundary }] = [
+    buildDateRange(clientFromDate, clientToDate),
+    buildDateRange(projectFromDate, projectToDate),
+    buildDateRange(employeeFromDate, employeeToDate),
+  ];
+
+  const [clientEntries, projectEntries, employeeEntries, employeeUsers] = await Promise.all([
+    db.timeEntry.findMany({
+      where: {
+        projectId: { in: safeProjectIds },
+        workDate: { gte: clientFromBoundary, lte: clientToBoundary },
+        ...(clientClientId !== "all" ? { project: { is: { clientId: clientClientId } } } : {}),
+        ...employeeWhereClause,
+      },
+      include: {
+        project: { include: { client: true } },
+      },
+      orderBy: [{ workDate: "desc" }],
+    }),
+    db.timeEntry.findMany({
+      where: {
+        projectId: { in: safeProjectIds },
+        workDate: { gte: projectFromBoundary, lte: projectToBoundary },
+        ...(projectClientId !== "all" ? { project: { is: { clientId: projectClientId } } } : {}),
+        ...(projectProjectId !== "all" ? { projectId: projectProjectId } : {}),
+        ...employeeWhereClause,
+      },
+      include: {
+        project: { include: { client: true } },
+        subProject: true,
+      },
+      orderBy: [{ workDate: "desc" }],
+    }),
+    db.timeEntry.findMany({
+      where: {
+        projectId: { in: safeProjectIds },
+        workDate: { gte: employeeFromBoundary, lte: employeeToBoundary },
+        ...(employeeClientId !== "all" ? { project: { is: { clientId: employeeClientId } } } : {}),
+        ...(employeeProjectId !== "all" ? { projectId: employeeProjectId } : {}),
+        ...(employeeId !== "all" ? { employeeId } : {}),
+        ...employeeWhereClause,
+      },
+      include: {
+        employee: true,
+        project: { include: { client: true } },
+        subProject: true,
+      },
+      orderBy: [{ workDate: "desc" }],
+    }),
+    db.user.findMany({
+      where: {
+        isActive: true,
+        ...(visibleEmployeeIds ? { id: { in: visibleEmployeeIds.length ? visibleEmployeeIds : ["__none__"] } } : {}),
+      },
+      select: {
+        id: true,
+        fullName: true,
+      },
+      orderBy: { fullName: "asc" },
+    }),
+  ]);
+
+  const clientMap = new Map<string, ClientHoursRow>();
+  const projectMap = new Map<string, ProjectHoursRow>();
+  const employeeMap = new Map<string, EmployeeHoursRow>();
+
+  for (const entry of clientEntries) {
+    const clientKey = entry.project.clientId;
+    const clientRow = clientMap.get(clientKey) ?? {
+      clientId: entry.project.clientId,
+      clientName: entry.project.client.name,
+      totalMinutes: 0,
+    };
+    clientRow.totalMinutes += entry.minutesSpent;
+    clientMap.set(clientKey, clientRow);
+  }
+
+  for (const entry of projectEntries) {
+    const projectKey = `${entry.project.client.name}__${entry.project.name}__${entry.subProject?.name ?? "-"}`;
+    const projectRow = projectMap.get(projectKey) ?? {
+      clientName: entry.project.client.name,
+      projectName: entry.project.name,
+      subProjectName: entry.subProject?.name ?? "-",
+      totalMinutes: 0,
+    };
+    projectRow.totalMinutes += entry.minutesSpent;
+    projectMap.set(projectKey, projectRow);
+  }
+
+  for (const entry of employeeEntries) {
+    const employeeKey = `${entry.employeeId}__${entry.project.client.name}__${entry.project.name}__${entry.subProject?.name ?? "-"}`;
+    const employeeRow = employeeMap.get(employeeKey) ?? {
+      employeeId: entry.employeeId,
+      employeeName: entry.employee.fullName,
+      clientName: entry.project.client.name,
+      projectName: entry.project.name,
+      subProjectName: entry.subProject?.name ?? "-",
+      totalMinutes: 0,
+    };
+    employeeRow.totalMinutes += entry.minutesSpent;
+    employeeMap.set(employeeKey, employeeRow);
+  }
+
+  const clientRows = Array.from(clientMap.values()).sort((a, b) => a.clientName.localeCompare(b.clientName));
+  const projectRows = Array.from(projectMap.values()).sort((a, b) => {
+    if (a.clientName !== b.clientName) return a.clientName.localeCompare(b.clientName);
+    if (a.projectName !== b.projectName) return a.projectName.localeCompare(b.projectName);
+    return a.subProjectName.localeCompare(b.subProjectName);
+  });
+  const employeeRows = Array.from(employeeMap.values()).sort((a, b) => {
+    if (a.employeeName !== b.employeeName) return a.employeeName.localeCompare(b.employeeName);
+    if (a.clientName !== b.clientName) return a.clientName.localeCompare(b.clientName);
+    if (a.projectName !== b.projectName) return a.projectName.localeCompare(b.projectName);
+    return a.subProjectName.localeCompare(b.subProjectName);
+  });
+
+  const paginatedClientRows = paginateItems(clientRows, clientPage, DEFAULT_PAGE_SIZE);
+  const paginatedProjectRows = paginateItems(projectRows, projectPage, DEFAULT_PAGE_SIZE);
+  const paginatedEmployeeRows = paginateItems(employeeRows, employeePage, DEFAULT_PAGE_SIZE);
+
+  const clientSearch = {
+    clientFromDate,
+    clientToDate,
+    clientClientId: clientClientId === "all" ? undefined : clientClientId,
+  };
+
+  const projectSearch = {
+    projectFromDate,
+    projectToDate,
+    projectClientId: projectClientId === "all" ? undefined : projectClientId,
+    projectProjectId: projectProjectId === "all" ? undefined : projectProjectId,
+  };
+
+  const employeeSearch = {
+    employeeFromDate,
+    employeeToDate,
+    employeeClientId: employeeClientId === "all" ? undefined : employeeClientId,
+    employeeProjectId: employeeProjectId === "all" ? undefined : employeeProjectId,
+    employeeId: employeeId === "all" ? undefined : employeeId,
+  };
 
   return (
-    <div>
+    <div className="space-y-8">
       <PageHeader
         title="Reports"
-        description="Operational reporting based on approved effort, billable effort, and fixed-hour consumption using the current schema."
+        description="Time-entry reporting with report-specific filters and grouped hour summaries."
       />
 
-      <div className="mb-6 card p-4">
-        <form className="grid gap-3 md:grid-cols-[1fr_220px_220px_auto]" method="get">
-          <input
-            className="input"
-            name="q"
-            defaultValue={q}
-            placeholder="Search by project, client, or project type"
-          />
-          <SearchableCombobox
-            id="clientId"
-            name="clientId"
-            defaultValue={clientId}
-            options={[
-              { value: "all", label: "All clients" },
-              ...clients.map((client) => ({ value: client.id, label: client.name })),
-            ]}
-            placeholder="All clients"
-            searchPlaceholder="Search clients..."
-            emptyLabel="No client found."
-          />
-          <SearchableCombobox
-            id="billingModel"
-            name="billingModel"
-            defaultValue={billingModel}
-            options={[
-              { value: "all", label: "All billing models" },
-              { value: "HOURLY", label: "Hourly" },
-              { value: "FIXED_FULL", label: "Fixed - Full Project" },
-              { value: "FIXED_MONTHLY", label: "Fixed - Monthly" },
-            ]}
-            placeholder="All billing models"
-            searchPlaceholder="Search billing models..."
-            emptyLabel="No billing model found."
-          />
-          <button className="btn-secondary" type="submit">Apply</button>
-        </form>
-      </div>
-
-      <div className="space-y-8">
-        <section className="table-wrap">
-          <div className="border-b border-slate-200 px-4 py-4">
-            <h2 className="section-title">Time per role per project</h2>
-            <p className="section-subtitle">Approved effort grouped by project and functional role.</p>
-          </div>
+      <section className="table-wrap">
+        <div className="border-b border-slate-200 px-4 py-4">
+          <h2 className="section-title">Client-wise hours</h2>
+          <p className="section-subtitle">Grouped by client for the selected date range.</p>
+        </div>
+        <div className="border-b border-slate-100 px-4 py-4">
+          <form className="flex flex-wrap items-end gap-3" method="get">
+            <div className="w-full sm:w-[180px]">
+              <input className="input w-full" type="date" name="clientFromDate" defaultValue={clientFromDate} />
+            </div>
+            <div className="w-full sm:w-[180px]">
+              <input className="input w-full" type="date" name="clientToDate" defaultValue={clientToDate} />
+            </div>
+            <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
+            <SearchableCombobox
+              id="clientClientId"
+              name="clientClientId"
+              defaultValue={clientClientId}
+              options={[
+                { value: "all", label: "All clients" },
+                ...clientOptions.map((client) => ({ value: client.id, label: client.name })),
+              ]}
+              placeholder="All clients"
+              searchPlaceholder="Search clients..."
+              emptyLabel="No clients found."
+            />
+            </div>
+            <div className="flex w-full flex-wrap gap-3 sm:w-auto">
+              <button className="btn-secondary" type="submit">Apply</button>
+              <a className="btn-secondary" href="/reports#client-wise-hours">Reset</a>
+            </div>
+          </form>
+        </div>
+        <div id="client-wise-hours" className="overflow-x-auto">
           <table className="table-base">
             <thead className="table-head">
               <tr>
-                <th className="table-cell">Project</th>
                 <th className="table-cell">Client</th>
-                <th className="table-cell">Role</th>
-                <th className="table-cell">Approved effort</th>
+                <th className="table-cell">Hours</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {effortByProjectRole.map((row) => (
-                <tr key={`${row.projectId}-${row.roleName}`}>
-                  <td className="table-cell">
-                    <Link href={`/projects/${row.projectId}`} className="font-medium text-blue-600 hover:underline">
-                      {row.projectName}
-                    </Link>
-                  </td>
+              {paginatedClientRows.items.map((row) => (
+                <tr key={row.clientId}>
                   <td className="table-cell">{row.clientName}</td>
-                  <td className="table-cell">{row.roleName}</td>
-                  <td className="table-cell">{formatMinutes(row.approvedMinutes)}</td>
+                  <td className="table-cell">{formatHours(row.totalMinutes)}</td>
                 </tr>
               ))}
-              {effortByProjectRole.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="table-cell text-center text-sm text-slate-500">
-                    No approved effort found for the selected filters.
-                  </td>
-                </tr>
+              {clientRows.length === 0 ? (
+                <tr><td colSpan={2} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr>
               ) : null}
             </tbody>
           </table>
-        </section>
+        </div>
+        <PaginationControls
+          basePath="/reports"
+          currentPage={paginatedClientRows.currentPage}
+          totalPages={paginatedClientRows.totalPages}
+          totalItems={paginatedClientRows.totalItems}
+          pageSize={paginatedClientRows.pageSize}
+          searchParams={clientSearch}
+          pageParam="clientPage"
+        />
+      </section>
 
-        <section className="table-wrap">
-          <div className="border-b border-slate-200 px-4 py-4">
-            <h2 className="section-title">Fixed monthly overage</h2>
-            <p className="section-subtitle">Approved effort against included monthly hours for fixed-monthly projects.</p>
-          </div>
+      <section className="table-wrap">
+        <div className="border-b border-slate-200 px-4 py-4">
+          <h2 className="section-title">Project / Sub-Project-wise hours</h2>
+          <p className="section-subtitle">Grouped by client, project, and sub-project for the selected date range.</p>
+        </div>
+        <div className="border-b border-slate-100 px-4 py-4">
+          <form className="flex flex-wrap items-end gap-3" method="get">
+            <div className="w-full sm:w-[180px]">
+              <input className="input w-full" type="date" name="projectFromDate" defaultValue={projectFromDate} />
+            </div>
+            <div className="w-full sm:w-[180px]">
+              <input className="input w-full" type="date" name="projectToDate" defaultValue={projectToDate} />
+            </div>
+            <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
+            <SearchableCombobox
+              id="projectClientId"
+              name="projectClientId"
+              defaultValue={projectClientId}
+              options={[
+                { value: "all", label: "All clients" },
+                ...clientOptions.map((client) => ({ value: client.id, label: client.name })),
+              ]}
+              placeholder="All clients"
+              searchPlaceholder="Search clients..."
+              emptyLabel="No clients found."
+            />
+            </div>
+            <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
+            <SearchableCombobox
+              id="projectProjectId"
+              name="projectProjectId"
+              defaultValue={projectProjectId}
+              options={[
+                { value: "all", label: "All projects" },
+                ...projectFilterOptions.map((project) => ({ value: project.id, label: project.name })),
+              ]}
+              placeholder="All projects"
+              searchPlaceholder="Search projects..."
+              emptyLabel="No projects found."
+            />
+            </div>
+            <div className="flex w-full flex-wrap gap-3 sm:w-auto">
+              <button className="btn-secondary" type="submit">Apply</button>
+              <a className="btn-secondary" href="/reports#project-wise-hours">Reset</a>
+            </div>
+          </form>
+        </div>
+        <div id="project-wise-hours" className="overflow-x-auto">
           <table className="table-base">
             <thead className="table-head">
               <tr>
-                <th className="table-cell">Project</th>
                 <th className="table-cell">Client</th>
-                <th className="table-cell">Month</th>
-                <th className="table-cell">Approved effort</th>
-                <th className="table-cell">Included effort</th>
-                <th className="table-cell">Overage</th>
+                <th className="table-cell">Project Name</th>
+                <th className="table-cell">Sub-Project Name</th>
+                <th className="table-cell">Hours</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {monthlyOverages.map((row) => (
-                <tr key={`${row.projectId}-${row.monthKey}`}>
-                  <td className="table-cell">
-                    <Link href={`/projects/${row.projectId}`} className="font-medium text-blue-600 hover:underline">
-                      {row.projectName}
-                    </Link>
-                  </td>
+              {paginatedProjectRows.items.map((row) => (
+                <tr key={`${row.clientName}-${row.projectName}-${row.subProjectName}`}>
                   <td className="table-cell">{row.clientName}</td>
-                  <td className="table-cell">{row.monthKey}</td>
-                  <td className="table-cell">{formatMinutes(row.approvedMinutes)}</td>
-                  <td className="table-cell">{formatMinutes(row.includedMinutes)}</td>
-                  <td className="table-cell">{formatMinutes(row.overageMinutes)}</td>
+                  <td className="table-cell">{row.projectName}</td>
+                  <td className="table-cell">{row.subProjectName}</td>
+                  <td className="table-cell">{formatHours(row.totalMinutes)}</td>
                 </tr>
               ))}
-              {monthlyOverages.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="table-cell text-center text-sm text-slate-500">
-                    No fixed-monthly overage data found for the selected filters.
-                  </td>
-                </tr>
+              {projectRows.length === 0 ? (
+                <tr><td colSpan={4} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr>
               ) : null}
             </tbody>
           </table>
-        </section>
+        </div>
+        <PaginationControls
+          basePath="/reports"
+          currentPage={paginatedProjectRows.currentPage}
+          totalPages={paginatedProjectRows.totalPages}
+          totalItems={paginatedProjectRows.totalItems}
+          pageSize={paginatedProjectRows.pageSize}
+          searchParams={projectSearch}
+          pageParam="projectPage"
+        />
+      </section>
 
-        <section className="table-wrap">
-          <div className="border-b border-slate-200 px-4 py-4">
-            <h2 className="section-title">Fixed full-project hours balance</h2>
-            <p className="section-subtitle">Approved effort versus contracted hours for fixed-full projects.</p>
-          </div>
+      <section className="table-wrap">
+        <div className="border-b border-slate-200 px-4 py-4">
+          <h2 className="section-title">Employee-wise hours</h2>
+          <p className="section-subtitle">Grouped by employee with client, project, and sub-project context.</p>
+        </div>
+        <div className="border-b border-slate-100 px-4 py-4">
+          <form className="flex flex-wrap items-end gap-3" method="get">
+            <div className="w-full sm:w-[180px]">
+              <input className="input w-full" type="date" name="employeeFromDate" defaultValue={employeeFromDate} />
+            </div>
+            <div className="w-full sm:w-[180px]">
+              <input className="input w-full" type="date" name="employeeToDate" defaultValue={employeeToDate} />
+            </div>
+            <div className="w-full sm:w-[220px] md:w-[240px] lg:w-[260px]">
+            <SearchableCombobox
+              id="employeeClientId"
+              name="employeeClientId"
+              defaultValue={employeeClientId}
+              options={[
+                { value: "all", label: "All clients" },
+                ...clientOptions.map((client) => ({ value: client.id, label: client.name })),
+              ]}
+              placeholder="All clients"
+              searchPlaceholder="Search clients..."
+              emptyLabel="No clients found."
+            />
+            </div>
+            <div className="w-full sm:w-[220px] md:w-[240px] lg:w-[260px]">
+            <SearchableCombobox
+              id="employeeProjectId"
+              name="employeeProjectId"
+              defaultValue={employeeProjectId}
+              options={[
+                { value: "all", label: "All projects" },
+                ...employeeProjectFilterOptions.map((project) => ({ value: project.id, label: project.name })),
+              ]}
+              placeholder="All projects"
+              searchPlaceholder="Search projects..."
+              emptyLabel="No projects found."
+            />
+            </div>
+            <div className="w-full sm:w-[220px] md:w-[240px] lg:w-[260px]">
+            <SearchableCombobox
+              id="employeeId"
+              name="employeeId"
+              defaultValue={employeeId}
+              options={[
+                { value: "all", label: "All employees" },
+                ...employeeUsers.map((employee) => ({ value: employee.id, label: employee.fullName })),
+              ]}
+              placeholder="All employees"
+              searchPlaceholder="Search employees..."
+              emptyLabel="No employees found."
+            />
+            </div>
+            <div className="flex w-full flex-wrap gap-3 sm:w-auto">
+              <button className="btn-secondary" type="submit">Apply</button>
+              <a className="btn-secondary" href="/reports#employee-wise-hours">Reset</a>
+            </div>
+          </form>
+        </div>
+        <div id="employee-wise-hours" className="overflow-x-auto">
           <table className="table-base">
             <thead className="table-head">
               <tr>
-                <th className="table-cell">Project</th>
+                <th className="table-cell">Employee</th>
                 <th className="table-cell">Client</th>
-                <th className="table-cell">Contracted effort</th>
-                <th className="table-cell">Approved effort</th>
-                <th className="table-cell">Remaining effort</th>
+                <th className="table-cell">Project Name</th>
+                <th className="table-cell">Sub-Project Name</th>
+                <th className="table-cell">Hours</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {fixedHoursBalance.map((row) => (
-                <tr key={row.projectId}>
-                  <td className="table-cell">
-                    <Link href={`/projects/${row.projectId}`} className="font-medium text-blue-600 hover:underline">
-                      {row.projectName}
-                    </Link>
-                  </td>
+              {paginatedEmployeeRows.items.map((row) => (
+                <tr key={`${row.employeeId}-${row.clientName}-${row.projectName}-${row.subProjectName}`}>
+                  <td className="table-cell">{row.employeeName}</td>
                   <td className="table-cell">{row.clientName}</td>
-                  <td className="table-cell">{formatMinutes(row.contractedMinutes)}</td>
-                  <td className="table-cell">{formatMinutes(row.approvedMinutes)}</td>
-                  <td className="table-cell">{formatMinutes(row.remainingMinutes)}</td>
+                  <td className="table-cell">{row.projectName}</td>
+                  <td className="table-cell">{row.subProjectName}</td>
+                  <td className="table-cell">{formatHours(row.totalMinutes)}</td>
                 </tr>
               ))}
-              {fixedHoursBalance.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="table-cell text-center text-sm text-slate-500">
-                    No fixed-full projects found for the selected filters.
-                  </td>
-                </tr>
+              {employeeRows.length === 0 ? (
+                <tr><td colSpan={5} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr>
               ) : null}
             </tbody>
           </table>
-        </section>
-
-        <section className="table-wrap">
-          <div className="border-b border-slate-200 px-4 py-4">
-            <h2 className="section-title">Approved billable effort by project</h2>
-            <p className="section-subtitle">Billable approved time only. This keeps reports effort-first rather than money-first.</p>
-          </div>
-          <table className="table-base">
-            <thead className="table-head">
-              <tr>
-                <th className="table-cell">Project</th>
-                <th className="table-cell">Client</th>
-                <th className="table-cell">Approved billable effort</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {billableSummary.map((row) => (
-                <tr key={row.projectId}>
-                  <td className="table-cell">
-                    <Link href={`/projects/${row.projectId}`} className="font-medium text-blue-600 hover:underline">
-                      {row.projectName}
-                    </Link>
-                  </td>
-                  <td className="table-cell">{row.clientName}</td>
-                  <td className="table-cell">{formatMinutes(row.approvedBillableMinutes)}</td>
-                </tr>
-              ))}
-              {billableSummary.length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="table-cell text-center text-sm text-slate-500">
-                    No approved billable effort found for the selected filters.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </section>
-      </div>
+        </div>
+        <PaginationControls
+          basePath="/reports"
+          currentPage={paginatedEmployeeRows.currentPage}
+          totalPages={paginatedEmployeeRows.totalPages}
+          totalItems={paginatedEmployeeRows.totalItems}
+          pageSize={paginatedEmployeeRows.pageSize}
+          searchParams={employeeSearch}
+          pageParam="employeePage"
+        />
+      </section>
     </div>
   );
 }

@@ -7,11 +7,13 @@ import { createLanguageAction, toggleLanguageStatusAction } from "@/lib/actions/
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { canManageLanguages } from "@/lib/permissions";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
 export default async function LanguagesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ q?: string; status?: string }>;
+  searchParams?: Promise<{ q?: string; status?: string; page?: string }>;
 }) {
   const user = await requireUser();
   if (!canManageLanguages(user)) redirect("/dashboard");
@@ -19,8 +21,9 @@ export default async function LanguagesPage({
   const params = (await searchParams) ?? {};
   const q = params.q?.trim() ?? "";
   const status = params.status ?? "all";
+  const page = parsePageParam(params.page);
 
-  const languages = await db.language.findMany({
+  const allLanguages = await db.language.findMany({
     where: {
       ...(q
         ? {
@@ -32,6 +35,8 @@ export default async function LanguagesPage({
     },
     orderBy: { name: "asc" },
   });
+
+  const { items: languages, currentPage, totalPages, totalItems, pageSize } = paginateItems(allLanguages, page, DEFAULT_PAGE_SIZE);
 
   return (
     <div>
@@ -100,7 +105,7 @@ export default async function LanguagesPage({
                   </td>
                 </tr>
               ))}
-              {languages.length === 0 ? (
+              {allLanguages.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="table-cell text-center text-sm text-slate-500">
                     No languages found.
@@ -109,6 +114,7 @@ export default async function LanguagesPage({
               ) : null}
             </tbody>
           </table>
+          <PaginationControls basePath="/languages" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, status }} />
         </div>
 
         <LanguageForm mode="create" action={createLanguageAction} />
