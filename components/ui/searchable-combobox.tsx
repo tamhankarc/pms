@@ -138,7 +138,7 @@ export function SearchableCombobox({
             </div>
           </div>
 
-          <div className="max-h-64 overflow-y-auto p-1">
+          <div className="max-h-48 overflow-y-auto p-1">
             {filteredOptions.length ? (
               filteredOptions.map((option) => {
                 const isSelected = option.value === selectedValue;

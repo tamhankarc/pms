@@ -152,18 +152,20 @@ export async function GET(request: Request) {
         employee: { select: { functionalRole: true } },
         project: { include: { client: true } },
         subProject: true,
+        country: true,
       },
       orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
     });
 
     const csv = toCsv([
-      ["Client Name", "Project Name", "Sub-Project Name", "Task Name", "Task Description", "Employee Role", "Hours"],
+      ["Client Name", "Project Name", "Sub-Project Name", "Task Name", "Task Description", "Country", "Employee Role", "Hours"],
       ...entries.map((entry) => [
         entry.project.client.name,
         entry.project.name,
         entry.subProject?.name ?? "-",
         entry.taskName,
         entry.notes?.trim() ? entry.notes : "-",
+        entry.country?.name ?? "-",
         formatRole(entry.employee.functionalRole),
         formatHours(entry.minutesSpent),
       ]),

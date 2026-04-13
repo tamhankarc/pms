@@ -42,7 +42,8 @@ function buildDateRange(fromDate: string, toDate: string) {
 }
 
 function formatHours(minutes: number) {
-  return (minutes / 60).toFixed(2);
+  //return (minutes / 60).toFixed(2);
+  return minutes;
 }
 
 function formatRole(role?: FunctionalRoleCode | "UNASSIGNED" | null) {
@@ -82,6 +83,8 @@ type TaskDetailRow = {
   subProjectName: string;
   taskName: string;
   taskDescription: string;
+  countryName: string;
+  countryCode: string;
   employeeRole: string;
   totalMinutes: number;
 };
@@ -244,6 +247,7 @@ export default async function ReportsPage({
           },
         },
         subProject: true,
+        country: true,
       },
       orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
     }),
@@ -288,6 +292,8 @@ export default async function ReportsPage({
     subProjectName: entry.subProject?.name ?? "-",
     taskName: entry.taskName,
     taskDescription: entry.notes?.trim() ? entry.notes : "-",
+    countryName: entry.country?.name ?? "-",
+    countryCode: entry.country?.isoCode ?? "-",
     employeeRole: formatRole(entry.employee.functionalRole),
     totalMinutes: entry.minutesSpent,
   }));
@@ -324,7 +330,7 @@ export default async function ReportsPage({
         description="Time-entry reporting with report-specific filters and grouped hour summaries."
       />
 
-      <section className="table-wrap">
+      <section id="client-wise-hours" className="table-wrap">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4">
           <div>
             <h2 className="section-title">Client-wise hours</h2>
@@ -342,7 +348,7 @@ export default async function ReportsPage({
           </Link>
         </div>
         <div className="relative z-20 border-b border-slate-100 px-4 py-4">
-          <form className="flex flex-wrap items-end gap-3" method="get">
+          <form className="flex flex-wrap items-end gap-3" method="get" action="/reports#client-wise-hours">
             <div className="w-full sm:w-[180px]">
               <input className="input w-full" type="date" name="clientFromDate" defaultValue={clientFromDate} />
             </div>
@@ -369,12 +375,12 @@ export default async function ReportsPage({
             </div>
           </form>
         </div>
-        <div id="client-wise-hours" className="overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="table-base">
             <thead className="table-head">
               <tr>
                 <th className="table-cell">Client</th>
-                <th className="table-cell">Hours</th>
+                <th className="table-cell">Mins</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -401,7 +407,7 @@ export default async function ReportsPage({
         />
       </section>
 
-      <section className="table-wrap">
+      <section id="project-wise-hours" className="table-wrap">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4">
           <div>
             <h2 className="section-title">Project / Sub-Project-wise hours</h2>
@@ -431,14 +437,14 @@ export default async function ReportsPage({
             projectOptions={projectOptions}
           />
         </div>
-        <div id="project-wise-hours" className="overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="table-base">
             <thead className="table-head">
               <tr>
                 <th className="table-cell">Client</th>
                 <th className="table-cell">Project Name</th>
                 <th className="table-cell">Sub-Project Name</th>
-                <th className="table-cell">Hours</th>
+                <th className="table-cell">Mins</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -467,7 +473,7 @@ export default async function ReportsPage({
         />
       </section>
 
-      <section className="table-wrap">
+      <section id="task-wise-hours" className="table-wrap">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4">
           <div>
             <h2 className="section-title">Task-wise detailed hours</h2>
@@ -500,33 +506,35 @@ export default async function ReportsPage({
             subProjectOptions={subProjectOptions}
           />
         </div>
-        <div id="task-wise-hours" className="overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="table-base">
             <thead className="table-head">
               <tr>
-                <th className="table-cell">Client Name</th>
+                <th className="table-cell max-w-48 break-normal">Client Name</th>
                 <th className="table-cell">Project Name</th>
                 <th className="table-cell">Sub-Project Name</th>
-                <th className="table-cell">Task Name</th>
-                <th className="table-cell">Task Description</th>
+                <th className="table-cell max-w-48 break-normal">Task Name</th>
+                <th className="table-cell max-w-48 break-all">Task Description</th>
+                <th className="table-cell">Country</th>
                 <th className="table-cell">Employee Role</th>
-                <th className="table-cell">Hours</th>
+                <th className="table-cell">Mins</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {paginatedTaskRows.items.map((row) => (
                 <tr key={row.id}>
-                  <td className="table-cell">{row.clientName}</td>
+                  <td className="table-cell max-w-48 break-normal">{row.clientName}</td>
                   <td className="table-cell">{row.projectName}</td>
                   <td className="table-cell">{row.subProjectName}</td>
-                  <td className="table-cell">{row.taskName}</td>
-                  <td className="table-cell">{row.taskDescription}</td>
+                  <td className="table-cell max-w-48 break-normal">{row.taskName}</td>
+                  <td className="table-cell max-w-48 break-all">{row.taskDescription}</td>
+                  <td className="table-cell">{row.countryCode}</td>
                   <td className="table-cell">{row.employeeRole}</td>
                   <td className="table-cell">{formatHours(row.totalMinutes)}</td>
                 </tr>
               ))}
               {taskRows.length === 0 ? (
-                <tr><td colSpan={7} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr>
+                <tr><td colSpan={8} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr>
               ) : null}
             </tbody>
           </table>

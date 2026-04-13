@@ -51,7 +51,7 @@ export function ProjectHoursFilterForm({
   const effectiveProjectId = isProjectAvailable ? selectedProjectId : "all";
 
   return (
-    <form className="relative z-20 flex flex-wrap items-end gap-3" method="get" action={action}>
+    <form className="relative z-20 flex flex-wrap items-end gap-3" method="get" action={`${action}${anchor}`}>
       <div className="w-full sm:w-[180px]">
         <input className="input w-full" type="date" name="projectFromDate" defaultValue={fromDate} />
       </div>
@@ -151,7 +151,7 @@ export function TaskDetailFilterForm({
   const effectiveSubProjectId = isSubProjectAvailable ? selectedSubProjectId : "all";
 
   return (
-    <form className="relative z-20 flex flex-wrap items-end gap-3" method="get" action={action}>
+    <form className="relative z-20 flex flex-wrap items-end gap-3" method="get" action={`${action}${anchor}`}>
       <div className="w-full sm:w-[180px]">
         <input className="input w-full" type="date" name="taskFromDate" defaultValue={fromDate} />
       </div>
