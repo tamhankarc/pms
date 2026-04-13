@@ -9,15 +9,29 @@ import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/paginati
 import { formatMinutes } from "@/lib/utils";
 import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/permissions";
 
+function normalizeDateInput(value?: string) {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
+}
+
+function buildFromBoundary(value: string) {
+  return value ? new Date(`${value}T00:00:00`) : undefined;
+}
+
+function buildToBoundary(value: string) {
+  return value ? new Date(`${value}T23:59:59.999`) : undefined;
+}
+
 export default async function TimeEntriesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ clientId?: string; projectId?: string; page?: string }>;
+  searchParams?: Promise<{ clientId?: string; projectId?: string; fromDate?: string; toDate?: string; page?: string }>;
 }) {
   const user = await requireUser();
   const params = (await searchParams) ?? {};
   const selectedClientId = params.clientId ?? "all";
   const selectedProjectId = params.projectId ?? "all";
+  const selectedFromDate = normalizeDateInput(params.fromDate);
+  const selectedToDate = normalizeDateInput(params.toDate);
   const page = parsePageParam(params.page);
 
   const [projects, countries, supervisorAssignments] = await Promise.all([
@@ -47,6 +61,14 @@ export default async function TimeEntriesPage({
     .filter((row) => row.employee.functionalRole === user.functionalRole)
     .map((row) => row.employeeId);
 
+  const fromBoundary = buildFromBoundary(selectedFromDate);
+  const toBoundary = buildToBoundary(selectedToDate);
+  const workDateFilter = {
+    ...(fromBoundary ? { gte: fromBoundary } : {}),
+    ...(toBoundary ? { lte: toBoundary } : {}),
+  };
+  const hasWorkDateFilter = Object.keys(workDateFilter).length > 0;
+
   const entries = await db.timeEntry.findMany({
     where:
       user.userType === "EMPLOYEE"
@@ -55,6 +77,7 @@ export default async function TimeEntriesPage({
             projectId: { in: safeProjectIds },
             project: { is: { isActive: true, status: "ACTIVE" } },
             OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
+            ...(hasWorkDateFilter ? { workDate: workDateFilter } : {}),
           }
         : user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
           ? {
@@ -64,12 +87,14 @@ export default async function TimeEntriesPage({
                   projectId: { in: safeProjectIds },
                   project: { is: { isActive: true, status: "ACTIVE" } },
                   OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
+                  ...(hasWorkDateFilter ? { workDate: workDateFilter } : {}),
                 },
                 {
                   employeeId: { in: scopedEmployeeIds.length ? scopedEmployeeIds : ["__none__"] },
                   projectId: { in: safeProjectIds },
                   project: { is: { isActive: true, status: "ACTIVE" } },
                   OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
+                  ...(hasWorkDateFilter ? { workDate: workDateFilter } : {}),
                 },
               ],
             }
@@ -77,6 +102,7 @@ export default async function TimeEntriesPage({
               projectId: { in: safeProjectIds },
               project: { is: { isActive: true, status: "ACTIVE" } },
               OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
+              ...(hasWorkDateFilter ? { workDate: workDateFilter } : {}),
             },
     include: {
       employee: true,
@@ -85,8 +111,7 @@ export default async function TimeEntriesPage({
       movie: true,
       language: true,
     },
-    orderBy: { createdAt: "desc" },
-    take: 50,
+    orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
   });
 
   const countryMap = new Map(countries.map((country) => [country.id, country.name]));
@@ -128,8 +153,37 @@ export default async function TimeEntriesPage({
       />
 
       <div className="card p-4">
-        <form method="get" className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-          <div className="grid gap-3 md:grid-cols-2">
+        <form method="get" className="flex flex-wrap items-end gap-3">
+          <div className="w-full sm:w-[180px]">
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor="fromDate">
+              Date from
+            </label>
+            <input
+              id="fromDate"
+              name="fromDate"
+              type="date"
+              defaultValue={selectedFromDate}
+              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </div>
+
+          <div className="w-full sm:w-[180px]">
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor="toDate">
+              Date to
+            </label>
+            <input
+              id="toDate"
+              name="toDate"
+              type="date"
+              defaultValue={selectedToDate}
+              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </div>
+
+          <div className="w-full min-w-0 sm:w-[260px] lg:w-[300px]">
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor="clientId">
+              Client
+            </label>
             <SearchableCombobox
               id="clientId"
               name="clientId"
@@ -142,6 +196,12 @@ export default async function TimeEntriesPage({
               searchPlaceholder="Search clients..."
               emptyLabel="No clients found."
             />
+          </div>
+
+          <div className="w-full min-w-0 sm:w-[260px] lg:w-[300px]">
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor="projectId">
+              Project
+            </label>
             <SearchableCombobox
               id="projectId"
               name="projectId"
@@ -155,7 +215,8 @@ export default async function TimeEntriesPage({
               emptyLabel="No projects found."
             />
           </div>
-          <div className="flex gap-3">
+
+          <div className="flex flex-wrap gap-3">
             <button className="btn-secondary" type="submit">
               Apply
             </button>
@@ -263,7 +324,12 @@ export default async function TimeEntriesPage({
           totalPages={totalPages}
           totalItems={totalItems}
           pageSize={pageSize}
-          searchParams={{ clientId: selectedClientId, projectId: selectedProjectId }}
+          searchParams={{
+            clientId: selectedClientId,
+            projectId: selectedProjectId,
+            fromDate: selectedFromDate || undefined,
+            toDate: selectedToDate || undefined,
+          }}
         />
       </div>
     </div>
