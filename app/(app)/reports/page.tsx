@@ -1,3 +1,6 @@
+import Link from "next/link";
+import type { FunctionalRoleCode } from "@prisma/client";
+import { ProjectHoursFilterForm, TaskDetailFilterForm } from "@/components/reports/report-filter-forms";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -14,7 +17,7 @@ function toDateInputValue(value: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function getDefaultRange() {
+function getDefaultMonthRange() {
   const now = new Date();
   return {
     fromDate: toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)),
@@ -22,12 +25,13 @@ function getDefaultRange() {
   };
 }
 
-function normalizeDateInput(value?: string) {
-  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
+function getTodayRange() {
+  const today = toDateInputValue(new Date());
+  return { fromDate: today, toDate: today };
 }
 
-function formatHours(minutes: number) {
-  return (minutes / 60).toFixed(2);
+function normalizeDateInput(value?: string) {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
 }
 
 function buildDateRange(fromDate: string, toDate: string) {
@@ -35,6 +39,27 @@ function buildDateRange(fromDate: string, toDate: string) {
     fromBoundary: new Date(`${fromDate}T00:00:00`),
     toBoundary: new Date(`${toDate}T23:59:59.999`),
   };
+}
+
+function formatHours(minutes: number) {
+  return (minutes / 60).toFixed(2);
+}
+
+function formatRole(role?: FunctionalRoleCode | "UNASSIGNED" | null) {
+  if (!role || role === "UNASSIGNED") return "-";
+  return role
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function buildExportHref(type: string, params: Record<string, string | undefined>) {
+  const search = new URLSearchParams({ type });
+  for (const [key, value] of Object.entries(params)) {
+    if (value) search.set(key, value);
+  }
+  return `/reports/export?${search.toString()}`;
 }
 
 type ClientHoursRow = {
@@ -50,12 +75,14 @@ type ProjectHoursRow = {
   totalMinutes: number;
 };
 
-type EmployeeHoursRow = {
-  employeeId: string;
-  employeeName: string;
+type TaskDetailRow = {
+  id: string;
   clientName: string;
   projectName: string;
   subProjectName: string;
+  taskName: string;
+  taskDescription: string;
+  employeeRole: string;
   totalMinutes: number;
 };
 
@@ -72,35 +99,36 @@ export default async function ReportsPage({
     projectClientId?: string;
     projectProjectId?: string;
     projectPage?: string;
-    employeeFromDate?: string;
-    employeeToDate?: string;
-    employeeClientId?: string;
-    employeeProjectId?: string;
-    employeeId?: string;
-    employeePage?: string;
+    taskFromDate?: string;
+    taskToDate?: string;
+    taskClientId?: string;
+    taskProjectId?: string;
+    taskSubProjectId?: string;
+    taskPage?: string;
   }>;
 }) {
   const user = await requireUser();
   const params = (await searchParams) ?? {};
-  const defaultRange = getDefaultRange();
+  const defaultMonthRange = getDefaultMonthRange();
+  const defaultTodayRange = getTodayRange();
 
-  const clientFromDate = normalizeDateInput(params.clientFromDate) ?? defaultRange.fromDate;
-  const clientToDate = normalizeDateInput(params.clientToDate) ?? defaultRange.toDate;
+  const clientFromDate = normalizeDateInput(params.clientFromDate) ?? defaultMonthRange.fromDate;
+  const clientToDate = normalizeDateInput(params.clientToDate) ?? defaultMonthRange.toDate;
   const clientClientId = params.clientClientId ?? "all";
   const clientPage = parsePageParam(params.clientPage);
 
-  const projectFromDate = normalizeDateInput(params.projectFromDate) ?? defaultRange.fromDate;
-  const projectToDate = normalizeDateInput(params.projectToDate) ?? defaultRange.toDate;
+  const projectFromDate = normalizeDateInput(params.projectFromDate) ?? defaultMonthRange.fromDate;
+  const projectToDate = normalizeDateInput(params.projectToDate) ?? defaultMonthRange.toDate;
   const projectClientId = params.projectClientId ?? "all";
   const projectProjectId = params.projectProjectId ?? "all";
   const projectPage = parsePageParam(params.projectPage);
 
-  const employeeFromDate = normalizeDateInput(params.employeeFromDate) ?? defaultRange.fromDate;
-  const employeeToDate = normalizeDateInput(params.employeeToDate) ?? defaultRange.toDate;
-  const employeeClientId = params.employeeClientId ?? "all";
-  const employeeProjectId = params.employeeProjectId ?? "all";
-  const employeeId = params.employeeId ?? "all";
-  const employeePage = parsePageParam(params.employeePage);
+  const taskFromDate = normalizeDateInput(params.taskFromDate) ?? defaultTodayRange.fromDate;
+  const taskToDate = normalizeDateInput(params.taskToDate) ?? defaultTodayRange.toDate;
+  const taskClientId = params.taskClientId ?? "all";
+  const taskProjectId = params.taskProjectId ?? "all";
+  const taskSubProjectId = params.taskSubProjectId ?? "all";
+  const taskPage = parsePageParam(params.taskPage);
 
   const visibleProjects = await getVisibleProjects(user);
   const visibleProjectIds = visibleProjects.map((project) => project.id);
@@ -116,13 +144,20 @@ export default async function ReportsPage({
     .map((project) => ({ id: project.id, name: project.name, clientId: project.clientId }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const projectFilterOptions = projectOptions.filter((project) =>
-    projectClientId === "all" ? true : project.clientId === projectClientId,
-  );
-
-  const employeeProjectFilterOptions = projectOptions.filter((project) =>
-    employeeClientId === "all" ? true : project.clientId === employeeClientId,
-  );
+  const subProjectOptions = (
+    await db.subProject.findMany({
+      where: {
+        isActive: true,
+        projectId: { in: safeProjectIds },
+      },
+      select: {
+        id: true,
+        name: true,
+        projectId: true,
+      },
+      orderBy: [{ name: "asc" }],
+    })
+  ).sort((a, b) => a.name.localeCompare(b.name));
 
   const supervisorAssignments =
     user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
@@ -132,7 +167,6 @@ export default async function ReportsPage({
             employee: {
               select: {
                 id: true,
-                fullName: true,
                 functionalRole: true,
                 isActive: true,
               },
@@ -156,13 +190,13 @@ export default async function ReportsPage({
     ? { employeeId: { in: visibleEmployeeIds.length ? visibleEmployeeIds : ["__none__"] } }
     : {};
 
-  const [{ fromBoundary: clientFromBoundary, toBoundary: clientToBoundary }, { fromBoundary: projectFromBoundary, toBoundary: projectToBoundary }, { fromBoundary: employeeFromBoundary, toBoundary: employeeToBoundary }] = [
+  const [{ fromBoundary: clientFromBoundary, toBoundary: clientToBoundary }, { fromBoundary: projectFromBoundary, toBoundary: projectToBoundary }, { fromBoundary: taskFromBoundary, toBoundary: taskToBoundary }] = [
     buildDateRange(clientFromDate, clientToDate),
     buildDateRange(projectFromDate, projectToDate),
-    buildDateRange(employeeFromDate, employeeToDate),
+    buildDateRange(taskFromDate, taskToDate),
   ];
 
-  const [clientEntries, projectEntries, employeeEntries, employeeUsers] = await Promise.all([
+  const [clientEntries, projectEntries, taskEntries] = await Promise.all([
     db.timeEntry.findMany({
       where: {
         projectId: { in: safeProjectIds },
@@ -192,35 +226,31 @@ export default async function ReportsPage({
     db.timeEntry.findMany({
       where: {
         projectId: { in: safeProjectIds },
-        workDate: { gte: employeeFromBoundary, lte: employeeToBoundary },
-        ...(employeeClientId !== "all" ? { project: { is: { clientId: employeeClientId } } } : {}),
-        ...(employeeProjectId !== "all" ? { projectId: employeeProjectId } : {}),
-        ...(employeeId !== "all" ? { employeeId } : {}),
+        workDate: { gte: taskFromBoundary, lte: taskToBoundary },
+        ...(taskClientId !== "all" ? { project: { is: { clientId: taskClientId } } } : {}),
+        ...(taskProjectId !== "all" ? { projectId: taskProjectId } : {}),
+        ...(taskSubProjectId !== "all" ? { subProjectId: taskSubProjectId } : {}),
         ...employeeWhereClause,
       },
       include: {
-        employee: true,
-        project: { include: { client: true } },
+        employee: {
+          select: {
+            functionalRole: true,
+          },
+        },
+        project: {
+          include: {
+            client: true,
+          },
+        },
         subProject: true,
       },
-      orderBy: [{ workDate: "desc" }],
-    }),
-    db.user.findMany({
-      where: {
-        isActive: true,
-        ...(visibleEmployeeIds ? { id: { in: visibleEmployeeIds.length ? visibleEmployeeIds : ["__none__"] } } : {}),
-      },
-      select: {
-        id: true,
-        fullName: true,
-      },
-      orderBy: { fullName: "asc" },
+      orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
     }),
   ]);
 
   const clientMap = new Map<string, ClientHoursRow>();
   const projectMap = new Map<string, ProjectHoursRow>();
-  const employeeMap = new Map<string, EmployeeHoursRow>();
 
   for (const entry of clientEntries) {
     const clientKey = entry.project.clientId;
@@ -245,36 +275,26 @@ export default async function ReportsPage({
     projectMap.set(projectKey, projectRow);
   }
 
-  for (const entry of employeeEntries) {
-    const employeeKey = `${entry.employeeId}__${entry.project.client.name}__${entry.project.name}__${entry.subProject?.name ?? "-"}`;
-    const employeeRow = employeeMap.get(employeeKey) ?? {
-      employeeId: entry.employeeId,
-      employeeName: entry.employee.fullName,
-      clientName: entry.project.client.name,
-      projectName: entry.project.name,
-      subProjectName: entry.subProject?.name ?? "-",
-      totalMinutes: 0,
-    };
-    employeeRow.totalMinutes += entry.minutesSpent;
-    employeeMap.set(employeeKey, employeeRow);
-  }
-
   const clientRows = Array.from(clientMap.values()).sort((a, b) => a.clientName.localeCompare(b.clientName));
   const projectRows = Array.from(projectMap.values()).sort((a, b) => {
     if (a.clientName !== b.clientName) return a.clientName.localeCompare(b.clientName);
     if (a.projectName !== b.projectName) return a.projectName.localeCompare(b.projectName);
     return a.subProjectName.localeCompare(b.subProjectName);
   });
-  const employeeRows = Array.from(employeeMap.values()).sort((a, b) => {
-    if (a.employeeName !== b.employeeName) return a.employeeName.localeCompare(b.employeeName);
-    if (a.clientName !== b.clientName) return a.clientName.localeCompare(b.clientName);
-    if (a.projectName !== b.projectName) return a.projectName.localeCompare(b.projectName);
-    return a.subProjectName.localeCompare(b.subProjectName);
-  });
+  const taskRows: TaskDetailRow[] = taskEntries.map((entry) => ({
+    id: entry.id,
+    clientName: entry.project.client.name,
+    projectName: entry.project.name,
+    subProjectName: entry.subProject?.name ?? "-",
+    taskName: entry.taskName,
+    taskDescription: entry.notes?.trim() ? entry.notes : "-",
+    employeeRole: formatRole(entry.employee.functionalRole),
+    totalMinutes: entry.minutesSpent,
+  }));
 
   const paginatedClientRows = paginateItems(clientRows, clientPage, DEFAULT_PAGE_SIZE);
   const paginatedProjectRows = paginateItems(projectRows, projectPage, DEFAULT_PAGE_SIZE);
-  const paginatedEmployeeRows = paginateItems(employeeRows, employeePage, DEFAULT_PAGE_SIZE);
+  const paginatedTaskRows = paginateItems(taskRows, taskPage, DEFAULT_PAGE_SIZE);
 
   const clientSearch = {
     clientFromDate,
@@ -289,12 +309,12 @@ export default async function ReportsPage({
     projectProjectId: projectProjectId === "all" ? undefined : projectProjectId,
   };
 
-  const employeeSearch = {
-    employeeFromDate,
-    employeeToDate,
-    employeeClientId: employeeClientId === "all" ? undefined : employeeClientId,
-    employeeProjectId: employeeProjectId === "all" ? undefined : employeeProjectId,
-    employeeId: employeeId === "all" ? undefined : employeeId,
+  const taskSearch = {
+    taskFromDate,
+    taskToDate,
+    taskClientId: taskClientId === "all" ? undefined : taskClientId,
+    taskProjectId: taskProjectId === "all" ? undefined : taskProjectId,
+    taskSubProjectId: taskSubProjectId === "all" ? undefined : taskSubProjectId,
   };
 
   return (
@@ -305,11 +325,23 @@ export default async function ReportsPage({
       />
 
       <section className="table-wrap">
-        <div className="border-b border-slate-200 px-4 py-4">
-          <h2 className="section-title">Client-wise hours</h2>
-          <p className="section-subtitle">Grouped by client for the selected date range.</p>
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4">
+          <div>
+            <h2 className="section-title">Client-wise hours</h2>
+            <p className="section-subtitle">Grouped by client for the selected date range.</p>
+          </div>
+          <Link
+            className="btn-secondary whitespace-nowrap"
+            href={buildExportHref("client", {
+              clientFromDate,
+              clientToDate,
+              clientClientId: clientClientId === "all" ? undefined : clientClientId,
+            })}
+          >
+            Export CSV
+          </Link>
         </div>
-        <div className="border-b border-slate-100 px-4 py-4">
+        <div className="relative z-20 border-b border-slate-100 px-4 py-4">
           <form className="flex flex-wrap items-end gap-3" method="get">
             <div className="w-full sm:w-[180px]">
               <input className="input w-full" type="date" name="clientFromDate" defaultValue={clientFromDate} />
@@ -318,18 +350,18 @@ export default async function ReportsPage({
               <input className="input w-full" type="date" name="clientToDate" defaultValue={clientToDate} />
             </div>
             <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
-            <SearchableCombobox
-              id="clientClientId"
-              name="clientClientId"
-              defaultValue={clientClientId}
-              options={[
-                { value: "all", label: "All clients" },
-                ...clientOptions.map((client) => ({ value: client.id, label: client.name })),
-              ]}
-              placeholder="All clients"
-              searchPlaceholder="Search clients..."
-              emptyLabel="No clients found."
-            />
+              <SearchableCombobox
+                id="clientClientId"
+                name="clientClientId"
+                defaultValue={clientClientId}
+                options={[
+                  { value: "all", label: "All clients" },
+                  ...clientOptions.map((client) => ({ value: client.id, label: client.name })),
+                ]}
+                placeholder="All clients"
+                searchPlaceholder="Search clients..."
+                emptyLabel="No clients found."
+              />
             </div>
             <div className="flex w-full flex-wrap gap-3 sm:w-auto">
               <button className="btn-secondary" type="submit">Apply</button>
@@ -370,51 +402,34 @@ export default async function ReportsPage({
       </section>
 
       <section className="table-wrap">
-        <div className="border-b border-slate-200 px-4 py-4">
-          <h2 className="section-title">Project / Sub-Project-wise hours</h2>
-          <p className="section-subtitle">Grouped by client, project, and sub-project for the selected date range.</p>
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4">
+          <div>
+            <h2 className="section-title">Project / Sub-Project-wise hours</h2>
+            <p className="section-subtitle">Grouped by client, project, and sub-project for the selected date range.</p>
+          </div>
+          <Link
+            className="btn-secondary whitespace-nowrap"
+            href={buildExportHref("project", {
+              projectFromDate,
+              projectToDate,
+              projectClientId: projectClientId === "all" ? undefined : projectClientId,
+              projectProjectId: projectProjectId === "all" ? undefined : projectProjectId,
+            })}
+          >
+            Export CSV
+          </Link>
         </div>
-        <div className="border-b border-slate-100 px-4 py-4">
-          <form className="flex flex-wrap items-end gap-3" method="get">
-            <div className="w-full sm:w-[180px]">
-              <input className="input w-full" type="date" name="projectFromDate" defaultValue={projectFromDate} />
-            </div>
-            <div className="w-full sm:w-[180px]">
-              <input className="input w-full" type="date" name="projectToDate" defaultValue={projectToDate} />
-            </div>
-            <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
-            <SearchableCombobox
-              id="projectClientId"
-              name="projectClientId"
-              defaultValue={projectClientId}
-              options={[
-                { value: "all", label: "All clients" },
-                ...clientOptions.map((client) => ({ value: client.id, label: client.name })),
-              ]}
-              placeholder="All clients"
-              searchPlaceholder="Search clients..."
-              emptyLabel="No clients found."
-            />
-            </div>
-            <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
-            <SearchableCombobox
-              id="projectProjectId"
-              name="projectProjectId"
-              defaultValue={projectProjectId}
-              options={[
-                { value: "all", label: "All projects" },
-                ...projectFilterOptions.map((project) => ({ value: project.id, label: project.name })),
-              ]}
-              placeholder="All projects"
-              searchPlaceholder="Search projects..."
-              emptyLabel="No projects found."
-            />
-            </div>
-            <div className="flex w-full flex-wrap gap-3 sm:w-auto">
-              <button className="btn-secondary" type="submit">Apply</button>
-              <a className="btn-secondary" href="/reports#project-wise-hours">Reset</a>
-            </div>
-          </form>
+        <div className="relative z-20 border-b border-slate-100 px-4 py-4">
+          <ProjectHoursFilterForm
+            action="/reports"
+            anchor="#project-wise-hours"
+            fromDate={projectFromDate}
+            toDate={projectToDate}
+            clientId={projectClientId}
+            projectId={projectProjectId}
+            clientOptions={clientOptions}
+            projectOptions={projectOptions}
+          />
         </div>
         <div id="project-wise-hours" className="overflow-x-auto">
           <table className="table-base">
@@ -453,101 +468,77 @@ export default async function ReportsPage({
       </section>
 
       <section className="table-wrap">
-        <div className="border-b border-slate-200 px-4 py-4">
-          <h2 className="section-title">Employee-wise hours</h2>
-          <p className="section-subtitle">Grouped by employee with client, project, and sub-project context.</p>
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4">
+          <div>
+            <h2 className="section-title">Task-wise detailed hours</h2>
+            <p className="section-subtitle">Detailed task entries for the selected date range, project, and sub-project.</p>
+          </div>
+          <Link
+            className="btn-secondary whitespace-nowrap"
+            href={buildExportHref("task", {
+              taskFromDate,
+              taskToDate,
+              taskClientId: taskClientId === "all" ? undefined : taskClientId,
+              taskProjectId: taskProjectId === "all" ? undefined : taskProjectId,
+              taskSubProjectId: taskSubProjectId === "all" ? undefined : taskSubProjectId,
+            })}
+          >
+            Export CSV
+          </Link>
         </div>
-        <div className="border-b border-slate-100 px-4 py-4">
-          <form className="flex flex-wrap items-end gap-3" method="get">
-            <div className="w-full sm:w-[180px]">
-              <input className="input w-full" type="date" name="employeeFromDate" defaultValue={employeeFromDate} />
-            </div>
-            <div className="w-full sm:w-[180px]">
-              <input className="input w-full" type="date" name="employeeToDate" defaultValue={employeeToDate} />
-            </div>
-            <div className="w-full sm:w-[220px] md:w-[240px] lg:w-[260px]">
-            <SearchableCombobox
-              id="employeeClientId"
-              name="employeeClientId"
-              defaultValue={employeeClientId}
-              options={[
-                { value: "all", label: "All clients" },
-                ...clientOptions.map((client) => ({ value: client.id, label: client.name })),
-              ]}
-              placeholder="All clients"
-              searchPlaceholder="Search clients..."
-              emptyLabel="No clients found."
-            />
-            </div>
-            <div className="w-full sm:w-[220px] md:w-[240px] lg:w-[260px]">
-            <SearchableCombobox
-              id="employeeProjectId"
-              name="employeeProjectId"
-              defaultValue={employeeProjectId}
-              options={[
-                { value: "all", label: "All projects" },
-                ...employeeProjectFilterOptions.map((project) => ({ value: project.id, label: project.name })),
-              ]}
-              placeholder="All projects"
-              searchPlaceholder="Search projects..."
-              emptyLabel="No projects found."
-            />
-            </div>
-            <div className="w-full sm:w-[220px] md:w-[240px] lg:w-[260px]">
-            <SearchableCombobox
-              id="employeeId"
-              name="employeeId"
-              defaultValue={employeeId}
-              options={[
-                { value: "all", label: "All employees" },
-                ...employeeUsers.map((employee) => ({ value: employee.id, label: employee.fullName })),
-              ]}
-              placeholder="All employees"
-              searchPlaceholder="Search employees..."
-              emptyLabel="No employees found."
-            />
-            </div>
-            <div className="flex w-full flex-wrap gap-3 sm:w-auto">
-              <button className="btn-secondary" type="submit">Apply</button>
-              <a className="btn-secondary" href="/reports#employee-wise-hours">Reset</a>
-            </div>
-          </form>
+        <div className="relative z-20 border-b border-slate-100 px-4 py-4">
+          <TaskDetailFilterForm
+            action="/reports"
+            anchor="#task-wise-hours"
+            fromDate={taskFromDate}
+            toDate={taskToDate}
+            clientId={taskClientId}
+            projectId={taskProjectId}
+            subProjectId={taskSubProjectId}
+            clientOptions={clientOptions}
+            projectOptions={projectOptions}
+            subProjectOptions={subProjectOptions}
+          />
         </div>
-        <div id="employee-wise-hours" className="overflow-x-auto">
+        <div id="task-wise-hours" className="overflow-x-auto">
           <table className="table-base">
             <thead className="table-head">
               <tr>
-                <th className="table-cell">Employee</th>
-                <th className="table-cell">Client</th>
+                <th className="table-cell">Client Name</th>
                 <th className="table-cell">Project Name</th>
                 <th className="table-cell">Sub-Project Name</th>
+                <th className="table-cell">Task Name</th>
+                <th className="table-cell">Task Description</th>
+                <th className="table-cell">Employee Role</th>
                 <th className="table-cell">Hours</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {paginatedEmployeeRows.items.map((row) => (
-                <tr key={`${row.employeeId}-${row.clientName}-${row.projectName}-${row.subProjectName}`}>
-                  <td className="table-cell">{row.employeeName}</td>
+              {paginatedTaskRows.items.map((row) => (
+                <tr key={row.id}>
                   <td className="table-cell">{row.clientName}</td>
                   <td className="table-cell">{row.projectName}</td>
                   <td className="table-cell">{row.subProjectName}</td>
+                  <td className="table-cell">{row.taskName}</td>
+                  <td className="table-cell">{row.taskDescription}</td>
+                  <td className="table-cell">{row.employeeRole}</td>
                   <td className="table-cell">{formatHours(row.totalMinutes)}</td>
                 </tr>
               ))}
-              {employeeRows.length === 0 ? (
-                <tr><td colSpan={5} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr>
+              {taskRows.length === 0 ? (
+                <tr><td colSpan={7} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr>
               ) : null}
             </tbody>
           </table>
         </div>
         <PaginationControls
           basePath="/reports"
-          currentPage={paginatedEmployeeRows.currentPage}
-          totalPages={paginatedEmployeeRows.totalPages}
-          totalItems={paginatedEmployeeRows.totalItems}
-          pageSize={paginatedEmployeeRows.pageSize}
-          searchParams={employeeSearch}
-          pageParam="employeePage"
+          currentPage={paginatedTaskRows.currentPage}
+          totalPages={paginatedTaskRows.totalPages}
+          totalItems={paginatedTaskRows.totalItems}
+          pageSize={paginatedTaskRows.pageSize}
+          searchParams={taskSearch}
+          pageParam="taskPage"
         />
       </section>
     </div>

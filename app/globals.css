@@ -7,7 +7,7 @@ body { @apply bg-slate-50 text-slate-900 antialiased; }
 .card { @apply rounded-2xl border border-slate-200 bg-white shadow-soft; }
 .section-title { @apply text-xl font-semibold tracking-tight text-slate-900; }
 .section-subtitle { @apply mt-1 text-sm text-slate-500; }
-.table-wrap { @apply overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft; }
+.table-wrap { @apply overflow-visible rounded-2xl border border-slate-200 bg-white shadow-soft; }
 .table-base { @apply min-w-full divide-y divide-slate-200; }
 .table-head { @apply bg-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-600; }
 .table-cell { @apply px-4 py-3 align-top text-sm text-slate-700; }

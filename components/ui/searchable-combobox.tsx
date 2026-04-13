@@ -103,7 +103,7 @@ export function SearchableCombobox({
   }
 
   return (
-    <div ref={wrapperRef} className="relative mt-1 w-full">
+    <div ref={wrapperRef} className="relative w-full">
       {name ? <input type="hidden" name={name} value={selectedValue} required={required} /> : null}
 
       <button
@@ -124,7 +124,7 @@ export function SearchableCombobox({
       </button>
 
       {isOpen ? (
-        <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+        <div className="absolute left-0 top-full z-[100] mt-2 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
           <div className="border-b border-slate-200 p-2">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
