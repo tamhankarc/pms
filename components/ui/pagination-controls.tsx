@@ -5,6 +5,7 @@ function buildHref(
   searchParams: Record<string, string | undefined>,
   page: number,
   pageParam: string,
+  anchor?: string,
 ) {
   const params = new URLSearchParams();
 
@@ -19,7 +20,8 @@ function buildHref(
   }
 
   const query = params.toString();
-  return query ? `${basePath}?${query}` : basePath;
+  const href = query ? `${basePath}?${query}` : basePath;
+  return anchor ? `${href}${anchor}` : href;
 }
 
 function getVisiblePages(currentPage: number, totalPages: number) {
@@ -57,6 +59,7 @@ export function PaginationControls({
   pageSize,
   searchParams,
   pageParam = "page",
+  anchor,
 }: {
   basePath: string;
   currentPage: number;
@@ -65,6 +68,7 @@ export function PaginationControls({
   pageSize: number;
   searchParams: Record<string, string | undefined>;
   pageParam?: string;
+  anchor?: string;
 }) {
   if (totalPages <= 1) return null;
 
@@ -84,7 +88,7 @@ export function PaginationControls({
 
           <div className="flex flex-wrap items-center justify-center gap-2">
             <Link
-              href={buildHref(basePath, searchParams, currentPage - 1, pageParam)}
+              href={buildHref(basePath, searchParams, currentPage - 1, pageParam, anchor)}
               className={navClass(currentPage <= 1)}
             >
               Previous
@@ -92,7 +96,7 @@ export function PaginationControls({
 
             {start > 1 ? (
               <>
-                <Link href={buildHref(basePath, searchParams, 1, pageParam)} className={pageClass(false)}>
+                <Link href={buildHref(basePath, searchParams, 1, pageParam, anchor)} className={pageClass(false)}>
                   1
                 </Link>
                 {start > 2 ? <span className="px-1 text-sm text-slate-400">…</span> : null}
@@ -102,7 +106,7 @@ export function PaginationControls({
             {pages.map((page) => (
               <Link
                 key={page}
-                href={buildHref(basePath, searchParams, page, pageParam)}
+                href={buildHref(basePath, searchParams, page, pageParam, anchor)}
                 className={pageClass(page === currentPage)}
               >
                 {page}
@@ -112,14 +116,14 @@ export function PaginationControls({
             {end < totalPages ? (
               <>
                 {end < totalPages - 1 ? <span className="px-1 text-sm text-slate-400">…</span> : null}
-                <Link href={buildHref(basePath, searchParams, totalPages, pageParam)} className={pageClass(false)}>
+                <Link href={buildHref(basePath, searchParams, totalPages, pageParam, anchor)} className={pageClass(false)}>
                   {totalPages}
                 </Link>
               </>
             ) : null}
 
             <Link
-              href={buildHref(basePath, searchParams, currentPage + 1, pageParam)}
+              href={buildHref(basePath, searchParams, currentPage + 1, pageParam, anchor)}
               className={navClass(currentPage >= totalPages)}
             >
               Next

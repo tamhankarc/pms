@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { FunctionalRoleCode } from "@prisma/client";
-import { ProjectHoursFilterForm, TaskDetailFilterForm } from "@/components/reports/report-filter-forms";
+import { MovieMinutesFilterForm, ProjectHoursFilterForm, TaskDetailFilterForm } from "@/components/reports/report-filter-forms";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -89,6 +89,15 @@ type TaskDetailRow = {
   totalMinutes: number;
 };
 
+type MovieMinutesRow = {
+  movieName: string;
+  clientName: string;
+  projectName: string;
+  subProjectName: string;
+  countryCode: string;
+  totalMinutes: number;
+};
+
 export default async function ReportsPage({
   searchParams,
 }: {
@@ -109,6 +118,14 @@ export default async function ReportsPage({
     taskSubProjectId?: string;
     taskCountryId?: string;
     taskPage?: string;
+    movieFromDate?: string;
+    movieToDate?: string;
+    movieMovieId?: string;
+    movieClientId?: string;
+    movieProjectId?: string;
+    movieSubProjectId?: string;
+    movieCountryId?: string;
+    moviePage?: string;
   }>;
 }) {
   const user = await requireUser();
@@ -135,9 +152,19 @@ export default async function ReportsPage({
   const taskCountryId = params.taskCountryId ?? "all";
   const taskPage = parsePageParam(params.taskPage);
 
+  const movieFromDate = normalizeDateInput(params.movieFromDate) ?? defaultMonthRange.fromDate;
+  const movieToDate = normalizeDateInput(params.movieToDate) ?? defaultMonthRange.toDate;
+  const movieMovieId = params.movieMovieId ?? "all";
+  const movieClientId = params.movieClientId ?? "all";
+  const movieProjectId = params.movieProjectId ?? "all";
+  const movieSubProjectId = params.movieSubProjectId ?? "all";
+  const movieCountryId = params.movieCountryId ?? "all";
+  const moviePage = parsePageParam(params.moviePage);
+
   const visibleProjects = await getVisibleProjects(user);
   const visibleProjectIds = visibleProjects.map((project) => project.id);
   const safeProjectIds = visibleProjectIds.length ? visibleProjectIds : ["__none__"];
+  const visibleClientIds = Array.from(new Set(visibleProjects.map((project) => project.clientId)));
 
   const clientOptions = Array.from(
     new Map(
@@ -149,7 +176,7 @@ export default async function ReportsPage({
     .map((project) => ({ id: project.id, name: project.name, clientId: project.clientId }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const [subProjectOptions, countryOptions] = await Promise.all([
+  const [subProjectOptions, countryOptions, movieOptions] = await Promise.all([
     db.subProject.findMany({
       where: {
         isActive: true,
@@ -171,6 +198,23 @@ export default async function ReportsPage({
       },
       orderBy: [{ isoCode: "asc" }, { name: "asc" }],
     }),
+    db.movie.findMany({
+      where: {
+        isActive: true,
+        clientId: { in: visibleClientIds.length ? visibleClientIds : ["__none__"] },
+      },
+      select: {
+        id: true,
+        title: true,
+        clientId: true,
+        client: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: [{ title: "asc" }],
+    }),
   ]);
 
   const normalizedSubProjectOptions = subProjectOptions.sort((a, b) => a.name.localeCompare(b.name));
@@ -180,6 +224,9 @@ export default async function ReportsPage({
       if (a.isoCode !== b.isoCode) return a.isoCode.localeCompare(b.isoCode);
       return a.name.localeCompare(b.name);
     });
+  const normalizedMovieOptions = movieOptions
+    .map((movie) => ({ id: movie.id, title: movie.title, clientId: movie.clientId, clientName: movie.client.name }))
+    .sort((a, b) => a.title.localeCompare(b.title));
 
   const supervisorAssignments =
     user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
@@ -212,13 +259,19 @@ export default async function ReportsPage({
     ? { employeeId: { in: visibleEmployeeIds.length ? visibleEmployeeIds : ["__none__"] } }
     : {};
 
-  const [{ fromBoundary: clientFromBoundary, toBoundary: clientToBoundary }, { fromBoundary: projectFromBoundary, toBoundary: projectToBoundary }, { fromBoundary: taskFromBoundary, toBoundary: taskToBoundary }] = [
+  const [
+    { fromBoundary: clientFromBoundary, toBoundary: clientToBoundary },
+    { fromBoundary: projectFromBoundary, toBoundary: projectToBoundary },
+    { fromBoundary: taskFromBoundary, toBoundary: taskToBoundary },
+    { fromBoundary: movieFromBoundary, toBoundary: movieToBoundary },
+  ] = [
     buildDateRange(clientFromDate, clientToDate),
     buildDateRange(projectFromDate, projectToDate),
     buildDateRange(taskFromDate, taskToDate),
+    buildDateRange(movieFromDate, movieToDate),
   ];
 
-  const [clientEntries, projectEntries, taskEntries] = await Promise.all([
+  const [clientEntries, projectEntries, taskEntries, movieEntries] = await Promise.all([
     db.timeEntry.findMany({
       where: {
         projectId: { in: safeProjectIds },
@@ -271,10 +324,31 @@ export default async function ReportsPage({
       },
       orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
     }),
+    db.timeEntry.findMany({
+      where: {
+        projectId: { in: safeProjectIds },
+        workDate: { gte: movieFromBoundary, lte: movieToBoundary },
+        movieId: { not: null },
+        ...(movieMovieId !== "all" ? { movieId: movieMovieId } : {}),
+        ...(movieClientId !== "all" ? { project: { is: { clientId: movieClientId } } } : {}),
+        ...(movieProjectId !== "all" ? { projectId: movieProjectId } : {}),
+        ...(movieSubProjectId !== "all" ? { subProjectId: movieSubProjectId } : {}),
+        ...(movieCountryId !== "all" ? { countryId: movieCountryId } : {}),
+        ...employeeWhereClause,
+      },
+      include: {
+        movie: true,
+        project: { include: { client: true } },
+        subProject: true,
+        country: true,
+      },
+      orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
+    }),
   ]);
 
   const clientMap = new Map<string, ClientHoursRow>();
   const projectMap = new Map<string, ProjectHoursRow>();
+  const movieMap = new Map<string, MovieMinutesRow>();
 
   for (const entry of clientEntries) {
     const clientKey = entry.project.clientId;
@@ -299,6 +373,23 @@ export default async function ReportsPage({
     projectMap.set(projectKey, projectRow);
   }
 
+  for (const entry of movieEntries) {
+    const movieName = entry.movie?.title ?? "-";
+    const countryCode = entry.country?.isoCode ?? "-";
+    const subProjectName = entry.subProject?.name ?? "-";
+    const movieKey = `${movieName}__${entry.project.client.name}__${entry.project.name}__${subProjectName}__${countryCode}`;
+    const movieRow = movieMap.get(movieKey) ?? {
+      movieName,
+      clientName: entry.project.client.name,
+      projectName: entry.project.name,
+      subProjectName,
+      countryCode,
+      totalMinutes: 0,
+    };
+    movieRow.totalMinutes += entry.minutesSpent;
+    movieMap.set(movieKey, movieRow);
+  }
+
   const clientRows = Array.from(clientMap.values()).sort((a, b) => a.clientName.localeCompare(b.clientName));
   const projectRows = Array.from(projectMap.values()).sort((a, b) => {
     if (a.clientName !== b.clientName) return a.clientName.localeCompare(b.clientName);
@@ -317,10 +408,18 @@ export default async function ReportsPage({
     employeeRole: formatRole(entry.employee.functionalRole),
     totalMinutes: entry.minutesSpent,
   }));
+  const movieRows = Array.from(movieMap.values()).sort((a, b) => {
+    if (a.movieName !== b.movieName) return a.movieName.localeCompare(b.movieName);
+    if (a.clientName !== b.clientName) return a.clientName.localeCompare(b.clientName);
+    if (a.projectName !== b.projectName) return a.projectName.localeCompare(b.projectName);
+    if (a.subProjectName !== b.subProjectName) return a.subProjectName.localeCompare(b.subProjectName);
+    return a.countryCode.localeCompare(b.countryCode);
+  });
 
   const paginatedClientRows = paginateItems(clientRows, clientPage, DEFAULT_PAGE_SIZE);
   const paginatedProjectRows = paginateItems(projectRows, projectPage, DEFAULT_PAGE_SIZE);
   const paginatedTaskRows = paginateItems(taskRows, taskPage, DEFAULT_PAGE_SIZE);
+  const paginatedMovieRows = paginateItems(movieRows, moviePage, DEFAULT_PAGE_SIZE);
 
   const clientSearch = {
     clientFromDate,
@@ -344,6 +443,16 @@ export default async function ReportsPage({
     taskCountryId: taskCountryId === "all" ? undefined : taskCountryId,
   };
 
+  const movieSearch = {
+    movieFromDate,
+    movieToDate,
+    movieMovieId: movieMovieId === "all" ? undefined : movieMovieId,
+    movieClientId: movieClientId === "all" ? undefined : movieClientId,
+    movieProjectId: movieProjectId === "all" ? undefined : movieProjectId,
+    movieSubProjectId: movieSubProjectId === "all" ? undefined : movieSubProjectId,
+    movieCountryId: movieCountryId === "all" ? undefined : movieCountryId,
+  };
+
   const allReportSearch = {
     ...clientSearch,
     ...(clientPage > 1 ? { clientPage: String(clientPage) } : {}),
@@ -351,6 +460,8 @@ export default async function ReportsPage({
     ...(projectPage > 1 ? { projectPage: String(projectPage) } : {}),
     ...taskSearch,
     ...(taskPage > 1 ? { taskPage: String(taskPage) } : {}),
+    ...movieSearch,
+    ...(moviePage > 1 ? { moviePage: String(moviePage) } : {}),
   };
 
   const clientPreservedParams = {
@@ -358,6 +469,8 @@ export default async function ReportsPage({
     ...(projectPage > 1 ? { projectPage: String(projectPage) } : {}),
     ...taskSearch,
     ...(taskPage > 1 ? { taskPage: String(taskPage) } : {}),
+    ...movieSearch,
+    ...(moviePage > 1 ? { moviePage: String(moviePage) } : {}),
   };
 
   const projectPreservedParams = {
@@ -365,6 +478,8 @@ export default async function ReportsPage({
     ...(clientPage > 1 ? { clientPage: String(clientPage) } : {}),
     ...taskSearch,
     ...(taskPage > 1 ? { taskPage: String(taskPage) } : {}),
+    ...movieSearch,
+    ...(moviePage > 1 ? { moviePage: String(moviePage) } : {}),
   };
 
   const taskPreservedParams = {
@@ -372,6 +487,17 @@ export default async function ReportsPage({
     ...(clientPage > 1 ? { clientPage: String(clientPage) } : {}),
     ...projectSearch,
     ...(projectPage > 1 ? { projectPage: String(projectPage) } : {}),
+    ...movieSearch,
+    ...(moviePage > 1 ? { moviePage: String(moviePage) } : {}),
+  };
+
+  const moviePreservedParams = {
+    ...clientSearch,
+    ...(clientPage > 1 ? { clientPage: String(clientPage) } : {}),
+    ...projectSearch,
+    ...(projectPage > 1 ? { projectPage: String(projectPage) } : {}),
+    ...taskSearch,
+    ...(taskPage > 1 ? { taskPage: String(taskPage) } : {}),
   };
 
   return (
@@ -384,7 +510,7 @@ export default async function ReportsPage({
       <section id="client-wise-hours" className="table-wrap">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4">
           <div>
-            <h2 className="section-title">Client-wise hours</h2>
+            <h2 className="section-title">Client-wise minutes</h2>
             <p className="section-subtitle">Grouped by client for the selected date range.</p>
           </div>
           <Link
@@ -468,13 +594,14 @@ export default async function ReportsPage({
           pageSize={paginatedClientRows.pageSize}
           searchParams={allReportSearch}
           pageParam="clientPage"
+          anchor="#client-wise-hours"
         />
       </section>
 
       <section id="project-wise-hours" className="table-wrap">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4">
           <div>
-            <h2 className="section-title">Project / Sub-Project-wise hours</h2>
+            <h2 className="section-title">Project / Sub-Project-wise minutes</h2>
             <p className="section-subtitle">Grouped by client, project, and sub-project for the selected date range.</p>
           </div>
           <Link
@@ -535,13 +662,14 @@ export default async function ReportsPage({
           pageSize={paginatedProjectRows.pageSize}
           searchParams={allReportSearch}
           pageParam="projectPage"
+          anchor="#project-wise-hours"
         />
       </section>
 
       <section id="task-wise-hours" className="table-wrap">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4">
           <div>
-            <h2 className="section-title">Task-wise detailed hours</h2>
+            <h2 className="section-title">Task-wise detailed minutes</h2>
             <p className="section-subtitle">Detailed task entries for the selected date range, project, and sub-project.</p>
           </div>
           <Link
@@ -616,6 +744,88 @@ export default async function ReportsPage({
           pageSize={paginatedTaskRows.pageSize}
           searchParams={allReportSearch}
           pageParam="taskPage"
+          anchor="#task-wise-hours"
+        />
+      </section>
+
+      <section id="movie-wise-minutes" className="table-wrap">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4">
+          <div>
+            <h2 className="section-title">Movie-wise minutes</h2>
+            <p className="section-subtitle">Grouped by movie, client, project, sub-project, and country for the selected date range.</p>
+          </div>
+          <Link
+            className="btn-secondary whitespace-nowrap"
+            href={buildExportHref("movie", {
+              movieFromDate,
+              movieToDate,
+              movieMovieId: movieMovieId === "all" ? undefined : movieMovieId,
+              movieClientId: movieClientId === "all" ? undefined : movieClientId,
+              movieProjectId: movieProjectId === "all" ? undefined : movieProjectId,
+              movieSubProjectId: movieSubProjectId === "all" ? undefined : movieSubProjectId,
+              movieCountryId: movieCountryId === "all" ? undefined : movieCountryId,
+            })}
+          >
+            Export CSV
+          </Link>
+        </div>
+        <div className="relative z-20 border-b border-slate-100 px-4 py-4">
+          <MovieMinutesFilterForm
+            action="/reports"
+            anchor="#movie-wise-minutes"
+            fromDate={movieFromDate}
+            toDate={movieToDate}
+            movieId={movieMovieId}
+            clientId={movieClientId}
+            projectId={movieProjectId}
+            subProjectId={movieSubProjectId}
+            countryId={movieCountryId}
+            movieOptions={normalizedMovieOptions}
+            clientOptions={clientOptions}
+            projectOptions={projectOptions}
+            subProjectOptions={normalizedSubProjectOptions}
+            countryOptions={normalizedCountryOptions}
+            preservedParams={moviePreservedParams}
+          />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="table-base">
+            <thead className="table-head">
+              <tr>
+                <th className="table-cell">Movie Name</th>
+                <th className="table-cell">Client Name</th>
+                <th className="table-cell">Project Name</th>
+                <th className="table-cell">Sub-Project Name</th>
+                <th className="table-cell">Country</th>
+                <th className="table-cell">Mins</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {paginatedMovieRows.items.map((row) => (
+                <tr key={`${row.movieName}-${row.clientName}-${row.projectName}-${row.subProjectName}-${row.countryCode}`}>
+                  <td className="table-cell">{row.movieName}</td>
+                  <td className="table-cell">{row.clientName}</td>
+                  <td className="table-cell">{row.projectName}</td>
+                  <td className="table-cell">{row.subProjectName}</td>
+                  <td className="table-cell">{row.countryCode}</td>
+                  <td className="table-cell">{formatHours(row.totalMinutes)}</td>
+                </tr>
+              ))}
+              {movieRows.length === 0 ? (
+                <tr><td colSpan={6} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+        <PaginationControls
+          basePath="/reports"
+          currentPage={paginatedMovieRows.currentPage}
+          totalPages={paginatedMovieRows.totalPages}
+          totalItems={paginatedMovieRows.totalItems}
+          pageSize={paginatedMovieRows.pageSize}
+          searchParams={allReportSearch}
+          pageParam="moviePage"
+          anchor="#movie-wise-minutes"
         />
       </section>
     </div>

@@ -26,6 +26,13 @@ type CountryOption = {
   isoCode: string;
 };
 
+type MovieOption = {
+  id: string;
+  title: string;
+  clientId: string;
+  clientName: string;
+};
+
 type PreservedParams = Record<string, string | undefined>;
 
 function renderHiddenParams(params: PreservedParams) {
@@ -261,6 +268,207 @@ export function TaskDetailFilterForm({
         <SearchableCombobox
           id="taskCountryId"
           name="taskCountryId"
+          value={selectedCountryId}
+          onValueChange={setSelectedCountryId}
+          options={[
+            { value: "all", label: "All countries" },
+            ...countryOptions.map((country) => ({
+              value: country.id,
+              label: country.isoCode ? `${country.isoCode} - ${country.name}` : country.name,
+              keywords: `${country.isoCode ?? ""} ${country.name}`,
+            })),
+          ]}
+          placeholder="All countries"
+          searchPlaceholder="Search countries..."
+          emptyLabel="No countries found."
+        />
+      </div>
+      <div className="flex w-full flex-wrap gap-3 sm:w-auto">
+        <button className="btn-secondary" type="submit">Apply</button>
+        <a className="btn-secondary" href={buildResetHref(anchor, preservedParams)}>Reset</a>
+      </div>
+    </form>
+  );
+}
+
+export function MovieMinutesFilterForm({
+  action,
+  anchor,
+  fromDate,
+  toDate,
+  movieId,
+  clientId,
+  projectId,
+  subProjectId,
+  countryId,
+  movieOptions,
+  clientOptions,
+  projectOptions,
+  subProjectOptions,
+  countryOptions,
+  preservedParams = {},
+}: {
+  action: string;
+  anchor: string;
+  fromDate: string;
+  toDate: string;
+  movieId: string;
+  clientId: string;
+  projectId: string;
+  subProjectId: string;
+  countryId: string;
+  movieOptions: MovieOption[];
+  clientOptions: ClientOption[];
+  projectOptions: ProjectOption[];
+  subProjectOptions: SubProjectOption[];
+  countryOptions: CountryOption[];
+  preservedParams?: PreservedParams;
+}) {
+  const [selectedMovieId, setSelectedMovieId] = useState(movieId);
+  const [selectedClientId, setSelectedClientId] = useState(clientId);
+  const [selectedProjectId, setSelectedProjectId] = useState(projectId);
+  const [selectedSubProjectId, setSelectedSubProjectId] = useState(subProjectId);
+  const [selectedCountryId, setSelectedCountryId] = useState(countryId);
+
+  const filteredMovies = useMemo(
+    () => movieOptions.filter((movie) => (selectedClientId === "all" ? true : movie.clientId === selectedClientId)),
+    [movieOptions, selectedClientId],
+  );
+
+  const effectiveMovieId =
+    selectedMovieId === "all" || filteredMovies.some((movie) => movie.id === selectedMovieId) ? selectedMovieId : "all";
+
+  const filteredProjects = useMemo(
+    () => projectOptions.filter((project) => (selectedClientId === "all" ? true : project.clientId === selectedClientId)),
+    [projectOptions, selectedClientId],
+  );
+
+  const effectiveProjectId =
+    selectedProjectId === "all" || filteredProjects.some((project) => project.id === selectedProjectId)
+      ? selectedProjectId
+      : "all";
+
+  const filteredSubProjects = useMemo(
+    () => subProjectOptions.filter((subProject) => (effectiveProjectId === "all" ? true : subProject.projectId === effectiveProjectId)),
+    [subProjectOptions, effectiveProjectId],
+  );
+
+  const effectiveSubProjectId =
+    selectedSubProjectId === "all" || filteredSubProjects.some((subProject) => subProject.id === selectedSubProjectId)
+      ? selectedSubProjectId
+      : "all";
+
+  return (
+    <form className="relative z-20 flex flex-wrap items-end gap-3" method="get" action={`${action}${anchor}`}>
+      {renderHiddenParams(preservedParams)}
+      <div className="w-full sm:w-[180px]">
+        <input className="input w-full" type="date" name="movieFromDate" defaultValue={fromDate} />
+      </div>
+      <div className="w-full sm:w-[180px]">
+        <input className="input w-full" type="date" name="movieToDate" defaultValue={toDate} />
+      </div>
+      <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
+        <SearchableCombobox
+          id="movieMovieId"
+          name="movieMovieId"
+          value={effectiveMovieId}
+          onValueChange={(value) => {
+            setSelectedMovieId(value);
+            if (value === "all") return;
+            const nextMovie = movieOptions.find((movie) => movie.id === value);
+            if (nextMovie && selectedClientId !== "all" && nextMovie.clientId !== selectedClientId) {
+              setSelectedClientId(nextMovie.clientId);
+              setSelectedProjectId("all");
+              setSelectedSubProjectId("all");
+            }
+          }}
+          options={[
+            { value: "all", label: "All movies" },
+            ...filteredMovies.map((movie) => ({
+              value: movie.id,
+              label: movie.title,
+              keywords: movie.clientName,
+            })),
+          ]}
+          placeholder="All movies"
+          searchPlaceholder="Search movies..."
+          emptyLabel="No movies found."
+        />
+      </div>
+      <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
+        <SearchableCombobox
+          id="movieClientId"
+          name="movieClientId"
+          value={selectedClientId}
+          onValueChange={(value) => {
+            setSelectedClientId(value);
+            const currentProject = projectOptions.find((project) => project.id === selectedProjectId);
+            if (currentProject && value !== "all" && currentProject.clientId !== value) {
+              setSelectedProjectId("all");
+              setSelectedSubProjectId("all");
+            }
+            const currentMovie = movieOptions.find((movie) => movie.id === selectedMovieId);
+            if (currentMovie && value !== "all" && currentMovie.clientId !== value) {
+              setSelectedMovieId("all");
+            }
+          }}
+          options={[
+            { value: "all", label: "All clients" },
+            ...clientOptions.map((client) => ({ value: client.id, label: client.name })),
+          ]}
+          placeholder="All clients"
+          searchPlaceholder="Search clients..."
+          emptyLabel="No clients found."
+        />
+      </div>
+      <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
+        <SearchableCombobox
+          id="movieProjectId"
+          name="movieProjectId"
+          value={effectiveProjectId}
+          onValueChange={(value) => {
+            setSelectedProjectId(value);
+            if (value === "all") {
+              setSelectedSubProjectId("all");
+              return;
+            }
+            const currentSubProject = subProjectOptions.find((subProject) => subProject.id === selectedSubProjectId);
+            if (currentSubProject && currentSubProject.projectId !== value) {
+              setSelectedSubProjectId("all");
+            }
+            const nextProject = projectOptions.find((project) => project.id === value);
+            if (nextProject && selectedClientId !== "all" && nextProject.clientId !== selectedClientId) {
+              setSelectedClientId(nextProject.clientId);
+            }
+          }}
+          options={[
+            { value: "all", label: "All projects" },
+            ...filteredProjects.map((project) => ({ value: project.id, label: project.name })),
+          ]}
+          placeholder="All projects"
+          searchPlaceholder="Search projects..."
+          emptyLabel="No projects found."
+        />
+      </div>
+      <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
+        <SearchableCombobox
+          id="movieSubProjectId"
+          name="movieSubProjectId"
+          value={effectiveSubProjectId}
+          onValueChange={setSelectedSubProjectId}
+          options={[
+            { value: "all", label: "All sub-projects" },
+            ...filteredSubProjects.map((subProject) => ({ value: subProject.id, label: subProject.name })),
+          ]}
+          placeholder="All sub-projects"
+          searchPlaceholder="Search sub-projects..."
+          emptyLabel="No sub-projects found."
+        />
+      </div>
+      <div className="w-full sm:w-[220px] md:w-[240px] lg:w-[260px]">
+        <SearchableCombobox
+          id="movieCountryId"
+          name="movieCountryId"
           value={selectedCountryId}
           onValueChange={setSelectedCountryId}
           options={[
