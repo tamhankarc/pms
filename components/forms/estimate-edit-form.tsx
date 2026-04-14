@@ -46,6 +46,14 @@ type LanguageOption = {
 
 const initialState: EstimateFormState = {};
 
+function getTodayDateString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function EstimateEditForm({
   estimate,
   projects,
@@ -78,6 +86,7 @@ export function EstimateEditForm({
   allowUnassignedSubProjects?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(updateEstimateAction, initialState);
+  const maxWorkDate = useMemo(() => getTodayDateString(), []);
 
   const clientOptions = useMemo(
     () =>
@@ -309,6 +318,7 @@ export function EstimateEditForm({
             type="date"
             name="workDate"
             defaultValue={estimate.workDate.toISOString().slice(0, 10)}
+            max={maxWorkDate}
             required
           />
         </div>

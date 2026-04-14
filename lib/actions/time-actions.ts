@@ -31,6 +31,19 @@ const timeUpdateSchema = timeSchema.extend({
   entryId: z.string().min(1, "Time entry is required."),
 });
 
+function getTodayInIndiaDateString() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function isFutureWorkDate(workDate: string) {
+  return workDate > getTodayInIndiaDateString();
+}
+
 async function getProjectForClient(projectId: string, clientId: string) {
   return db.project.findFirst({
     where: { id: projectId, clientId, isActive: true, status: "ACTIVE" },
@@ -331,6 +344,10 @@ export async function createTimeEntryAction(
       };
     }
 
+    if (isFutureWorkDate(parsed.data.workDate)) {
+      return { success: false, error: "Future date is not allowed for time entries." };
+    }
+
     const employeeId = parsed.data.employeeId || user.id;
 
     const canAct = await canActForEmployee(user, employeeId);
@@ -440,6 +457,10 @@ export async function updateTimeEntryAction(
         success: false,
         error: parsed.error.issues[0]?.message || "Invalid time entry update payload",
       };
+    }
+
+    if (isFutureWorkDate(parsed.data.workDate)) {
+      return { success: false, error: "Future date is not allowed for time entries." };
     }
 
     const entry = await db.timeEntry.findUnique({

@@ -50,6 +50,14 @@ type LanguageOption = {
 
 const initialState: TimeEntryFormState = {};
 
+function getTodayDateString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function TimeEntryCreateForm({
   projects,
   subProjects,
@@ -70,6 +78,7 @@ export function TimeEntryCreateForm({
   allowUnassignedSubProjects?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(createTimeEntryAction, initialState);
+  const maxWorkDate = useMemo(() => getTodayDateString(), []);
 
   const clientOptions = useMemo(
     () =>
@@ -345,7 +354,7 @@ export function TimeEntryCreateForm({
           <FormLabel htmlFor="workDate" required>
             Work date
           </FormLabel>
-          <input id="workDate" className="input" name="workDate" type="date" required />
+          <input id="workDate" className="input" name="workDate" type="date" defaultValue={maxWorkDate} max={maxWorkDate} required />
         </div>
 
         <div>

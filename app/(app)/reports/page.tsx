@@ -107,6 +107,7 @@ export default async function ReportsPage({
     taskClientId?: string;
     taskProjectId?: string;
     taskSubProjectId?: string;
+    taskCountryId?: string;
     taskPage?: string;
   }>;
 }) {
@@ -131,6 +132,7 @@ export default async function ReportsPage({
   const taskClientId = params.taskClientId ?? "all";
   const taskProjectId = params.taskProjectId ?? "all";
   const taskSubProjectId = params.taskSubProjectId ?? "all";
+  const taskCountryId = params.taskCountryId ?? "all";
   const taskPage = parsePageParam(params.taskPage);
 
   const visibleProjects = await getVisibleProjects(user);
@@ -147,8 +149,8 @@ export default async function ReportsPage({
     .map((project) => ({ id: project.id, name: project.name, clientId: project.clientId }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const subProjectOptions = (
-    await db.subProject.findMany({
+  const [subProjectOptions, countryOptions] = await Promise.all([
+    db.subProject.findMany({
       where: {
         isActive: true,
         projectId: { in: safeProjectIds },
@@ -159,8 +161,25 @@ export default async function ReportsPage({
         projectId: true,
       },
       orderBy: [{ name: "asc" }],
-    })
-  ).sort((a, b) => a.name.localeCompare(b.name));
+    }),
+    db.country.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        isoCode: true,
+      },
+      orderBy: [{ isoCode: "asc" }, { name: "asc" }],
+    }),
+  ]);
+
+  const normalizedSubProjectOptions = subProjectOptions.sort((a, b) => a.name.localeCompare(b.name));
+  const normalizedCountryOptions = countryOptions
+    .map((country) => ({ id: country.id, name: country.name, isoCode: country.isoCode ?? "-" }))
+    .sort((a, b) => {
+      if (a.isoCode !== b.isoCode) return a.isoCode.localeCompare(b.isoCode);
+      return a.name.localeCompare(b.name);
+    });
 
   const supervisorAssignments =
     user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
@@ -233,6 +252,7 @@ export default async function ReportsPage({
         ...(taskClientId !== "all" ? { project: { is: { clientId: taskClientId } } } : {}),
         ...(taskProjectId !== "all" ? { projectId: taskProjectId } : {}),
         ...(taskSubProjectId !== "all" ? { subProjectId: taskSubProjectId } : {}),
+        ...(taskCountryId !== "all" ? { countryId: taskCountryId } : {}),
         ...employeeWhereClause,
       },
       include: {
@@ -321,6 +341,37 @@ export default async function ReportsPage({
     taskClientId: taskClientId === "all" ? undefined : taskClientId,
     taskProjectId: taskProjectId === "all" ? undefined : taskProjectId,
     taskSubProjectId: taskSubProjectId === "all" ? undefined : taskSubProjectId,
+    taskCountryId: taskCountryId === "all" ? undefined : taskCountryId,
+  };
+
+  const allReportSearch = {
+    ...clientSearch,
+    ...(clientPage > 1 ? { clientPage: String(clientPage) } : {}),
+    ...projectSearch,
+    ...(projectPage > 1 ? { projectPage: String(projectPage) } : {}),
+    ...taskSearch,
+    ...(taskPage > 1 ? { taskPage: String(taskPage) } : {}),
+  };
+
+  const clientPreservedParams = {
+    ...projectSearch,
+    ...(projectPage > 1 ? { projectPage: String(projectPage) } : {}),
+    ...taskSearch,
+    ...(taskPage > 1 ? { taskPage: String(taskPage) } : {}),
+  };
+
+  const projectPreservedParams = {
+    ...clientSearch,
+    ...(clientPage > 1 ? { clientPage: String(clientPage) } : {}),
+    ...taskSearch,
+    ...(taskPage > 1 ? { taskPage: String(taskPage) } : {}),
+  };
+
+  const taskPreservedParams = {
+    ...clientSearch,
+    ...(clientPage > 1 ? { clientPage: String(clientPage) } : {}),
+    ...projectSearch,
+    ...(projectPage > 1 ? { projectPage: String(projectPage) } : {}),
   };
 
   return (
@@ -370,8 +421,21 @@ export default async function ReportsPage({
               />
             </div>
             <div className="flex w-full flex-wrap gap-3 sm:w-auto">
+              {Object.entries(clientPreservedParams).map(([key, value]) =>
+                value ? <input key={key} type="hidden" name={key} value={value} /> : null,
+              )}
               <button className="btn-secondary" type="submit">Apply</button>
-              <a className="btn-secondary" href="/reports#client-wise-hours">Reset</a>
+              <a
+                className="btn-secondary"
+                href={(() => {
+                  const search = new URLSearchParams();
+                  Object.entries(clientPreservedParams).forEach(([key, value]) => { if (value) search.set(key, value); });
+                  const query = search.toString();
+                  return query ? `/reports?${query}#client-wise-hours` : "/reports#client-wise-hours";
+                })()}
+              >
+                Reset
+              </a>
             </div>
           </form>
         </div>
@@ -402,7 +466,7 @@ export default async function ReportsPage({
           totalPages={paginatedClientRows.totalPages}
           totalItems={paginatedClientRows.totalItems}
           pageSize={paginatedClientRows.pageSize}
-          searchParams={clientSearch}
+          searchParams={allReportSearch}
           pageParam="clientPage"
         />
       </section>
@@ -435,6 +499,7 @@ export default async function ReportsPage({
             projectId={projectProjectId}
             clientOptions={clientOptions}
             projectOptions={projectOptions}
+            preservedParams={projectPreservedParams}
           />
         </div>
         <div className="overflow-x-auto">
@@ -468,7 +533,7 @@ export default async function ReportsPage({
           totalPages={paginatedProjectRows.totalPages}
           totalItems={paginatedProjectRows.totalItems}
           pageSize={paginatedProjectRows.pageSize}
-          searchParams={projectSearch}
+          searchParams={allReportSearch}
           pageParam="projectPage"
         />
       </section>
@@ -487,6 +552,7 @@ export default async function ReportsPage({
               taskClientId: taskClientId === "all" ? undefined : taskClientId,
               taskProjectId: taskProjectId === "all" ? undefined : taskProjectId,
               taskSubProjectId: taskSubProjectId === "all" ? undefined : taskSubProjectId,
+              taskCountryId: taskCountryId === "all" ? undefined : taskCountryId,
             })}
           >
             Export CSV
@@ -501,9 +567,12 @@ export default async function ReportsPage({
             clientId={taskClientId}
             projectId={taskProjectId}
             subProjectId={taskSubProjectId}
+            countryId={taskCountryId}
             clientOptions={clientOptions}
             projectOptions={projectOptions}
-            subProjectOptions={subProjectOptions}
+            subProjectOptions={normalizedSubProjectOptions}
+            countryOptions={normalizedCountryOptions}
+            preservedParams={taskPreservedParams}
           />
         </div>
         <div className="overflow-x-auto">
@@ -545,7 +614,7 @@ export default async function ReportsPage({
           totalPages={paginatedTaskRows.totalPages}
           totalItems={paginatedTaskRows.totalItems}
           pageSize={paginatedTaskRows.pageSize}
-          searchParams={taskSearch}
+          searchParams={allReportSearch}
           pageParam="taskPage"
         />
       </section>

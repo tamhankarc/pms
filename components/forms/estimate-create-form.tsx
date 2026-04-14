@@ -50,6 +50,14 @@ type LanguageOption = {
 
 const initialState: EstimateFormState = {};
 
+function getTodayDateString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function EstimateCreateForm({
   projects,
   subProjects,
@@ -74,6 +82,7 @@ export function EstimateCreateForm({
   allowUnassignedSubProjects?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(createEstimateAction, initialState);
+  const maxWorkDate = useMemo(() => getTodayDateString(), []);
 
   const clientOptions = useMemo(
     () =>
@@ -352,7 +361,7 @@ export function EstimateCreateForm({
           <FormLabel htmlFor="workDate" required>
             Work date
           </FormLabel>
-          <input id="workDate" className="input" type="date" name="workDate" required />
+          <input id="workDate" className="input" type="date" name="workDate" defaultValue={maxWorkDate} max={maxWorkDate} required />
         </div>
 
         <div>

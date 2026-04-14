@@ -45,6 +45,14 @@ type LanguageOption = {
 
 const initialState: TimeEntryFormState = {};
 
+function getTodayDateString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function TimeEntryEditForm({
   entry,
   countries,
@@ -79,6 +87,7 @@ export function TimeEntryEditForm({
   allowUnassignedSubProjects?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(updateTimeEntryAction, initialState);
+  const maxWorkDate = useMemo(() => getTodayDateString(), []);
 
   const clientOptions = useMemo(
     () =>
@@ -310,6 +319,7 @@ export function TimeEntryEditForm({
             name="workDate"
             type="date"
             defaultValue={new Date(entry.workDate).toISOString().slice(0, 10)}
+            max={maxWorkDate}
             required
           />
         </div>

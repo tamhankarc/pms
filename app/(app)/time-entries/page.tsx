@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
-import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { ListReportFilters } from "@/components/forms/list-report-filters";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -126,10 +126,6 @@ export default async function TimeEntriesPage({
     ).values(),
   ).sort((a, b) => a.name.localeCompare(b.name));
 
-  const projectOptions = projects.filter((project) =>
-    selectedClientId === "all" ? true : project.clientId === selectedClientId,
-  );
-
   const { items: paginatedEntries, currentPage, totalPages, totalItems, pageSize } = paginateItems(
     entries,
     page,
@@ -153,78 +149,19 @@ export default async function TimeEntriesPage({
       />
 
       <div className="card p-4">
-        <form method="get" className="flex flex-wrap items-end gap-3">
-          <div className="w-full sm:w-[180px]">
-            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor="fromDate">
-              Date from
-            </label>
-            <input
-              id="fromDate"
-              name="fromDate"
-              type="date"
-              defaultValue={selectedFromDate}
-              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-            />
-          </div>
-
-          <div className="w-full sm:w-[180px]">
-            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor="toDate">
-              Date to
-            </label>
-            <input
-              id="toDate"
-              name="toDate"
-              type="date"
-              defaultValue={selectedToDate}
-              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-            />
-          </div>
-
-          <div className="w-full min-w-0 sm:w-[260px] lg:w-[300px]">
-            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor="clientId">
-              Client
-            </label>
-            <SearchableCombobox
-              id="clientId"
-              name="clientId"
-              defaultValue={selectedClientId}
-              options={[
-                { value: "all", label: "All clients" },
-                ...clientOptions.map((client) => ({ value: client.id, label: client.name })),
-              ]}
-              placeholder="All clients"
-              searchPlaceholder="Search clients..."
-              emptyLabel="No clients found."
-            />
-          </div>
-
-          <div className="w-full min-w-0 sm:w-[260px] lg:w-[300px]">
-            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor="projectId">
-              Project
-            </label>
-            <SearchableCombobox
-              id="projectId"
-              name="projectId"
-              defaultValue={selectedProjectId}
-              options={[
-                { value: "all", label: "All projects" },
-                ...projectOptions.map((project) => ({ value: project.id, label: project.name })),
-              ]}
-              placeholder="All projects"
-              searchPlaceholder="Search projects..."
-              emptyLabel="No projects found."
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <button className="btn-secondary" type="submit">
-              Apply
-            </button>
-            <Link className="btn-secondary" href="/time-entries">
-              Reset
-            </Link>
-          </div>
-        </form>
+        <ListReportFilters
+          basePath="/time-entries"
+          selectedFromDate={selectedFromDate}
+          selectedToDate={selectedToDate}
+          selectedClientId={selectedClientId}
+          selectedProjectId={selectedProjectId}
+          clientOptions={clientOptions}
+          projectOptions={projects.map((project) => ({
+            id: project.id,
+            name: project.name,
+            clientId: project.clientId,
+          }))}
+        />
       </div>
 
       <div className="table-wrap overflow-x-auto">

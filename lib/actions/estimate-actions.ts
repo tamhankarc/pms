@@ -29,6 +29,19 @@ const estimateUpdateSchema = estimateSchema.extend({
   estimateId: z.string().min(1, "Estimate is required."),
 });
 
+function getTodayInIndiaDateString() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function isFutureWorkDate(workDate: string) {
+  return workDate > getTodayInIndiaDateString();
+}
+
 const reviewEstimateSchema = z.object({
   estimateId: z.string().min(1, "Estimate is required."),
   action: z.enum(["APPROVED", "REJECTED", "REVISED"]),
@@ -325,6 +338,10 @@ export async function createEstimateAction(
       };
     }
 
+    if (isFutureWorkDate(parsed.data.workDate)) {
+      return { success: false, error: "Future date is not allowed for estimates." };
+    }
+
     const employeeId = parsed.data.employeeId || user.id;
 
     const canAct = await canActForEstimateEmployee(user, employeeId);
@@ -421,6 +438,10 @@ export async function updateEstimateAction(
         success: false,
         error: parsed.error.issues[0]?.message || "Invalid estimate payload",
       };
+    }
+
+    if (isFutureWorkDate(parsed.data.workDate)) {
+      return { success: false, error: "Future date is not allowed for estimates." };
     }
 
     const estimate = await db.estimate.findUnique({

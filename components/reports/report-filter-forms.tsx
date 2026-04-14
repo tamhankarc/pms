@@ -20,6 +20,29 @@ type SubProjectOption = {
   projectId: string;
 };
 
+type CountryOption = {
+  id: string;
+  name: string;
+  isoCode: string;
+};
+
+type PreservedParams = Record<string, string | undefined>;
+
+function renderHiddenParams(params: PreservedParams) {
+  return Object.entries(params).map(([key, value]) =>
+    value ? <input key={key} type="hidden" name={key} value={value} /> : null,
+  );
+}
+
+function buildResetHref(anchor: string, params: PreservedParams) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) search.set(key, value);
+  }
+  const query = search.toString();
+  return query ? `/reports?${query}${anchor}` : `/reports${anchor}`;
+}
+
 export function ProjectHoursFilterForm({
   action,
   anchor,
@@ -29,6 +52,7 @@ export function ProjectHoursFilterForm({
   projectId,
   clientOptions,
   projectOptions,
+  preservedParams = {},
 }: {
   action: string;
   anchor: string;
@@ -38,6 +62,7 @@ export function ProjectHoursFilterForm({
   projectId: string;
   clientOptions: ClientOption[];
   projectOptions: ProjectOption[];
+  preservedParams?: PreservedParams;
 }) {
   const [selectedClientId, setSelectedClientId] = useState(clientId);
   const [selectedProjectId, setSelectedProjectId] = useState(projectId);
@@ -52,6 +77,7 @@ export function ProjectHoursFilterForm({
 
   return (
     <form className="relative z-20 flex flex-wrap items-end gap-3" method="get" action={`${action}${anchor}`}>
+      {renderHiddenParams(preservedParams)}
       <div className="w-full sm:w-[180px]">
         <input className="input w-full" type="date" name="projectFromDate" defaultValue={fromDate} />
       </div>
@@ -96,7 +122,7 @@ export function ProjectHoursFilterForm({
       </div>
       <div className="flex w-full flex-wrap gap-3 sm:w-auto">
         <button className="btn-secondary" type="submit">Apply</button>
-        <a className="btn-secondary" href={`/reports${anchor}`}>Reset</a>
+        <a className="btn-secondary" href={buildResetHref(anchor, preservedParams)}>Reset</a>
       </div>
     </form>
   );
@@ -110,9 +136,12 @@ export function TaskDetailFilterForm({
   clientId,
   projectId,
   subProjectId,
+  countryId,
   clientOptions,
   projectOptions,
   subProjectOptions,
+  countryOptions,
+  preservedParams = {},
 }: {
   action: string;
   anchor: string;
@@ -121,13 +150,17 @@ export function TaskDetailFilterForm({
   clientId: string;
   projectId: string;
   subProjectId: string;
+  countryId: string;
   clientOptions: ClientOption[];
   projectOptions: ProjectOption[];
   subProjectOptions: SubProjectOption[];
+  countryOptions: CountryOption[];
+  preservedParams?: PreservedParams;
 }) {
   const [selectedClientId, setSelectedClientId] = useState(clientId);
   const [selectedProjectId, setSelectedProjectId] = useState(projectId);
   const [selectedSubProjectId, setSelectedSubProjectId] = useState(subProjectId);
+  const [selectedCountryId, setSelectedCountryId] = useState(countryId);
 
   const filteredProjects = useMemo(
     () => projectOptions.filter((project) => (selectedClientId === "all" ? true : project.clientId === selectedClientId)),
@@ -152,6 +185,7 @@ export function TaskDetailFilterForm({
 
   return (
     <form className="relative z-20 flex flex-wrap items-end gap-3" method="get" action={`${action}${anchor}`}>
+      {renderHiddenParams(preservedParams)}
       <div className="w-full sm:w-[180px]">
         <input className="input w-full" type="date" name="taskFromDate" defaultValue={fromDate} />
       </div>
@@ -223,9 +257,28 @@ export function TaskDetailFilterForm({
           emptyLabel="No sub-projects found."
         />
       </div>
+      <div className="w-full sm:w-[220px] md:w-[240px] lg:w-[260px]">
+        <SearchableCombobox
+          id="taskCountryId"
+          name="taskCountryId"
+          value={selectedCountryId}
+          onValueChange={setSelectedCountryId}
+          options={[
+            { value: "all", label: "All countries" },
+            ...countryOptions.map((country) => ({
+              value: country.id,
+              label: country.isoCode ? `${country.isoCode} - ${country.name}` : country.name,
+              keywords: `${country.isoCode ?? ""} ${country.name}`,
+            })),
+          ]}
+          placeholder="All countries"
+          searchPlaceholder="Search countries..."
+          emptyLabel="No countries found."
+        />
+      </div>
       <div className="flex w-full flex-wrap gap-3 sm:w-auto">
         <button className="btn-secondary" type="submit">Apply</button>
-        <a className="btn-secondary" href={`/reports${anchor}`}>Reset</a>
+        <a className="btn-secondary" href={buildResetHref(anchor, preservedParams)}>Reset</a>
       </div>
     </form>
   );

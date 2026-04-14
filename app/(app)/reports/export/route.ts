@@ -137,6 +137,7 @@ export async function GET(request: Request) {
     const taskClientId = searchParams.get("taskClientId") ?? "all";
     const taskProjectId = searchParams.get("taskProjectId") ?? "all";
     const taskSubProjectId = searchParams.get("taskSubProjectId") ?? "all";
+    const taskCountryId = searchParams.get("taskCountryId") ?? "all";
     const { fromBoundary, toBoundary } = buildDateRange(fromDate, toDate);
 
     const entries = await db.timeEntry.findMany({
@@ -146,6 +147,7 @@ export async function GET(request: Request) {
         ...(taskClientId !== "all" ? { project: { is: { clientId: taskClientId } } } : {}),
         ...(taskProjectId !== "all" ? { projectId: taskProjectId } : {}),
         ...(taskSubProjectId !== "all" ? { subProjectId: taskSubProjectId } : {}),
+        ...(taskCountryId !== "all" ? { countryId: taskCountryId } : {}),
         ...employeeWhereClause,
       },
       include: {
