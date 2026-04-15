@@ -8,6 +8,7 @@ import { getVisibleProjects } from "@/lib/queries";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 import { formatMinutes } from "@/lib/utils";
 import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/permissions";
+import { deleteTimeEntryAction } from "@/lib/actions/time-actions";
 
 function normalizeDateInput(value?: string) {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
@@ -184,6 +185,11 @@ export default async function TimeEntriesPage({
                 entry.employeeId === user.id ||
                 ((user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) &&
                   managedIds.has(entry.employeeId));
+              const canDelete =
+                ["ADMIN", "MANAGER", "TEAM_LEAD"].includes(user.userType) &&
+                (canFullyModerateProject(user) ||
+                  ((user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) &&
+                    managedIds.has(entry.employeeId)));
 
               return (
                 <tr key={entry.id}>
@@ -230,16 +236,30 @@ export default async function TimeEntriesPage({
                   </td>
 
                   <td className="table-cell align-top min-w-[96px] xl:min-w-[110px] whitespace-nowrap">
-                    {canEdit ? (
-                      <Link
-                        className="btn-secondary inline-flex min-w-[64px] xl:min-w-[68px] justify-center whitespace-nowrap text-[11px] xl:text-xs px-2 xl:px-3"
-                        href={`/time-entries/${entry.id}`}
-                      >
-                        Edit
-                      </Link>
-                    ) : (
-                      <span className="text-[11px] xl:text-xs text-slate-400 whitespace-nowrap">No action</span>
-                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {canEdit ? (
+                        <Link
+                          className="btn-secondary inline-flex min-w-[64px] xl:min-w-[68px] justify-center whitespace-nowrap text-[11px] xl:text-xs px-2 xl:px-3"
+                          href={`/time-entries/${entry.id}`}
+                        >
+                          Edit
+                        </Link>
+                      ) : null}
+                      {canDelete ? (
+                        <form action={deleteTimeEntryAction}>
+                          <input type="hidden" name="entryId" value={entry.id} />
+                          <button
+                            className="btn-secondary inline-flex min-w-[64px] xl:min-w-[68px] justify-center whitespace-nowrap px-2 text-[11px] xl:px-3 xl:text-xs"
+                            type="submit"
+                          >
+                            Delete
+                          </button>
+                        </form>
+                      ) : null}
+                      {!canEdit && !canDelete ? (
+                        <span className="text-[11px] xl:text-xs text-slate-400 whitespace-nowrap">No action</span>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               );

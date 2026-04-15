@@ -1,146 +1,301 @@
-# PMS Next.js Starter
+# Project Management System (PMS)
 
-A production-minded starter for your internal **Project Management & Billing System** built with **Next.js App Router**, **Tailwind CSS**, **Prisma**, and **MySQL**.
+A full-featured internal **Project Management System** built with **Next.js App Router**, **TypeScript**, **Tailwind CSS**, **Prisma**, and **MySQL**.
 
-## What this starter already includes
+This application is designed to manage clients, projects, sub-projects, users, assignments, time entries, estimates, reports, and billing-related workflows with role-based access control.
 
-- Role-based app shell and login
-- Platform user types: Admin, Manager, Team Lead, Employee, Report Viewer
-- Fixed functional role per employee/team lead for reporting
-- Employee groups for project visibility
-- Client-first project model with **optional movie linkage**
-- Time entry submission and moderation
-- Estimate submission and moderation
-- Team Lead ↔ Employee assignment model
-- Project billing transactions:
-  - Partial billing
-  - Upgrade before completion
-  - Upgrade after completion
-  - Adjustment
-- Seed data and sample dashboard/report pages
+## Core technology stack
 
-## Important moderation rule already enforced
+- Next.js
+- React
+- TypeScript
+- Tailwind CSS
+- Prisma ORM
+- MySQL
+- JWT-based session authentication stored in HTTP-only cookies
 
-- Every employee can be assigned to one or more Team Leads.
-- A Team Lead can only moderate **time entries** and **estimates** for employees explicitly assigned to them.
-- Admin and Manager can perform **full project-level moderation**.
+## Main functional areas
 
-## 1) Local setup in WSL
+### Authentication and access control
+- Login with username or email
+- Password hashing and secure session cookies
+- Role-based routing and server-side permission checks
+- User types supported:
+  - Admin
+  - Manager
+  - Team Lead
+  - Employee
+  - Report Viewer
+  - Accounts
+- Functional role support for scoped manager and team-lead workflows
 
-### Prerequisites
+### Dashboard
+- Summary cards and operational overviews
+- Billing-focused visibility for permitted roles
+- Reporting and workflow shortcuts
 
-- Node.js 20.19+ or 22.12+ or 24+ recommended by Prisma's current Next.js guide. citeturn584036view0
-- MySQL running locally in WSL, Docker, or another reachable host
+### User management
+- Create users
+- Edit users
+- Activate/deactivate users
+- Change password
+- Profile management
+- Functional role mapping
+- Role-based user visibility and moderation rules
+
+### Client management
+- Create and edit clients
+- Client-level settings that control whether Countries, Movies, and Languages appear in Time Entries and Estimates
+- Optional project-type behavior controlled from client-level settings
+
+### Country and language management
+- Manage country master list
+- Manage language master list
+- Country ISO code usage in reports and filters
+- Active/inactive controls
+
+### Movie management
+- Create and edit movies
+- Client-linked movie records
+- Use movies in time entries and reporting
+- Movie-wise reporting with filters and CSV export
+
+### Project management
+- Create and edit projects
+- Status support such as Draft, Active, On Hold, Completed, and Archived
+- Client-linked project ownership
+- Assignment-aware project visibility
+- Project-level flags that can override client-level entry field visibility
+
+### Sub-project management
+- Create and edit sub-projects
+- Client -> Project dependent selection
+- Sub-project level override options for Countries and Movies visibility in entries
+- Assignment-ready structure for user/project mapping
+
+### Team lead assignments
+- Assign employees to team leads
+- Team Lead moderation limited to assigned employees
+- Functional-role matching rules for review/moderation
+
+### User assignments
+- Assign users at project level or sub-project level
+- Client -> Project -> Sub-Project dependent filtering
+- Project-level assignment and sub-project-level assignment support
+- Assignment validation to prevent invalid removals when entries already exist
+
+### Time entries
+- Create time entries
+- Edit time entries
+- Delete time entries for Admin / Manager / Team Lead users with valid access
+- Client -> Project dependent filters on list pages
+- Project / Sub-project / Country / Movie / Language support depending on client/project/sub-project settings
+- Prevent future dates on create and edit
+- Default date support can be set to today in create forms
+- Status workflow and moderation
+- Pagination on list page
+
+### Estimates
+- Create estimates
+- Edit and resubmit estimates
+- Delete estimates for Admin / Manager / Team Lead users with valid access
+- Client -> Project dependent filters on list pages
+- Project / Sub-project / Country / Movie / Language support depending on client/project/sub-project settings
+- Prevent future dates on create and edit
+- Review and moderation workflow
+- Pagination on list page
+
+### Billing and transactions
+- Billing transactions stored against projects
+- Effective date support
+- Billing transaction type support
+- Billing dashboard visibility for authorized roles
+
+### Reports
+Reports currently include:
+- Client-wise hours
+- Project / Sub-Project-wise hours
+- Task-wise detailed hours
+- Movie-wise minutes
+
+Report capabilities include:
+- Independent filter sets per report section
+- Date range filters
+- Client / Project / Sub-Project dependent filters
+- Country filters where applicable
+- Movie-based dependent filtering in the Movie-wise report
+- Pagination
+- Anchor-based focus retention on Apply and Pagination
+- CSV export for all supported report sections
+- Employee-wise report section kept hidden unless needed later
+
+## Important rules already enforced
+- Team Leads can only act on employees assigned to them
+- Role-scoped Managers are limited by matching functional role rules where applicable
+- Project and sub-project visibility is assignment-aware
+- Entry forms validate whether selected client/project/sub-project/movie/language/country combinations are valid
+- Future dates are blocked in Time Entries and Estimates
+
+## Prerequisites
+
+Install the following before setup:
+
+- Node.js 20 or newer
+- npm
+- MySQL 8.x recommended
 - Git
 
-### Create env file
+Recommended but optional:
+- Linux / WSL / macOS shell
+- Process manager such as PM2, systemd, or Docker Compose for non-development environments
+- Reverse proxy such as Nginx or Caddy for production hosting
+- Object storage such as S3-compatible storage if the project is extended with file uploads
+- Email provider if notification or reminder functionality is added later
 
+## Required environment variables
+
+Create a `.env` file based on `.env.example`.
+
+Typical required values:
+
+```env
+DATABASE_URL="mysql://username:password@127.0.0.1:3306/pms_db"
+SESSION_SECRET="replace-with-a-long-random-random-secret"
+APP_URL="http://localhost:3000"
+AUDIT_LOG_ENABLED="true"
+```
+
+Use a long random value for `SESSION_SECRET`.
+
+## Installation steps
+
+### 1. Copy environment file
 ```bash
 cp .env.example .env
 ```
 
-Update `.env`:
+### 2. Update environment variables
+Set your database connection, app URL, session secret, and any optional flags.
 
-```env
-DATABASE_URL="mysql://root:password@127.0.0.1:3306/pms_db"
-SESSION_SECRET="replace-with-a-long-random-secret"
-APP_URL="http://localhost:3000"
-```
-
-### Install dependencies
-
+### 3. Install dependencies
 ```bash
 npm install
 ```
 
-### Create database
+### 4. Create the database
+Example MySQL command:
 
 ```sql
 CREATE DATABASE pms_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-### Generate Prisma client and push schema
-
+### 5. Generate Prisma client
 ```bash
 npx prisma generate
+```
+
+### 6. Apply schema
+For a fresh environment:
+```bash
 npx prisma db push
 ```
 
-### Seed the database
+If you are using migrations in your environment:
+```bash
+npx prisma migrate deploy
+```
 
+### 7. Seed sample data
 ```bash
 npm run db:seed
 ```
 
-### Start development server
-
+### 8. Start development server
 ```bash
 npm run dev
 ```
 
 Open:
-
 ```text
 http://localhost:3000/login
 ```
 
-### Seed credentials
+## Seed credentials
 
-- Admin: `admin@company.com` / `Admin@123`
-- Manager: `manager@company.com` / `Manager@123`
-- Team Lead: `lead@company.com` / `Lead@123`
-- Employee: `dev1@company.com` / `Employee@123`
+If seed data is enabled in the current project version, typical sample users may include:
+- Admin
+- Manager
+- Team Lead
+- Employee
 
-## 2) Suggested WSL workflow
+Check `prisma/seed.ts` for the exact current credentials and demo records used in your copy.
+
+## Useful development commands
 
 ```bash
-cd ~/projects
-unzip pms-nextjs.zip
-cd pms-nextjs
-cp .env.example .env
 npm install
-npx prisma db push
-npm run db:seed
 npm run dev
+npm run build
+npm run lint
+npx prisma generate
+npx prisma db push
+npx prisma migrate deploy
+npm run db:seed
 ```
 
-If you use VS Code:
+## Production checklist
 
-```bash
-code .
-```
+Before going live, remember the following:
 
-## 3) Deploying to Vercel + Railway
+- Use a strong production `SESSION_SECRET`
+- Use production database credentials with least-privilege DB access
+- Keep `NODE_ENV=production`
+- Make sure cookies are served over HTTPS
+- Put the app behind a reverse proxy and TLS/SSL
+- Store secrets in the server environment, never in source control
+- Take regular database backups
+- Test Prisma generate and migration/deploy flow in the target environment
+- Verify all required environment variables are available at build time and runtime
+- Review audit-log settings and keep them enabled where required
+- Confirm timezone handling for reports, time entries, estimates, and scheduled jobs
+- Monitor server logs and application errors
+- Restrict direct public access to the database
+- Run the app with a process manager or containers so it restarts automatically after failure or reboot
+- Review CORS, headers, and security hardening if the app is exposed publicly
+- Validate CSV export access by role before release
+- If email and reminders are added later, configure SPF / DKIM / provider credentials before enabling them
 
-This repository is ready for the setup you described:
+## Notes for deployment in any environment
 
-- **Vercel** for the Next.js app
-- **Railway MySQL** for the database
+This application can be deployed in any environment that supports:
+- Node.js runtime
+- MySQL connectivity
+- Environment variable injection
+- Ability to run Prisma generate and schema deployment commands
+- Persistent process management for the application server
 
-Prisma documents a Next.js + Prisma deployment flow to Vercel, and Vercel's Railway integration can expose Railway database variables such as `DATABASE_URL` to Vercel deployments. citeturn584036view0turn584036view2
+Typical deployment approaches:
+- Single Linux server
+- VPS with reverse proxy
+- Docker / Docker Compose
+- Container platform
+- Managed Node.js hosting with external MySQL
 
-### Railway
+## Project structure highlights
 
-1. Create a Railway project
-2. Add a **MySQL** database service
-3. Copy the generated `DATABASE_URL`
+- `app/` -> Next.js App Router pages and layouts
+- `components/` -> reusable UI and form components
+- `lib/actions/` -> server actions
+- `lib/` -> auth, permissions, db helpers, domain rules, guards, utilities
+- `prisma/` -> Prisma schema and seed data
 
-### Vercel
+## Final note
 
-1. Push this project to GitHub
-2. Import the repo into Vercel
-3. Add environment variables:
-   - `DATABASE_URL`
-   - `SESSION_SECRET`
-   - `APP_URL`
-4. Keep install/build settings standard initially
-
-Prisma recommends regenerating Prisma Client during Vercel builds and using `prisma migrate deploy` in deployment workflows. This starter already includes `postinstall: prisma generate`; for production migrations, use `npm run db:deploy`. citeturn584036view1
-
-### Optional production build script
-
-```json
-"vercel-build": "prisma generate && prisma migrate deploy && next build"
-```
-
-That pattern comes directly from Prisma's Vercel deployment guidance. citeturn584036view1
+This PMS is built as a role-aware internal business application. Before production rollout, validate:
+- role permissions
+- review flows
+- assignment flows
+- report filters
+- CSV exports
+- seed/demo data removal if not needed
+- environment-specific URLs and secrets

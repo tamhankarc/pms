@@ -374,13 +374,19 @@ export function MovieMinutesFilterForm({
           value={effectiveMovieId}
           onValueChange={(value) => {
             setSelectedMovieId(value);
-            if (value === "all") return;
-            const nextMovie = movieOptions.find((movie) => movie.id === value);
-            if (nextMovie && selectedClientId !== "all" && nextMovie.clientId !== selectedClientId) {
-              setSelectedClientId(nextMovie.clientId);
-              setSelectedProjectId("all");
-              setSelectedSubProjectId("all");
+
+            if (value === "all") {
+              return;
             }
+
+            const nextMovie = movieOptions.find((movie) => movie.id === value);
+            if (!nextMovie) {
+              return;
+            }
+
+            setSelectedClientId(nextMovie.clientId);
+            setSelectedProjectId("all");
+            setSelectedSubProjectId("all");
           }}
           options={[
             { value: "all", label: "All movies" },

@@ -140,6 +140,15 @@ export function SubProjectForm({
               setProjectId(value);
               setHideCountriesInEntries(false);
               setHideMoviesInEntries(false);
+
+              if (!value) {
+                return;
+              }
+
+              const nextProject = projects.find((project) => project.id === value);
+              if (nextProject && nextProject.clientId !== clientId) {
+                setClientId(nextProject.clientId);
+              }
             }}
             options={filteredProjects.map((project) => ({
               value: project.id,

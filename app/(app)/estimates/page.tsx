@@ -5,7 +5,7 @@ import { ListReportFilters } from "@/components/forms/list-report-filters";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatMinutes } from "@/lib/utils";
-import { reviewEstimateAction } from "@/lib/actions/estimate-actions";
+import { deleteEstimateAction, reviewEstimateAction } from "@/lib/actions/estimate-actions";
 import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/permissions";
 import { getVisibleProjects } from "@/lib/queries";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -211,6 +211,12 @@ export default async function EstimatesPage({
                   estimate.employee.functionalRole === user.functionalRole);
 
               const canResubmit = (estimate.employeeId === user.id || canFullyModerateProject(user)) && ["REVISED", "DRAFT"].includes(estimate.status);
+              const canDelete =
+                ["ADMIN", "MANAGER", "TEAM_LEAD"].includes(user.userType) &&
+                (canFullyModerateProject(user) ||
+                  ((user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) &&
+                    managedIds.has(estimate.employeeId) &&
+                    estimate.employee.functionalRole === user.functionalRole));
 
               const latestReview = estimate.reviews[0];
 
@@ -273,7 +279,15 @@ export default async function EstimatesPage({
                           Edit &amp; Resubmit
                         </Link>
                       ) : null}
-                      {!canReview && !canResubmit ? <span className="text-xs text-slate-400">No action</span> : null}
+                      {canDelete ? (
+                        <form action={deleteEstimateAction}>
+                          <input type="hidden" name="estimateId" value={estimate.id} />
+                          <button className="btn-secondary text-xs" type="submit">
+                            Delete
+                          </button>
+                        </form>
+                      ) : null}
+                      {!canReview && !canResubmit && !canDelete ? <span className="text-xs text-slate-400">No action</span> : null}
                     </div>
                   </td>
                 </tr>

@@ -612,3 +612,71 @@ export async function reviewEstimateAction(formData: FormData) {
   revalidatePath("/estimates");
   revalidatePath(`/estimates/${estimate.id}/edit`);
 }
+
+export async function deleteEstimateAction(formData: FormData) {
+  const user = await requireUserForAction();
+  const estimateId = String(formData.get("estimateId") || "");
+
+  if (!estimateId) {
+    throw new Error("Estimate is required.");
+  }
+
+  if (!["ADMIN", "MANAGER", "TEAM_LEAD"].includes(user.userType)) {
+    throw new Error("You do not have permission to delete estimates.");
+  }
+
+  const estimate = await db.estimate.findUnique({
+    where: { id: estimateId },
+    include: {
+      employee: {
+        select: {
+          id: true,
+          functionalRole: true,
+        },
+      },
+    },
+  });
+
+  if (!estimate) {
+    throw new Error("Estimate not found.");
+  }
+
+  if (user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) {
+    const assignment = await db.employeeTeamLead.findFirst({
+      where: {
+        teamLeadId: user.id,
+        employeeId: estimate.employeeId,
+      },
+      include: {
+        employee: {
+          select: {
+            functionalRole: true,
+          },
+        },
+      },
+    });
+
+    if (!assignment) {
+      throw new Error("You can delete estimates only for assigned employees.");
+    }
+
+    if (assignment.employee.functionalRole !== user.functionalRole) {
+      throw new Error("You can delete estimates only for employees with matching functional role.");
+    }
+  }
+
+  await recordAuditLog({
+    actorId: user.id,
+    entityType: "Estimate",
+    entityId: estimate.id,
+    action: "DELETE",
+    before: estimate,
+    description: "Deleted estimate",
+  });
+
+  await db.estimate.delete({
+    where: { id: estimate.id },
+  });
+
+  revalidatePath("/estimates");
+}

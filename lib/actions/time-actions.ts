@@ -565,3 +565,71 @@ export async function updateTimeEntryAction(
     };
   }
 }
+
+export async function deleteTimeEntryAction(formData: FormData) {
+  const user = await requireUserForAction();
+  const entryId = String(formData.get("entryId") || "");
+
+  if (!entryId) {
+    throw new Error("Time entry is required.");
+  }
+
+  if (!["ADMIN", "MANAGER", "TEAM_LEAD"].includes(user.userType)) {
+    throw new Error("You do not have permission to delete time entries.");
+  }
+
+  const entry = await db.timeEntry.findUnique({
+    where: { id: entryId },
+    include: {
+      employee: {
+        select: {
+          id: true,
+          functionalRole: true,
+        },
+      },
+    },
+  });
+
+  if (!entry) {
+    throw new Error("Time entry not found.");
+  }
+
+  if (user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) {
+    const assignment = await db.employeeTeamLead.findFirst({
+      where: {
+        teamLeadId: user.id,
+        employeeId: entry.employeeId,
+      },
+      include: {
+        employee: {
+          select: {
+            functionalRole: true,
+          },
+        },
+      },
+    });
+
+    if (!assignment) {
+      throw new Error("You can delete time entries only for assigned employees.");
+    }
+
+    if (assignment.employee.functionalRole !== user.functionalRole) {
+      throw new Error("You can delete time entries only for employees with matching functional role.");
+    }
+  }
+
+  await recordAuditLog({
+    actorId: user.id,
+    entityType: "TimeEntry",
+    entityId: entry.id,
+    action: "DELETE",
+    before: entry,
+    description: "Deleted time entry",
+  });
+
+  await db.timeEntry.delete({
+    where: { id: entry.id },
+  });
+
+  revalidatePath("/time-entries");
+}

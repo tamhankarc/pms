@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 
-export type AuditLogAction = "CREATE" | "UPDATE";
+export type AuditLogAction = "CREATE" | "UPDATE" | "DELETE";
 
 type AuditPayload = {
   actorId?: string | null;

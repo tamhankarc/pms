@@ -48,14 +48,35 @@ export function UserAssignmentForm({
   }, [state?.success, router]);
 
   const filteredProjects = useMemo(
-    () => projects.filter((project) => project.clientId === clientId),
+    () => (clientId ? projects.filter((project) => project.clientId === clientId) : projects),
     [projects, clientId],
   );
 
-  const filteredSubProjects = useMemo(
-    () => subProjects.filter((subProject) => subProject.projectId === projectId),
-    [subProjects, projectId],
-  );
+  const filteredSubProjects = useMemo(() => {
+    if (projectId) {
+      return subProjects.filter((subProject) => subProject.projectId === projectId);
+    }
+
+    if (clientId) {
+      const filteredProjectIds = new Set(filteredProjects.map((project) => project.id));
+      return subProjects.filter((subProject) => filteredProjectIds.has(subProject.projectId));
+    }
+
+    return subProjects;
+  }, [subProjects, projectId, clientId, filteredProjects]);
+
+
+  useEffect(() => {
+    if (projectId && !filteredProjects.some((project) => project.id === projectId)) {
+      setProjectId("");
+    }
+  }, [filteredProjects, projectId]);
+
+  useEffect(() => {
+    if (subProjectId && !filteredSubProjects.some((subProject) => subProject.id === subProjectId)) {
+      setSubProjectId("");
+    }
+  }, [filteredSubProjects, subProjectId]);
 
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -128,6 +149,14 @@ export function UserAssignmentForm({
             onValueChange={(nextValue) => {
               setProjectId(nextValue);
               setSubProjectId("");
+              if (!nextValue) {
+                return;
+              }
+
+              const nextProject = projects.find((project) => project.id === nextValue);
+              if (nextProject && nextProject.clientId !== clientId) {
+                setClientId(nextProject.clientId);
+              }
             }}
             options={filteredProjects.map((project) => ({
               value: project.id,
