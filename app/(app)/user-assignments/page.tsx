@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
-import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { UserAssignmentListFilters } from "@/components/forms/user-assignment-list-filters";
 import { UserAssignmentForm } from "@/components/forms/user-assignment-form";
 import { db } from "@/lib/db";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -29,7 +29,7 @@ export default async function UserAssignmentsPage({
       orderBy: { name: "asc" },
     }),
     db.project.findMany({
-      where: params.clientId ? { clientId: params.clientId } : {},
+      where: {},
       select: {
         id: true,
         name: true,
@@ -39,7 +39,7 @@ export default async function UserAssignmentsPage({
       orderBy: { name: "asc" },
     }),
     db.subProject.findMany({
-      where: params.projectId ? { projectId: params.projectId } : {},
+      where: {},
       select: {
         id: true,
         name: true,
@@ -162,61 +162,26 @@ export default async function UserAssignmentsPage({
       />
 
       <div className="card p-4">
-        <form method="get" className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto_auto]">
-          <SearchableCombobox
-            id="clientId"
-            name="clientId"
-            defaultValue={params.clientId ?? ""}
-            options={[
-              { value: "", label: "All clients" },
-              ...clients.map((client) => ({ value: client.id, label: client.name })),
-            ]}
-            placeholder="All clients"
-            searchPlaceholder="Search clients..."
-            emptyLabel="No client found."
-          />
-
-          <SearchableCombobox
-            id="projectId"
-            name="projectId"
-            defaultValue={params.projectId ?? ""}
-            options={[
-              { value: "", label: "All projects" },
-              ...projects.map((project) => ({
-                value: project.id,
-                label: project.name,
-                keywords: project.client.name,
-              })),
-            ]}
-            placeholder="All projects"
-            searchPlaceholder="Search projects..."
-            emptyLabel="No projects found."
-          />
-
-          <SearchableCombobox
-            id="subProjectId"
-            name="subProjectId"
-            defaultValue={params.subProjectId ?? ""}
-            options={[
-              { value: "", label: "All sub projects" },
-              ...subProjects.map((subProject) => ({
-                value: subProject.id,
-                label: subProject.name,
-                keywords: `${subProject.name} ${subProject.project.name} ${subProject.project.client.name}`,
-              })),
-            ]}
-            placeholder="All sub projects"
-            searchPlaceholder="Search sub projects..."
-            emptyLabel="No sub project found."
-          />
-
-          <button className="btn-secondary" type="submit">
-            Apply
-          </button>
-          <Link href="/user-assignments" className="btn-secondary">
-            Reset
-          </Link>
-        </form>
+        <UserAssignmentListFilters
+          selectedClientId={params.clientId ?? ""}
+          selectedProjectId={params.projectId ?? ""}
+          selectedSubProjectId={params.subProjectId ?? ""}
+          clients={clients}
+          projects={projects.map((project) => ({
+            id: project.id,
+            name: project.name,
+            clientId: project.clientId,
+            clientName: project.client.name,
+          }))}
+          subProjects={subProjects.map((subProject) => ({
+            id: subProject.id,
+            name: subProject.name,
+            projectId: subProject.projectId,
+            projectName: subProject.project.name,
+            clientId: subProject.project.clientId,
+            clientName: subProject.project.client.name,
+          }))}
+        />
       </div>
 
       {params.create === "1" || params.scope ? (

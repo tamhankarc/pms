@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
-import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { SubProjectListFilters } from "@/components/forms/sub-project-list-filters";
 import { db } from "@/lib/db";
 import { toggleSubProjectStatusAction } from "@/lib/actions/sub-project-actions";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -18,10 +18,7 @@ export default async function SubProjectPage({
 
   const [projects, subProjects] = await Promise.all([
     db.project.findMany({
-      where: {
-        isActive: true,
-        ...(selectedClientId ? { clientId: selectedClientId } : {}),
-      },
+      where: { isActive: true },
       include: { client: true },
       orderBy: [{ name: "asc" }],
     }),
@@ -59,44 +56,17 @@ export default async function SubProjectPage({
       />
 
       <div className="card p-4">
-        <form method="get" className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
-          <SearchableCombobox
-            id="clientId"
-            name="clientId"
-            defaultValue={selectedClientId}
-            options={[
-              { value: "", label: "All clients" },
-              ...clients.map((client) => ({ value: client.id, label: client.name })),
-            ]}
-            placeholder="All clients"
-            searchPlaceholder="Search clients..."
-            emptyLabel="No client found."
-          />
-
-          <SearchableCombobox
-            id="projectId"
-            name="projectId"
-            defaultValue={selectedProjectId}
-            options={[
-              { value: "", label: "All projects" },
-              ...projects.map((project) => ({
-                value: project.id,
-                label: `${project.name} · ${project.client.name}`,
-                keywords: `${project.name} ${project.client.name}`,
-              })),
-            ]}
-            placeholder="All projects"
-            searchPlaceholder="Search projects..."
-            emptyLabel="No projects found."
-          />
-
-          <button className="btn-secondary" type="submit">
-            Apply
-          </button>
-          <Link href="/sub-project" className="btn-secondary">
-            Reset
-          </Link>
-        </form>
+        <SubProjectListFilters
+          selectedClientId={selectedClientId}
+          selectedProjectId={selectedProjectId}
+          clients={clients}
+          projects={projects.map((project) => ({
+            id: project.id,
+            name: project.name,
+            clientId: project.clientId,
+            clientName: project.client.name,
+          }))}
+        />
       </div>
 
       <div className="table-wrap">
