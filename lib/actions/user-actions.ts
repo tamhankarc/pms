@@ -4,10 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { hashPassword, requireUserTypesForAction } from "@/lib/auth";
-import {
-  assertEmployeeHasAtLeastOneSupervisor,
-  assertUniqueIds,
-} from "@/lib/domain/rules";
+import { normalizeAddressCountry, toAddressSummary } from "@/lib/address";
 
 const operationalRoles = [
   "DEVELOPER",
@@ -57,6 +54,18 @@ const baseSchema = z.object({
   designation: z.string().trim().max(120).optional().or(z.literal("")),
   joiningDate: z.string().optional().or(z.literal("")),
   phoneNumber: z.string().trim().max(30).optional().or(z.literal("")),
+  secondaryPhoneNumber: z.string().trim().max(30).optional().or(z.literal("")),
+  currentAddressLine: z.string().trim().max(2000).optional().or(z.literal("")),
+  currentCity: z.string().trim().max(120).optional().or(z.literal("")),
+  currentState: z.string().trim().max(120).optional().or(z.literal("")),
+  currentCountry: z.enum(["IN", "US"]).optional(),
+  currentPostalCode: z.string().trim().max(30).optional().or(z.literal("")),
+  permanentSameAsCurrent: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  permanentAddressLine: z.string().trim().max(2000).optional().or(z.literal("")),
+  permanentCity: z.string().trim().max(120).optional().or(z.literal("")),
+  permanentState: z.string().trim().max(120).optional().or(z.literal("")),
+  permanentCountry: z.enum(["IN", "US"]).optional(),
+  permanentPostalCode: z.string().trim().max(30).optional().or(z.literal("")),
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
 
@@ -69,28 +78,31 @@ function validateUserTypeRoleCombination(userType: typeof userTypes[number], fun
   }
 }
 
-async function validateSupervisors(supervisorIds: string[], employeeFunctionalRole: FunctionalRole) {
-  if (supervisorIds.length === 0) return false;
+function buildAddressPayload(parsed: z.infer<typeof baseSchema>) {
+  const currentAddress = {
+    addressLine: parsed.currentAddressLine?.trim() || "",
+    city: parsed.currentCity?.trim() || "",
+    state: parsed.currentState?.trim() || "",
+    country: normalizeAddressCountry(parsed.currentCountry),
+    postalCode: parsed.currentPostalCode?.trim() || "",
+  };
 
-  const supervisors = await db.user.findMany({
-    where: {
-      id: { in: supervisorIds },
-      isActive: true,
-    },
-    select: {
-      id: true,
-      userType: true,
-      functionalRole: true,
-    },
-  });
+  const permanentSameAsCurrent = Boolean(parsed.permanentSameAsCurrent);
+  const permanentAddress = permanentSameAsCurrent
+    ? currentAddress
+    : {
+        addressLine: parsed.permanentAddressLine?.trim() || "",
+        city: parsed.permanentCity?.trim() || "",
+        state: parsed.permanentState?.trim() || "",
+        country: normalizeAddressCountry(parsed.permanentCountry ?? parsed.currentCountry),
+        postalCode: parsed.permanentPostalCode?.trim() || "",
+      };
 
-  if (supervisors.length !== supervisorIds.length) return false;
-
-  return supervisors.every((person) => {
-    if (person.userType === "TEAM_LEAD") return true;
-    if (person.userType === "MANAGER" && person.functionalRole === employeeFunctionalRole) return true;
-    return false;
-  });
+  return {
+    currentAddress,
+    permanentAddress,
+    permanentSameAsCurrent,
+  };
 }
 
 export async function createUserAction(
@@ -110,7 +122,19 @@ export async function createUserAction(
       employeeCode: formData.get("employeeCode") || "",
       designation: formData.get("designation") || "",
       joiningDate: formData.get("joiningDate") || "",
-      phoneNumber: formData.get("phoneNumber"),
+      phoneNumber: formData.get("phoneNumber") || "",
+      secondaryPhoneNumber: formData.get("secondaryPhoneNumber") || "",
+      currentAddressLine: formData.get("currentAddressLine") || "",
+      currentCity: formData.get("currentCity") || "",
+      currentState: formData.get("currentState") || "",
+      currentCountry: formData.get("currentCountry") || "IN",
+      currentPostalCode: formData.get("currentPostalCode") || "",
+      permanentSameAsCurrent: formData.get("permanentSameAsCurrent") ?? undefined,
+      permanentAddressLine: formData.get("permanentAddressLine") || "",
+      permanentCity: formData.get("permanentCity") || "",
+      permanentState: formData.get("permanentState") || "",
+      permanentCountry: formData.get("permanentCountry") || formData.get("currentCountry") || "IN",
+      permanentPostalCode: formData.get("permanentPostalCode") || "",
       isActive: formData.get("isActive") ?? "on",
     });
 
@@ -126,53 +150,37 @@ export async function createUserAction(
     }
 
     validateUserTypeRoleCombination(parsed.data.userType, parsed.data.functionalRole);
-
-    const supervisorIds =
-      parsed.data.userType === "EMPLOYEE"
-        ? formData.getAll("supervisorIds").map(String).filter(Boolean)
-        : [];
-
-    if (parsed.data.userType === "EMPLOYEE") {
-      assertEmployeeHasAtLeastOneSupervisor(supervisorIds);
-      assertUniqueIds(supervisorIds, "supervisor");
-      const valid = await validateSupervisors(supervisorIds, parsed.data.functionalRole);
-      if (!valid) {
-        return {
-          success: false,
-          error: "Supervisors must be Team Leads or Managers with the same functional role as the employee.",
-        };
-      }
-    }
-
+    const { currentAddress, permanentAddress, permanentSameAsCurrent } = buildAddressPayload(parsed.data);
     const passwordHash = await hashPassword(parsed.data.password);
 
-    await db.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          fullName: parsed.data.fullName,
-          username: parsed.data.username.toLowerCase(),
-          email: parsed.data.email.toLowerCase(),
-          passwordHash,
-          userType: parsed.data.userType,
-          functionalRole: parsed.data.functionalRole,
-          employeeCode: parsed.data.employeeCode?.trim() || null,
-          designation: parsed.data.designation?.trim() || null,
-          joiningDate: parsed.data.joiningDate ? new Date(parsed.data.joiningDate) : null,
-          phoneNumber: parsed.data.phoneNumber?.trim() || null,
-          isActive: Boolean(parsed.data.isActive),
-        },
-      });
-
-      if (parsed.data.userType === "EMPLOYEE") {
-        await tx.employeeTeamLead.createMany({
-          data: supervisorIds.map((teamLeadId) => ({
-            employeeId: user.id,
-            teamLeadId,
-            assignedById: actor.id,
-          })),
-          skipDuplicates: true,
-        });
-      }
+    await db.user.create({
+      data: {
+        fullName: parsed.data.fullName,
+        username: parsed.data.username.toLowerCase(),
+        email: parsed.data.email.toLowerCase(),
+        passwordHash,
+        userType: parsed.data.userType,
+        functionalRole: parsed.data.functionalRole,
+        employeeCode: parsed.data.employeeCode?.trim() || null,
+        designation: parsed.data.designation?.trim() || null,
+        joiningDate: parsed.data.joiningDate ? new Date(parsed.data.joiningDate) : null,
+        phoneNumber: parsed.data.phoneNumber?.trim() || null,
+        secondaryPhoneNumber: parsed.data.secondaryPhoneNumber?.trim() || null,
+        currentAddressLine: currentAddress.addressLine || null,
+        currentCity: currentAddress.city || null,
+        currentState: currentAddress.state || null,
+        currentCountry: currentAddress.country,
+        currentPostalCode: currentAddress.postalCode || null,
+        permanentAddressLine: permanentAddress.addressLine || null,
+        permanentCity: permanentAddress.city || null,
+        permanentState: permanentAddress.state || null,
+        permanentCountry: permanentAddress.country,
+        permanentPostalCode: permanentAddress.postalCode || null,
+        currentAddress: toAddressSummary(currentAddress),
+        permanentAddress: toAddressSummary(permanentAddress),
+        permanentSameAsCurrent,
+        isActive: Boolean(parsed.data.isActive),
+      },
     });
 
     revalidatePath("/users");
@@ -199,7 +207,19 @@ export async function updateUserAction(
       employeeCode: formData.get("employeeCode") || "",
       designation: formData.get("designation") || "",
       joiningDate: formData.get("joiningDate") || "",
-      phoneNumber: formData.get("phoneNumber"),
+      phoneNumber: formData.get("phoneNumber") || "",
+      secondaryPhoneNumber: formData.get("secondaryPhoneNumber") || "",
+      currentAddressLine: formData.get("currentAddressLine") || "",
+      currentCity: formData.get("currentCity") || "",
+      currentState: formData.get("currentState") || "",
+      currentCountry: formData.get("currentCountry") || "IN",
+      currentPostalCode: formData.get("currentPostalCode") || "",
+      permanentSameAsCurrent: formData.get("permanentSameAsCurrent") ?? undefined,
+      permanentAddressLine: formData.get("permanentAddressLine") || "",
+      permanentCity: formData.get("permanentCity") || "",
+      permanentState: formData.get("permanentState") || "",
+      permanentCountry: formData.get("permanentCountry") || formData.get("currentCountry") || "IN",
+      permanentPostalCode: formData.get("permanentPostalCode") || "",
       isActive: formData.get("isActive") ?? undefined,
     });
 
@@ -215,53 +235,36 @@ export async function updateUserAction(
     }
 
     validateUserTypeRoleCombination(parsed.data.userType, parsed.data.functionalRole);
+    const { currentAddress, permanentAddress, permanentSameAsCurrent } = buildAddressPayload(parsed.data);
 
-    const supervisorIds =
-      parsed.data.userType === "EMPLOYEE"
-        ? formData.getAll("supervisorIds").map(String).filter(Boolean)
-        : [];
-
-    if (parsed.data.userType === "EMPLOYEE") {
-      assertEmployeeHasAtLeastOneSupervisor(supervisorIds);
-      assertUniqueIds(supervisorIds, "supervisor");
-      const valid = await validateSupervisors(supervisorIds, parsed.data.functionalRole);
-      if (!valid) {
-        return {
-          success: false,
-          error: "Supervisors must be Team Leads or Managers with the same functional role as the employee.",
-        };
-      }
-    }
-
-    await db.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: parsed.data.id! },
-        data: {
-          fullName: parsed.data.fullName,
-          username: parsed.data.username.toLowerCase(),
-          email: parsed.data.email.toLowerCase(),
-          userType: parsed.data.userType,
-          functionalRole: parsed.data.functionalRole,
-          employeeCode: parsed.data.employeeCode?.trim() || null,
-          designation: parsed.data.designation?.trim() || null,
-          joiningDate: parsed.data.joiningDate ? new Date(parsed.data.joiningDate) : null,
-          phoneNumber: parsed.data.phoneNumber?.trim() || null,
-          isActive: Boolean(parsed.data.isActive),
-        },
-      });
-
-      await tx.employeeTeamLead.deleteMany({ where: { employeeId: parsed.data.id! } });
-
-      if (parsed.data.userType === "EMPLOYEE" && supervisorIds.length > 0) {
-        await tx.employeeTeamLead.createMany({
-          data: supervisorIds.map((teamLeadId) => ({
-            employeeId: parsed.data.id!,
-            teamLeadId,
-            assignedById: actor.id,
-          })),
-          skipDuplicates: true,
-        });
-      }
+    await db.user.update({
+      where: { id: parsed.data.id },
+      data: {
+        fullName: parsed.data.fullName,
+        username: parsed.data.username.toLowerCase(),
+        email: parsed.data.email.toLowerCase(),
+        userType: parsed.data.userType,
+        functionalRole: parsed.data.functionalRole,
+        employeeCode: parsed.data.employeeCode?.trim() || null,
+        designation: parsed.data.designation?.trim() || null,
+        joiningDate: parsed.data.joiningDate ? new Date(parsed.data.joiningDate) : null,
+        phoneNumber: parsed.data.phoneNumber?.trim() || null,
+        secondaryPhoneNumber: parsed.data.secondaryPhoneNumber?.trim() || null,
+        currentAddressLine: currentAddress.addressLine || null,
+        currentCity: currentAddress.city || null,
+        currentState: currentAddress.state || null,
+        currentCountry: currentAddress.country,
+        currentPostalCode: currentAddress.postalCode || null,
+        permanentAddressLine: permanentAddress.addressLine || null,
+        permanentCity: permanentAddress.city || null,
+        permanentState: permanentAddress.state || null,
+        permanentCountry: permanentAddress.country,
+        permanentPostalCode: permanentAddress.postalCode || null,
+        currentAddress: toAddressSummary(currentAddress),
+        permanentAddress: toAddressSummary(permanentAddress),
+        permanentSameAsCurrent,
+        isActive: Boolean(parsed.data.isActive),
+      },
     });
 
     revalidatePath("/users");

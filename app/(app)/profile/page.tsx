@@ -3,6 +3,12 @@ import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 
+type CountryCode = "IN" | "US" | null;
+
+function normalizeCountry(value: string | null): CountryCode {
+  return value === "IN" || value === "US" ? value : null;
+}
+
 export default async function ProfilePage() {
   const sessionUser = await requireUser();
 
@@ -18,21 +24,36 @@ export default async function ProfilePage() {
       designation: true,
       joiningDate: true,
       phoneNumber: true,
-      currentAddress: true,
-      permanentAddress: true,
+      secondaryPhoneNumber: true,
       permanentSameAsCurrent: true,
+      currentAddressLine: true,
+      currentCity: true,
+      currentState: true,
+      currentCountry: true,
+      currentPostalCode: true,
+      permanentAddressLine: true,
+      permanentCity: true,
+      permanentState: true,
+      permanentCountry: true,
+      permanentPostalCode: true,
     },
   });
+
+  const normalizedUser = {
+    ...user,
+    currentCountry: normalizeCountry(user.currentCountry),
+    permanentCountry: normalizeCountry(user.permanentCountry),
+  };
 
   return (
     <div>
       <PageHeader
         title="My profile"
-        description="Update your contact details and address information. Core employee identity fields are read-only."
+        description="Update your phone numbers and address information. Core employee identity fields are read-only."
       />
 
       <div className="max-w-4xl">
-        <ProfileForm user={user} />
+        <ProfileForm user={normalizedUser} />
       </div>
     </div>
   );

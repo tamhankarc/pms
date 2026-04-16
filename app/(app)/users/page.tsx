@@ -45,65 +45,36 @@ export default async function UsersPage({
   const showCreate = params.create === "1";
   const page = parsePageParam(params.page);
 
-  const [users, supervisorRows] = await Promise.all([
-    db.user.findMany({
-      where: {
-        ...(q
-          ? {
-              OR: [
-                { fullName: { contains: q } },
-                { username: { contains: q } },
-                { email: { contains: q } },
-                { designation: { contains: q } },
-                { employeeCode: { contains: q } },
-              ],
-            }
-          : {}),
-        ...(status === "active" ? { isActive: true } : {}),
-        ...(status === "inactive" ? { isActive: false } : {}),
-        ...(userType !== "all" ? { userType } : {}),
-      },
-      include: {
-        employeeSupervisors: { include: { teamLead: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    }),
-    db.user.findMany({
-      where: {
-        isActive: true,
-        userType: { in: ["TEAM_LEAD", "MANAGER"] },
-      },
-      orderBy: [{ userType: "asc" }, { fullName: "asc" }],
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        userType: true,
-        functionalRole: true,
-      },
-    }),
-  ]);
+  const users = await db.user.findMany({
+    where: {
+      ...(q
+        ? {
+            OR: [
+              { fullName: { contains: q } },
+              { username: { contains: q } },
+              { email: { contains: q } },
+              { designation: { contains: q } },
+              { employeeCode: { contains: q } },
+            ],
+          }
+        : {}),
+      ...(status === "active" ? { isActive: true } : {}),
+      ...(status === "inactive" ? { isActive: false } : {}),
+      ...(userType !== "all" ? { userType } : {}),
+    },
+    include: {
+      employeeSupervisors: { include: { teamLead: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
 
   const { items: paginatedUsers, currentPage, totalPages, totalItems, pageSize } = paginateItems(users, page, DEFAULT_PAGE_SIZE);
-
-  const supervisors = supervisorRows
-    .filter(
-      (person): person is typeof person & { userType: "TEAM_LEAD" | "MANAGER" } =>
-        person.userType === "TEAM_LEAD" || person.userType === "MANAGER",
-    )
-    .map((person) => ({
-      id: person.id,
-      fullName: person.fullName,
-      email: person.email,
-      userType: person.userType,
-      functionalRole: person.functionalRole,
-    }));
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Users"
-        description="Create and manage users, roles, supervisor assignment, employee code, designation, joining date, and active status."
+        description="Create and manage users, roles, employee codes, designations, joining dates, contact details, addresses, and active status. Supervisor mapping is managed from Team Lead Assignments."
         actions={
           canManageUsers(currentUser) ? (
             <Link className="btn-primary" href="/users?create=1">
@@ -157,13 +128,7 @@ export default async function UsersPage({
         </form>
       </div>
 
-      {showCreate && canManageUsers(currentUser) ? (
-        <UserManageForm
-          mode="create"
-          supervisors={supervisors}
-          action={createUserAction}
-        />
-      ) : null}
+      {showCreate && canManageUsers(currentUser) ? <UserManageForm mode="create" action={createUserAction} /> : null}
 
       <div className="table-wrap">
         <table className="table-base">
@@ -189,14 +154,10 @@ export default async function UsersPage({
                   <div className="text-xs text-slate-500">{user.email}</div>
                 </td>
                 <td className="table-cell">{user.userType.replaceAll("_", " ")}</td>
-                <td className="table-cell">
-                  {(user.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}
-                </td>
+                <td className="table-cell">{(user.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}</td>
                 <td className="table-cell">{user.employeeCode || "—"}</td>
                 <td className="table-cell">{user.designation || "—"}</td>
-                <td className="table-cell">
-                  {user.joiningDate ? new Date(user.joiningDate).toLocaleDateString() : "—"}
-                </td>
+                <td className="table-cell">{user.joiningDate ? new Date(user.joiningDate).toLocaleDateString() : "—"}</td>
                 <td className="table-cell">
                   {user.userType === "EMPLOYEE" ? (
                     <div className="mt-1 text-xs text-slate-600">
@@ -211,9 +172,7 @@ export default async function UsersPage({
                   )}
                 </td>
                 <td className="table-cell">
-                  <span className={user.isActive ? "badge-emerald" : "badge-slate"}>
-                    {user.isActive ? "Active" : "Inactive"}
-                  </span>
+                  <span className={user.isActive ? "badge-emerald" : "badge-slate"}>{user.isActive ? "Active" : "Inactive"}</span>
                 </td>
                 <td className="table-cell">
                   <div className="flex gap-2">
@@ -222,9 +181,7 @@ export default async function UsersPage({
                     </Link>
                     <form action={toggleUserStatusAction}>
                       <input type="hidden" name="userId" value={user.id} />
-                      <button className="btn-secondary text-xs">
-                        {user.isActive ? "Deactivate" : "Activate"}
-                      </button>
+                      <button className="btn-secondary text-xs">{user.isActive ? "Deactivate" : "Activate"}</button>
                     </form>
                   </div>
                 </td>
@@ -239,7 +196,14 @@ export default async function UsersPage({
             ) : null}
           </tbody>
         </table>
-        <PaginationControls basePath="/users" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, status, userType: userType === "all" ? undefined : userType, create: showCreate ? "1" : undefined }} />
+        <PaginationControls
+          basePath="/users"
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          searchParams={{ q, status, userType: userType === "all" ? undefined : userType, create: showCreate ? "1" : undefined }}
+        />
       </div>
     </div>
   );

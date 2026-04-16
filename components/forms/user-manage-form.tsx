@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { FormLabel } from "@/components/ui/form-label";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
-import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import type { UserFormState } from "@/lib/actions/user-actions";
+import { AddressFields } from "@/components/forms/address-fields";
+import { createDefaultAddress, type AddressValue } from "@/lib/address";
 
 const operationalFunctionalRoles = [
   "DEVELOPER",
@@ -27,18 +28,9 @@ const userTypes = [
 
 type FunctionalRole = (typeof operationalFunctionalRoles)[number] | "BILLING";
 
-type SupervisorOption = {
-  id: string;
-  fullName: string;
-  email: string;
-  userType: "TEAM_LEAD" | "MANAGER";
-  functionalRole: FunctionalRole | null;
-};
-
 type UserManageFormProps = {
   mode: "create" | "edit";
   action: (state: UserFormState, formData: FormData) => Promise<UserFormState>;
-  supervisors: SupervisorOption[];
   initialValues?: {
     id?: string;
     fullName?: string;
@@ -50,18 +42,25 @@ type UserManageFormProps = {
     designation?: string | null;
     joiningDate?: string | null;
     phoneNumber?: string | null;
+    secondaryPhoneNumber?: string | null;
     isActive?: boolean;
-    supervisorIds?: string[];
+    permanentSameAsCurrent?: boolean;
+    currentAddressLine?: string | null;
+    currentCity?: string | null;
+    currentState?: string | null;
+    currentCountry?: "IN" | "US" | null;
+    currentPostalCode?: string | null;
+    permanentAddressLine?: string | null;
+    permanentCity?: string | null;
+    permanentState?: string | null;
+    permanentCountry?: "IN" | "US" | null;
+    permanentPostalCode?: string | null;
   };
 };
 
 const initialState: UserFormState = {};
 
-function PasswordField({
-  defaultVisible = false,
-}: {
-  defaultVisible?: boolean;
-}) {
+function PasswordField({ defaultVisible = false }: { defaultVisible?: boolean }) {
   const [visible, setVisible] = useState(defaultVisible);
 
   return (
@@ -84,39 +83,33 @@ function PasswordField({
   );
 }
 
-export function UserManageForm({ mode, action, supervisors, initialValues }: UserManageFormProps) {
+export function UserManageForm({ mode, action, initialValues }: UserManageFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [userType, setUserType] = useState<(typeof userTypes)[number]>(initialValues?.userType ?? "EMPLOYEE");
   const [functionalRole, setFunctionalRole] = useState<FunctionalRole>(initialValues?.functionalRole ?? "DEVELOPER");
-  const [supervisorIds, setSupervisorIds] = useState<string[]>(initialValues?.supervisorIds ?? []);
+  const [sameAsCurrent, setSameAsCurrent] = useState(initialValues?.permanentSameAsCurrent ?? false);
+  const [currentAddress, setCurrentAddress] = useState<AddressValue>({
+    addressLine: initialValues?.currentAddressLine ?? "",
+    city: initialValues?.currentCity ?? "",
+    state: initialValues?.currentState ?? "",
+    country: initialValues?.currentCountry ?? "IN",
+    postalCode: initialValues?.currentPostalCode ?? "",
+  });
+  const [permanentAddress, setPermanentAddress] = useState<AddressValue>({
+    addressLine: initialValues?.permanentAddressLine ?? "",
+    city: initialValues?.permanentCity ?? "",
+    state: initialValues?.permanentState ?? "",
+    country: initialValues?.permanentCountry ?? initialValues?.currentCountry ?? "IN",
+    postalCode: initialValues?.permanentPostalCode ?? "",
+  });
 
-  const canHaveSupervisors = userType === "EMPLOYEE";
+  useEffect(() => {
+    if (sameAsCurrent) {
+      setPermanentAddress(currentAddress);
+    }
+  }, [sameAsCurrent, currentAddress]);
 
   const availableFunctionalRoles = userType === "ACCOUNTS" ? (["BILLING"] as const) : operationalFunctionalRoles;
-
-  const filteredSupervisors = useMemo(
-    () =>
-      supervisors.filter(
-        (person) =>
-          person.userType === "TEAM_LEAD" ||
-          (person.userType === "MANAGER" && person.functionalRole === functionalRole),
-      ),
-    [supervisors, functionalRole],
-  );
-
-  const supervisorOptions = useMemo(
-    () =>
-      filteredSupervisors.map((person) => ({
-        value: person.id,
-        label: `${person.fullName} · ${person.userType.replaceAll("_", " ")}${
-          person.userType === "MANAGER" && person.functionalRole
-            ? ` · ${person.functionalRole.replaceAll("_", " ")}`
-            : ""
-        }`,
-        keywords: `${person.fullName} ${person.email} ${person.userType} ${person.functionalRole ?? ""}`,
-      })),
-    [filteredSupervisors],
-  );
 
   function handleUserTypeChange(nextUserType: (typeof userTypes)[number]) {
     setUserType(nextUserType);
@@ -124,9 +117,6 @@ export function UserManageForm({ mode, action, supervisors, initialValues }: Use
       setFunctionalRole("BILLING");
     } else if (functionalRole === "BILLING") {
       setFunctionalRole("DEVELOPER");
-    }
-    if (nextUserType !== "EMPLOYEE") {
-      setSupervisorIds([]);
     }
   }
 
@@ -226,35 +216,54 @@ export function UserManageForm({ mode, action, supervisors, initialValues }: Use
         </div>
 
         <div>
-          <FormLabel htmlFor="phoneNumber">Phone number</FormLabel>
+          <FormLabel htmlFor="phoneNumber">Primary phone number</FormLabel>
           <input id="phoneNumber" className="input" name="phoneNumber" defaultValue={initialValues?.phoneNumber ?? ""} />
         </div>
 
-        {canHaveSupervisors ? (
-          <div className="md:col-span-2">
-            <FormLabel htmlFor="supervisorIds" required>
-              Assign Supervisor(s)
-            </FormLabel>
-            <SearchableMultiSelect
-              id="supervisorIds"
-              name="supervisorIds"
-              value={supervisorIds}
-              onValueChange={setSupervisorIds}
-              options={supervisorOptions}
-              placeholder="Select supervisor(s)"
-              searchPlaceholder="Search supervisors..."
-              emptyLabel="No supervisor found."
-              required
-            />
-            <p className="mt-2 text-xs text-slate-500">
-              Employees must have at least one assigned Team Lead or a Manager with the same functional role.
-            </p>
-          </div>
-        ) : null}
+        <div className="md:col-span-2">
+          <FormLabel htmlFor="secondaryPhoneNumber">Secondary phone number</FormLabel>
+          <input
+            id="secondaryPhoneNumber"
+            className="input"
+            name="secondaryPhoneNumber"
+            defaultValue={initialValues?.secondaryPhoneNumber ?? ""}
+          />
+        </div>
+
+        <AddressFields prefix="current" title="Current Address" value={currentAddress} onChange={setCurrentAddress} />
+
+        <div className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <input
+            id="permanentSameAsCurrent"
+            type="checkbox"
+            name="permanentSameAsCurrent"
+            checked={sameAsCurrent}
+            onChange={(event) => {
+              const checked = event.target.checked;
+              setSameAsCurrent(checked);
+              if (checked) {
+                setPermanentAddress(currentAddress);
+              } else if (!permanentAddress.country) {
+                setPermanentAddress(createDefaultAddress(currentAddress.country));
+              }
+            }}
+          />
+          <label htmlFor="permanentSameAsCurrent" className="text-sm text-slate-700">
+            Permanent address is same as current address
+          </label>
+        </div>
+
+        <AddressFields
+          prefix="permanent"
+          title="Permanent Address"
+          value={sameAsCurrent ? currentAddress : permanentAddress}
+          onChange={setPermanentAddress}
+          disabled={sameAsCurrent}
+        />
 
         {userType === "ACCOUNTS" ? (
           <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Accounts users are not assigned to supervisors. They will only see the billing dashboard and can change their own password.
+            Accounts users will only see the billing dashboard and can change their own password.
           </div>
         ) : null}
 

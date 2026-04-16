@@ -12,49 +12,17 @@ export default async function UserEditPage({
 }) {
   const { id } = await params;
 
-  const [user, supervisorRows] = await Promise.all([
-    db.user.findUnique({
-      where: { id },
-      include: {
-        employeeSupervisors: true,
-      },
-    }),
-    db.user.findMany({
-      where: {
-        isActive: true,
-        userType: { in: ["TEAM_LEAD", "MANAGER"] },
-      },
-      orderBy: [{ userType: "asc" }, { fullName: "asc" }],
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        userType: true,
-        functionalRole: true,
-      },
-    }),
-  ]);
+  const user = await db.user.findUnique({
+    where: { id },
+  });
 
   if (!user) notFound();
-
-  const supervisors = supervisorRows
-    .filter(
-      (person): person is typeof person & { userType: "TEAM_LEAD" | "MANAGER" } =>
-        person.userType === "TEAM_LEAD" || person.userType === "MANAGER",
-    )
-    .map((person) => ({
-      id: person.id,
-      fullName: person.fullName,
-      email: person.email,
-      userType: person.userType,
-      functionalRole: person.functionalRole,
-    }));
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={`Edit user · ${user.fullName}`}
-        description="Update core user details, supervisors, employee code, designation, joining date, and active status."
+        description="Update core user details, contact details, address information, employee code, joining date, and active status. Supervisor mapping is handled from Team Lead Assignments."
         actions={
           <Link href="/users" className="btn-secondary">
             Back to users
@@ -65,7 +33,6 @@ export default async function UserEditPage({
       <UserManageForm
         mode="edit"
         action={updateUserAction}
-        supervisors={supervisors}
         initialValues={{
           id: user.id,
           fullName: user.fullName,
@@ -83,12 +50,21 @@ export default async function UserEditPage({
             | "OTHER",
           employeeCode: user.employeeCode,
           designation: user.designation,
-          joiningDate: user.joiningDate
-            ? new Date(user.joiningDate).toISOString().slice(0, 10)
-            : null,
+          joiningDate: user.joiningDate ? new Date(user.joiningDate).toISOString().slice(0, 10) : null,
           phoneNumber: user.phoneNumber,
+          secondaryPhoneNumber: user.secondaryPhoneNumber,
           isActive: user.isActive,
-          supervisorIds: user.employeeSupervisors.map((row) => row.teamLeadId),
+          permanentSameAsCurrent: user.permanentSameAsCurrent,
+          currentAddressLine: user.currentAddressLine,
+          currentCity: user.currentCity,
+          currentState: user.currentState,
+          currentCountry: user.currentCountry as "IN" | "US" | null,
+          currentPostalCode: user.currentPostalCode,
+          permanentAddressLine: user.permanentAddressLine,
+          permanentCity: user.permanentCity,
+          permanentState: user.permanentState,
+          permanentCountry: user.permanentCountry as "IN" | "US" | null,
+          permanentPostalCode: user.permanentPostalCode,
         }}
       />
     </div>

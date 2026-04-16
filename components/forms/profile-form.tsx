@@ -1,8 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { updateProfileAction } from "@/lib/actions/profile-actions";
 import { FormLabel } from "@/components/ui/form-label";
+import { AddressFields } from "@/components/forms/address-fields";
+import { createDefaultAddress, type AddressValue } from "@/lib/address";
 
 const initialState = {
   success: false,
@@ -25,21 +27,48 @@ export function ProfileForm({
     designation: string | null;
     joiningDate: Date | null;
     phoneNumber: string | null;
-    currentAddress: string | null;
-    permanentAddress: string | null;
+    secondaryPhoneNumber: string | null;
     permanentSameAsCurrent: boolean;
+    currentAddressLine: string | null;
+    currentCity: string | null;
+    currentState: string | null;
+    currentCountry: "IN" | "US" | null;
+    currentPostalCode: string | null;
+    permanentAddressLine: string | null;
+    permanentCity: string | null;
+    permanentState: string | null;
+    permanentCountry: "IN" | "US" | null;
+    permanentPostalCode: string | null;
   };
 }) {
   const [state, formAction] = useActionState(updateProfileAction, initialState);
   const [sameAsCurrent, setSameAsCurrent] = useState(user.permanentSameAsCurrent);
-  const [currentAddress, setCurrentAddress] = useState(user.currentAddress ?? "");
-  const [permanentAddress, setPermanentAddress] = useState(user.permanentAddress ?? "");
+  const [currentAddress, setCurrentAddress] = useState<AddressValue>({
+    addressLine: user.currentAddressLine ?? "",
+    city: user.currentCity ?? "",
+    state: user.currentState ?? "",
+    country: user.currentCountry ?? "IN",
+    postalCode: user.currentPostalCode ?? "",
+  });
+  const [permanentAddress, setPermanentAddress] = useState<AddressValue>({
+    addressLine: user.permanentAddressLine ?? "",
+    city: user.permanentCity ?? "",
+    state: user.permanentState ?? "",
+    country: user.permanentCountry ?? user.currentCountry ?? "IN",
+    postalCode: user.permanentPostalCode ?? "",
+  });
+
+  useEffect(() => {
+    if (sameAsCurrent) {
+      setPermanentAddress(currentAddress);
+    }
+  }, [sameAsCurrent, currentAddress]);
 
   return (
     <form action={formAction} className="card p-6">
       <h2 className="section-title">Update profile</h2>
       <p className="section-subtitle">
-        You can update your phone number and address details here. Core user details are read-only.
+        You can update your phone numbers and address details here. Core user details are read-only.
       </p>
 
       {state?.message ? (
@@ -57,35 +86,17 @@ export function ProfileForm({
       <div className="mt-5 grid gap-4 md:grid-cols-2">
         <div>
           <FormLabel htmlFor="fullName">Full name</FormLabel>
-          <input
-            id="fullName"
-            name="fullName"
-            className="input bg-slate-50"
-            defaultValue={user.fullName ?? ""}
-            readOnly
-          />
+          <input id="fullName" name="fullName" className="input bg-slate-50" defaultValue={user.fullName ?? ""} readOnly />
         </div>
 
         <div>
           <FormLabel htmlFor="email">Email</FormLabel>
-          <input
-            id="email"
-            className="input bg-slate-50"
-            defaultValue={user.email ?? ""}
-            disabled
-            readOnly
-          />
+          <input id="email" className="input bg-slate-50" defaultValue={user.email ?? ""} disabled readOnly />
         </div>
 
         <div>
           <FormLabel htmlFor="userType">User type</FormLabel>
-          <input
-            id="userType"
-            className="input bg-slate-50"
-            defaultValue={user.userType.replaceAll("_", " ")}
-            disabled
-            readOnly
-          />
+          <input id="userType" className="input bg-slate-50" defaultValue={user.userType.replaceAll("_", " ")} disabled readOnly />
         </div>
 
         <div>
@@ -101,24 +112,12 @@ export function ProfileForm({
 
         <div>
           <FormLabel htmlFor="employeeCode">Employee code</FormLabel>
-          <input
-            id="employeeCode"
-            className="input bg-slate-50"
-            defaultValue={user.employeeCode ?? ""}
-            disabled
-            readOnly
-          />
+          <input id="employeeCode" className="input bg-slate-50" defaultValue={user.employeeCode ?? ""} disabled readOnly />
         </div>
 
         <div>
           <FormLabel htmlFor="designation">Designation</FormLabel>
-          <input
-            id="designation"
-            className="input bg-slate-50"
-            defaultValue={user.designation ?? ""}
-            disabled
-            readOnly
-          />
+          <input id="designation" className="input bg-slate-50" defaultValue={user.designation ?? ""} disabled readOnly />
         </div>
 
         <div className="md:col-span-2">
@@ -132,26 +131,22 @@ export function ProfileForm({
           />
         </div>
 
-        <div className="md:col-span-2">
-          <FormLabel htmlFor="phoneNumber">Phone number</FormLabel>
+        <div>
+          <FormLabel htmlFor="phoneNumber">Primary phone number</FormLabel>
+          <input id="phoneNumber" className="input" name="phoneNumber" defaultValue={user.phoneNumber ?? ""} />
+        </div>
+
+        <div>
+          <FormLabel htmlFor="secondaryPhoneNumber">Secondary phone number</FormLabel>
           <input
-            id="phoneNumber"
+            id="secondaryPhoneNumber"
             className="input"
-            name="phoneNumber"
-            defaultValue={user.phoneNumber ?? ""}
+            name="secondaryPhoneNumber"
+            defaultValue={user.secondaryPhoneNumber ?? ""}
           />
         </div>
 
-        <div className="md:col-span-2">
-          <FormLabel htmlFor="currentAddress">Current address</FormLabel>
-          <textarea
-            id="currentAddress"
-            className="input min-h-28"
-            name="currentAddress"
-            value={currentAddress}
-            onChange={(event) => setCurrentAddress(event.target.value)}
-          />
-        </div>
+        <AddressFields prefix="current" title="Current Address" value={currentAddress} onChange={setCurrentAddress} />
 
         <div className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
           <input
@@ -159,25 +154,28 @@ export function ProfileForm({
             type="checkbox"
             name="permanentSameAsCurrent"
             checked={sameAsCurrent}
-            onChange={(event) => setSameAsCurrent(event.target.checked)}
+            onChange={(event) => {
+              const checked = event.target.checked;
+              setSameAsCurrent(checked);
+              if (checked) {
+                setPermanentAddress(currentAddress);
+              } else if (!permanentAddress.country) {
+                setPermanentAddress(createDefaultAddress(currentAddress.country));
+              }
+            }}
           />
           <label htmlFor="permanentSameAsCurrent" className="text-sm text-slate-700">
             Permanent address is same as current address
           </label>
         </div>
 
-        <div className="md:col-span-2">
-          <FormLabel htmlFor="permanentAddress">Permanent address</FormLabel>
-          <textarea
-            id="permanentAddress"
-            className="input min-h-28"
-            name="permanentAddress"
-            value={sameAsCurrent ? currentAddress : permanentAddress}
-            onChange={(event) => setPermanentAddress(event.target.value)}
-            readOnly={sameAsCurrent}
-            disabled={sameAsCurrent}
-          />
-        </div>
+        <AddressFields
+          prefix="permanent"
+          title="Permanent Address"
+          value={sameAsCurrent ? currentAddress : permanentAddress}
+          onChange={setPermanentAddress}
+          disabled={sameAsCurrent}
+        />
       </div>
 
       <SubmitButton />

@@ -76,9 +76,20 @@ model User {
   designation            String?
   joiningDate            DateTime?
   phoneNumber            String?
+  secondaryPhoneNumber   String?
   isActive               Boolean             @default(true)
   currentAddress         String?             @db.Text
+  currentAddressLine     String?             @db.Text
+  currentCity            String?
+  currentState           String?
+  currentCountry         String?
+  currentPostalCode      String?
   permanentAddress       String?             @db.Text
+  permanentAddressLine   String?             @db.Text
+  permanentCity          String?
+  permanentState         String?
+  permanentCountry       String?
+  permanentPostalCode    String?
   permanentSameAsCurrent Boolean             @default(false)
   createdAt              DateTime            @default(now())
   updatedAt              DateTime            @updatedAt

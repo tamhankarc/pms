@@ -10,6 +10,7 @@ import {
   verifyPassword,
 } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { normalizeAddressCountry, toAddressSummary } from "@/lib/address";
 
 export type ProfileActionState = {
   success?: boolean;
@@ -24,11 +25,18 @@ export type PasswordActionState = {
 const profileSchema = z.object({
   fullName: z.string().min(2, "Full name is required."),
   phoneNumber: z.string().trim().max(30).optional().or(z.literal("")),
-  currentAddress: z.string().trim().max(2000).optional().or(z.literal("")),
-  permanentSameAsCurrent: z
-    .union([z.literal("on"), z.literal("true"), z.literal("1")])
-    .optional(),
-  permanentAddress: z.string().trim().max(2000).optional().or(z.literal("")),
+  secondaryPhoneNumber: z.string().trim().max(30).optional().or(z.literal("")),
+  currentAddressLine: z.string().trim().max(2000).optional().or(z.literal("")),
+  currentCity: z.string().trim().max(120).optional().or(z.literal("")),
+  currentState: z.string().trim().max(120).optional().or(z.literal("")),
+  currentCountry: z.enum(["IN", "US"]).optional(),
+  currentPostalCode: z.string().trim().max(30).optional().or(z.literal("")),
+  permanentSameAsCurrent: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  permanentAddressLine: z.string().trim().max(2000).optional().or(z.literal("")),
+  permanentCity: z.string().trim().max(120).optional().or(z.literal("")),
+  permanentState: z.string().trim().max(120).optional().or(z.literal("")),
+  permanentCountry: z.enum(["IN", "US"]).optional(),
+  permanentPostalCode: z.string().trim().max(30).optional().or(z.literal("")),
 });
 
 export async function updateProfileAction(
@@ -41,9 +49,18 @@ export async function updateProfileAction(
     const parsed = profileSchema.safeParse({
       fullName: String(formData.get("fullName") ?? ""),
       phoneNumber: String(formData.get("phoneNumber") ?? ""),
-      currentAddress: String(formData.get("currentAddress") ?? ""),
+      secondaryPhoneNumber: String(formData.get("secondaryPhoneNumber") ?? ""),
+      currentAddressLine: String(formData.get("currentAddressLine") ?? ""),
+      currentCity: String(formData.get("currentCity") ?? ""),
+      currentState: String(formData.get("currentState") ?? ""),
+      currentCountry: String(formData.get("currentCountry") ?? "IN"),
+      currentPostalCode: String(formData.get("currentPostalCode") ?? ""),
       permanentSameAsCurrent: formData.get("permanentSameAsCurrent") ?? undefined,
-      permanentAddress: String(formData.get("permanentAddress") ?? ""),
+      permanentAddressLine: String(formData.get("permanentAddressLine") ?? ""),
+      permanentCity: String(formData.get("permanentCity") ?? ""),
+      permanentState: String(formData.get("permanentState") ?? ""),
+      permanentCountry: String(formData.get("permanentCountry") ?? formData.get("currentCountry") ?? "IN"),
+      permanentPostalCode: String(formData.get("permanentPostalCode") ?? ""),
     });
 
     if (!parsed.success) {
@@ -54,18 +71,41 @@ export async function updateProfileAction(
     }
 
     const permanentSameAsCurrent = Boolean(parsed.data.permanentSameAsCurrent);
-    const currentAddress = parsed.data.currentAddress?.trim() || null;
+    const currentAddress = {
+      addressLine: parsed.data.currentAddressLine?.trim() || "",
+      city: parsed.data.currentCity?.trim() || "",
+      state: parsed.data.currentState?.trim() || "",
+      country: normalizeAddressCountry(parsed.data.currentCountry),
+      postalCode: parsed.data.currentPostalCode?.trim() || "",
+    };
     const permanentAddress = permanentSameAsCurrent
       ? currentAddress
-      : parsed.data.permanentAddress?.trim() || null;
+      : {
+          addressLine: parsed.data.permanentAddressLine?.trim() || "",
+          city: parsed.data.permanentCity?.trim() || "",
+          state: parsed.data.permanentState?.trim() || "",
+          country: normalizeAddressCountry(parsed.data.permanentCountry ?? parsed.data.currentCountry),
+          postalCode: parsed.data.permanentPostalCode?.trim() || "",
+        };
 
     const updated = await db.user.update({
       where: { id: currentUser.id },
       data: {
         fullName: parsed.data.fullName.trim(),
         phoneNumber: parsed.data.phoneNumber?.trim() || null,
-        currentAddress,
-        permanentAddress,
+        secondaryPhoneNumber: parsed.data.secondaryPhoneNumber?.trim() || null,
+        currentAddressLine: currentAddress.addressLine || null,
+        currentCity: currentAddress.city || null,
+        currentState: currentAddress.state || null,
+        currentCountry: currentAddress.country,
+        currentPostalCode: currentAddress.postalCode || null,
+        permanentAddressLine: permanentAddress.addressLine || null,
+        permanentCity: permanentAddress.city || null,
+        permanentState: permanentAddress.state || null,
+        permanentCountry: permanentAddress.country,
+        permanentPostalCode: permanentAddress.postalCode || null,
+        currentAddress: toAddressSummary(currentAddress),
+        permanentAddress: toAddressSummary(permanentAddress),
         permanentSameAsCurrent,
       },
       select: {
