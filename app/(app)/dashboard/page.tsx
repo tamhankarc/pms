@@ -98,8 +98,19 @@ export default async function DashboardPage({
   const showBillingDashboard = canSeeBillingDashboard(user);
   const showAttendanceCard = canMarkAttendance(user);
   const showEMSAdminPanel = canViewEMSAdminDashboard(user);
+  const showApprovedLeaveBlock = isAdmin(user) || isHR(user) || isManager || isTeamLead;
 
-  const [stats, projects, managedEmployees, billingData, pendingApprovalInfo, approvers, selectedApproverIds, leaveCalendarData, employeeSnapshot] = await Promise.all([
+  const [
+    stats,
+    projects,
+    managedEmployees,
+    billingData,
+    pendingApprovalInfo,
+    approvers,
+    selectedApproverIds,
+    leaveCalendarData,
+    employeeSnapshot,
+  ] = await Promise.all([
     isAccountsBilling ? Promise.resolve(null) : getDashboardStats(user),
     isAccountsBilling ? Promise.resolve([]) : getVisibleProjects(user),
     user.userType === "TEAM_LEAD" ? getManagedEmployees(user.id) : Promise.resolve([]),
@@ -109,7 +120,7 @@ export default async function DashboardPage({
     (showAttendanceCard || showEMSAdminPanel) ? getPendingLeaveApprovalInfoForUser(user) : Promise.resolve(null),
     showEMSAdminPanel ? getApproverOptions() : Promise.resolve([]),
     (showAttendanceCard || showEMSAdminPanel) ? getGlobalApproverAssignmentIds() : Promise.resolve([]),
-    (showAttendanceCard || showEMSAdminPanel) ? getApprovedLeaveMonthCalendar(leaveMonth) : Promise.resolve(null),
+    showApprovedLeaveBlock ? getApprovedLeaveMonthCalendar(leaveMonth) : Promise.resolve(null),
     showAttendanceCard ? getEmployeeDashboardSnapshot(user.id) : Promise.resolve(null),
   ]);
 
@@ -275,7 +286,7 @@ export default async function DashboardPage({
         </div>
       ) : null}
 
-      {leaveCalendarData ? (
+      {showApprovedLeaveBlock && leaveCalendarData ? (
         <ApprovedLeaveCalendar
           title="Employees on approved leave"
           subtitle="Select any date to see the employees on approved leave for that day."
