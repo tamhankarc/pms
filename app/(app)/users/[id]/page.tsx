@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { UserManageForm } from "@/components/forms/user-manage-form";
 import { PageHeader } from "@/components/ui/page-header";
 import { updateUserAction } from "@/lib/actions/user-actions";
+import { requireUser } from "@/lib/auth";
+import { canManageUsers } from "@/lib/permissions";
 import { db } from "@/lib/db";
 
 export default async function UserEditPage({
@@ -10,6 +12,9 @@ export default async function UserEditPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const currentUser = await requireUser();
+  if (!canManageUsers(currentUser)) redirect("/dashboard");
+
   const { id } = await params;
 
   const user = await db.user.findUnique({

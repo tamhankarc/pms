@@ -12,7 +12,7 @@ const EMPLOYEE_ALLOWED_PATHS = [
   "/profile",
   "/change-password",
 ];
-const ACCOUNTS_ALLOWED_PATHS = ["/dashboard", "/change-password"];
+const ACCOUNTS_ALLOWED_PATHS = ["/dashboard", "/reports", "/change-password"];
 const HR_ALLOWED_PATHS = [
   "/dashboard",
   "/users",

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { requireUser } from "@/lib/auth";
@@ -40,6 +41,7 @@ export default async function UsersPage({
   searchParams?: Promise<{ q?: string; status?: string; userType?: string; create?: string; page?: string }>;
 }) {
   const currentUser = await requireUser();
+  if (!canManageUsers(currentUser)) redirect("/dashboard");
   const params = (await searchParams) ?? {};
   const q = params.q?.trim() ?? "";
   const status = params.status ?? "all";

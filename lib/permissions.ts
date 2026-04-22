@@ -41,11 +41,11 @@ export function isPmLike(user: UserLike) {
 
 export function canComprehensivelyModerateProject(user: UserLike) { return isAdmin(user) || isManager(user) || isHR(user); }
 export function canFullyModerateProject(user: UserLike) { return canComprehensivelyModerateProject(user); }
-export function canManageUsers(user: UserLike) { return isAdmin(user) || isManager(user) || isHR(user); }
+export function canManageUsers(user: UserLike) { return isAdmin(user) || isHR(user); }
 export function canAssignTeamLeads(user: UserLike) { return isAdmin(user) || isManager(user) || isHR(user); }
 export function canCreateOrEditProject(user: UserLike) { return isAdmin(user) || isManager(user) || isTeamLead(user); }
 export function canCreateProjects(user: UserLike) { return canCreateOrEditProject(user); }
-export function canSeeAllProjects(user: UserLike) { return isAdmin(user) || isManager(user) || isTeamLead(user) || isReportViewer(user) || isHR(user); }
+export function canSeeAllProjects(user: UserLike) { return isAdmin(user) || isManager(user) || isTeamLead(user) || isReportViewer(user) || isAccounts(user) || isHR(user); }
 export function canManageCountries(user: UserLike) { return isAdmin(user) || isManager(user) || isTeamLead(user) || isHR(user); }
 export function canManageLanguages(user: UserLike) { return isAdmin(user) || isManager(user) || isTeamLead(user) || isHR(user); }
 export function canManageClients(user: UserLike) { return isAdmin(user) || isManager(user) || isTeamLead(user) || isHR(user); }

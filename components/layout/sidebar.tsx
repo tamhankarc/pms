@@ -96,6 +96,7 @@ const employeeItems: SidebarNavItem[] = [
 
 const accountsItems: SidebarNavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/change-password", label: "Change Password", icon: KeyRound },
 ];
 

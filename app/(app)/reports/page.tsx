@@ -9,6 +9,7 @@ import { db } from "@/lib/db";
 import { getVisibleProjects } from "@/lib/queries";
 import { isRoleScopedManager } from "@/lib/permissions";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
+import { formatMinutes } from "@/lib/utils";
 
 function toDateInputValue(value: Date) {
   const year = value.getFullYear();
@@ -421,6 +422,11 @@ export default async function ReportsPage({
   const paginatedTaskRows = paginateItems(taskRows, taskPage, DEFAULT_PAGE_SIZE);
   const paginatedMovieRows = paginateItems(movieRows, moviePage, DEFAULT_PAGE_SIZE);
 
+  const clientTotalMinutes = clientRows.reduce((sum, row) => sum + row.totalMinutes, 0);
+  const projectTotalMinutes = projectRows.reduce((sum, row) => sum + row.totalMinutes, 0);
+  const taskTotalMinutes = taskRows.reduce((sum, row) => sum + row.totalMinutes, 0);
+  const movieTotalMinutes = movieRows.reduce((sum, row) => sum + row.totalMinutes, 0);
+
   const clientSearch = {
     clientFromDate,
     clientToDate,
@@ -586,6 +592,9 @@ export default async function ReportsPage({
             </tbody>
           </table>
         </div>
+        <div className="border-t border-slate-100 px-4 py-4 text-right text-sm font-semibold text-slate-700">
+          Total Time: <span className="text-slate-900">{formatMinutes(clientTotalMinutes)}</span>
+        </div>
         <PaginationControls
           basePath="/reports"
           currentPage={paginatedClientRows.currentPage}
@@ -653,6 +662,9 @@ export default async function ReportsPage({
               ) : null}
             </tbody>
           </table>
+        </div>
+        <div className="border-t border-slate-100 px-4 py-4 text-right text-sm font-semibold text-slate-700">
+          Total Time: <span className="text-slate-900">{formatMinutes(projectTotalMinutes)}</span>
         </div>
         <PaginationControls
           basePath="/reports"
@@ -736,6 +748,9 @@ export default async function ReportsPage({
             </tbody>
           </table>
         </div>
+        <div className="border-t border-slate-100 px-4 py-4 text-right text-sm font-semibold text-slate-700">
+          Total Time: <span className="text-slate-900">{formatMinutes(taskTotalMinutes)}</span>
+        </div>
         <PaginationControls
           basePath="/reports"
           currentPage={paginatedTaskRows.currentPage}
@@ -816,6 +831,9 @@ export default async function ReportsPage({
               ) : null}
             </tbody>
           </table>
+        </div>
+        <div className="border-t border-slate-100 px-4 py-4 text-right text-sm font-semibold text-slate-700">
+          Total Time: <span className="text-slate-900">{formatMinutes(movieTotalMinutes)}</span>
         </div>
         <PaginationControls
           basePath="/reports"

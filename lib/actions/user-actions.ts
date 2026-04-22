@@ -112,7 +112,7 @@ export async function createUserAction(
   formData: FormData,
 ): Promise<UserFormState> {
   try {
-    const actor = await requireUserTypesForAction(["ADMIN", "MANAGER", "HR"]);
+    const actor = await requireUserTypesForAction(["ADMIN", "HR"]);
 
     const parsed = baseSchema.safeParse({
       fullName: formData.get("fullName"),
@@ -198,7 +198,7 @@ export async function updateUserAction(
   formData: FormData,
 ): Promise<UserFormState> {
   try {
-    const actor = await requireUserTypesForAction(["ADMIN", "MANAGER", "HR"]);
+    const actor = await requireUserTypesForAction(["ADMIN", "HR"]);
     const parsed = baseSchema.safeParse({
       id: formData.get("id"),
       fullName: formData.get("fullName"),
@@ -279,7 +279,7 @@ export async function updateUserAction(
 }
 
 export async function toggleUserStatusAction(formData: FormData) {
-  await requireUserTypesForAction(["ADMIN", "MANAGER", "HR"]);
+  await requireUserTypesForAction(["ADMIN", "HR"]);
   const userId = String(formData.get("userId") || "");
   if (!userId) throw new Error("User is required.");
 
@@ -310,7 +310,7 @@ export async function assignTeamLeadAction(
   formData: FormData,
 ): Promise<TeamLeadAssignmentState> {
   try {
-    const actor = await requireUserTypesForAction(["ADMIN", "MANAGER", "HR"]);
+    const actor = await requireUserTypesForAction(["ADMIN", "HR"]);
 
     const parsed = teamLeadAssignmentSchema.safeParse({
       teamLeadId: formData.get("teamLeadId"),

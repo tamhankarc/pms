@@ -10,12 +10,13 @@ import {
 } from "lucide-react";
 import type { BillingModel } from "@prisma/client";
 import { PageHeader } from "@/components/ui/page-header";
-import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { StatCard } from "@/components/ui/stat-card";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { ApprovedLeaveCalendar } from "@/components/ems/approved-leave-calendar";
 import { AttendanceActionsCard } from "@/components/ems/attendance-actions-card";
 import { AttendanceCalendar } from "@/components/ems/attendance-calendar";
 import { ApproverAssignmentForm } from "@/components/ems/approver-assignment-form";
+import { DashboardBillingFilters } from "@/components/dashboard-billing-filters";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
@@ -87,14 +88,117 @@ function getLeaveBreakupLabel(row: {
   return parts.length ? parts.join(" · ") : row.leaveType.replaceAll("_", " ");
 }
 
+function BillingDashboardSection({
+  title,
+  description,
+  billingStartDate,
+  billingEndDate,
+  billingClientId,
+  billingProjectId,
+  billingModel,
+  billingPage,
+  leaveMonth,
+  month,
+  billingData,
+}: {
+  title: string;
+  description: string;
+  billingStartDate: string;
+  billingEndDate: string;
+  billingClientId: string;
+  billingProjectId: string;
+  billingModel: BillingModel | "";
+  billingPage: string;
+  leaveMonth?: string;
+  month?: string;
+  billingData: Awaited<ReturnType<typeof getBillingDashboardData>>;
+}) {
+  return (
+    <section className="card p-6">
+      <h2 className="section-title">{title}</h2>
+      <p className="section-subtitle">{description}</p>
+
+      <DashboardBillingFilters
+        billingStartDate={billingStartDate}
+        billingEndDate={billingEndDate}
+        billingClientId={billingClientId}
+        billingProjectId={billingProjectId}
+        billingModel={billingModel}
+        leaveMonth={leaveMonth}
+        month={month}
+        clientOptions={billingData.clientOptions}
+        projectOptions={billingData.projectOptions}
+      />
+
+      <div className="mt-5 overflow-x-auto">
+        <table className="table-base">
+          <thead className="table-head">
+            <tr>
+              <th className="table-cell">Client name</th>
+              <th className="table-cell">Project name</th>
+              <th className="table-cell">Billing type</th>
+              <th className="table-cell">Time</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {billingData.rows.map((row) => (
+              <tr key={row.projectId}>
+                <td className="table-cell">{row.clientName}</td>
+                <td className="table-cell">{row.projectName}</td>
+                <td className="table-cell">{row.billingModel.replaceAll("_", " ")}</td>
+                <td className="table-cell">{row.workedTime}</td>
+              </tr>
+            ))}
+            {billingData.rows.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="table-cell text-center text-sm text-slate-500">
+                  No projects found for the selected filters.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-slate-200 bg-slate-50/70">
+              <td className="table-cell font-semibold text-slate-900" colSpan={3}>Total time</td>
+              <td className="table-cell font-semibold text-slate-900">{formatMinutes(billingData.totalWorkedMinutes)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <PaginationControls
+        basePath="/dashboard"
+        currentPage={billingData.currentPage}
+        totalPages={billingData.totalPages}
+        totalItems={billingData.totalCount}
+        pageSize={billingData.pageSize}
+        pageParam="billingPage"
+        searchParams={{
+          billingStartDate,
+          billingEndDate,
+          billingClientId,
+          billingProjectId,
+          billingModel: billingModel || undefined,
+          billingPage,
+          leaveMonth,
+          month,
+        }}
+        anchor="#project-billing-hours"
+      />
+    </section>
+  );
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
   searchParams?: Promise<{
     billingStartDate?: string;
     billingEndDate?: string;
+    billingClientId?: string;
     billingProjectId?: string;
     billingModel?: string;
+    billingPage?: string;
     leaveMonth?: string;
     month?: string;
   }>;
@@ -110,8 +214,11 @@ export default async function DashboardPage({
   const defaultBillingRange = getDefaultBillingRange();
   const billingStartDate = normalizeDateInput(params.billingStartDate) ?? defaultBillingRange.startDate;
   const billingEndDate = normalizeDateInput(params.billingEndDate) ?? defaultBillingRange.endDate;
+  const billingClientId = params.billingClientId ?? "";
   const billingProjectId = params.billingProjectId ?? "";
   const billingModel = (params.billingModel ?? "") as BillingModel | "";
+  const billingPageNumber = Number.parseInt(params.billingPage ?? "1", 10);
+  const billingPage = Number.isFinite(billingPageNumber) && billingPageNumber > 0 ? billingPageNumber : 1;
 
   const isEmployee = user.userType === "EMPLOYEE";
   const isTeamLead = user.userType === "TEAM_LEAD";
@@ -121,7 +228,10 @@ export default async function DashboardPage({
   const showBillingDashboard = canSeeBillingDashboard(user);
   const showAttendanceCard = canMarkAttendance(user);
   const showEMSAdminPanel = canViewEMSAdminDashboard(user);
-  const showApprovedLeaveBlock = isAdmin(user) || isHR(user) || isManager || isTeamLead;
+  const userIsHR = isHR(user);
+  const showApprovedLeaveBlock = isAdmin(user) || userIsHR || isManager || isTeamLead;
+  const showManagementSummary = !isEmployee && !isTeamLead && !isManager && !userIsHR;
+  const showProjectOverviewSection = !userIsHR;
 
   const resolvedJoiningDate = showAttendanceCard
     ? (
@@ -158,8 +268,26 @@ export default async function DashboardPage({
     isAccountsBilling ? Promise.resolve([]) : getVisibleProjects(user),
     user.userType === "TEAM_LEAD" ? getManagedEmployees(user.id) : Promise.resolve([]),
     showBillingDashboard
-      ? getBillingDashboardData(user, billingStartDate, billingEndDate, billingProjectId || undefined, billingModel)
-      : Promise.resolve({ rows: [], projectOptions: [] }),
+      ? getBillingDashboardData(
+          user,
+          billingStartDate,
+          billingEndDate,
+          billingClientId || undefined,
+          billingProjectId || undefined,
+          billingModel,
+          billingPage,
+          10,
+        )
+      : Promise.resolve({
+          rows: [],
+          totalWorkedMinutes: 0,
+          totalCount: 0,
+          currentPage: 1,
+          totalPages: 1,
+          pageSize: 10,
+          clientOptions: [],
+          projectOptions: [],
+        }),
     showAttendanceCard || showEMSAdminPanel ? getPendingLeaveApprovalInfoForUser(user) : Promise.resolve(null),
     showEMSAdminPanel ? getApproverOptions() : Promise.resolve([]),
     showAttendanceCard || showEMSAdminPanel ? getGlobalApproverAssignmentIds() : Promise.resolve([]),
@@ -168,7 +296,7 @@ export default async function DashboardPage({
     showAttendanceCard ? getAttendanceCalendarData(user.id, focusMonth, resolvedJoiningDate) : Promise.resolve(null),
   ]);
 
-  const canOpenLeaveApprovals = isAdmin(user) || isHR(user) || selectedApproverIds.includes(user.id);
+  const canOpenLeaveApprovals = isAdmin(user) || userIsHR || selectedApproverIds.includes(user.id);
   const pendingCount = pendingApprovalInfo?.count ?? 0;
   const pendingLabel = pendingApprovalInfo
     ? pendingApprovalInfo.mode === "total"
@@ -186,75 +314,19 @@ export default async function DashboardPage({
     return (
       <div className="space-y-6">
         <PageHeader title="Dashboard" description="Billing dashboard showing project hours by selected date range." />
-
-        <section className="card p-6">
-          <h2 className="section-title">Project billing hours</h2>
-          <p className="section-subtitle">
-            Filter by start date, end date, project, and billing type to review hours worked across projects.
-          </p>
-
-          <form className="mt-5 grid gap-3 md:grid-cols-[180px_180px_1fr_220px_auto]" method="get">
-            <input className="input" type="date" name="billingStartDate" defaultValue={billingStartDate} />
-            <input className="input" type="date" name="billingEndDate" defaultValue={billingEndDate} />
-            <SearchableCombobox
-              id="billingProjectId"
-              name="billingProjectId"
-              defaultValue={billingProjectId}
-              options={[
-                { value: "", label: "All projects" },
-                ...billingData.projectOptions.map((project) => ({ value: project.id, label: project.name })),
-              ]}
-              placeholder="All projects"
-              searchPlaceholder="Search projects..."
-              emptyLabel="No projects found."
-            />
-            <SearchableCombobox
-              id="billingModel"
-              name="billingModel"
-              defaultValue={billingModel}
-              options={[
-                { value: "", label: "All billing types" },
-                { value: "HOURLY", label: "Hourly" },
-                { value: "FIXED_FULL", label: "Fixed - Full Project" },
-                { value: "FIXED_MONTHLY", label: "Fixed - Monthly" },
-              ]}
-              placeholder="All billing types"
-              searchPlaceholder="Search billing types..."
-              emptyLabel="No billing type found."
-            />
-            <button className="btn-secondary" type="submit">
-              Apply
-            </button>
-          </form>
-
-          <div className="mt-5 overflow-x-auto">
-            <table className="table-base">
-              <thead className="table-head">
-                <tr>
-                  <th className="table-cell">Project name</th>
-                  <th className="table-cell">Billing type</th>
-                  <th className="table-cell">Hours worked</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {billingData.rows.map((row) => (
-                  <tr key={row.projectId}>
-                    <td className="table-cell">{row.projectName}</td>
-                    <td className="table-cell">{row.billingModel.replaceAll("_", " ")}</td>
-                    <td className="table-cell">{row.workedHours}</td>
-                  </tr>
-                ))}
-                {billingData.rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="table-cell text-center text-sm text-slate-500">
-                      No projects found for the selected filters.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <div id="project-billing-hours">
+          <BillingDashboardSection
+            title="Project billing hours"
+            description="Filter by start date, end date, client, project, and billing type to review time worked across projects."
+            billingStartDate={billingStartDate}
+            billingEndDate={billingEndDate}
+            billingClientId={billingClientId}
+            billingProjectId={billingProjectId}
+            billingModel={billingModel}
+            billingPage={String(billingPage)}
+            billingData={billingData}
+          />
+        </div>
       </div>
     );
   }
@@ -406,7 +478,7 @@ export default async function DashboardPage({
         />
       ) : null}
 
-      {!isEmployee && !isTeamLead && !isManager ? (
+      {showManagementSummary ? (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Visible projects"
@@ -431,164 +503,113 @@ export default async function DashboardPage({
         </div>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-        <section className="card p-6">
-          <h2 className="section-title">Recent projects</h2>
-          <p className="section-subtitle">
-            Visibility respects direct project assignment, except for Admin, Manager, Team Lead, Report Viewer, and HR accounts.
-          </p>
+      {showProjectOverviewSection ? (
+        <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
+          <section className="card p-6">
+            <h2 className="section-title">Recent projects</h2>
+            <p className="section-subtitle">
+              Visibility respects direct project assignment, except for Admin, Manager, Team Lead, Report Viewer, and HR accounts.
+            </p>
 
-          <div className="mt-5 overflow-x-auto">
-            <table className="table-base">
-              <thead className="table-head">
-                <tr>
-                  <th className="table-cell">Project</th>
-                  <th className="table-cell">Client</th>
-                  <th className="table-cell">Billing</th>
-                  <th className="table-cell">Assigned To</th>
-                  <th className="table-cell">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {projects.slice(0, 8).map((project) => (
-                  <tr key={project.id}>
-                    <td className="table-cell">
-                      <div className="font-medium text-slate-900">{project.name}</div>
-                      <div className="text-xs text-slate-500">{project.code}</div>
-                    </td>
-                    <td className="table-cell">{project.client.name}</td>
-                    <td className="table-cell">{project.billingModel.replaceAll("_", " ")}</td>
-                    <td className="table-cell">
-                      {project.assignedUsers.map((row) => row.user.fullName).join(", ") || "—"}
-                    </td>
-                    <td className="table-cell">
-                      <span className="badge-blue">{project.status.replaceAll("_", " ")}</span>
-                    </td>
-                  </tr>
-                ))}
-                {projects.length === 0 ? (
+            <div className="mt-5 overflow-x-auto">
+              <table className="table-base">
+                <thead className="table-head">
                   <tr>
-                    <td colSpan={5} className="table-cell text-center text-sm text-slate-500">
-                      No visible projects found.
-                    </td>
+                    <th className="table-cell">Project</th>
+                    <th className="table-cell">Client</th>
+                    <th className="table-cell">Billing</th>
+                    <th className="table-cell">Assigned To</th>
+                    <th className="table-cell">Status</th>
                   </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="card p-6">
-          <h2 className="section-title">Role overview</h2>
-          <p className="section-subtitle">
-            {isEmployee
-              ? "You can add time entries and estimates only for projects assigned to you, and you can also manage your leave requests and attendance from this merged platform."
-              : isTeamLead
-                ? "You can work on assigned projects, moderate employee effort within your scope, and act on leave approvals when assigned as approver."
-                : isManager
-                  ? "Managers can comprehensively moderate project operations. EMS approval access depends on approver assignment rules."
-                  : "This account can access broader project and employee management capabilities based on permissions."}
-          </p>
-
-          {isTeamLead ? (
-            <ul className="mt-5 space-y-3">
-              {managedEmployees.map((row) => (
-                <li key={row.id} className="rounded-2xl border border-slate-200 p-4">
-                  <p className="font-medium text-slate-900">{row.employee.fullName}</p>
-                  <p className="text-sm text-slate-500">
-                    {(row.employee.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}
-                  </p>
-                </li>
-              ))}
-              {managedEmployees.length === 0 ? (
-                <li className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-                  No employees are currently assigned to you.
-                </li>
-              ) : null}
-            </ul>
-          ) : (
-            <div className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-              {isEmployee
-                ? "Use Time Entries and Estimates for delivery work, and Leave Requests for attendance-related self-service."
-                : "This account can perform moderation and management actions based on its configured role permissions."}
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {projects.slice(0, 8).map((project) => (
+                    <tr key={project.id}>
+                      <td className="table-cell">
+                        <div className="font-medium text-slate-900">{project.name}</div>
+                        <div className="text-xs text-slate-500">{project.code}</div>
+                      </td>
+                      <td className="table-cell">{project.client.name}</td>
+                      <td className="table-cell">{project.billingModel.replaceAll("_", " ")}</td>
+                      <td className="table-cell">
+                        {project.assignedUsers.map((row) => row.user.fullName).join(", ") || "—"}
+                      </td>
+                      <td className="table-cell">
+                        <span className="badge-blue">{project.status.replaceAll("_", " ")}</span>
+                      </td>
+                    </tr>
+                  ))}
+                  {projects.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="table-cell text-center text-sm text-slate-500">
+                        No visible projects found.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
             </div>
-          )}
-        </section>
-      </div>
+          </section>
+
+          <section className="card p-6">
+            <h2 className="section-title">Role overview</h2>
+            <p className="section-subtitle">
+              {isEmployee
+                ? "You can add time entries and estimates only for projects assigned to you, and you can also manage your leave requests and attendance from this merged platform."
+                : isTeamLead
+                  ? "You can work on assigned projects, moderate employee effort within your scope, and act on leave approvals when assigned as approver."
+                  : isManager
+                    ? "Managers can comprehensively moderate project operations. EMS approval access depends on approver assignment rules."
+                    : "This account can access broader project and employee management capabilities based on permissions."}
+            </p>
+
+            {isTeamLead ? (
+              <ul className="mt-5 space-y-3">
+                {managedEmployees.map((row) => (
+                  <li key={row.id} className="rounded-2xl border border-slate-200 p-4">
+                    <p className="font-medium text-slate-900">{row.employee.fullName}</p>
+                    <p className="text-sm text-slate-500">
+                      {(row.employee.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}
+                    </p>
+                  </li>
+                ))}
+                {managedEmployees.length === 0 ? (
+                  <li className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                    No employees are currently assigned to you.
+                  </li>
+                ) : null}
+              </ul>
+            ) : (
+              <div className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+                {isEmployee
+                  ? "Use Time Entries and Estimates for delivery work, and Leave Requests for attendance-related self-service."
+                  : "This account can perform moderation and management actions based on its configured role permissions."}
+              </div>
+            )}
+          </section>
+        </div>
+      ) : null}
 
       {showEMSAdminPanel ? (
         <ApproverAssignmentForm approvers={approvers} selectedApproverIds={selectedApproverIds} />
       ) : null}
 
       {showBillingDashboard ? (
-        <section className="card p-6">
-          <h2 className="section-title">Project billing hours</h2>
-          <p className="section-subtitle">
-            Review project-level hours worked for a selected date range. This section is available to Admins, Project Managers, and Billing Accounts.
-          </p>
-
-          <form className="mt-5 grid gap-3 md:grid-cols-[180px_180px_1fr_220px_auto]" method="get">
-            <input className="input" type="date" name="billingStartDate" defaultValue={billingStartDate} />
-            <input className="input" type="date" name="billingEndDate" defaultValue={billingEndDate} />
-            <SearchableCombobox
-              id="billingProjectId"
-              name="billingProjectId"
-              defaultValue={billingProjectId}
-              options={[
-                { value: "", label: "All projects" },
-                ...billingData.projectOptions.map((project) => ({ value: project.id, label: project.name })),
-              ]}
-              placeholder="All projects"
-              searchPlaceholder="Search projects..."
-              emptyLabel="No projects found."
-            />
-            <SearchableCombobox
-              id="billingModel"
-              name="billingModel"
-              defaultValue={billingModel}
-              options={[
-                { value: "", label: "All billing types" },
-                { value: "HOURLY", label: "Hourly" },
-                { value: "FIXED_FULL", label: "Fixed - Full Project" },
-                { value: "FIXED_MONTHLY", label: "Fixed - Monthly" },
-              ]}
-              placeholder="All billing types"
-              searchPlaceholder="Search billing types..."
-              emptyLabel="No billing type found."
-            />
-            <button className="btn-secondary" type="submit">
-              Apply
-            </button>
-          </form>
-
-          <div className="mt-5 overflow-x-auto">
-            <table className="table-base">
-              <thead className="table-head">
-                <tr>
-                  <th className="table-cell">Project name</th>
-                  <th className="table-cell">Billing type</th>
-                  <th className="table-cell">Hours worked</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {billingData.rows.map((row) => (
-                  <tr key={row.projectId}>
-                    <td className="table-cell">{row.projectName}</td>
-                    <td className="table-cell">{row.billingModel.replaceAll("_", " ")}</td>
-                    <td className="table-cell">{row.workedHours}</td>
-                  </tr>
-                ))}
-                {billingData.rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="table-cell text-center text-sm text-slate-500">
-                      No projects found for the selected filters.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <div id="project-billing-hours">
+          <BillingDashboardSection
+            title="Project billing hours"
+            description="Review project-level time worked for a selected date range. This section is available to Admins, Project Managers, and Billing Accounts."
+            billingStartDate={billingStartDate}
+            billingEndDate={billingEndDate}
+            billingClientId={billingClientId}
+            billingProjectId={billingProjectId}
+            billingModel={billingModel}
+            billingPage={String(billingPage)}
+            leaveMonth={leaveMonth}
+            month={params.month}
+            billingData={billingData}
+          />
+        </div>
       ) : null}
     </div>
   );
