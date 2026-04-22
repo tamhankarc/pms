@@ -9,8 +9,17 @@ type CalendarData = {
   presentDays: string[];
   leaveDays: string[];
   weekendOrHolidayDays: string[];
+  holidayNamesByDate?: Record<string, string>;
   minMonthKey: string;
   maxMonthKey: string;
+};
+
+type CalendarQueryParams = {
+  billingStartDate?: string;
+  billingEndDate?: string;
+  billingProjectId?: string;
+  billingModel?: string;
+  leaveMonth?: string;
 };
 
 function monthLabel(monthKey: string) {
@@ -18,6 +27,15 @@ function monthLabel(monthKey: string) {
   return new Intl.DateTimeFormat("en-IN", {
     month: "long",
     year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, 1, 12, 0, 0)));
+}
+
+function shortMonthLabel(monthKey: string) {
+  const [year, month] = monthKey.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-IN", {
+    month: "short",
+    year: "2-digit",
     timeZone: "UTC",
   }).format(new Date(Date.UTC(year, month - 1, 1, 12, 0, 0)));
 }
@@ -48,13 +66,36 @@ function buildMonthGrid(monthKey: string) {
   return cells;
 }
 
-function DayCell({ dateKey, day, todayKey, presentDays, leaveDays, weekendOrHolidayDays }: {
+function buildMonthHref(monthKey: string, queryParams?: CalendarQueryParams) {
+  const params = new URLSearchParams();
+
+  if (queryParams?.billingStartDate) params.set("billingStartDate", queryParams.billingStartDate);
+  if (queryParams?.billingEndDate) params.set("billingEndDate", queryParams.billingEndDate);
+  if (queryParams?.billingProjectId) params.set("billingProjectId", queryParams.billingProjectId);
+  if (queryParams?.billingModel) params.set("billingModel", queryParams.billingModel);
+  if (queryParams?.leaveMonth) params.set("leaveMonth", queryParams.leaveMonth);
+  params.set("month", monthKey);
+
+  const query = params.toString();
+  return query ? `/dashboard?${query}#attendance-calendar` : "/dashboard#attendance-calendar";
+}
+
+function DayCell({
+  dateKey,
+  day,
+  todayKey,
+  presentDays,
+  leaveDays,
+  weekendOrHolidayDays,
+  holidayNamesByDate,
+}: {
   dateKey?: string;
   day: number | null;
   todayKey: string;
   presentDays: Set<string>;
   leaveDays: Set<string>;
   weekendOrHolidayDays: Set<string>;
+  holidayNamesByDate: Record<string, string>;
 }) {
   let className = "bg-transparent border-transparent";
 
@@ -74,21 +115,35 @@ function DayCell({ dateKey, day, todayKey, presentDays, leaveDays, weekendOrHoli
     }
   }
 
+  const holidayName = dateKey ? holidayNamesByDate[dateKey] : "";
+
   return (
     <div
-      className={`flex min-h-12 items-start justify-end rounded-xl border px-2 py-2 text-sm font-medium text-slate-700 ${className}`}
+      className={`flex min-h-16 flex-col rounded-xl border px-2 py-2 text-slate-700 ${className}`}
     >
-      {day ?? ""}
+      <div className="flex items-start justify-end text-sm font-medium">{day ?? ""}</div>
+      {holidayName ? (
+        <div className="mt-1 line-clamp-2 text-[10px] leading-3 text-slate-600">{holidayName}</div>
+      ) : null}
     </div>
   );
 }
 
-function MonthBlock({ monthKey, todayKey, presentDays, leaveDays, weekendOrHolidayDays, className = "" }: {
+function MonthBlock({
+  monthKey,
+  todayKey,
+  presentDays,
+  leaveDays,
+  weekendOrHolidayDays,
+  holidayNamesByDate,
+  className = "",
+}: {
   monthKey: string;
   todayKey: string;
   presentDays: Set<string>;
   leaveDays: Set<string>;
   weekendOrHolidayDays: Set<string>;
+  holidayNamesByDate: Record<string, string>;
   className?: string;
 }) {
   const grid = buildMonthGrid(monthKey);
@@ -115,6 +170,7 @@ function MonthBlock({ monthKey, todayKey, presentDays, leaveDays, weekendOrHolid
             presentDays={presentDays}
             leaveDays={leaveDays}
             weekendOrHolidayDays={weekendOrHolidayDays}
+            holidayNamesByDate={holidayNamesByDate}
           />
         ))}
       </div>
@@ -128,36 +184,37 @@ export function AttendanceCalendar({
   focusData,
   companionData,
   todayKey,
+  queryParams,
 }: {
   focusMonthKey: string;
   companionMonthKey?: string;
   focusData: CalendarData;
   companionData?: CalendarData;
   todayKey: string;
+  queryParams?: CalendarQueryParams;
 }) {
   const previousMonth = clampMonthKey(
     shiftMonthKey(focusMonthKey, -1),
     focusData.minMonthKey,
     focusData.maxMonthKey,
   );
-  const nextMonth = clampMonthKey(
-    shiftMonthKey(focusMonthKey, 1),
-    focusData.minMonthKey,
-    focusData.maxMonthKey,
-  );
+
+  const nextMonth = shiftMonthKey(focusMonthKey, 1);
 
   const focusPresentDays = new Set(focusData.presentDays);
   const focusLeaveDays = new Set(focusData.leaveDays);
   const focusWeekendOrHolidayDays = new Set(focusData.weekendOrHolidayDays);
+  const focusHolidayNamesByDate = focusData.holidayNamesByDate ?? {};
   const companionPresentDays = new Set(companionData?.presentDays ?? []);
   const companionLeaveDays = new Set(companionData?.leaveDays ?? []);
   const companionWeekendOrHolidayDays = new Set(companionData?.weekendOrHolidayDays ?? []);
+  const companionHolidayNamesByDate = companionData?.holidayNamesByDate ?? {};
 
   const showDualLayout = Boolean(companionMonthKey && companionData);
   const leftMonthKey = companionMonthKey && companionData ? companionMonthKey : focusMonthKey;
 
   return (
-    <section className="card p-6">
+    <section id="attendance-calendar" className="card p-6 scroll-mt-24">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h2 className="section-title">Attendance calendar</h2>
@@ -168,18 +225,22 @@ export function AttendanceCalendar({
 
         <div className="flex items-center justify-center gap-3 self-start">
           <Link
+            scroll={false}
             className={`inline-flex h-10 w-10 items-center justify-center rounded-full border ${previousMonth === focusMonthKey ? "pointer-events-none border-slate-200 text-slate-300" : "border-slate-300 text-slate-700 hover:bg-slate-50"}`}
-            href={`/dashboard?month=${previousMonth}`}
+            href={buildMonthHref(previousMonth, queryParams)}
             aria-label="Previous month"
           >
             <ChevronLeft className="h-4 w-4" />
           </Link>
-          <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700">
-            {showDualLayout ? `${monthLabel(leftMonthKey)} - ${monthLabel(focusMonthKey)}` : monthLabel(focusMonthKey)}
+
+          <div className="inline-flex min-w-[84px] items-center justify-center whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium leading-none text-slate-700">
+            {showDualLayout ? `${shortMonthLabel(leftMonthKey)} - ${shortMonthLabel(focusMonthKey)}` : shortMonthLabel(focusMonthKey)}
           </div>
+
           <Link
-            className={`inline-flex h-10 w-10 items-center justify-center rounded-full border ${nextMonth === focusMonthKey ? "pointer-events-none border-slate-200 text-slate-300" : "border-slate-300 text-slate-700 hover:bg-slate-50"}`}
-            href={`/dashboard?month=${nextMonth}`}
+            scroll={false}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 text-slate-700 hover:bg-slate-50"
+            href={buildMonthHref(nextMonth, queryParams)}
             aria-label="Next month"
           >
             <ChevronRight className="h-4 w-4" />
@@ -195,6 +256,7 @@ export function AttendanceCalendar({
             presentDays={companionPresentDays}
             leaveDays={companionLeaveDays}
             weekendOrHolidayDays={companionWeekendOrHolidayDays}
+            holidayNamesByDate={companionHolidayNamesByDate}
             className="hidden 2xl:block"
           />
           <MonthBlock
@@ -203,6 +265,7 @@ export function AttendanceCalendar({
             presentDays={focusPresentDays}
             leaveDays={focusLeaveDays}
             weekendOrHolidayDays={focusWeekendOrHolidayDays}
+            holidayNamesByDate={focusHolidayNamesByDate}
             className="2xl:col-span-1"
           />
         </div>
@@ -214,6 +277,7 @@ export function AttendanceCalendar({
             presentDays={focusPresentDays}
             leaveDays={focusLeaveDays}
             weekendOrHolidayDays={focusWeekendOrHolidayDays}
+            holidayNamesByDate={focusHolidayNamesByDate}
           />
         </div>
       )}

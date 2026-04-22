@@ -344,6 +344,13 @@ export default async function DashboardPage({
               focusMonthKey={focusMonth}
               focusData={focusCalendarData}
               todayKey={todayKey}
+              queryParams={{
+                billingStartDate,
+                billingEndDate,
+                billingProjectId,
+                billingModel,
+                leaveMonth,
+              }}
             />
           ) : null}
 

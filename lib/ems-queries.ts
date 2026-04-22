@@ -306,10 +306,17 @@ export async function getAttendanceCalendarData(userId: string, monthKey: string
     where: {
       holidayDate: { gte: monthStart, lt: monthEndExclusive },
     },
-    select: { holidayDate: true },
+    select: { holidayDate: true, name: true },
+    orderBy: { holidayDate: "asc" },
   });
 
-  const holidayKeys = new Set(holidayRows.map((row) => getIstDateKey(row.holidayDate)));
+  const holidayNamesByDate: Record<string, string> = {};
+  for (const row of holidayRows) {
+    const dateKey = getIstDateKey(row.holidayDate);
+    holidayNamesByDate[dateKey] = row.name;
+  }
+
+  const holidayKeys = new Set(Object.keys(holidayNamesByDate));
   const weekendOrHolidayDays = new Set<string>(holidayKeys);
   const [year, month] = monthKey.split("-").map(Number);
   const daysInMonth = new Date(Date.UTC(year, month, 0, 12, 0, 0)).getUTCDate();
@@ -346,6 +353,7 @@ export async function getAttendanceCalendarData(userId: string, monthKey: string
     presentDays: [...presentDays],
     leaveDays: [...leaveDays],
     weekendOrHolidayDays: [...weekendOrHolidayDays],
+    holidayNamesByDate,
     minMonthKey: getInitialCalendarStartMonth(joiningDate),
     maxMonthKey: getIstDateKey().slice(0, 7),
   };

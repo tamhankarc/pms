@@ -23,6 +23,7 @@ function isDesktopLikeDevice() {
 export function AttendanceActionsCard({ canMarkIn, canMarkOut, markInAt, markOutAt, city, shift }: Props) {
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
+  const [pendingAction, setPendingAction] = useState<"MARK_IN" | "MARK_OUT" | null>(null);
   const [isDesktop, setIsDesktop] = useState(true);
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export function AttendanceActionsCard({ canMarkIn, canMarkOut, markInAt, markOut
         formData.set("latitude", String(position.coords.latitude));
         formData.set("longitude", String(position.coords.longitude));
 
+        setPendingAction(actionType);
         startTransition(async () => {
           try {
             await markAttendanceAction(formData);
@@ -64,6 +66,8 @@ export function AttendanceActionsCard({ canMarkIn, canMarkOut, markInAt, markOut
             if ((err instanceof Error ? err.message : "").includes("signed out")) {
               window.location.href = "/login";
             }
+          } finally {
+            setPendingAction(null);
           }
         });
       },
@@ -102,7 +106,7 @@ export function AttendanceActionsCard({ canMarkIn, canMarkOut, markInAt, markOut
             disabled={!canMarkIn || pending}
             onClick={() => submit("MARK_IN")}
           >
-            {pending ? "Processing..." : "Mark-In"}
+            {pendingAction === "MARK_IN" ? "Processing..." : "Mark-In"}
           </button>
           <button
             type="button"
@@ -110,7 +114,7 @@ export function AttendanceActionsCard({ canMarkIn, canMarkOut, markInAt, markOut
             disabled={!canMarkOut || pending}
             onClick={() => submit("MARK_OUT")}
           >
-            {pending ? "Processing..." : "Mark-Out"}
+            {pendingAction === "MARK_OUT" ? "Processing..." : "Mark-Out"}
           </button>
         </div>
       </div>
