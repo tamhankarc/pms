@@ -1,13 +1,23 @@
 import Link from "next/link";
-import { Bell, CalendarDays, ClipboardList, FolderKanban, Hourglass, TimerReset } from "lucide-react";
+import {
+  Bell,
+  CalendarDays,
+  ClipboardList,
+  FolderKanban,
+  Hourglass,
+  MapPin,
+  TimerReset,
+} from "lucide-react";
 import type { BillingModel } from "@prisma/client";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { StatCard } from "@/components/ui/stat-card";
 import { ApprovedLeaveCalendar } from "@/components/ems/approved-leave-calendar";
 import { AttendanceActionsCard } from "@/components/ems/attendance-actions-card";
+import { AttendanceCalendar } from "@/components/ems/attendance-calendar";
 import { ApproverAssignmentForm } from "@/components/ems/approver-assignment-form";
 import { requireUser } from "@/lib/auth";
+import { db } from "@/lib/db";
 import {
   getBillingDashboardData,
   getDashboardStats,
@@ -24,11 +34,20 @@ import {
 import {
   getApprovedLeaveMonthCalendar,
   getApproverOptions,
+  getAttendanceCalendarData,
   getEmployeeDashboardSnapshot,
   getGlobalApproverAssignmentIds,
   getPendingLeaveApprovalInfoForUser,
 } from "@/lib/ems-queries";
-import { formatDateInIst, formatTimeInIst, getIstDateKey, isMarkInWindow, isMarkOutWindow } from "@/lib/ist";
+import {
+  clampMonthKey,
+  formatDateInIst,
+  formatTimeInIst,
+  getInitialCalendarStartMonth,
+  getIstDateKey,
+  isMarkInWindow,
+  isMarkOutWindow,
+} from "@/lib/ist";
 import { formatMinutes } from "@/lib/utils";
 
 function toDateInputValue(value: Date) {
@@ -77,14 +96,17 @@ export default async function DashboardPage({
     billingProjectId?: string;
     billingModel?: string;
     leaveMonth?: string;
+    month?: string;
   }>;
 }) {
   const user = await requireUser();
   const params = (await searchParams) ?? {};
   const todayKey = getIstDateKey();
-  const leaveMonth = params.leaveMonth && /^\d{4}-\d{2}$/.test(params.leaveMonth)
-    ? params.leaveMonth
-    : todayKey.slice(0, 7);
+  const leaveMonth =
+    params.leaveMonth && /^\d{4}-\d{2}$/.test(params.leaveMonth)
+      ? params.leaveMonth
+      : todayKey.slice(0, 7);
+
   const defaultBillingRange = getDefaultBillingRange();
   const billingStartDate = normalizeDateInput(params.billingStartDate) ?? defaultBillingRange.startDate;
   const billingEndDate = normalizeDateInput(params.billingEndDate) ?? defaultBillingRange.endDate;
@@ -95,10 +117,30 @@ export default async function DashboardPage({
   const isTeamLead = user.userType === "TEAM_LEAD";
   const isManager = user.userType === "MANAGER";
   const isAccountsBilling = user.userType === "ACCOUNTS" && user.functionalRole === "BILLING";
+
   const showBillingDashboard = canSeeBillingDashboard(user);
   const showAttendanceCard = canMarkAttendance(user);
   const showEMSAdminPanel = canViewEMSAdminDashboard(user);
   const showApprovedLeaveBlock = isAdmin(user) || isHR(user) || isManager || isTeamLead;
+
+  const resolvedJoiningDate = showAttendanceCard
+    ? (
+        await db.user.findUnique({
+          where: { id: user.id },
+          select: { joiningDate: true },
+        })
+      )?.joiningDate ?? null
+    : null;
+
+  const currentMonth = todayKey.slice(0, 7);
+  const minMonth = getInitialCalendarStartMonth(resolvedJoiningDate);
+  const focusMonth = showAttendanceCard
+    ? clampMonthKey(
+        params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : currentMonth,
+        minMonth,
+        currentMonth,
+      )
+    : currentMonth;
 
   const [
     stats,
@@ -110,6 +152,7 @@ export default async function DashboardPage({
     selectedApproverIds,
     leaveCalendarData,
     employeeSnapshot,
+    focusCalendarData,
   ] = await Promise.all([
     isAccountsBilling ? Promise.resolve(null) : getDashboardStats(user),
     isAccountsBilling ? Promise.resolve([]) : getVisibleProjects(user),
@@ -117,11 +160,12 @@ export default async function DashboardPage({
     showBillingDashboard
       ? getBillingDashboardData(user, billingStartDate, billingEndDate, billingProjectId || undefined, billingModel)
       : Promise.resolve({ rows: [], projectOptions: [] }),
-    (showAttendanceCard || showEMSAdminPanel) ? getPendingLeaveApprovalInfoForUser(user) : Promise.resolve(null),
+    showAttendanceCard || showEMSAdminPanel ? getPendingLeaveApprovalInfoForUser(user) : Promise.resolve(null),
     showEMSAdminPanel ? getApproverOptions() : Promise.resolve([]),
-    (showAttendanceCard || showEMSAdminPanel) ? getGlobalApproverAssignmentIds() : Promise.resolve([]),
+    showAttendanceCard || showEMSAdminPanel ? getGlobalApproverAssignmentIds() : Promise.resolve([]),
     showApprovedLeaveBlock ? getApprovedLeaveMonthCalendar(leaveMonth) : Promise.resolve(null),
     showAttendanceCard ? getEmployeeDashboardSnapshot(user.id) : Promise.resolve(null),
+    showAttendanceCard ? getAttendanceCalendarData(user.id, focusMonth, resolvedJoiningDate) : Promise.resolve(null),
   ]);
 
   const canOpenLeaveApprovals = isAdmin(user) || isHR(user) || selectedApproverIds.includes(user.id);
@@ -145,7 +189,9 @@ export default async function DashboardPage({
 
         <section className="card p-6">
           <h2 className="section-title">Project billing hours</h2>
-          <p className="section-subtitle">Filter by start date, end date, project, and billing type to review hours worked across projects.</p>
+          <p className="section-subtitle">
+            Filter by start date, end date, project, and billing type to review hours worked across projects.
+          </p>
 
           <form className="mt-5 grid gap-3 md:grid-cols-[180px_180px_1fr_220px_auto]" method="get">
             <input className="input" type="date" name="billingStartDate" defaultValue={billingStartDate} />
@@ -176,7 +222,9 @@ export default async function DashboardPage({
               searchPlaceholder="Search billing types..."
               emptyLabel="No billing type found."
             />
-            <button className="btn-secondary" type="submit">Apply</button>
+            <button className="btn-secondary" type="submit">
+              Apply
+            </button>
           </form>
 
           <div className="mt-5 overflow-x-auto">
@@ -198,7 +246,9 @@ export default async function DashboardPage({
                 ))}
                 {billingData.rows.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="table-cell text-center text-sm text-slate-500">No projects found for the selected filters.</td>
+                    <td colSpan={3} className="table-cell text-center text-sm text-slate-500">
+                      No projects found for the selected filters.
+                    </td>
                   </tr>
                 ) : null}
               </tbody>
@@ -216,7 +266,9 @@ export default async function DashboardPage({
         description="Combined delivery, billing, attendance, and leave overview for the current workspace."
         actions={
           showAttendanceCard ? (
-            <Link className="btn-secondary" href="/leave-requests">Manage leave requests</Link>
+            <Link className="btn-secondary" href="/leave-requests">
+              Manage leave requests
+            </Link>
           ) : undefined
         }
       />
@@ -230,10 +282,14 @@ export default async function DashboardPage({
               </div>
               <div>
                 <p className="text-sm font-semibold text-amber-900">Pending Leave Approvals</p>
-                <p className="mt-1 text-sm text-amber-800"><span className="font-semibold">{pendingLabel}</span></p>
+                <p className="mt-1 text-sm text-amber-800">
+                  <span className="font-semibold">{pendingLabel}</span>
+                </p>
               </div>
             </div>
-            <Link className="btn-secondary" href="/leave-approvals">Open Leave Approvals</Link>
+            <Link className="btn-secondary" href="/leave-approvals">
+              Open Leave Approvals
+            </Link>
           </div>
         </section>
       ) : null}
@@ -241,10 +297,37 @@ export default async function DashboardPage({
       {showAttendanceCard && employeeSnapshot ? (
         <div className="space-y-6">
           <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard label="Casual leaves remaining" value={employeeSnapshot.leaveBalance.casualLeaves.toFixed(2)} icon={<CalendarDays className="h-5 w-5" />} />
-            <StatCard label="Earned leaves remaining" value={employeeSnapshot.leaveBalance.earnedLeaves.toFixed(2)} icon={<CalendarDays className="h-5 w-5" />} />
-            <StatCard label="Today mark-in" value={formatTimeInIst(employeeSnapshot.attendanceStatus.markIn?.markedAt ?? null) || "Not marked"} icon={<TimerReset className="h-5 w-5" />} />
-            <StatCard label="Today mark-out" value={formatTimeInIst(employeeSnapshot.attendanceStatus.markOut?.markedAt ?? null) || "Not marked"} icon={<TimerReset className="h-5 w-5" />} />
+            <StatCard
+              label="Casual leaves remaining"
+              value={employeeSnapshot.leaveBalance.casualLeaves.toFixed(2)}
+              icon={<CalendarDays className="h-5 w-5" />}
+            />
+            <StatCard
+              label="Earned leaves remaining"
+              value={employeeSnapshot.leaveBalance.earnedLeaves.toFixed(2)}
+              icon={<CalendarDays className="h-5 w-5" />}
+            />
+            <StatCard
+              label="Today mark-in"
+              value={formatTimeInIst(employeeSnapshot.attendanceStatus.markIn?.markedAt ?? null) || "Not marked"}
+              icon={<TimerReset className="h-5 w-5" />}
+            />
+            <StatCard
+              label="Today mark-out"
+              value={formatTimeInIst(employeeSnapshot.attendanceStatus.markOut?.markedAt ?? null) || "Not marked"}
+              icon={<TimerReset className="h-5 w-5" />}
+            />
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            <div className="flex items-center gap-2 font-medium text-slate-900">
+              <MapPin className="h-4 w-4" />
+              Geo Detection rule
+            </div>
+            <p className="mt-2">
+              Attendance actions work only when browser geolocation is enabled. Any attendance attempt without valid
+              geolocation will sign you out.
+            </p>
           </section>
 
           <AttendanceActionsCard
@@ -256,13 +339,23 @@ export default async function DashboardPage({
             shift={shift}
           />
 
+          {focusCalendarData ? (
+            <AttendanceCalendar
+              focusMonthKey={focusMonth}
+              focusData={focusCalendarData}
+              todayKey={todayKey}
+            />
+          ) : null}
+
           <section className="card p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h2 className="section-title">Current leave snapshot</h2>
                 <p className="section-subtitle">Recent active leave requests and their latest status.</p>
               </div>
-              <Link className="btn-primary" href="/leave-requests/new">Create leave request</Link>
+              <Link className="btn-primary" href="/leave-requests/new">
+                Create leave request
+              </Link>
             </div>
 
             <div className="mt-5 space-y-3">
@@ -271,7 +364,9 @@ export default async function DashboardPage({
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-medium text-slate-900">{getLeaveBreakupLabel(row as never)}</p>
-                      <p className="text-sm text-slate-500">{formatDateInIst(row.startDate)} - {formatDateInIst(row.endDate)}</p>
+                      <p className="text-sm text-slate-500">
+                        {formatDateInIst(row.startDate)} - {formatDateInIst(row.endDate)}
+                      </p>
                     </div>
                     <span className="badge-blue">{row.status.replaceAll("_", " ")}</span>
                   </div>
@@ -279,7 +374,9 @@ export default async function DashboardPage({
                 </div>
               ))}
               {employeeSnapshot.leaveSummary.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">No current leave requests found.</div>
+                <div className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                  No current leave requests found.
+                </div>
               ) : null}
             </div>
           </section>
@@ -297,23 +394,42 @@ export default async function DashboardPage({
             billingEndDate,
             billingProjectId,
             billingModel,
+            month: params.month,
           }}
         />
       ) : null}
 
       {!isEmployee && !isTeamLead && !isManager ? (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Visible projects" value={String(stats?.projects ?? 0)} icon={<FolderKanban className="h-5 w-5" />} />
-          <StatCard label="Approved effort" value={formatMinutes(stats?.approvedMinutes ?? 0)} icon={<Hourglass className="h-5 w-5" />} />
-          <StatCard label="Approved billable effort" value={formatMinutes(stats?.approvedBillableMinutes ?? 0)} icon={<TimerReset className="h-5 w-5" />} />
-          <StatCard label="Pending estimates" value={String(stats?.pendingEstimates ?? 0)} icon={<ClipboardList className="h-5 w-5" />} />
+          <StatCard
+            label="Visible projects"
+            value={String(stats?.projects ?? 0)}
+            icon={<FolderKanban className="h-5 w-5" />}
+          />
+          <StatCard
+            label="Approved effort"
+            value={formatMinutes(stats?.approvedMinutes ?? 0)}
+            icon={<Hourglass className="h-5 w-5" />}
+          />
+          <StatCard
+            label="Approved billable effort"
+            value={formatMinutes(stats?.approvedBillableMinutes ?? 0)}
+            icon={<TimerReset className="h-5 w-5" />}
+          />
+          <StatCard
+            label="Pending estimates"
+            value={String(stats?.pendingEstimates ?? 0)}
+            icon={<ClipboardList className="h-5 w-5" />}
+          />
         </div>
       ) : null}
 
-      <div className={`${isEmployee ? "grid gap-6 xl:grid-cols-[1.4fr_1fr]" : "grid gap-6 xl:grid-cols-[1.4fr_1fr]"}`}>
+      <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
         <section className="card p-6">
           <h2 className="section-title">Recent projects</h2>
-          <p className="section-subtitle">Visibility respects direct project assignment, except for Admin, Manager, Team Lead, Report Viewer, and HR accounts.</p>
+          <p className="section-subtitle">
+            Visibility respects direct project assignment, except for Admin, Manager, Team Lead, Report Viewer, and HR accounts.
+          </p>
 
           <div className="mt-5 overflow-x-auto">
             <table className="table-base">
@@ -335,13 +451,19 @@ export default async function DashboardPage({
                     </td>
                     <td className="table-cell">{project.client.name}</td>
                     <td className="table-cell">{project.billingModel.replaceAll("_", " ")}</td>
-                    <td className="table-cell">{project.assignedUsers.map((row) => row.user.fullName).join(", ") || "—"}</td>
-                    <td className="table-cell"><span className="badge-blue">{project.status.replaceAll("_", " ")}</span></td>
+                    <td className="table-cell">
+                      {project.assignedUsers.map((row) => row.user.fullName).join(", ") || "—"}
+                    </td>
+                    <td className="table-cell">
+                      <span className="badge-blue">{project.status.replaceAll("_", " ")}</span>
+                    </td>
                   </tr>
                 ))}
                 {projects.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="table-cell text-center text-sm text-slate-500">No visible projects found.</td>
+                    <td colSpan={5} className="table-cell text-center text-sm text-slate-500">
+                      No visible projects found.
+                    </td>
                   </tr>
                 ) : null}
               </tbody>
@@ -366,11 +488,15 @@ export default async function DashboardPage({
               {managedEmployees.map((row) => (
                 <li key={row.id} className="rounded-2xl border border-slate-200 p-4">
                   <p className="font-medium text-slate-900">{row.employee.fullName}</p>
-                  <p className="text-sm text-slate-500">{(row.employee.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}</p>
+                  <p className="text-sm text-slate-500">
+                    {(row.employee.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}
+                  </p>
                 </li>
               ))}
               {managedEmployees.length === 0 ? (
-                <li className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">No employees are currently assigned to you.</li>
+                <li className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                  No employees are currently assigned to you.
+                </li>
               ) : null}
             </ul>
           ) : (
@@ -390,7 +516,9 @@ export default async function DashboardPage({
       {showBillingDashboard ? (
         <section className="card p-6">
           <h2 className="section-title">Project billing hours</h2>
-          <p className="section-subtitle">Review project-level hours worked for a selected date range. This section is available to Admins, Project Managers, and Billing Accounts.</p>
+          <p className="section-subtitle">
+            Review project-level hours worked for a selected date range. This section is available to Admins, Project Managers, and Billing Accounts.
+          </p>
 
           <form className="mt-5 grid gap-3 md:grid-cols-[180px_180px_1fr_220px_auto]" method="get">
             <input className="input" type="date" name="billingStartDate" defaultValue={billingStartDate} />
@@ -421,7 +549,9 @@ export default async function DashboardPage({
               searchPlaceholder="Search billing types..."
               emptyLabel="No billing type found."
             />
-            <button className="btn-secondary" type="submit">Apply</button>
+            <button className="btn-secondary" type="submit">
+              Apply
+            </button>
           </form>
 
           <div className="mt-5 overflow-x-auto">
@@ -443,7 +573,9 @@ export default async function DashboardPage({
                 ))}
                 {billingData.rows.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="table-cell text-center text-sm text-slate-500">No projects found for the selected filters.</td>
+                    <td colSpan={3} className="table-cell text-center text-sm text-slate-500">
+                      No projects found for the selected filters.
+                    </td>
                   </tr>
                 ) : null}
               </tbody>
