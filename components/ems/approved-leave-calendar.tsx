@@ -16,8 +16,8 @@ type ApprovedLeaveCalendarData = {
 function monthLabel(monthKey: string) {
   const [year, month] = monthKey.split("-").map(Number);
   return new Intl.DateTimeFormat("en-IN", {
-    month: "long",
-    year: "numeric",
+    month: "short",
+    year: "2-digit",
     timeZone: "UTC",
   }).format(new Date(Date.UTC(year, month - 1, 1, 12, 0, 0)));
 }
