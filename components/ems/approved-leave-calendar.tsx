@@ -91,11 +91,14 @@ export function ApprovedLeaveCalendar({
     Object.entries(extraSearchParams).forEach(([key, value]) => {
       if (value) params.set(key, value);
     });
-    return `${basePath}?${params.toString()}`;
+    const query = params.toString();
+    return query
+      ? `${basePath}?${query}#approved-leave-calendar`
+      : `${basePath}#approved-leave-calendar`;
   };
 
   return (
-    <section className="card p-6">
+    <section id="approved-leave-calendar" className="card p-6 scroll-mt-24">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h2 className="section-title">{title}</h2>
@@ -104,6 +107,7 @@ export function ApprovedLeaveCalendar({
 
         <div className="flex items-center justify-center gap-3 self-start">
           <Link
+            scroll={false}
             className={`inline-flex h-10 w-10 items-center justify-center rounded-full border ${previousDisabled ? "pointer-events-none border-slate-200 text-slate-300" : "border-slate-300 text-slate-700 hover:bg-slate-50"}`}
             href={buildHref(previousMonth)}
             aria-label="Previous month"
@@ -114,6 +118,7 @@ export function ApprovedLeaveCalendar({
             {monthLabel(data.monthKey)}
           </div>
           <Link
+            scroll={false}
             className={`inline-flex h-10 w-10 items-center justify-center rounded-full border ${nextDisabled ? "pointer-events-none border-slate-200 text-slate-300" : "border-slate-300 text-slate-700 hover:bg-slate-50"}`}
             href={buildHref(nextMonth)}
             aria-label="Next month"

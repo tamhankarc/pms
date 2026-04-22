@@ -41,7 +41,6 @@ import {
   getPendingLeaveApprovalInfoForUser,
 } from "@/lib/ems-queries";
 import {
-  clampMonthKey,
   formatDateInIst,
   formatTimeInIst,
   getInitialCalendarStartMonth,
@@ -159,8 +158,12 @@ function BillingDashboardSection({
           </tbody>
           <tfoot>
             <tr className="border-t border-slate-200 bg-slate-50/70">
-              <td className="table-cell font-semibold text-slate-900" colSpan={3}>Total time</td>
-              <td className="table-cell font-semibold text-slate-900">{formatMinutes(billingData.totalWorkedMinutes)}</td>
+              <td className="table-cell font-semibold text-slate-900" colSpan={3}>
+                Total time
+              </td>
+              <td className="table-cell font-semibold text-slate-900">
+                {formatMinutes(billingData.totalWorkedMinutes)}
+              </td>
             </tr>
           </tfoot>
         </table>
@@ -244,12 +247,12 @@ export default async function DashboardPage({
 
   const currentMonth = todayKey.slice(0, 7);
   const minMonth = getInitialCalendarStartMonth(resolvedJoiningDate);
+  const requestedAttendanceMonth =
+    params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : currentMonth;
   const focusMonth = showAttendanceCard
-    ? clampMonthKey(
-        params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : currentMonth,
-        minMonth,
-        currentMonth,
-      )
+    ? requestedAttendanceMonth < minMonth
+      ? minMonth
+      : requestedAttendanceMonth
     : currentMonth;
 
   const [

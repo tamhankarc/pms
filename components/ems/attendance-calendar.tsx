@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { clampMonthKey, shiftMonthKey } from "@/lib/ist";
+import { shiftMonthKey } from "@/lib/ist";
 
 type CalendarData = {
   monthKey: string;
@@ -118,9 +118,7 @@ function DayCell({
   const holidayName = dateKey ? holidayNamesByDate[dateKey] : "";
 
   return (
-    <div
-      className={`flex min-h-16 flex-col rounded-xl border px-2 py-2 text-slate-700 ${className}`}
-    >
+    <div className={`flex min-h-16 flex-col rounded-xl border px-2 py-2 text-slate-700 ${className}`}>
       <div className="flex items-start justify-end text-sm font-medium">{day ?? ""}</div>
       {holidayName ? (
         <div className="mt-1 line-clamp-2 text-[10px] leading-3 text-slate-600">{holidayName}</div>
@@ -156,7 +154,9 @@ function MonthBlock({
 
       <div className="grid grid-cols-7 gap-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => (
-          <div key={label} className="py-2">{label}</div>
+          <div key={label} className="py-2">
+            {label}
+          </div>
         ))}
       </div>
 
@@ -193,11 +193,9 @@ export function AttendanceCalendar({
   todayKey: string;
   queryParams?: CalendarQueryParams;
 }) {
-  const previousMonth = clampMonthKey(
-    shiftMonthKey(focusMonthKey, -1),
-    focusData.minMonthKey,
-    focusData.maxMonthKey,
-  );
+  const rawPreviousMonth = shiftMonthKey(focusMonthKey, -1);
+  const canGoPrevious = rawPreviousMonth >= focusData.minMonthKey;
+  const previousMonth = canGoPrevious ? rawPreviousMonth : focusMonthKey;
 
   const nextMonth = shiftMonthKey(focusMonthKey, 1);
 
@@ -219,14 +217,19 @@ export function AttendanceCalendar({
         <div>
           <h2 className="section-title">Attendance calendar</h2>
           <p className="section-subtitle">
-            Green: present, Red: absent, Orange: approved leave, Purple: weekend or official holiday, Blue: today, White: future. Weekend or holiday dates change to approved leave only for unpaid sandwich leave cases.
+            Green: present, Red: absent, Orange: approved leave, Purple: weekend or official holiday, Blue: today,
+            White: future. Weekend or holiday dates change to approved leave only for unpaid sandwich leave cases.
           </p>
         </div>
 
         <div className="flex items-center justify-center gap-3 self-start">
           <Link
             scroll={false}
-            className={`inline-flex h-10 w-10 items-center justify-center rounded-full border ${previousMonth === focusMonthKey ? "pointer-events-none border-slate-200 text-slate-300" : "border-slate-300 text-slate-700 hover:bg-slate-50"}`}
+            className={`inline-flex h-10 w-10 items-center justify-center rounded-full border ${
+              !canGoPrevious
+                ? "pointer-events-none border-slate-200 text-slate-300"
+                : "border-slate-300 text-slate-700 hover:bg-slate-50"
+            }`}
             href={buildMonthHref(previousMonth, queryParams)}
             aria-label="Previous month"
           >
@@ -234,7 +237,9 @@ export function AttendanceCalendar({
           </Link>
 
           <div className="inline-flex min-w-[84px] items-center justify-center whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium leading-none text-slate-700">
-            {showDualLayout ? `${shortMonthLabel(leftMonthKey)} - ${shortMonthLabel(focusMonthKey)}` : shortMonthLabel(focusMonthKey)}
+            {showDualLayout
+              ? `${shortMonthLabel(leftMonthKey)} - ${shortMonthLabel(focusMonthKey)}`
+              : shortMonthLabel(focusMonthKey)}
           </div>
 
           <Link
