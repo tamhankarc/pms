@@ -28,6 +28,7 @@ async function validateSupervisorIds(
     | "LOCALIZATION"
     | "DEVOPS"
     | "PROJECT_MANAGER"
+    | "DIRECTOR"
     | "BILLING"
     | "OTHER"
     | null,

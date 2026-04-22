@@ -14,6 +14,7 @@ const operationalFunctionalRoles = [
   "LOCALIZATION",
   "DEVOPS",
   "PROJECT_MANAGER",
+  "DIRECTOR",
   "OTHER",
 ] as const;
 
@@ -24,6 +25,7 @@ const userTypes = [
   "ADMIN",
   "REPORT_VIEWER",
   "ACCOUNTS",
+  "HR",
 ] as const;
 
 type FunctionalRole = (typeof operationalFunctionalRoles)[number] | "BILLING";
@@ -197,6 +199,8 @@ export function UserManageForm({ mode, action, initialValues }: UserManageFormPr
           <input type="hidden" name="functionalRole" value={functionalRole} />
           {userType === "ACCOUNTS" ? (
             <p className="mt-1 text-xs text-slate-500">Accounts users must use the Billing functional role.</p>
+          ) : userType === "HR" ? (
+            <p className="mt-1 text-xs text-slate-500">HR users should typically use the Other functional role.</p>
           ) : null}
         </div>
 
@@ -264,6 +268,10 @@ export function UserManageForm({ mode, action, initialValues }: UserManageFormPr
         {userType === "ACCOUNTS" ? (
           <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
             Accounts users will only see the billing dashboard and can change their own password.
+          </div>
+        ) : userType === "HR" ? (
+          <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            HR users can access EMS dashboard, leave approvals, users, profile, and password change pages.
           </div>
         ) : null}
 

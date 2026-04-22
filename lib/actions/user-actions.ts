@@ -13,6 +13,7 @@ const operationalRoles = [
   "LOCALIZATION",
   "DEVOPS",
   "PROJECT_MANAGER",
+  "DIRECTOR",
   "OTHER",
 ] as const;
 
@@ -28,6 +29,7 @@ const userTypes = [
   "EMPLOYEE",
   "REPORT_VIEWER",
   "ACCOUNTS",
+  "HR",
 ] as const;
 
 type FunctionalRole = (typeof functionalRoles)[number];
@@ -110,7 +112,7 @@ export async function createUserAction(
   formData: FormData,
 ): Promise<UserFormState> {
   try {
-    const actor = await requireUserTypesForAction(["ADMIN", "MANAGER"]);
+    const actor = await requireUserTypesForAction(["ADMIN", "MANAGER", "HR"]);
 
     const parsed = baseSchema.safeParse({
       fullName: formData.get("fullName"),
@@ -145,8 +147,8 @@ export async function createUserAction(
       };
     }
 
-    if (actor.userType !== "ADMIN" && (parsed.data.userType === "MANAGER" || parsed.data.userType === "ADMIN")) {
-      return { success: false, error: "Only Admin can create Manager or Admin users." };
+    if (actor.userType !== "ADMIN" && (parsed.data.userType === "MANAGER" || parsed.data.userType === "ADMIN" || parsed.data.userType === "HR")) {
+      return { success: false, error: "Only Admin can create Manager, Admin, or HR users." };
     }
 
     validateUserTypeRoleCombination(parsed.data.userType, parsed.data.functionalRole);
@@ -196,7 +198,7 @@ export async function updateUserAction(
   formData: FormData,
 ): Promise<UserFormState> {
   try {
-    const actor = await requireUserTypesForAction(["ADMIN", "MANAGER"]);
+    const actor = await requireUserTypesForAction(["ADMIN", "MANAGER", "HR"]);
     const parsed = baseSchema.safeParse({
       id: formData.get("id"),
       fullName: formData.get("fullName"),
@@ -230,8 +232,8 @@ export async function updateUserAction(
       };
     }
 
-    if (actor.userType !== "ADMIN" && (parsed.data.userType === "MANAGER" || parsed.data.userType === "ADMIN")) {
-      return { success: false, error: "Only Admin can assign Manager or Admin user type." };
+    if (actor.userType !== "ADMIN" && (parsed.data.userType === "MANAGER" || parsed.data.userType === "ADMIN" || parsed.data.userType === "HR")) {
+      return { success: false, error: "Only Admin can assign Manager, Admin, or HR user type." };
     }
 
     validateUserTypeRoleCombination(parsed.data.userType, parsed.data.functionalRole);
@@ -277,7 +279,7 @@ export async function updateUserAction(
 }
 
 export async function toggleUserStatusAction(formData: FormData) {
-  await requireUserTypesForAction(["ADMIN", "MANAGER"]);
+  await requireUserTypesForAction(["ADMIN", "MANAGER", "HR"]);
   const userId = String(formData.get("userId") || "");
   if (!userId) throw new Error("User is required.");
 
@@ -308,7 +310,7 @@ export async function assignTeamLeadAction(
   formData: FormData,
 ): Promise<TeamLeadAssignmentState> {
   try {
-    const actor = await requireUserTypesForAction(["ADMIN", "MANAGER"]);
+    const actor = await requireUserTypesForAction(["ADMIN", "MANAGER", "HR"]);
 
     const parsed = teamLeadAssignmentSchema.safeParse({
       teamLeadId: formData.get("teamLeadId"),

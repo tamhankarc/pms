@@ -12,6 +12,7 @@ const operationalFunctionalRoles = [
   "LOCALIZATION",
   "DEVOPS",
   "PROJECT_MANAGER",
+  "DIRECTOR",
   "OTHER",
 ] as const;
 
@@ -22,6 +23,7 @@ const userTypes = [
   "ADMIN",
   "REPORT_VIEWER",
   "ACCOUNTS",
+  "HR",
 ] as const;
 
 type FunctionalRole = (typeof operationalFunctionalRoles)[number] | "BILLING";

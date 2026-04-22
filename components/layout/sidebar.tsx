@@ -3,6 +3,8 @@ import {
   BarChart3,
   BriefcaseBusiness,
   Building2,
+  CalendarDays,
+  CheckCheck,
   ClipboardCheck,
   Clapperboard,
   FolderKanban,
@@ -17,7 +19,14 @@ import {
   ListChecks,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/auth";
-import { canManageCountries, canManageLanguages, isRoleScopedManager } from "@/lib/permissions";
+import {
+  canAccessLeaveRequests,
+  canManageCountries,
+  canManageLanguages,
+  canManageUsers,
+  isHR,
+  isRoleScopedManager,
+} from "@/lib/permissions";
 
 export type SidebarNavItem = {
   href: string;
@@ -25,6 +34,24 @@ export type SidebarNavItem = {
   icon: React.ComponentType<{ className?: string }>;
   access?: "countries" | "languages";
 };
+
+function withLeaveItems(items: SidebarNavItem[], user: SessionUser, canAccessLeaveApprovals: boolean) {
+  const nextItems = [...items];
+
+  if (canAccessLeaveRequests(user)) {
+    nextItems.push({ href: "/leave-requests", label: "Leave Requests", icon: CalendarDays });
+  }
+
+  if (canAccessLeaveApprovals) {
+    nextItems.push({ href: "/leave-approvals", label: "Leave Approvals", icon: CheckCheck });
+  }
+
+  if (isHR(user)) {
+    nextItems.push({ href: "/leave-admin", label: "Leave Administration", icon: CalendarDays });
+  }
+
+  return nextItems;
+}
 
 const fullItems: SidebarNavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -72,37 +99,61 @@ const accountsItems: SidebarNavItem[] = [
   { href: "/change-password", label: "Change Password", icon: KeyRound },
 ];
 
-export function getSidebarItems(user: SessionUser): SidebarNavItem[] {
-  return user.userType === "EMPLOYEE"
-    ? employeeItems
-    : user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
-      ? teamLeadItems.filter(
-          (item) =>
-            (item.access !== "countries" || canManageCountries(user)) &&
-            (item.access !== "languages" || canManageLanguages(user)),
-        )
-      : user.userType === "ACCOUNTS"
-        ? accountsItems
-        : fullItems.filter(
-            (item) =>
-              (item.access !== "countries" || canManageCountries(user)) &&
-              (item.access !== "languages" || canManageLanguages(user)),
-          );
+function filterAccess(items: SidebarNavItem[], user: SessionUser) {
+  return items.filter(
+    (item) =>
+      (item.access !== "countries" || canManageCountries(user)) &&
+      (item.access !== "languages" || canManageLanguages(user)),
+  );
 }
 
-export function Sidebar({ user }: { user: SessionUser }) {
-  const items = getSidebarItems(user);
+export function getSidebarItems(user: SessionUser, canAccessLeaveApprovals: boolean): SidebarNavItem[] {
+  if (user.userType === "EMPLOYEE") {
+    return withLeaveItems(employeeItems, user, canAccessLeaveApprovals);
+  }
+
+  if (user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) {
+    return withLeaveItems(filterAccess(teamLeadItems, user), user, canAccessLeaveApprovals);
+  }
+
+  if (user.userType === "ACCOUNTS") {
+    return withLeaveItems(accountsItems, user, canAccessLeaveApprovals);
+  }
+
+  if (user.userType === "HR") {
+    return [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/users", label: "Users", icon: ShieldCheck },
+      { href: "/leave-requests", label: "Leave Requests", icon: CalendarDays },
+      ...(canAccessLeaveApprovals ? [{ href: "/leave-approvals", label: "Leave Approvals", icon: CheckCheck }] : []),
+      { href: "/leave-admin", label: "Leave Administration", icon: CalendarDays },
+      { href: "/profile", label: "My Profile", icon: UserCog },
+      { href: "/change-password", label: "Change Password", icon: KeyRound },
+    ];
+  }
+
+  const merged = withLeaveItems(filterAccess(fullItems, user), user, canAccessLeaveApprovals);
+  if (!canManageUsers(user)) {
+    return merged.filter((item) => item.href !== "/users");
+  }
+  return merged;
+}
+
+export function Sidebar({ user, canAccessLeaveApprovals }: { user: SessionUser; canAccessLeaveApprovals: boolean }) {
+  const items = getSidebarItems(user, canAccessLeaveApprovals);
 
   return (
     <aside className="hidden lg:block shrink-0 w-64 2xl:w-72 border-r border-slate-200 bg-slate-950 text-slate-100">
       <div className="flex h-full flex-col">
         <div className="border-b border-slate-800 px-5 2xl:px-6 py-5 2xl:py-6">
           <p className="text-[11px] 2xl:text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
-            Internal PMS
+            Internal PMS + EMS
           </p>
-          <h2 className="mt-3 text-base 2xl:text-lg font-semibold">Project Management Suite</h2>
+          <h2 className="mt-3 text-base 2xl:text-lg font-semibold">Project &amp; Leave Management Suite</h2>
           <p className="mt-2 text-sm font-medium text-slate-200">{user.fullName}</p>
-          {user.designation ? <p className="text-xs text-slate-400">{user.designation}</p> : null}
+          <p className="text-xs text-slate-400">
+            {user.designation ? `${user.designation}` : ""}
+          </p>
         </div>
 
         <nav className="flex-1 space-y-1 px-2.5 2xl:px-3 py-5 2xl:py-6">

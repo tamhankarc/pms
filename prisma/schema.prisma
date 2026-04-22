@@ -14,6 +14,7 @@ enum UserType {
   EMPLOYEE
   REPORT_VIEWER
   ACCOUNTS
+  HR
 }
 
 enum FunctionalRoleCode {
@@ -23,6 +24,7 @@ enum FunctionalRoleCode {
   LOCALIZATION
   DEVOPS
   PROJECT_MANAGER
+  DIRECTOR
   OTHER
   BILLING
 }
@@ -62,6 +64,38 @@ enum BillingTransactionType {
   UPGRADE_PRE_COMPLETION
   UPGRADE_POST_COMPLETION
   ADJUSTMENT
+}
+
+
+enum AttendanceActionType {
+  MARK_IN
+  MARK_OUT
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  RECONSIDER
+  CANCELLED
+}
+
+enum LeaveType {
+  CASUAL
+  SICK
+  EARNED
+  UNPAID
+  OTHER
+}
+
+enum ShiftType {
+  DAY
+  NIGHT
+}
+
+enum EmploymentStatus {
+  PROBATION
+  PERMANENT
 }
 
 model User {
@@ -109,6 +143,14 @@ model User {
 
   timeEntries      TimeEntry[]
   timeEntryReviews TimeEntryReview[] @relation("TimeEntryReviewer")
+
+  attendanceLogs            AttendanceLog[]
+  leaveRequests             LeaveRequest[] @relation("LeaveRequestEmployee")
+  leaveRequestsToApprove    LeaveRequest[] @relation("LeaveRequestApprover")
+  leaveApproverAssignments  LeaveApproverAssignment[] @relation("LeaveApproverEmployee")
+  approverForEmployees      LeaveApproverAssignment[] @relation("LeaveApproverUser")
+  leaveApprovalsAssignedBy  LeaveApproverAssignment[] @relation("LeaveApproverAssignedBy")
+  leaveYearProfiles        LeaveYearProfile[]
 
   @@index([userType, isActive])
   @@index([functionalRole, isActive])
@@ -427,4 +469,95 @@ model BillingTransaction {
 
   @@index([projectId, effectiveDate])
   @@index([transactionType])
+}
+
+
+model AttendanceLog {
+  id             String               @id @default(cuid())
+  userId         String
+  attendanceDate DateTime
+  type           AttendanceActionType
+  markedAt       DateTime             @default(now())
+  latitude       Decimal              @db.Decimal(10, 7)
+  longitude      Decimal              @db.Decimal(10, 7)
+  city           String?
+  createdAt      DateTime             @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([userId, attendanceDate])
+  @@index([attendanceDate, type])
+}
+
+model LeaveRequest {
+  id                String      @id @default(cuid())
+  userId            String
+  leaveType         LeaveType
+  startDate         DateTime
+  endDate           DateTime
+  reason            String?     @db.Text
+  status            LeaveStatus @default(PENDING)
+  approverId        String?
+  approverComment   String?     @db.Text
+  reconsiderNote    String?     @db.Text
+  cancelledAt       DateTime?
+  approvedAt        DateTime?
+  rejectedAt        DateTime?
+  reconsideredAt    DateTime?
+  totalLeaveDays    Decimal?    @db.Decimal(6, 2)
+  casualDaysUsed    Decimal?    @db.Decimal(6, 2)
+  earnedDaysUsed    Decimal?    @db.Decimal(6, 2)
+  unpaidDaysUsed    Decimal?    @db.Decimal(6, 2)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  user     User  @relation("LeaveRequestEmployee", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  approver User? @relation("LeaveRequestApprover", fields: [approverId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([userId, startDate, endDate])
+  @@index([status, approverId])
+}
+
+model LeaveApproverAssignment {
+  id          String   @id @default(cuid())
+  employeeId  String
+  approverId  String
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  employee  User  @relation("LeaveApproverEmployee", fields: [employeeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  approver  User  @relation("LeaveApproverUser", fields: [approverId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  createdBy User? @relation("LeaveApproverAssignedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@unique([employeeId, approverId])
+  @@index([approverId])
+}
+
+
+model LeaveYearProfile {
+  id               String           @id @default(cuid())
+  userId           String
+  year             Int
+  casualLeaves     Decimal          @default(0) @db.Decimal(6, 2)
+  earnedLeaves     Decimal          @default(0) @db.Decimal(6, 2)
+  shift            ShiftType        @default(DAY)
+  employmentStatus EmploymentStatus @default(PROBATION)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([userId, year])
+  @@index([year])
+}
+
+model OfficialHoliday {
+  id          String   @id @default(cuid())
+  name        String
+  holidayDate DateTime @unique
+  year        Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([year, holidayDate])
 }

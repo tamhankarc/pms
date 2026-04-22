@@ -6,7 +6,8 @@ export type CurrentUser = {
     | "TEAM_LEAD"
     | "EMPLOYEE"
     | "REPORT_VIEWER"
-    | "ACCOUNTS";
+    | "ACCOUNTS"
+    | "HR";
   functionalRole?:
     | "DEVELOPER"
     | "QA"
@@ -14,6 +15,7 @@ export type CurrentUser = {
     | "LOCALIZATION"
     | "DEVOPS"
     | "PROJECT_MANAGER"
+    | "DIRECTOR"
     | "BILLING"
     | "OTHER"
     | "UNASSIGNED"

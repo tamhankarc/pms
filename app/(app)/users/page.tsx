@@ -16,7 +16,8 @@ type UserTypeFilter =
   | "MANAGER"
   | "ADMIN"
   | "REPORT_VIEWER"
-  | "ACCOUNTS";
+  | "ACCOUNTS"
+  | "HR";
 
 function toUserTypeFilter(value: string | undefined): UserTypeFilter {
   switch (value) {
@@ -26,6 +27,7 @@ function toUserTypeFilter(value: string | undefined): UserTypeFilter {
     case "ADMIN":
     case "REPORT_VIEWER":
     case "ACCOUNTS":
+    case "HR":
       return value;
     default:
       return "all";
@@ -117,6 +119,7 @@ export default async function UsersPage({
               { value: "ADMIN", label: "Admin" },
               { value: "REPORT_VIEWER", label: "Report Viewer" },
               { value: "ACCOUNTS", label: "Accounts" },
+              { value: "HR", label: "HR" },
             ]}
             placeholder="All user types"
             searchPlaceholder="Search user types..."

@@ -46,6 +46,7 @@ export default async function UserEditPage({
             | "LOCALIZATION"
             | "DEVOPS"
             | "PROJECT_MANAGER"
+            | "DIRECTOR"
             | "BILLING"
             | "OTHER",
           employeeCode: user.employeeCode,
