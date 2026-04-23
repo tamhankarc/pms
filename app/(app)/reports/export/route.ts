@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getVisibleProjects } from "@/lib/queries";
 import { isRoleScopedManager } from "@/lib/permissions";
+import { formatMinutes } from "@/lib/utils";
 
 function normalizeDateInput(value: string | null) {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
@@ -35,10 +36,6 @@ function getTodayRange() {
   return { fromDate: today, toDate: today };
 }
 
-function formatHours(minutes: number) {
-  return (minutes / 60).toFixed(2);
-}
-
 function formatRole(role?: FunctionalRoleCode | "UNASSIGNED" | null) {
   if (!role || role === "UNASSIGNED") return "-";
   return role
@@ -60,6 +57,75 @@ function toCsv(rows: string[][]) {
   return rows.map((row) => row.map((cell) => escapeCsvValue(cell)).join(",")).join("\n");
 }
 
+function sanitizeFileSegment(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "report";
+}
+
+function getTimestamp() {
+  const now = new Date();
+  const yyyy = String(now.getFullYear());
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const hh = String(now.getHours()).padStart(2, "0");
+  const min = String(now.getMinutes()).padStart(2, "0");
+  const ss = String(now.getSeconds()).padStart(2, "0");
+  return `${yyyy}${mm}${dd}_${hh}${min}${ss}`;
+}
+
+function buildFileName(baseName: string, selectedClientName?: string) {
+  const prefix = selectedClientName ? `${sanitizeFileSegment(selectedClientName)}_` : "";
+  return `${prefix}${baseName.replace(/-/g, "_")}_${getTimestamp()}.csv`;
+}
+
+function formatReportDate(date: Date) {
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+function csvResponse(rows: string[][], baseName: string, selectedClientName?: string) {
+  const csv = toCsv(rows);
+  return new Response(csv, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${buildFileName(baseName, selectedClientName)}"`,
+    },
+  });
+}
+
+
+type SortDirection = "asc" | "desc";
+
+function normalizeSortDirection(value: string | null): SortDirection {
+  return value === "desc" ? "desc" : "asc";
+}
+
+function compareText(a: string, b: string, direction: SortDirection) {
+  const result = a.localeCompare(b, undefined, { sensitivity: "base", numeric: true });
+  return direction === "asc" ? result : -result;
+}
+
+function compareNumber(a: number, b: number, direction: SortDirection) {
+  return direction === "asc" ? a - b : b - a;
+}
+
+function sortRows<T>(rows: T[], selector: (row: T) => string | number, direction: SortDirection) {
+  return [...rows].sort((a, b) => {
+    const av = selector(a);
+    const bv = selector(b);
+    if (typeof av === "number" && typeof bv === "number") {
+      return compareNumber(av, bv, direction);
+    }
+    return compareText(String(av), String(bv), direction);
+  });
+}
+
 export async function GET(request: Request) {
   const user = await getSession();
   if (!user) {
@@ -73,6 +139,21 @@ export async function GET(request: Request) {
   const visibleProjects = await getVisibleProjects(user);
   const visibleProjectIds = visibleProjects.map((project) => project.id);
   const safeProjectIds = visibleProjectIds.length ? visibleProjectIds : ["__none__"];
+  const clientNameById = new Map(
+    Array.from(new Map(visibleProjects.map((project) => [project.clientId, project.client.name])).entries()),
+  );
+  const movieEligibleProjects = visibleProjects.filter(
+    (project) => project.client.showMoviesInEntries && !project.hideMoviesInEntries,
+  );
+  const movieEligibleProjectIds = movieEligibleProjects.length ? movieEligibleProjects.map((project) => project.id) : ["__none__"];
+
+  const countryEligibleProjects = visibleProjects.filter(
+  (project) => project.client.showCountriesInTimeEntries && !project.hideCountriesInEntries,
+);
+
+const countryEligibleProjectIds = countryEligibleProjects.length
+  ? countryEligibleProjects.map((project) => project.id)
+  : ["__none__"];
 
   const supervisorAssignments =
     user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
@@ -139,18 +220,32 @@ export async function GET(request: Request) {
       map.set(key, row);
     }
 
-    const rows = Array.from(map.values()).sort((a, b) => a.clientName.localeCompare(b.clientName));
-    const csv = toCsv([
-      ["Client", "Project Name", "Sub-Project Name", "Hours"],
-      ...rows.map((row) => [row.clientName, row.projectName, row.subProjectName, formatHours(row.totalMinutes)]),
-    ]);
+    const projectSortBy = searchParams.get("projectSortBy") ?? "clientName";
+    const projectSortDir = normalizeSortDirection(searchParams.get("projectSortDir"));
+    const rows = sortRows(Array.from(map.values()), (row) => {
+      switch (projectSortBy) {
+        case "projectName":
+          return row.projectName;
+        case "subProjectName":
+          return row.subProjectName;
+        case "totalMinutes":
+          return row.totalMinutes;
+        case "clientName":
+        default:
+          return row.clientName;
+      }
+    }, projectSortDir);
+    const totalMinutes = rows.reduce((sum, row) => sum + row.totalMinutes, 0);
 
-    return new Response(csv, {
-      headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": 'attachment; filename="project-subproject-hours.csv"',
-      },
-    });
+    return csvResponse(
+      [
+        ["Client", "Project Name", "Sub-Project Name", "Mins"],
+        ...rows.map((row) => [row.clientName, row.projectName, row.subProjectName, String(row.totalMinutes)]),
+        ["", "", "Total Time", formatMinutes(totalMinutes)],
+      ],
+      "project-subproject-minutes",
+      projectClientId !== "all" ? clientNameById.get(projectClientId) : undefined,
+    );
   }
 
   if (type === "task") {
@@ -181,26 +276,47 @@ export async function GET(request: Request) {
       orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
     });
 
-    const csv = toCsv([
-      ["Client Name", "Project Name", "Sub-Project Name", "Task Name", "Task Description", "Country Code", "Employee Role", "Hours"],
-      ...entries.map((entry) => [
-        entry.project.client.name,
-        entry.project.name,
-        entry.subProject?.name ?? "-",
-        entry.taskName,
-        entry.notes?.trim() ? entry.notes : "-",
-        entry.country?.isoCode ?? "-",
-        formatRole(entry.employee.functionalRole),
-        formatHours(entry.minutesSpent),
-      ]),
-    ]);
+    const taskSortBy = searchParams.get("taskSortBy") ?? "clientName";
+    const taskSortDir = normalizeSortDirection(searchParams.get("taskSortDir"));
+    const rows = sortRows(entries, (entry) => {
+      switch (taskSortBy) {
+        case "projectName":
+          return entry.project.name;
+        case "subProjectName":
+          return entry.subProject?.name ?? "-";
+        case "taskName":
+          return entry.taskName;
+        case "countryCode":
+          return entry.country?.isoCode ?? "-";
+        case "employeeRole":
+          return formatRole(entry.employee.functionalRole);
+        case "totalMinutes":
+          return entry.minutesSpent;
+        case "clientName":
+        default:
+          return entry.project.client.name;
+      }
+    }, taskSortDir);
+    const totalMinutes = rows.reduce((sum, entry) => sum + entry.minutesSpent, 0);
 
-    return new Response(csv, {
-      headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": 'attachment; filename="task-wise-detailed-hours.csv"',
-      },
-    });
+    return csvResponse(
+      [
+        ["Client Name", "Project Name", "Sub-Project Name", "Task Name", "Task Description", "Country Code", "Employee Role", "Mins"],
+        ...rows.map((entry) => [
+          entry.project.client.name,
+          entry.project.name,
+          entry.subProject?.name ?? "-",
+          entry.taskName,
+          entry.notes?.trim() ? entry.notes : "-",
+          entry.country?.isoCode ?? "-",
+          formatRole(entry.employee.functionalRole),
+          String(entry.minutesSpent),
+        ]),
+        ["", "", "", "", "", "", "Total Time", formatMinutes(totalMinutes)],
+      ],
+      "task-wise-detailed-minutes",
+      taskClientId !== "all" ? clientNameById.get(taskClientId) : undefined,
+    );
   }
 
   if (type === "movie") {
@@ -215,11 +331,18 @@ export async function GET(request: Request) {
 
     const entries = await db.timeEntry.findMany({
       where: {
-        projectId: { in: safeProjectIds },
+        projectId: { in: movieEligibleProjectIds },
         workDate: { gte: fromBoundary, lte: toBoundary },
         movieId: { not: null },
+        project: {
+          is: {
+            client: { is: { showMoviesInEntries: true } },
+            hideMoviesInEntries: false,
+            ...(movieClientId !== "all" ? { clientId: movieClientId } : {}),
+          },
+        },
+        OR: [{ subProjectId: null }, { subProject: { is: { hideMoviesInEntries: false } } }],
         ...(movieMovieId !== "all" ? { movieId: movieMovieId } : {}),
-        ...(movieClientId !== "all" ? { project: { is: { clientId: movieClientId } } } : {}),
         ...(movieProjectId !== "all" ? { projectId: movieProjectId } : {}),
         ...(movieSubProjectId !== "all" ? { subProjectId: movieSubProjectId } : {}),
         ...(movieCountryId !== "all" ? { countryId: movieCountryId } : {}),
@@ -251,25 +374,181 @@ export async function GET(request: Request) {
       map.set(key, row);
     }
 
-    const rows = Array.from(map.values()).sort((a, b) => {
-      if (a.movieName !== b.movieName) return a.movieName.localeCompare(b.movieName);
-      if (a.clientName !== b.clientName) return a.clientName.localeCompare(b.clientName);
-      if (a.projectName !== b.projectName) return a.projectName.localeCompare(b.projectName);
-      if (a.subProjectName !== b.subProjectName) return a.subProjectName.localeCompare(b.subProjectName);
-      return a.countryCode.localeCompare(b.countryCode);
+    const movieSortBy = searchParams.get("movieSortBy") ?? "movieName";
+    const movieSortDir = normalizeSortDirection(searchParams.get("movieSortDir"));
+    const rows = sortRows(Array.from(map.values()), (row) => {
+      switch (movieSortBy) {
+        case "clientName":
+          return row.clientName;
+        case "projectName":
+          return row.projectName;
+        case "subProjectName":
+          return row.subProjectName;
+        case "countryCode":
+          return row.countryCode;
+        case "totalMinutes":
+          return row.totalMinutes;
+        case "movieName":
+        default:
+          return row.movieName;
+      }
+    }, movieSortDir);
+    const totalMinutes = rows.reduce((sum, row) => sum + row.totalMinutes, 0);
+
+    return csvResponse(
+      [
+        ["Movie Name", "Client Name", "Project Name", "Sub-Project Name", "Country", "Mins"],
+        ...rows.map((row) => [row.movieName, row.clientName, row.projectName, row.subProjectName, row.countryCode, String(row.totalMinutes)]),
+        ["", "", "", "", "Total Time", formatMinutes(totalMinutes)],
+      ],
+      "movie-wise-minutes",
+      movieClientId !== "all" ? clientNameById.get(movieClientId) : undefined,
+    );
+  }
+
+  if (type === "day") {
+    const fromDate = normalizeDateInput(searchParams.get("dayFromDate")) ?? defaultMonthRange.fromDate;
+    const toDate = normalizeDateInput(searchParams.get("dayToDate")) ?? defaultMonthRange.toDate;
+    const dayClientId = searchParams.get("dayClientId") ?? "all";
+    const dayProjectId = searchParams.get("dayProjectId") ?? "all";
+    const daySubProjectId = searchParams.get("daySubProjectId") ?? "all";
+    const dayCountryId = searchParams.get("dayCountryId") ?? "all";
+    const { fromBoundary, toBoundary } = buildDateRange(fromDate, toDate);
+
+    const entries = await db.timeEntry.findMany({
+      where: {
+        projectId: { in: safeProjectIds },
+        workDate: { gte: fromBoundary, lte: toBoundary },
+        ...(dayClientId !== "all" ? { project: { is: { clientId: dayClientId } } } : {}),
+        ...(dayProjectId !== "all" ? { projectId: dayProjectId } : {}),
+        ...(daySubProjectId !== "all" ? { subProjectId: daySubProjectId } : {}),
+        ...(dayCountryId !== "all" ? { countryId: dayCountryId } : {}),
+        ...employeeWhereClause,
+      },
+      include: {
+        project: { include: { client: true } },
+        subProject: true,
+        country: true,
+      },
+      orderBy: [{ workDate: "asc" }, { createdAt: "asc" }],
     });
 
-    const csv = toCsv([
-      ["Movie Name", "Client Name", "Project Name", "Sub-Project Name", "Country", "Mins"],
-      ...rows.map((row) => [row.movieName, row.clientName, row.projectName, row.subProjectName, row.countryCode, String(row.totalMinutes)]),
-    ]);
+    const map = new Map<string, { dateKey: string; clientName: string; projectName: string; subProjectName: string; countryName: string; countryCode: string; totalMinutes: number }>();
+    for (const entry of entries) {
+      const dateKey = entry.workDate.toISOString().slice(0, 10);
+      const clientName = entry.project.client.name;
+      const projectName = entry.project.name;
+      const subProjectName = entry.subProject?.name ?? "-";
+      const countryName = entry.country?.name ?? "Unspecified";
+      const countryCode = entry.country?.isoCode ?? "-";
+      const key = `${dateKey}__${clientName}__${projectName}__${subProjectName}__${countryCode}__${countryName}`;
+      const row = map.get(key) ?? { dateKey, clientName, projectName, subProjectName, countryName, countryCode, totalMinutes: 0 };
+      row.totalMinutes += entry.minutesSpent;
+      map.set(key, row);
+    }
 
-    return new Response(csv, {
-      headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": 'attachment; filename="movie-wise-minutes.csv"',
+    const daySortBy = searchParams.get("daySortBy") ?? "dateKey";
+    const daySortDir = normalizeSortDirection(searchParams.get("daySortDir"));
+    const rows = sortRows(Array.from(map.values()), (row) => {
+      switch (daySortBy) {
+        case "clientName":
+          return row.clientName;
+        case "projectName":
+          return row.projectName;
+        case "subProjectName":
+          return row.subProjectName;
+        case "countryCode":
+          return row.countryCode;
+        case "totalMinutes":
+          return row.totalMinutes;
+        case "dateKey":
+        default:
+          return row.dateKey;
+      }
+    }, daySortDir);
+    const totalMinutes = rows.reduce((sum, row) => sum + row.totalMinutes, 0);
+
+    return csvResponse(
+      [
+        ["Date", "Client", "Project", "Sub-Project", "Country", "Mins"],
+        ...rows.map((row) => [formatReportDate(new Date(`${row.dateKey}T12:00:00`)), row.clientName, row.projectName, row.subProjectName, row.countryCode === "-" ? row.countryName : `${row.countryCode} - ${row.countryName}`, String(row.totalMinutes)]),
+        ["", "", "", "", "Total Time", formatMinutes(totalMinutes)],
+      ],
+      "day-wise-minutes",
+      dayClientId !== "all" ? clientNameById.get(dayClientId) : undefined,
+    );
+  }
+
+  if (type === "country") {
+    const fromDate = normalizeDateInput(searchParams.get("countryFromDate")) ?? defaultMonthRange.fromDate;
+    const toDate = normalizeDateInput(searchParams.get("countryToDate")) ?? defaultMonthRange.toDate;
+    const countryClientId = searchParams.get("countryClientId") ?? "all";
+    const countryProjectId = searchParams.get("countryProjectId") ?? "all";
+    const countrySubProjectId = searchParams.get("countrySubProjectId") ?? "all";
+    const countryCountryId = searchParams.get("countryCountryId") ?? "all";
+    const { fromBoundary, toBoundary } = buildDateRange(fromDate, toDate);
+
+    const entries = await db.timeEntry.findMany({
+      where: {
+        projectId: { in: countryEligibleProjectIds.length ? countryEligibleProjectIds : ["__none__"] },
+        workDate: { gte: fromBoundary, lte: toBoundary },
+        ...(countryClientId !== "all" ? { project: { is: { clientId: countryClientId } } } : {}),
+        ...(countryProjectId !== "all" ? { projectId: countryProjectId } : {}),
+        ...(countrySubProjectId !== "all" ? { subProjectId: countrySubProjectId } : {}),
+        ...(countryCountryId !== "all" ? { countryId: countryCountryId } : {}),
+        OR: [{ subProjectId: null }, { subProject: { is: { hideCountriesInEntries: false } } }],
+        ...employeeWhereClause,
+      },
+      include: {
+        project: { include: { client: true } },
+        subProject: true,
+        country: true,
       },
     });
+
+    const map = new Map<string, { clientName: string; projectName: string; subProjectName: string; countryName: string; countryCode: string; totalMinutes: number }>();
+    for (const entry of entries) {
+      const clientName = entry.project.client.name;
+      const projectName = entry.project.name;
+      const subProjectName = entry.subProject?.name ?? "-";
+      const countryCode = entry.country?.isoCode ?? "-";
+      const countryName = entry.country?.name ?? "Unspecified";
+      const key = `${clientName}__${projectName}__${subProjectName}__${countryCode}__${countryName}`;
+      const row = map.get(key) ?? { clientName, projectName, subProjectName, countryName, countryCode, totalMinutes: 0 };
+      row.totalMinutes += entry.minutesSpent;
+      map.set(key, row);
+    }
+
+    const countrySortBy = searchParams.get("countrySortBy") ?? "countryCode";
+    const countrySortDir = normalizeSortDirection(searchParams.get("countrySortDir"));
+    const rows = sortRows(Array.from(map.values()), (row) => {
+      switch (countrySortBy) {
+        case "clientName":
+          return row.clientName;
+        case "projectName":
+          return row.projectName;
+        case "subProjectName":
+          return row.subProjectName;
+        case "totalMinutes":
+          return row.totalMinutes;
+        case "countryName":
+          return row.countryName;
+        case "countryCode":
+        default:
+          return row.countryCode;
+      }
+    }, countrySortDir);
+    const totalMinutes = rows.reduce((sum, row) => sum + row.totalMinutes, 0);
+
+    return csvResponse(
+      [
+        ["Country", "Client", "Project", "Sub-Project", "Mins"],
+        ...rows.map((row) => [row.countryCode === "-" ? row.countryName : `${row.countryCode} - ${row.countryName}`, row.clientName, row.projectName, row.subProjectName, String(row.totalMinutes)]),
+        ["", "", "", "Total Time", formatMinutes(totalMinutes)],
+      ],
+      "country-wise-minutes",
+      countryClientId !== "all" ? clientNameById.get(countryClientId) : undefined,
+    );
   }
 
   const fromDate = normalizeDateInput(searchParams.get("clientFromDate")) ?? defaultMonthRange.fromDate;
@@ -299,16 +578,26 @@ export async function GET(request: Request) {
     map.set(entry.project.clientId, row);
   }
 
-  const rows = Array.from(map.values()).sort((a, b) => a.clientName.localeCompare(b.clientName));
-  const csv = toCsv([
-    ["Client", "Hours"],
-    ...rows.map((row) => [row.clientName, formatHours(row.totalMinutes)]),
-  ]);
+  const clientSortBy = searchParams.get("clientSortBy") ?? "clientName";
+  const clientSortDir = normalizeSortDirection(searchParams.get("clientSortDir"));
+  const rows = sortRows(Array.from(map.values()), (row) => {
+    switch (clientSortBy) {
+      case "totalMinutes":
+        return row.totalMinutes;
+      case "clientName":
+      default:
+        return row.clientName;
+    }
+  }, clientSortDir);
+  const totalMinutes = rows.reduce((sum, row) => sum + row.totalMinutes, 0);
 
-  return new Response(csv, {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": 'attachment; filename="client-wise-hours.csv"',
-    },
-  });
+  return csvResponse(
+    [
+      ["Client", "Mins"],
+      ...rows.map((row) => [row.clientName, String(row.totalMinutes)]),
+      ["Total Time", formatMinutes(totalMinutes)],
+    ],
+    "client-wise-minutes",
+    clientClientId !== "all" ? clientNameById.get(clientClientId) : undefined,
+  );
 }

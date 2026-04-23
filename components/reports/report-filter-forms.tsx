@@ -12,12 +12,14 @@ type ProjectOption = {
   id: string;
   name: string;
   clientId: string;
+  hideCountriesInEntries?: boolean;
 };
 
 type SubProjectOption = {
   id: string;
   name: string;
   projectId: string;
+  hideCountriesInEntries?: boolean;
 };
 
 type CountryOption = {
@@ -49,6 +51,7 @@ function buildResetHref(anchor: string, params: PreservedParams) {
   const query = search.toString();
   return query ? `/reports?${query}${anchor}` : `/reports${anchor}`;
 }
+
 
 export function ProjectHoursFilterForm({
   action,
@@ -148,6 +151,9 @@ export function TaskDetailFilterForm({
   projectOptions,
   subProjectOptions,
   countryOptions,
+  countryEligibleClientOptions = clientOptions,
+  countryEligibleProjectOptions = projectOptions,
+  countryEligibleSubProjectOptions = subProjectOptions,
   preservedParams = {},
 }: {
   action: string;
@@ -162,6 +168,9 @@ export function TaskDetailFilterForm({
   projectOptions: ProjectOption[];
   subProjectOptions: SubProjectOption[];
   countryOptions: CountryOption[];
+  countryEligibleClientOptions?: ClientOption[];
+  countryEligibleProjectOptions?: ProjectOption[];
+  countryEligibleSubProjectOptions?: SubProjectOption[];
   preservedParams?: PreservedParams;
 }) {
   const [selectedClientId, setSelectedClientId] = useState(clientId);
@@ -169,9 +178,24 @@ export function TaskDetailFilterForm({
   const [selectedSubProjectId, setSelectedSubProjectId] = useState(subProjectId);
   const [selectedCountryId, setSelectedCountryId] = useState(countryId);
 
+  const useCountryEligibleOptions = selectedCountryId !== "all";
+  const activeClientOptions = useCountryEligibleOptions ? countryEligibleClientOptions : clientOptions;
+  const activeProjectOptions = useCountryEligibleOptions ? countryEligibleProjectOptions : projectOptions;
+  const activeSubProjectOptions = useCountryEligibleOptions ? countryEligibleSubProjectOptions : subProjectOptions;
+
+  const selectedClientAllowsCountry =
+    selectedClientId === "all" || countryEligibleClientOptions.some((client) => client.id === selectedClientId);
+  const selectedProjectAllowsCountry =
+    selectedProjectId === "all" || countryEligibleProjectOptions.some((project) => project.id === selectedProjectId);
+  const selectedSubProjectAllowsCountry =
+    selectedSubProjectId === "all" || countryEligibleSubProjectOptions.some((subProject) => subProject.id === selectedSubProjectId);
+  const countryDropdownEnabled =
+    selectedCountryId !== "all" ||
+    (selectedClientAllowsCountry && selectedProjectAllowsCountry && selectedSubProjectAllowsCountry);
+
   const filteredProjects = useMemo(
-    () => projectOptions.filter((project) => (selectedClientId === "all" ? true : project.clientId === selectedClientId)),
-    [projectOptions, selectedClientId],
+    () => activeProjectOptions.filter((project) => (selectedClientId === "all" ? true : project.clientId === selectedClientId)),
+    [activeProjectOptions, selectedClientId],
   );
 
   const isProjectAvailable = selectedProjectId === "all" || filteredProjects.some((project) => project.id === selectedProjectId);
@@ -179,11 +203,11 @@ export function TaskDetailFilterForm({
 
   const filteredSubProjects = useMemo(
     () =>
-      subProjectOptions.filter((subProject) => {
+      activeSubProjectOptions.filter((subProject) => {
         if (effectiveProjectId === "all") return true;
         return subProject.projectId === effectiveProjectId;
       }),
-    [effectiveProjectId, subProjectOptions],
+    [effectiveProjectId, activeSubProjectOptions],
   );
 
   const isSubProjectAvailable =
@@ -206,7 +230,7 @@ export function TaskDetailFilterForm({
           value={selectedClientId}
           onValueChange={(value) => {
             setSelectedClientId(value);
-            const currentProject = projectOptions.find((project) => project.id === selectedProjectId);
+            const currentProject = activeProjectOptions.find((project) => project.id === selectedProjectId);
             if (currentProject && value !== "all" && currentProject.clientId !== value) {
               setSelectedProjectId("all");
               setSelectedSubProjectId("all");
@@ -214,7 +238,7 @@ export function TaskDetailFilterForm({
           }}
           options={[
             { value: "all", label: "All clients" },
-            ...clientOptions.map((client) => ({ value: client.id, label: client.name })),
+            ...activeClientOptions.map((client) => ({ value: client.id, label: client.name })),
           ]}
           placeholder="All clients"
           searchPlaceholder="Search clients..."
@@ -228,14 +252,14 @@ export function TaskDetailFilterForm({
           value={effectiveProjectId}
           onValueChange={(value) => {
             setSelectedProjectId(value);
-            const currentSubProject = subProjectOptions.find((subProject) => subProject.id === selectedSubProjectId);
+            const currentSubProject = activeSubProjectOptions.find((subProject) => subProject.id === selectedSubProjectId);
             if (currentSubProject && value !== "all" && currentSubProject.projectId !== value) {
               setSelectedSubProjectId("all");
             }
             if (value === "all") {
               return;
             }
-            const nextProject = projectOptions.find((project) => project.id === value);
+            const nextProject = activeProjectOptions.find((project) => project.id === value);
             if (nextProject && selectedClientId !== "all" && nextProject.clientId !== selectedClientId) {
               setSelectedClientId(nextProject.clientId);
             }
@@ -268,8 +292,191 @@ export function TaskDetailFilterForm({
         <SearchableCombobox
           id="taskCountryId"
           name="taskCountryId"
-          value={selectedCountryId}
+          value={countryDropdownEnabled ? selectedCountryId : "all"}
           onValueChange={setSelectedCountryId}
+          disabled={!countryDropdownEnabled}
+          buttonClassName={!countryDropdownEnabled ? "border-dashed border-slate-300 bg-slate-50 text-slate-400" : undefined}
+          options={[
+            { value: "all", label: "All countries" },
+            ...countryOptions.map((country) => ({
+              value: country.id,
+              label: country.isoCode ? `${country.isoCode} - ${country.name}` : country.name,
+              keywords: `${country.isoCode ?? ""} ${country.name}`,
+            })),
+          ]}
+          placeholder="All countries"
+          searchPlaceholder="Search countries..."
+          emptyLabel="No countries found."
+        />
+      </div>
+      <div className="flex w-full flex-wrap gap-3 sm:w-auto">
+        <button className="btn-secondary" type="submit">Apply</button>
+        <a className="btn-secondary" href={buildResetHref(anchor, preservedParams)}>Reset</a>
+      </div>
+    </form>
+  );
+}
+
+
+export function ScopedMinutesFilterForm({
+  action,
+  anchor,
+  prefix,
+  fromDate,
+  toDate,
+  clientId,
+  projectId,
+  subProjectId,
+  countryId,
+  clientOptions,
+  projectOptions,
+  subProjectOptions,
+  countryOptions,
+  countryEligibleClientOptions = clientOptions,
+  countryEligibleProjectOptions = projectOptions,
+  countryEligibleSubProjectOptions = subProjectOptions,
+  preservedParams = {},
+}: {
+  action: string;
+  anchor: string;
+  prefix: string;
+  fromDate: string;
+  toDate: string;
+  clientId: string;
+  projectId: string;
+  subProjectId: string;
+  countryId: string;
+  clientOptions: ClientOption[];
+  projectOptions: ProjectOption[];
+  subProjectOptions: SubProjectOption[];
+  countryOptions: CountryOption[];
+  countryEligibleClientOptions?: ClientOption[];
+  countryEligibleProjectOptions?: ProjectOption[];
+  countryEligibleSubProjectOptions?: SubProjectOption[];
+  preservedParams?: PreservedParams;
+}) {
+  const [selectedClientId, setSelectedClientId] = useState(clientId);
+  const [selectedProjectId, setSelectedProjectId] = useState(projectId);
+  const [selectedSubProjectId, setSelectedSubProjectId] = useState(subProjectId);
+  const [selectedCountryId, setSelectedCountryId] = useState(countryId);
+
+  const useCountryEligibleOptions = selectedCountryId !== "all";
+  const activeClientOptions = useCountryEligibleOptions ? countryEligibleClientOptions : clientOptions;
+  const activeProjectOptions = useCountryEligibleOptions ? countryEligibleProjectOptions : projectOptions;
+  const activeSubProjectOptions = useCountryEligibleOptions ? countryEligibleSubProjectOptions : subProjectOptions;
+
+  const selectedClientAllowsCountry =
+    selectedClientId === "all" || countryEligibleClientOptions.some((client) => client.id === selectedClientId);
+  const selectedProjectAllowsCountry =
+    selectedProjectId === "all" || countryEligibleProjectOptions.some((project) => project.id === selectedProjectId);
+  const selectedSubProjectAllowsCountry =
+    selectedSubProjectId === "all" || countryEligibleSubProjectOptions.some((subProject) => subProject.id === selectedSubProjectId);
+  const countryDropdownEnabled =
+    selectedCountryId !== "all" ||
+    (selectedClientAllowsCountry && selectedProjectAllowsCountry && selectedSubProjectAllowsCountry);
+
+  const filteredProjects = useMemo(
+    () => activeProjectOptions.filter((project) => (selectedClientId === "all" ? true : project.clientId === selectedClientId)),
+    [activeProjectOptions, selectedClientId],
+  );
+
+  const effectiveProjectId =
+    selectedProjectId === "all" || filteredProjects.some((project) => project.id === selectedProjectId)
+      ? selectedProjectId
+      : "all";
+
+  const filteredSubProjects = useMemo(
+    () => activeSubProjectOptions.filter((subProject) => (effectiveProjectId === "all" ? true : subProject.projectId === effectiveProjectId)),
+    [activeSubProjectOptions, effectiveProjectId],
+  );
+
+  const effectiveSubProjectId =
+    selectedSubProjectId === "all" || filteredSubProjects.some((subProject) => subProject.id === selectedSubProjectId)
+      ? selectedSubProjectId
+      : "all";
+
+  return (
+    <form className="relative z-20 flex flex-wrap items-end gap-3" method="get" action={`${action}${anchor}`}>
+      {renderHiddenParams(preservedParams)}
+      <div className="w-full sm:w-[180px]">
+        <input className="input w-full" type="date" name={`${prefix}FromDate`} defaultValue={fromDate} />
+      </div>
+      <div className="w-full sm:w-[180px]">
+        <input className="input w-full" type="date" name={`${prefix}ToDate`} defaultValue={toDate} />
+      </div>
+      <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
+        <SearchableCombobox
+          id={`${prefix}ClientId`}
+          name={`${prefix}ClientId`}
+          value={selectedClientId}
+          onValueChange={(value) => {
+            setSelectedClientId(value);
+            const currentProject = activeProjectOptions.find((project) => project.id === selectedProjectId);
+            if (currentProject && value !== "all" && currentProject.clientId !== value) {
+              setSelectedProjectId("all");
+              setSelectedSubProjectId("all");
+            }
+          }}
+          options={[
+            { value: "all", label: "All clients" },
+            ...activeClientOptions.map((client) => ({ value: client.id, label: client.name })),
+          ]}
+          placeholder="All clients"
+          searchPlaceholder="Search clients..."
+          emptyLabel="No clients found."
+        />
+      </div>
+      <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
+        <SearchableCombobox
+          id={`${prefix}ProjectId`}
+          name={`${prefix}ProjectId`}
+          value={effectiveProjectId}
+          onValueChange={(value) => {
+            setSelectedProjectId(value);
+            const currentSubProject = activeSubProjectOptions.find((subProject) => subProject.id === selectedSubProjectId);
+            if (currentSubProject && value !== "all" && currentSubProject.projectId !== value) {
+              setSelectedSubProjectId("all");
+            }
+            if (value === "all") {
+              return;
+            }
+            const nextProject = activeProjectOptions.find((project) => project.id === value);
+            if (nextProject && selectedClientId !== "all" && nextProject.clientId !== selectedClientId) {
+              setSelectedClientId(nextProject.clientId);
+            }
+          }}
+          options={[
+            { value: "all", label: "All projects" },
+            ...filteredProjects.map((project) => ({ value: project.id, label: project.name })),
+          ]}
+          placeholder="All projects"
+          searchPlaceholder="Search projects..."
+          emptyLabel="No projects found."
+        />
+      </div>
+      <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
+        <SearchableCombobox
+          id={`${prefix}SubProjectId`}
+          name={`${prefix}SubProjectId`}
+          value={effectiveSubProjectId}
+          onValueChange={setSelectedSubProjectId}
+          options={[
+            { value: "all", label: "All sub-projects" },
+            ...filteredSubProjects.map((subProject) => ({ value: subProject.id, label: subProject.name })),
+          ]}
+          placeholder="All sub-projects"
+          searchPlaceholder="Search sub-projects..."
+          emptyLabel="No sub-projects found."
+        />
+      </div>
+      <div className="w-full sm:w-[220px] md:w-[240px] lg:w-[260px]">
+        <SearchableCombobox
+          id={`${prefix}CountryId`}
+          name={`${prefix}CountryId`}
+          value={countryDropdownEnabled ? selectedCountryId : "all"}
+          onValueChange={setSelectedCountryId}
+          disabled={!countryDropdownEnabled}
+          buttonClassName={!countryDropdownEnabled ? "border-dashed border-slate-300 bg-slate-50 text-slate-400" : undefined}
           options={[
             { value: "all", label: "All countries" },
             ...countryOptions.map((country) => ({

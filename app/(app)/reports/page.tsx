@@ -1,6 +1,12 @@
 import Link from "next/link";
 import type { FunctionalRoleCode } from "@prisma/client";
-import { MovieMinutesFilterForm, ProjectHoursFilterForm, TaskDetailFilterForm } from "@/components/reports/report-filter-forms";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import {
+  MovieMinutesFilterForm,
+  ProjectHoursFilterForm,
+  ScopedMinutesFilterForm,
+  TaskDetailFilterForm,
+} from "@/components/reports/report-filter-forms";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -42,8 +48,7 @@ function buildDateRange(fromDate: string, toDate: string) {
   };
 }
 
-function formatHours(minutes: number) {
-  //return (minutes / 60).toFixed(2);
+function formatMins(minutes: number) {
   return minutes;
 }
 
@@ -99,6 +104,120 @@ type MovieMinutesRow = {
   totalMinutes: number;
 };
 
+type DayMinutesRow = {
+  dateKey: string;
+  clientName: string;
+  projectName: string;
+  subProjectName: string;
+  countryName: string;
+  countryCode: string;
+  totalMinutes: number;
+};
+
+type CountryMinutesRow = {
+  clientName: string;
+  projectName: string;
+  subProjectName: string;
+  countryName: string;
+  countryCode: string;
+  totalMinutes: number;
+};
+
+function formatReportDate(date: Date) {
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+type SortDirection = "asc" | "desc";
+
+function normalizeSortDirection(value?: string): SortDirection {
+  return value === "desc" ? "desc" : "asc";
+}
+
+function compareText(a: string, b: string, direction: SortDirection) {
+  const result = a.localeCompare(b, undefined, { sensitivity: "base", numeric: true });
+  return direction === "asc" ? result : -result;
+}
+
+function compareNumber(a: number, b: number, direction: SortDirection) {
+  return direction === "asc" ? a - b : b - a;
+}
+
+function sortRows<T>(rows: T[], selector: (row: T) => string | number, direction: SortDirection) {
+  return [...rows].sort((a, b) => {
+    const av = selector(a);
+    const bv = selector(b);
+    if (typeof av === "number" && typeof bv === "number") {
+      return compareNumber(av, bv, direction);
+    }
+    return compareText(String(av), String(bv), direction);
+  });
+}
+
+function buildSortHref({
+  baseSearchParams,
+  sortByParam,
+  sortDirParam,
+  pageParam,
+  sortBy,
+  currentSortBy,
+  currentSortDir,
+  anchor,
+}: {
+  baseSearchParams: Record<string, string | undefined>;
+  sortByParam: string;
+  sortDirParam: string;
+  pageParam: string;
+  sortBy: string;
+  currentSortBy: string;
+  currentSortDir: SortDirection;
+  anchor: string;
+}) {
+  const search = new URLSearchParams();
+  Object.entries(baseSearchParams).forEach(([key, value]) => {
+    if (value && key !== pageParam) search.set(key, value);
+  });
+  search.set(sortByParam, sortBy);
+  search.set(sortDirParam, currentSortBy === sortBy && currentSortDir === "asc" ? "desc" : "asc");
+  const query = search.toString();
+  return query ? `/reports?${query}${anchor}` : `/reports${anchor}`;
+}
+
+function SortableHeader({
+  label,
+  sortBy,
+  currentSortBy,
+  currentSortDir,
+  href,
+  className = "table-cell",
+}: {
+  label: string;
+  sortBy: string;
+  currentSortBy: string;
+  currentSortDir: SortDirection;
+  href: string;
+  className?: string;
+}) {
+  const isActive = currentSortBy === sortBy;
+  return (
+    <th className={className}>
+      <Link className="inline-flex items-center gap-1 hover:text-slate-900" href={href} scroll={false}>
+        <span>{label}</span>
+        {isActive ? (
+          currentSortDir === "asc" ? (
+            <ChevronUp className="h-3.5 w-3.5 shrink-0 text-slate-700" strokeWidth={2.5} />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-700" strokeWidth={2.5} />
+          )
+        ) : null}
+      </Link>
+    </th>
+  );
+}
+
 export default async function ReportsPage({
   searchParams,
 }: {
@@ -107,11 +226,15 @@ export default async function ReportsPage({
     clientToDate?: string;
     clientClientId?: string;
     clientPage?: string;
+    clientSortBy?: string;
+    clientSortDir?: string;
     projectFromDate?: string;
     projectToDate?: string;
     projectClientId?: string;
     projectProjectId?: string;
     projectPage?: string;
+    projectSortBy?: string;
+    projectSortDir?: string;
     taskFromDate?: string;
     taskToDate?: string;
     taskClientId?: string;
@@ -119,6 +242,8 @@ export default async function ReportsPage({
     taskSubProjectId?: string;
     taskCountryId?: string;
     taskPage?: string;
+    taskSortBy?: string;
+    taskSortDir?: string;
     movieFromDate?: string;
     movieToDate?: string;
     movieMovieId?: string;
@@ -127,6 +252,26 @@ export default async function ReportsPage({
     movieSubProjectId?: string;
     movieCountryId?: string;
     moviePage?: string;
+    movieSortBy?: string;
+    movieSortDir?: string;
+    dayFromDate?: string;
+    dayToDate?: string;
+    dayClientId?: string;
+    dayProjectId?: string;
+    daySubProjectId?: string;
+    dayCountryId?: string;
+    dayPage?: string;
+    daySortBy?: string;
+    daySortDir?: string;
+    countryFromDate?: string;
+    countryToDate?: string;
+    countryClientId?: string;
+    countryProjectId?: string;
+    countrySubProjectId?: string;
+    countryCountryId?: string;
+    countryPage?: string;
+    countrySortBy?: string;
+    countrySortDir?: string;
   }>;
 }) {
   const user = await requireUser();
@@ -138,12 +283,16 @@ export default async function ReportsPage({
   const clientToDate = normalizeDateInput(params.clientToDate) ?? defaultMonthRange.toDate;
   const clientClientId = params.clientClientId ?? "all";
   const clientPage = parsePageParam(params.clientPage);
+  const clientSortBy = params.clientSortBy ?? "clientName";
+  const clientSortDir = normalizeSortDirection(params.clientSortDir);
 
   const projectFromDate = normalizeDateInput(params.projectFromDate) ?? defaultMonthRange.fromDate;
   const projectToDate = normalizeDateInput(params.projectToDate) ?? defaultMonthRange.toDate;
   const projectClientId = params.projectClientId ?? "all";
   const projectProjectId = params.projectProjectId ?? "all";
   const projectPage = parsePageParam(params.projectPage);
+  const projectSortBy = params.projectSortBy ?? "clientName";
+  const projectSortDir = normalizeSortDirection(params.projectSortDir);
 
   const taskFromDate = normalizeDateInput(params.taskFromDate) ?? defaultTodayRange.fromDate;
   const taskToDate = normalizeDateInput(params.taskToDate) ?? defaultTodayRange.toDate;
@@ -152,6 +301,8 @@ export default async function ReportsPage({
   const taskSubProjectId = params.taskSubProjectId ?? "all";
   const taskCountryId = params.taskCountryId ?? "all";
   const taskPage = parsePageParam(params.taskPage);
+  const taskSortBy = params.taskSortBy ?? "clientName";
+  const taskSortDir = normalizeSortDirection(params.taskSortDir);
 
   const movieFromDate = normalizeDateInput(params.movieFromDate) ?? defaultMonthRange.fromDate;
   const movieToDate = normalizeDateInput(params.movieToDate) ?? defaultMonthRange.toDate;
@@ -161,11 +312,32 @@ export default async function ReportsPage({
   const movieSubProjectId = params.movieSubProjectId ?? "all";
   const movieCountryId = params.movieCountryId ?? "all";
   const moviePage = parsePageParam(params.moviePage);
+  const movieSortBy = params.movieSortBy ?? "movieName";
+  const movieSortDir = normalizeSortDirection(params.movieSortDir);
+
+  const dayFromDate = normalizeDateInput(params.dayFromDate) ?? defaultMonthRange.fromDate;
+  const dayToDate = normalizeDateInput(params.dayToDate) ?? defaultMonthRange.toDate;
+  const dayClientId = params.dayClientId ?? "all";
+  const dayProjectId = params.dayProjectId ?? "all";
+  const daySubProjectId = params.daySubProjectId ?? "all";
+  const dayCountryId = params.dayCountryId ?? "all";
+  const dayPage = parsePageParam(params.dayPage);
+  const daySortBy = params.daySortBy ?? "dateKey";
+  const daySortDir = normalizeSortDirection(params.daySortDir);
+
+  const countryFromDate = normalizeDateInput(params.countryFromDate) ?? defaultMonthRange.fromDate;
+  const countryToDate = normalizeDateInput(params.countryToDate) ?? defaultMonthRange.toDate;
+  const countryClientId = params.countryClientId ?? "all";
+  const countryProjectId = params.countryProjectId ?? "all";
+  const countrySubProjectId = params.countrySubProjectId ?? "all";
+  const countryCountryId = params.countryCountryId ?? "all";
+  const countryPage = parsePageParam(params.countryPage);
+  const countrySortBy = params.countrySortBy ?? "countryCode";
+  const countrySortDir = normalizeSortDirection(params.countrySortDir);
 
   const visibleProjects = await getVisibleProjects(user);
   const visibleProjectIds = visibleProjects.map((project) => project.id);
   const safeProjectIds = visibleProjectIds.length ? visibleProjectIds : ["__none__"];
-  const visibleClientIds = Array.from(new Set(visibleProjects.map((project) => project.clientId)));
 
   const clientOptions = Array.from(
     new Map(
@@ -175,6 +347,30 @@ export default async function ReportsPage({
 
   const projectOptions = visibleProjects
     .map((project) => ({ id: project.id, name: project.name, clientId: project.clientId }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const movieEligibleProjects = visibleProjects.filter(
+    (project) => project.client.showMoviesInEntries && !project.hideMoviesInEntries,
+  );
+  const movieEligibleProjectIds = movieEligibleProjects.map((project) => project.id);
+  const movieEligibleClientMap = new Map(
+    movieEligibleProjects.map((project) => [project.client.id, { id: project.client.id, name: project.client.name }]),
+  );
+  const movieClientOptions = Array.from(movieEligibleClientMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  const movieProjectOptions = movieEligibleProjects
+    .map((project) => ({ id: project.id, name: project.name, clientId: project.clientId }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const countryEligibleProjects = visibleProjects.filter(
+    (project) => project.client.showCountriesInTimeEntries && !project.hideCountriesInEntries,
+  );
+  const countryEligibleProjectIds = countryEligibleProjects.map((project) => project.id);
+  const countryEligibleClientMap = new Map(
+    countryEligibleProjects.map((project) => [project.client.id, { id: project.client.id, name: project.client.name }]),
+  );
+  const countryEligibleClientOptions = Array.from(countryEligibleClientMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  const countryEligibleProjectOptions = countryEligibleProjects
+    .map((project) => ({ id: project.id, name: project.name, clientId: project.clientId, hideCountriesInEntries: project.hideCountriesInEntries }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const [subProjectOptions, countryOptions, movieOptions] = await Promise.all([
@@ -187,6 +383,8 @@ export default async function ReportsPage({
         id: true,
         name: true,
         projectId: true,
+        hideMoviesInEntries: true,
+        hideCountriesInEntries: true,
       },
       orderBy: [{ name: "asc" }],
     }),
@@ -202,7 +400,7 @@ export default async function ReportsPage({
     db.movie.findMany({
       where: {
         isActive: true,
-        clientId: { in: visibleClientIds.length ? visibleClientIds : ["__none__"] },
+        clientId: { in: Array.from(new Set(movieEligibleProjects.map((project) => project.clientId))).length ? Array.from(new Set(movieEligibleProjects.map((project) => project.clientId))) : ["__none__"] },
       },
       select: {
         id: true,
@@ -218,13 +416,27 @@ export default async function ReportsPage({
     }),
   ]);
 
-  const normalizedSubProjectOptions = subProjectOptions.sort((a, b) => a.name.localeCompare(b.name));
+  const normalizedSubProjectOptions = subProjectOptions
+    .map((subProject) => ({ id: subProject.id, name: subProject.name, projectId: subProject.projectId, hideMoviesInEntries: subProject.hideMoviesInEntries, hideCountriesInEntries: subProject.hideCountriesInEntries }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const countryEligibleSubProjectOptions = normalizedSubProjectOptions
+    .filter((subProject) => countryEligibleProjectIds.includes(subProject.projectId) && !subProject.hideCountriesInEntries)
+    .map(({ id, name, projectId, hideCountriesInEntries }) => ({ id, name, projectId, hideCountriesInEntries }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const movieSubProjectOptions = normalizedSubProjectOptions
+    .filter((subProject) => movieEligibleProjectIds.includes(subProject.projectId) && !subProject.hideMoviesInEntries)
+    .map(({ id, name, projectId }) => ({ id, name, projectId }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   const normalizedCountryOptions = countryOptions
     .map((country) => ({ id: country.id, name: country.name, isoCode: country.isoCode ?? "-" }))
     .sort((a, b) => {
       if (a.isoCode !== b.isoCode) return a.isoCode.localeCompare(b.isoCode);
       return a.name.localeCompare(b.name);
     });
+
   const normalizedMovieOptions = movieOptions
     .map((movie) => ({ id: movie.id, title: movie.title, clientId: movie.clientId, clientName: movie.client.name }))
     .sort((a, b) => a.title.localeCompare(b.title));
@@ -265,14 +477,18 @@ export default async function ReportsPage({
     { fromBoundary: projectFromBoundary, toBoundary: projectToBoundary },
     { fromBoundary: taskFromBoundary, toBoundary: taskToBoundary },
     { fromBoundary: movieFromBoundary, toBoundary: movieToBoundary },
+    { fromBoundary: dayFromBoundary, toBoundary: dayToBoundary },
+    { fromBoundary: countryFromBoundary, toBoundary: countryToBoundary },
   ] = [
     buildDateRange(clientFromDate, clientToDate),
     buildDateRange(projectFromDate, projectToDate),
     buildDateRange(taskFromDate, taskToDate),
     buildDateRange(movieFromDate, movieToDate),
+    buildDateRange(dayFromDate, dayToDate),
+    buildDateRange(countryFromDate, countryToDate),
   ];
 
-  const [clientEntries, projectEntries, taskEntries, movieEntries] = await Promise.all([
+  const [clientEntries, projectEntries, taskEntries, movieEntries, dayEntries, countryEntries] = await Promise.all([
     db.timeEntry.findMany({
       where: {
         projectId: { in: safeProjectIds },
@@ -280,9 +496,7 @@ export default async function ReportsPage({
         ...(clientClientId !== "all" ? { project: { is: { clientId: clientClientId } } } : {}),
         ...employeeWhereClause,
       },
-      include: {
-        project: { include: { client: true } },
-      },
+      include: { project: { include: { client: true } } },
       orderBy: [{ workDate: "desc" }],
     }),
     db.timeEntry.findMany({
@@ -293,10 +507,7 @@ export default async function ReportsPage({
         ...(projectProjectId !== "all" ? { projectId: projectProjectId } : {}),
         ...employeeWhereClause,
       },
-      include: {
-        project: { include: { client: true } },
-        subProject: true,
-      },
+      include: { project: { include: { client: true } }, subProject: true },
       orderBy: [{ workDate: "desc" }],
     }),
     db.timeEntry.findMany({
@@ -310,16 +521,8 @@ export default async function ReportsPage({
         ...employeeWhereClause,
       },
       include: {
-        employee: {
-          select: {
-            functionalRole: true,
-          },
-        },
-        project: {
-          include: {
-            client: true,
-          },
-        },
+        employee: { select: { functionalRole: true } },
+        project: { include: { client: true } },
         subProject: true,
         country: true,
       },
@@ -327,11 +530,18 @@ export default async function ReportsPage({
     }),
     db.timeEntry.findMany({
       where: {
-        projectId: { in: safeProjectIds },
+        projectId: { in: movieEligibleProjectIds.length ? movieEligibleProjectIds : ["__none__"] },
         workDate: { gte: movieFromBoundary, lte: movieToBoundary },
         movieId: { not: null },
+        project: {
+          is: {
+            client: { is: { showMoviesInEntries: true } },
+            hideMoviesInEntries: false,
+            ...(movieClientId !== "all" ? { clientId: movieClientId } : {}),
+          },
+        },
+        OR: [{ subProjectId: null }, { subProject: { is: { hideMoviesInEntries: false } } }],
         ...(movieMovieId !== "all" ? { movieId: movieMovieId } : {}),
-        ...(movieClientId !== "all" ? { project: { is: { clientId: movieClientId } } } : {}),
         ...(movieProjectId !== "all" ? { projectId: movieProjectId } : {}),
         ...(movieSubProjectId !== "all" ? { subProjectId: movieSubProjectId } : {}),
         ...(movieCountryId !== "all" ? { countryId: movieCountryId } : {}),
@@ -345,11 +555,48 @@ export default async function ReportsPage({
       },
       orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
     }),
+    db.timeEntry.findMany({
+      where: {
+        projectId: { in: safeProjectIds },
+        workDate: { gte: dayFromBoundary, lte: dayToBoundary },
+        ...(dayClientId !== "all" ? { project: { is: { clientId: dayClientId } } } : {}),
+        ...(dayProjectId !== "all" ? { projectId: dayProjectId } : {}),
+        ...(daySubProjectId !== "all" ? { subProjectId: daySubProjectId } : {}),
+        ...(dayCountryId !== "all" ? { countryId: dayCountryId } : {}),
+        ...employeeWhereClause,
+      },
+      include: {
+        project: { include: { client: true } },
+        subProject: true,
+        country: true,
+      },
+      orderBy: [{ workDate: "asc" }, { createdAt: "asc" }],
+    }),
+    db.timeEntry.findMany({
+      where: {
+        projectId: { in: countryEligibleProjectIds.length ? countryEligibleProjectIds : ["__none__"] },
+        workDate: { gte: countryFromBoundary, lte: countryToBoundary },
+        ...(countryClientId !== "all" ? { project: { is: { clientId: countryClientId } } } : {}),
+        ...(countryProjectId !== "all" ? { projectId: countryProjectId } : {}),
+        ...(countrySubProjectId !== "all" ? { subProjectId: countrySubProjectId } : {}),
+        ...(countryCountryId !== "all" ? { countryId: countryCountryId } : {}),
+        OR: [{ subProjectId: null }, { subProject: { is: { hideCountriesInEntries: false } } }],
+        ...employeeWhereClause,
+      },
+      include: {
+        project: { include: { client: true } },
+        subProject: true,
+        country: true,
+      },
+      orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
+    }),
   ]);
 
   const clientMap = new Map<string, ClientHoursRow>();
   const projectMap = new Map<string, ProjectHoursRow>();
   const movieMap = new Map<string, MovieMinutesRow>();
+  const dayMap = new Map<string, DayMinutesRow>();
+  const countryMap = new Map<string, CountryMinutesRow>();
 
   for (const entry of clientEntries) {
     const clientKey = entry.project.clientId;
@@ -391,13 +638,49 @@ export default async function ReportsPage({
     movieMap.set(movieKey, movieRow);
   }
 
-  const clientRows = Array.from(clientMap.values()).sort((a, b) => a.clientName.localeCompare(b.clientName));
-  const projectRows = Array.from(projectMap.values()).sort((a, b) => {
-    if (a.clientName !== b.clientName) return a.clientName.localeCompare(b.clientName);
-    if (a.projectName !== b.projectName) return a.projectName.localeCompare(b.projectName);
-    return a.subProjectName.localeCompare(b.subProjectName);
-  });
-  const taskRows: TaskDetailRow[] = taskEntries.map((entry) => ({
+  for (const entry of dayEntries) {
+    const dateKey = entry.workDate.toISOString().slice(0, 10);
+    const clientName = entry.project.client.name;
+    const projectName = entry.project.name;
+    const subProjectName = entry.subProject?.name ?? "-";
+    const countryName = entry.country?.name ?? "Unspecified";
+    const countryCode = entry.country?.isoCode ?? "-";
+    const key = `${dateKey}__${clientName}__${projectName}__${subProjectName}__${countryCode}__${countryName}`;
+    const dayRow = dayMap.get(key) ?? {
+      dateKey,
+      clientName,
+      projectName,
+      subProjectName,
+      countryName,
+      countryCode,
+      totalMinutes: 0,
+    };
+    dayRow.totalMinutes += entry.minutesSpent;
+    dayMap.set(key, dayRow);
+  }
+
+  for (const entry of countryEntries) {
+    const clientName = entry.project.client.name;
+    const projectName = entry.project.name;
+    const subProjectName = entry.subProject?.name ?? "-";
+    const countryCode = entry.country?.isoCode ?? "-";
+    const countryName = entry.country?.name ?? "Unspecified";
+    const key = `${clientName}__${projectName}__${subProjectName}__${countryCode}__${countryName}`;
+    const countryRow = countryMap.get(key) ?? {
+      clientName,
+      projectName,
+      subProjectName,
+      countryCode,
+      countryName,
+      totalMinutes: 0,
+    };
+    countryRow.totalMinutes += entry.minutesSpent;
+    countryMap.set(key, countryRow);
+  }
+
+  const clientBaseRows = Array.from(clientMap.values());
+  const projectBaseRows = Array.from(projectMap.values());
+  const taskBaseRows: TaskDetailRow[] = taskEntries.map((entry) => ({
     id: entry.id,
     clientName: entry.project.client.name,
     projectName: entry.project.name,
@@ -409,31 +692,133 @@ export default async function ReportsPage({
     employeeRole: formatRole(entry.employee.functionalRole),
     totalMinutes: entry.minutesSpent,
   }));
-  const movieRows = Array.from(movieMap.values()).sort((a, b) => {
-    if (a.movieName !== b.movieName) return a.movieName.localeCompare(b.movieName);
-    if (a.clientName !== b.clientName) return a.clientName.localeCompare(b.clientName);
-    if (a.projectName !== b.projectName) return a.projectName.localeCompare(b.projectName);
-    if (a.subProjectName !== b.subProjectName) return a.subProjectName.localeCompare(b.subProjectName);
-    return a.countryCode.localeCompare(b.countryCode);
-  });
+  const movieBaseRows = Array.from(movieMap.values());
+  const dayBaseRows = Array.from(dayMap.values());
+  const countryBaseRows = Array.from(countryMap.values());
+
+  const clientRows = sortRows(clientBaseRows, (row) => {
+    switch (clientSortBy) {
+      case "totalMinutes":
+        return row.totalMinutes;
+      case "clientName":
+      default:
+        return row.clientName;
+    }
+  }, clientSortDir);
+
+  const projectRows = sortRows(projectBaseRows, (row) => {
+    switch (projectSortBy) {
+      case "projectName":
+        return row.projectName;
+      case "subProjectName":
+        return row.subProjectName;
+      case "totalMinutes":
+        return row.totalMinutes;
+      case "clientName":
+      default:
+        return row.clientName;
+    }
+  }, projectSortDir);
+
+  const taskRows = sortRows(taskBaseRows, (row) => {
+    switch (taskSortBy) {
+      case "projectName":
+        return row.projectName;
+      case "subProjectName":
+        return row.subProjectName;
+      case "taskName":
+        return row.taskName;
+      case "countryCode":
+        return row.countryCode;
+      case "employeeRole":
+        return row.employeeRole;
+      case "totalMinutes":
+        return row.totalMinutes;
+      case "clientName":
+      default:
+        return row.clientName;
+    }
+  }, taskSortDir);
+
+  const movieRows = sortRows(movieBaseRows, (row) => {
+    switch (movieSortBy) {
+      case "clientName":
+        return row.clientName;
+      case "projectName":
+        return row.projectName;
+      case "subProjectName":
+        return row.subProjectName;
+      case "countryCode":
+        return row.countryCode;
+      case "totalMinutes":
+        return row.totalMinutes;
+      case "movieName":
+      default:
+        return row.movieName;
+    }
+  }, movieSortDir);
+
+  const dayRows = sortRows(dayBaseRows, (row) => {
+    switch (daySortBy) {
+      case "clientName":
+        return row.clientName;
+      case "projectName":
+        return row.projectName;
+      case "subProjectName":
+        return row.subProjectName;
+      case "countryCode":
+        return row.countryCode;
+      case "totalMinutes":
+        return row.totalMinutes;
+      case "dateKey":
+      default:
+        return row.dateKey;
+    }
+  }, daySortDir);
+
+  const countryRows = sortRows(countryBaseRows, (row) => {
+    switch (countrySortBy) {
+      case "clientName":
+        return row.clientName;
+      case "projectName":
+        return row.projectName;
+      case "subProjectName":
+        return row.subProjectName;
+      case "totalMinutes":
+        return row.totalMinutes;
+      case "countryName":
+        return row.countryName;
+      case "countryCode":
+      default:
+        return row.countryCode;
+    }
+  }, countrySortDir);
 
   const paginatedClientRows = paginateItems(clientRows, clientPage, DEFAULT_PAGE_SIZE);
   const paginatedProjectRows = paginateItems(projectRows, projectPage, DEFAULT_PAGE_SIZE);
   const paginatedTaskRows = paginateItems(taskRows, taskPage, DEFAULT_PAGE_SIZE);
   const paginatedMovieRows = paginateItems(movieRows, moviePage, DEFAULT_PAGE_SIZE);
+  const paginatedDayRows = paginateItems(dayRows, dayPage, DEFAULT_PAGE_SIZE);
+  const paginatedCountryRows = paginateItems(countryRows, countryPage, DEFAULT_PAGE_SIZE);
 
   const clientTotalMinutes = clientRows.reduce((sum, row) => sum + row.totalMinutes, 0);
   const projectTotalMinutes = projectRows.reduce((sum, row) => sum + row.totalMinutes, 0);
   const taskTotalMinutes = taskRows.reduce((sum, row) => sum + row.totalMinutes, 0);
   const movieTotalMinutes = movieRows.reduce((sum, row) => sum + row.totalMinutes, 0);
+  const dayTotalMinutes = dayRows.reduce((sum, row) => sum + row.totalMinutes, 0);
+  const countryTotalMinutes = countryRows.reduce((sum, row) => sum + row.totalMinutes, 0);
 
   const clientSearch = {
+    clientSortBy: clientSortBy || undefined,
+    clientSortDir,
     clientFromDate,
     clientToDate,
     clientClientId: clientClientId === "all" ? undefined : clientClientId,
   };
 
   const projectSearch = {
+    projectSortBy: projectSortBy || undefined,
+    projectSortDir,
     projectFromDate,
     projectToDate,
     projectClientId: projectClientId === "all" ? undefined : projectClientId,
@@ -441,6 +826,8 @@ export default async function ReportsPage({
   };
 
   const taskSearch = {
+    taskSortBy: taskSortBy || undefined,
+    taskSortDir,
     taskFromDate,
     taskToDate,
     taskClientId: taskClientId === "all" ? undefined : taskClientId,
@@ -450,6 +837,8 @@ export default async function ReportsPage({
   };
 
   const movieSearch = {
+    movieSortBy: movieSortBy || undefined,
+    movieSortDir,
     movieFromDate,
     movieToDate,
     movieMovieId: movieMovieId === "all" ? undefined : movieMovieId,
@@ -457,6 +846,28 @@ export default async function ReportsPage({
     movieProjectId: movieProjectId === "all" ? undefined : movieProjectId,
     movieSubProjectId: movieSubProjectId === "all" ? undefined : movieSubProjectId,
     movieCountryId: movieCountryId === "all" ? undefined : movieCountryId,
+  };
+
+  const daySearch = {
+    daySortBy: daySortBy || undefined,
+    daySortDir,
+    dayFromDate,
+    dayToDate,
+    dayClientId: dayClientId === "all" ? undefined : dayClientId,
+    dayProjectId: dayProjectId === "all" ? undefined : dayProjectId,
+    daySubProjectId: daySubProjectId === "all" ? undefined : daySubProjectId,
+    dayCountryId: dayCountryId === "all" ? undefined : dayCountryId,
+  };
+
+  const countrySearch = {
+    countrySortBy: countrySortBy || undefined,
+    countrySortDir,
+    countryFromDate,
+    countryToDate,
+    countryClientId: countryClientId === "all" ? undefined : countryClientId,
+    countryProjectId: countryProjectId === "all" ? undefined : countryProjectId,
+    countrySubProjectId: countrySubProjectId === "all" ? undefined : countrySubProjectId,
+    countryCountryId: countryCountryId === "all" ? undefined : countryCountryId,
   };
 
   const allReportSearch = {
@@ -468,6 +879,10 @@ export default async function ReportsPage({
     ...(taskPage > 1 ? { taskPage: String(taskPage) } : {}),
     ...movieSearch,
     ...(moviePage > 1 ? { moviePage: String(moviePage) } : {}),
+    ...daySearch,
+    ...(dayPage > 1 ? { dayPage: String(dayPage) } : {}),
+    ...countrySearch,
+    ...(countryPage > 1 ? { countryPage: String(countryPage) } : {}),
   };
 
   const clientPreservedParams = {
@@ -477,6 +892,10 @@ export default async function ReportsPage({
     ...(taskPage > 1 ? { taskPage: String(taskPage) } : {}),
     ...movieSearch,
     ...(moviePage > 1 ? { moviePage: String(moviePage) } : {}),
+    ...daySearch,
+    ...(dayPage > 1 ? { dayPage: String(dayPage) } : {}),
+    ...countrySearch,
+    ...(countryPage > 1 ? { countryPage: String(countryPage) } : {}),
   };
 
   const projectPreservedParams = {
@@ -486,6 +905,10 @@ export default async function ReportsPage({
     ...(taskPage > 1 ? { taskPage: String(taskPage) } : {}),
     ...movieSearch,
     ...(moviePage > 1 ? { moviePage: String(moviePage) } : {}),
+    ...daySearch,
+    ...(dayPage > 1 ? { dayPage: String(dayPage) } : {}),
+    ...countrySearch,
+    ...(countryPage > 1 ? { countryPage: String(countryPage) } : {}),
   };
 
   const taskPreservedParams = {
@@ -495,6 +918,10 @@ export default async function ReportsPage({
     ...(projectPage > 1 ? { projectPage: String(projectPage) } : {}),
     ...movieSearch,
     ...(moviePage > 1 ? { moviePage: String(moviePage) } : {}),
+    ...daySearch,
+    ...(dayPage > 1 ? { dayPage: String(dayPage) } : {}),
+    ...countrySearch,
+    ...(countryPage > 1 ? { countryPage: String(countryPage) } : {}),
   };
 
   const moviePreservedParams = {
@@ -504,13 +931,44 @@ export default async function ReportsPage({
     ...(projectPage > 1 ? { projectPage: String(projectPage) } : {}),
     ...taskSearch,
     ...(taskPage > 1 ? { taskPage: String(taskPage) } : {}),
+    ...daySearch,
+    ...(dayPage > 1 ? { dayPage: String(dayPage) } : {}),
+    ...countrySearch,
+    ...(countryPage > 1 ? { countryPage: String(countryPage) } : {}),
   };
+
+  const dayPreservedParams = {
+    ...clientSearch,
+    ...(clientPage > 1 ? { clientPage: String(clientPage) } : {}),
+    ...projectSearch,
+    ...(projectPage > 1 ? { projectPage: String(projectPage) } : {}),
+    ...taskSearch,
+    ...(taskPage > 1 ? { taskPage: String(taskPage) } : {}),
+    ...movieSearch,
+    ...(moviePage > 1 ? { moviePage: String(moviePage) } : {}),
+    ...countrySearch,
+    ...(countryPage > 1 ? { countryPage: String(countryPage) } : {}),
+  };
+
+  const countryPreservedParams = {
+    ...clientSearch,
+    ...(clientPage > 1 ? { clientPage: String(clientPage) } : {}),
+    ...projectSearch,
+    ...(projectPage > 1 ? { projectPage: String(projectPage) } : {}),
+    ...taskSearch,
+    ...(taskPage > 1 ? { taskPage: String(taskPage) } : {}),
+    ...movieSearch,
+    ...(moviePage > 1 ? { moviePage: String(moviePage) } : {}),
+    ...daySearch,
+    ...(dayPage > 1 ? { dayPage: String(dayPage) } : {}),
+  };
+
 
   return (
     <div className="space-y-8">
       <PageHeader
         title="Reports"
-        description="Time-entry reporting with report-specific filters and grouped hour summaries."
+        description="Time-entry reporting with report-specific filters and grouped minute summaries."
       />
 
       <section id="client-wise-hours" className="table-wrap">
@@ -519,14 +977,7 @@ export default async function ReportsPage({
             <h2 className="section-title">Client-wise minutes</h2>
             <p className="section-subtitle">Grouped by client for the selected date range.</p>
           </div>
-          <Link
-            className="btn-secondary whitespace-nowrap"
-            href={buildExportHref("client", {
-              clientFromDate,
-              clientToDate,
-              clientClientId: clientClientId === "all" ? undefined : clientClientId,
-            })}
-          >
+          <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("client", clientSearch)}>
             Export CSV
           </Link>
         </div>
@@ -575,36 +1026,55 @@ export default async function ReportsPage({
           <table className="table-base">
             <thead className="table-head">
               <tr>
-                <th className="table-cell">Client</th>
-                <th className="table-cell">Mins</th>
+                <SortableHeader
+                  label="Client"
+                  sortBy="clientName"
+                  currentSortBy={clientSortBy}
+                  currentSortDir={clientSortDir}
+                  href={buildSortHref({
+                    baseSearchParams: allReportSearch,
+                    sortByParam: "clientSortBy",
+                    sortDirParam: "clientSortDir",
+                    pageParam: "clientPage",
+                    sortBy: "clientName",
+                    currentSortBy: clientSortBy,
+                    currentSortDir: clientSortDir,
+                    anchor: "#client-wise-hours",
+                  })}
+                />
+                <SortableHeader
+                  label="Mins"
+                  sortBy="totalMinutes"
+                  currentSortBy={clientSortBy}
+                  currentSortDir={clientSortDir}
+                  href={buildSortHref({
+                    baseSearchParams: allReportSearch,
+                    sortByParam: "clientSortBy",
+                    sortDirParam: "clientSortDir",
+                    pageParam: "clientPage",
+                    sortBy: "totalMinutes",
+                    currentSortBy: clientSortBy,
+                    currentSortDir: clientSortDir,
+                    anchor: "#client-wise-hours",
+                  })}
+                />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {paginatedClientRows.items.map((row) => (
                 <tr key={row.clientId}>
                   <td className="table-cell">{row.clientName}</td>
-                  <td className="table-cell">{formatHours(row.totalMinutes)}</td>
+                  <td className="table-cell">{formatMins(row.totalMinutes)}</td>
                 </tr>
               ))}
-              {clientRows.length === 0 ? (
-                <tr><td colSpan={2} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr>
-              ) : null}
+              {clientRows.length === 0 ? <tr><td colSpan={2} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr> : null}
             </tbody>
           </table>
         </div>
         <div className="border-t border-slate-100 px-4 py-4 text-right text-sm font-semibold text-slate-700">
           Total Time: <span className="text-slate-900">{formatMinutes(clientTotalMinutes)}</span>
         </div>
-        <PaginationControls
-          basePath="/reports"
-          currentPage={paginatedClientRows.currentPage}
-          totalPages={paginatedClientRows.totalPages}
-          totalItems={paginatedClientRows.totalItems}
-          pageSize={paginatedClientRows.pageSize}
-          searchParams={allReportSearch}
-          pageParam="clientPage"
-          anchor="#client-wise-hours"
-        />
+        <PaginationControls basePath="/reports" currentPage={paginatedClientRows.currentPage} totalPages={paginatedClientRows.totalPages} totalItems={paginatedClientRows.totalItems} pageSize={paginatedClientRows.pageSize} searchParams={allReportSearch} pageParam="clientPage" anchor="#client-wise-hours" />
       </section>
 
       <section id="project-wise-hours" className="table-wrap">
@@ -613,69 +1083,33 @@ export default async function ReportsPage({
             <h2 className="section-title">Project / Sub-Project-wise minutes</h2>
             <p className="section-subtitle">Grouped by client, project, and sub-project for the selected date range.</p>
           </div>
-          <Link
-            className="btn-secondary whitespace-nowrap"
-            href={buildExportHref("project", {
-              projectFromDate,
-              projectToDate,
-              projectClientId: projectClientId === "all" ? undefined : projectClientId,
-              projectProjectId: projectProjectId === "all" ? undefined : projectProjectId,
-            })}
-          >
+          <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("project", projectSearch)}>
             Export CSV
           </Link>
         </div>
         <div className="relative z-20 border-b border-slate-100 px-4 py-4">
-          <ProjectHoursFilterForm
-            action="/reports"
-            anchor="#project-wise-hours"
-            fromDate={projectFromDate}
-            toDate={projectToDate}
-            clientId={projectClientId}
-            projectId={projectProjectId}
-            clientOptions={clientOptions}
-            projectOptions={projectOptions}
-            preservedParams={projectPreservedParams}
-          />
+          <ProjectHoursFilterForm action="/reports" anchor="#project-wise-hours" fromDate={projectFromDate} toDate={projectToDate} clientId={projectClientId} projectId={projectProjectId} clientOptions={clientOptions} projectOptions={projectOptions} preservedParams={projectPreservedParams} />
         </div>
         <div className="overflow-x-auto">
           <table className="table-base">
-            <thead className="table-head">
-              <tr>
-                <th className="table-cell">Client</th>
-                <th className="table-cell">Project Name</th>
-                <th className="table-cell">Sub-Project Name</th>
-                <th className="table-cell">Mins</th>
-              </tr>
-            </thead>
+            <thead className="table-head"><tr>
+              <SortableHeader label="Client" sortBy="clientName" currentSortBy={projectSortBy} currentSortDir={projectSortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "projectSortBy", sortDirParam: "projectSortDir", pageParam: "projectPage", sortBy: "clientName", currentSortBy: projectSortBy, currentSortDir: projectSortDir, anchor: "#project-wise-hours" })} />
+              <SortableHeader label="Project Name" sortBy="projectName" currentSortBy={projectSortBy} currentSortDir={projectSortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "projectSortBy", sortDirParam: "projectSortDir", pageParam: "projectPage", sortBy: "projectName", currentSortBy: projectSortBy, currentSortDir: projectSortDir, anchor: "#project-wise-hours" })} />
+              <SortableHeader label="Sub-Project Name" sortBy="subProjectName" currentSortBy={projectSortBy} currentSortDir={projectSortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "projectSortBy", sortDirParam: "projectSortDir", pageParam: "projectPage", sortBy: "subProjectName", currentSortBy: projectSortBy, currentSortDir: projectSortDir, anchor: "#project-wise-hours" })} />
+              <SortableHeader label="Mins" sortBy="totalMinutes" currentSortBy={projectSortBy} currentSortDir={projectSortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "projectSortBy", sortDirParam: "projectSortDir", pageParam: "projectPage", sortBy: "totalMinutes", currentSortBy: projectSortBy, currentSortDir: projectSortDir, anchor: "#project-wise-hours" })} />
+            </tr></thead>
             <tbody className="divide-y divide-slate-100">
               {paginatedProjectRows.items.map((row) => (
                 <tr key={`${row.clientName}-${row.projectName}-${row.subProjectName}`}>
-                  <td className="table-cell">{row.clientName}</td>
-                  <td className="table-cell">{row.projectName}</td>
-                  <td className="table-cell">{row.subProjectName}</td>
-                  <td className="table-cell">{formatHours(row.totalMinutes)}</td>
+                  <td className="table-cell">{row.clientName}</td><td className="table-cell">{row.projectName}</td><td className="table-cell">{row.subProjectName}</td><td className="table-cell">{formatMins(row.totalMinutes)}</td>
                 </tr>
               ))}
-              {projectRows.length === 0 ? (
-                <tr><td colSpan={4} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr>
-              ) : null}
+              {projectRows.length === 0 ? <tr><td colSpan={4} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr> : null}
             </tbody>
           </table>
         </div>
-        <div className="border-t border-slate-100 px-4 py-4 text-right text-sm font-semibold text-slate-700">
-          Total Time: <span className="text-slate-900">{formatMinutes(projectTotalMinutes)}</span>
-        </div>
-        <PaginationControls
-          basePath="/reports"
-          currentPage={paginatedProjectRows.currentPage}
-          totalPages={paginatedProjectRows.totalPages}
-          totalItems={paginatedProjectRows.totalItems}
-          pageSize={paginatedProjectRows.pageSize}
-          searchParams={allReportSearch}
-          pageParam="projectPage"
-          anchor="#project-wise-hours"
-        />
+        <div className="border-t border-slate-100 px-4 py-4 text-right text-sm font-semibold text-slate-700">Total Time: <span className="text-slate-900">{formatMinutes(projectTotalMinutes)}</span></div>
+        <PaginationControls basePath="/reports" currentPage={paginatedProjectRows.currentPage} totalPages={paginatedProjectRows.totalPages} totalItems={paginatedProjectRows.totalItems} pageSize={paginatedProjectRows.pageSize} searchParams={allReportSearch} pageParam="projectPage" anchor="#project-wise-hours" />
       </section>
 
       <section id="task-wise-hours" className="table-wrap">
@@ -684,167 +1118,139 @@ export default async function ReportsPage({
             <h2 className="section-title">Task-wise detailed minutes</h2>
             <p className="section-subtitle">Detailed task entries for the selected date range, project, and sub-project.</p>
           </div>
-          <Link
-            className="btn-secondary whitespace-nowrap"
-            href={buildExportHref("task", {
-              taskFromDate,
-              taskToDate,
-              taskClientId: taskClientId === "all" ? undefined : taskClientId,
-              taskProjectId: taskProjectId === "all" ? undefined : taskProjectId,
-              taskSubProjectId: taskSubProjectId === "all" ? undefined : taskSubProjectId,
-              taskCountryId: taskCountryId === "all" ? undefined : taskCountryId,
-            })}
-          >
+          <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("task", taskSearch)}>
             Export CSV
           </Link>
         </div>
         <div className="relative z-20 border-b border-slate-100 px-4 py-4">
-          <TaskDetailFilterForm
-            action="/reports"
-            anchor="#task-wise-hours"
-            fromDate={taskFromDate}
-            toDate={taskToDate}
-            clientId={taskClientId}
-            projectId={taskProjectId}
-            subProjectId={taskSubProjectId}
-            countryId={taskCountryId}
-            clientOptions={clientOptions}
-            projectOptions={projectOptions}
-            subProjectOptions={normalizedSubProjectOptions}
-            countryOptions={normalizedCountryOptions}
-            preservedParams={taskPreservedParams}
-          />
+          <TaskDetailFilterForm action="/reports" anchor="#task-wise-hours" fromDate={taskFromDate} toDate={taskToDate} clientId={taskClientId} projectId={taskProjectId} subProjectId={taskSubProjectId} countryId={taskCountryId} clientOptions={clientOptions} projectOptions={projectOptions} subProjectOptions={normalizedSubProjectOptions.map(({id,name,projectId,hideCountriesInEntries}) => ({id,name,projectId,hideCountriesInEntries}))} countryOptions={normalizedCountryOptions} countryEligibleClientOptions={countryEligibleClientOptions} countryEligibleProjectOptions={countryEligibleProjectOptions} countryEligibleSubProjectOptions={countryEligibleSubProjectOptions} preservedParams={taskPreservedParams} />
         </div>
         <div className="overflow-x-auto">
           <table className="table-base">
-            <thead className="table-head">
-              <tr>
-                <th className="table-cell max-w-48 break-normal">Client Name</th>
-                <th className="table-cell">Project Name</th>
-                <th className="table-cell">Sub-Project Name</th>
-                <th className="table-cell max-w-48 break-normal">Task Name</th>
-                <th className="table-cell max-w-48 break-all">Task Description</th>
-                <th className="table-cell">Country</th>
-                <th className="table-cell">Employee Role</th>
-                <th className="table-cell">Mins</th>
-              </tr>
-            </thead>
+            <thead className="table-head"><tr>
+              <SortableHeader className="table-cell max-w-48 break-normal" label="Client Name" sortBy="clientName" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "clientName", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
+              <SortableHeader label="Project Name" sortBy="projectName" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "projectName", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
+              <SortableHeader label="Sub-Project Name" sortBy="subProjectName" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "subProjectName", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
+              <SortableHeader className="table-cell max-w-48 break-normal" label="Task Name" sortBy="taskName" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "taskName", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
+              <th className="table-cell max-w-48 break-all">Task Details</th>
+              <SortableHeader label="Country" sortBy="countryCode" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "countryCode", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
+              <SortableHeader label="Employee Role" sortBy="employeeRole" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "employeeRole", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
+              <SortableHeader label="Mins" sortBy="totalMinutes" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "totalMinutes", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
+            </tr></thead>
             <tbody className="divide-y divide-slate-100">
               {paginatedTaskRows.items.map((row) => (
-                <tr key={row.id}>
-                  <td className="table-cell max-w-48 break-normal">{row.clientName}</td>
-                  <td className="table-cell">{row.projectName}</td>
-                  <td className="table-cell">{row.subProjectName}</td>
-                  <td className="table-cell max-w-48 break-normal">{row.taskName}</td>
-                  <td className="table-cell max-w-48 break-all">{row.taskDescription}</td>
-                  <td className="table-cell">{row.countryCode}</td>
-                  <td className="table-cell">{row.employeeRole}</td>
-                  <td className="table-cell">{formatHours(row.totalMinutes)}</td>
-                </tr>
+                <tr key={row.id}><td className="table-cell max-w-48 break-normal">{row.clientName}</td><td className="table-cell">{row.projectName}</td><td className="table-cell">{row.subProjectName}</td><td className="table-cell max-w-48 break-normal">{row.taskName}</td><td className="table-cell max-w-48 break-all">{row.taskDescription}</td><td className="table-cell">{row.countryCode}</td><td className="table-cell">{row.employeeRole}</td><td className="table-cell">{formatMins(row.totalMinutes)}</td></tr>
               ))}
-              {taskRows.length === 0 ? (
-                <tr><td colSpan={8} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr>
-              ) : null}
+              {taskRows.length === 0 ? <tr><td colSpan={8} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr> : null}
             </tbody>
           </table>
         </div>
-        <div className="border-t border-slate-100 px-4 py-4 text-right text-sm font-semibold text-slate-700">
-          Total Time: <span className="text-slate-900">{formatMinutes(taskTotalMinutes)}</span>
-        </div>
-        <PaginationControls
-          basePath="/reports"
-          currentPage={paginatedTaskRows.currentPage}
-          totalPages={paginatedTaskRows.totalPages}
-          totalItems={paginatedTaskRows.totalItems}
-          pageSize={paginatedTaskRows.pageSize}
-          searchParams={allReportSearch}
-          pageParam="taskPage"
-          anchor="#task-wise-hours"
-        />
+        <div className="border-t border-slate-100 px-4 py-4 text-right text-sm font-semibold text-slate-700">Total Time: <span className="text-slate-900">{formatMinutes(taskTotalMinutes)}</span></div>
+        <PaginationControls basePath="/reports" currentPage={paginatedTaskRows.currentPage} totalPages={paginatedTaskRows.totalPages} totalItems={paginatedTaskRows.totalItems} pageSize={paginatedTaskRows.pageSize} searchParams={allReportSearch} pageParam="taskPage" anchor="#task-wise-hours" />
       </section>
 
       <section id="movie-wise-minutes" className="table-wrap">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4">
           <div>
             <h2 className="section-title">Movie-wise minutes</h2>
-            <p className="section-subtitle">Grouped by movie, client, project, sub-project, and country for the selected date range.</p>
+            <p className="section-subtitle">Grouped by movie, client, project, sub-project, and country for movie-enabled time-entry combinations only.</p>
           </div>
-          <Link
-            className="btn-secondary whitespace-nowrap"
-            href={buildExportHref("movie", {
-              movieFromDate,
-              movieToDate,
-              movieMovieId: movieMovieId === "all" ? undefined : movieMovieId,
-              movieClientId: movieClientId === "all" ? undefined : movieClientId,
-              movieProjectId: movieProjectId === "all" ? undefined : movieProjectId,
-              movieSubProjectId: movieSubProjectId === "all" ? undefined : movieSubProjectId,
-              movieCountryId: movieCountryId === "all" ? undefined : movieCountryId,
-            })}
-          >
+          <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("movie", movieSearch)}>
             Export CSV
           </Link>
         </div>
         <div className="relative z-20 border-b border-slate-100 px-4 py-4">
-          <MovieMinutesFilterForm
-            action="/reports"
-            anchor="#movie-wise-minutes"
-            fromDate={movieFromDate}
-            toDate={movieToDate}
-            movieId={movieMovieId}
-            clientId={movieClientId}
-            projectId={movieProjectId}
-            subProjectId={movieSubProjectId}
-            countryId={movieCountryId}
-            movieOptions={normalizedMovieOptions}
-            clientOptions={clientOptions}
-            projectOptions={projectOptions}
-            subProjectOptions={normalizedSubProjectOptions}
-            countryOptions={normalizedCountryOptions}
-            preservedParams={moviePreservedParams}
-          />
+          <MovieMinutesFilterForm action="/reports" anchor="#movie-wise-minutes" fromDate={movieFromDate} toDate={movieToDate} movieId={movieMovieId} clientId={movieClientId} projectId={movieProjectId} subProjectId={movieSubProjectId} countryId={movieCountryId} movieOptions={normalizedMovieOptions} clientOptions={movieClientOptions} projectOptions={movieProjectOptions} subProjectOptions={movieSubProjectOptions} countryOptions={normalizedCountryOptions} preservedParams={moviePreservedParams} />
         </div>
         <div className="overflow-x-auto">
           <table className="table-base">
-            <thead className="table-head">
-              <tr>
-                <th className="table-cell">Movie Name</th>
-                <th className="table-cell">Client Name</th>
-                <th className="table-cell">Project Name</th>
-                <th className="table-cell">Sub-Project Name</th>
-                <th className="table-cell">Country</th>
-                <th className="table-cell">Mins</th>
-              </tr>
-            </thead>
+            <thead className="table-head"><tr>
+              <SortableHeader label="Movie Name" sortBy="movieName" currentSortBy={movieSortBy} currentSortDir={movieSortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "movieSortBy", sortDirParam: "movieSortDir", pageParam: "moviePage", sortBy: "movieName", currentSortBy: movieSortBy, currentSortDir: movieSortDir, anchor: "#movie-wise-minutes" })} />
+              <SortableHeader label="Client Name" sortBy="clientName" currentSortBy={movieSortBy} currentSortDir={movieSortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "movieSortBy", sortDirParam: "movieSortDir", pageParam: "moviePage", sortBy: "clientName", currentSortBy: movieSortBy, currentSortDir: movieSortDir, anchor: "#movie-wise-minutes" })} />
+              <SortableHeader label="Project Name" sortBy="projectName" currentSortBy={movieSortBy} currentSortDir={movieSortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "movieSortBy", sortDirParam: "movieSortDir", pageParam: "moviePage", sortBy: "projectName", currentSortBy: movieSortBy, currentSortDir: movieSortDir, anchor: "#movie-wise-minutes" })} />
+              <SortableHeader label="Sub-Project Name" sortBy="subProjectName" currentSortBy={movieSortBy} currentSortDir={movieSortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "movieSortBy", sortDirParam: "movieSortDir", pageParam: "moviePage", sortBy: "subProjectName", currentSortBy: movieSortBy, currentSortDir: movieSortDir, anchor: "#movie-wise-minutes" })} />
+              <SortableHeader label="Country" sortBy="countryCode" currentSortBy={movieSortBy} currentSortDir={movieSortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "movieSortBy", sortDirParam: "movieSortDir", pageParam: "moviePage", sortBy: "countryCode", currentSortBy: movieSortBy, currentSortDir: movieSortDir, anchor: "#movie-wise-minutes" })} />
+              <SortableHeader label="Mins" sortBy="totalMinutes" currentSortBy={movieSortBy} currentSortDir={movieSortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "movieSortBy", sortDirParam: "movieSortDir", pageParam: "moviePage", sortBy: "totalMinutes", currentSortBy: movieSortBy, currentSortDir: movieSortDir, anchor: "#movie-wise-minutes" })} />
+            </tr></thead>
             <tbody className="divide-y divide-slate-100">
               {paginatedMovieRows.items.map((row) => (
-                <tr key={`${row.movieName}-${row.clientName}-${row.projectName}-${row.subProjectName}-${row.countryCode}`}>
-                  <td className="table-cell">{row.movieName}</td>
-                  <td className="table-cell">{row.clientName}</td>
-                  <td className="table-cell">{row.projectName}</td>
-                  <td className="table-cell">{row.subProjectName}</td>
-                  <td className="table-cell">{row.countryCode}</td>
-                  <td className="table-cell">{formatHours(row.totalMinutes)}</td>
-                </tr>
+                <tr key={`${row.movieName}-${row.clientName}-${row.projectName}-${row.subProjectName}-${row.countryCode}`}><td className="table-cell">{row.movieName}</td><td className="table-cell">{row.clientName}</td><td className="table-cell">{row.projectName}</td><td className="table-cell">{row.subProjectName}</td><td className="table-cell">{row.countryCode}</td><td className="table-cell">{formatMins(row.totalMinutes)}</td></tr>
               ))}
-              {movieRows.length === 0 ? (
-                <tr><td colSpan={6} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr>
-              ) : null}
+              {movieRows.length === 0 ? <tr><td colSpan={6} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr> : null}
             </tbody>
           </table>
         </div>
-        <div className="border-t border-slate-100 px-4 py-4 text-right text-sm font-semibold text-slate-700">
-          Total Time: <span className="text-slate-900">{formatMinutes(movieTotalMinutes)}</span>
+        <div className="border-t border-slate-100 px-4 py-4 text-right text-sm font-semibold text-slate-700">Total Time: <span className="text-slate-900">{formatMinutes(movieTotalMinutes)}</span></div>
+        <PaginationControls basePath="/reports" currentPage={paginatedMovieRows.currentPage} totalPages={paginatedMovieRows.totalPages} totalItems={paginatedMovieRows.totalItems} pageSize={paginatedMovieRows.pageSize} searchParams={allReportSearch} pageParam="moviePage" anchor="#movie-wise-minutes" />
+      </section>
+
+      <section id="day-wise-minutes" className="table-wrap">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4">
+          <div>
+            <h2 className="section-title">Day-wise minutes</h2>
+            <p className="section-subtitle">Grouped by work date for the selected filters.</p>
+          </div>
+          <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("day", daySearch)}>
+            Export CSV
+          </Link>
         </div>
-        <PaginationControls
-          basePath="/reports"
-          currentPage={paginatedMovieRows.currentPage}
-          totalPages={paginatedMovieRows.totalPages}
-          totalItems={paginatedMovieRows.totalItems}
-          pageSize={paginatedMovieRows.pageSize}
-          searchParams={allReportSearch}
-          pageParam="moviePage"
-          anchor="#movie-wise-minutes"
-        />
+        <div className="relative z-20 border-b border-slate-100 px-4 py-4">
+          <ScopedMinutesFilterForm action="/reports" anchor="#day-wise-minutes" prefix="day" fromDate={dayFromDate} toDate={dayToDate} clientId={dayClientId} projectId={dayProjectId} subProjectId={daySubProjectId} countryId={dayCountryId} clientOptions={clientOptions} projectOptions={projectOptions} subProjectOptions={normalizedSubProjectOptions.map(({id,name,projectId,hideCountriesInEntries}) => ({id,name,projectId,hideCountriesInEntries}))} countryOptions={normalizedCountryOptions} countryEligibleClientOptions={countryEligibleClientOptions} countryEligibleProjectOptions={countryEligibleProjectOptions} countryEligibleSubProjectOptions={countryEligibleSubProjectOptions} preservedParams={dayPreservedParams} />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="table-base">
+            <thead className="table-head"><tr>
+              <SortableHeader label="Date" sortBy="dateKey" currentSortBy={daySortBy} currentSortDir={daySortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "daySortBy", sortDirParam: "daySortDir", pageParam: "dayPage", sortBy: "dateKey", currentSortBy: daySortBy, currentSortDir: daySortDir, anchor: "#day-wise-minutes" })} />
+              <SortableHeader label="Client" sortBy="clientName" currentSortBy={daySortBy} currentSortDir={daySortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "daySortBy", sortDirParam: "daySortDir", pageParam: "dayPage", sortBy: "clientName", currentSortBy: daySortBy, currentSortDir: daySortDir, anchor: "#day-wise-minutes" })} />
+              <SortableHeader label="Project" sortBy="projectName" currentSortBy={daySortBy} currentSortDir={daySortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "daySortBy", sortDirParam: "daySortDir", pageParam: "dayPage", sortBy: "projectName", currentSortBy: daySortBy, currentSortDir: daySortDir, anchor: "#day-wise-minutes" })} />
+              <SortableHeader label="Sub-Project" sortBy="subProjectName" currentSortBy={daySortBy} currentSortDir={daySortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "daySortBy", sortDirParam: "daySortDir", pageParam: "dayPage", sortBy: "subProjectName", currentSortBy: daySortBy, currentSortDir: daySortDir, anchor: "#day-wise-minutes" })} />
+              <SortableHeader label="Country" sortBy="countryCode" currentSortBy={daySortBy} currentSortDir={daySortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "daySortBy", sortDirParam: "daySortDir", pageParam: "dayPage", sortBy: "countryCode", currentSortBy: daySortBy, currentSortDir: daySortDir, anchor: "#day-wise-minutes" })} />
+              <SortableHeader label="Mins" sortBy="totalMinutes" currentSortBy={daySortBy} currentSortDir={daySortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "daySortBy", sortDirParam: "daySortDir", pageParam: "dayPage", sortBy: "totalMinutes", currentSortBy: daySortBy, currentSortDir: daySortDir, anchor: "#day-wise-minutes" })} />
+            </tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {paginatedDayRows.items.map((row) => (
+                <tr key={`${row.dateKey}-${row.clientName}-${row.projectName}-${row.subProjectName}-${row.countryCode}-${row.countryName}`}><td className="table-cell">{formatReportDate(new Date(`${row.dateKey}T12:00:00`))}</td><td className="table-cell">{row.clientName}</td><td className="table-cell">{row.projectName}</td><td className="table-cell">{row.subProjectName}</td><td className="table-cell">{row.countryCode === "-" ? row.countryName : `${row.countryCode} - ${row.countryName}`}</td><td className="table-cell">{formatMins(row.totalMinutes)}</td></tr>
+              ))}
+              {dayRows.length === 0 ? <tr><td colSpan={6} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr> : null}
+            </tbody>
+          </table>
+        </div>
+        <div className="border-t border-slate-100 px-4 py-4 text-right text-sm font-semibold text-slate-700">Total Time: <span className="text-slate-900">{formatMinutes(dayTotalMinutes)}</span></div>
+        <PaginationControls basePath="/reports" currentPage={paginatedDayRows.currentPage} totalPages={paginatedDayRows.totalPages} totalItems={paginatedDayRows.totalItems} pageSize={paginatedDayRows.pageSize} searchParams={allReportSearch} pageParam="dayPage" anchor="#day-wise-minutes" />
+      </section>
+
+      <section id="country-wise-minutes" className="table-wrap">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4">
+          <div>
+            <h2 className="section-title">Country-wise minutes</h2>
+            <p className="section-subtitle">Grouped by country for the selected filters, limited to time-entry combinations where the country dropdown is enabled.</p>
+          </div>
+          <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("country", countrySearch)}>
+            Export CSV
+          </Link>
+        </div>
+        <div className="relative z-20 border-b border-slate-100 px-4 py-4">
+          <ScopedMinutesFilterForm action="/reports" anchor="#country-wise-minutes" prefix="country" fromDate={countryFromDate} toDate={countryToDate} clientId={countryClientId} projectId={countryProjectId} subProjectId={countrySubProjectId} countryId={countryCountryId} clientOptions={countryEligibleClientOptions} projectOptions={countryEligibleProjectOptions} subProjectOptions={countryEligibleSubProjectOptions} countryOptions={normalizedCountryOptions} countryEligibleClientOptions={countryEligibleClientOptions} countryEligibleProjectOptions={countryEligibleProjectOptions} countryEligibleSubProjectOptions={countryEligibleSubProjectOptions} preservedParams={countryPreservedParams} />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="table-base">
+            <thead className="table-head"><tr>
+              <SortableHeader label="Country" sortBy="countryCode" currentSortBy={countrySortBy} currentSortDir={countrySortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "countrySortBy", sortDirParam: "countrySortDir", pageParam: "countryPage", sortBy: "countryCode", currentSortBy: countrySortBy, currentSortDir: countrySortDir, anchor: "#country-wise-minutes" })} />
+              <SortableHeader label="Client" sortBy="clientName" currentSortBy={countrySortBy} currentSortDir={countrySortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "countrySortBy", sortDirParam: "countrySortDir", pageParam: "countryPage", sortBy: "clientName", currentSortBy: countrySortBy, currentSortDir: countrySortDir, anchor: "#country-wise-minutes" })} />
+              <SortableHeader label="Project" sortBy="projectName" currentSortBy={countrySortBy} currentSortDir={countrySortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "countrySortBy", sortDirParam: "countrySortDir", pageParam: "countryPage", sortBy: "projectName", currentSortBy: countrySortBy, currentSortDir: countrySortDir, anchor: "#country-wise-minutes" })} />
+              <SortableHeader label="Sub-Project" sortBy="subProjectName" currentSortBy={countrySortBy} currentSortDir={countrySortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "countrySortBy", sortDirParam: "countrySortDir", pageParam: "countryPage", sortBy: "subProjectName", currentSortBy: countrySortBy, currentSortDir: countrySortDir, anchor: "#country-wise-minutes" })} />
+              <SortableHeader label="Mins" sortBy="totalMinutes" currentSortBy={countrySortBy} currentSortDir={countrySortDir} href={buildSortHref({ baseSearchParams: allReportSearch, sortByParam: "countrySortBy", sortDirParam: "countrySortDir", pageParam: "countryPage", sortBy: "totalMinutes", currentSortBy: countrySortBy, currentSortDir: countrySortDir, anchor: "#country-wise-minutes" })} />
+            </tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {paginatedCountryRows.items.map((row) => (
+                <tr key={`${row.countryCode}-${row.countryName}-${row.clientName}-${row.projectName}-${row.subProjectName}`}><td className="table-cell">{row.countryCode === "-" ? row.countryName : `${row.countryCode} - ${row.countryName}`}</td><td className="table-cell">{row.clientName}</td><td className="table-cell">{row.projectName}</td><td className="table-cell">{row.subProjectName}</td><td className="table-cell">{formatMins(row.totalMinutes)}</td></tr>
+              ))}
+              {countryRows.length === 0 ? <tr><td colSpan={5} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr> : null}
+            </tbody>
+          </table>
+        </div>
+        <div className="border-t border-slate-100 px-4 py-4 text-right text-sm font-semibold text-slate-700">Total Time: <span className="text-slate-900">{formatMinutes(countryTotalMinutes)}</span></div>
+        <PaginationControls basePath="/reports" currentPage={paginatedCountryRows.currentPage} totalPages={paginatedCountryRows.totalPages} totalItems={paginatedCountryRows.totalItems} pageSize={paginatedCountryRows.pageSize} searchParams={allReportSearch} pageParam="countryPage" anchor="#country-wise-minutes" />
       </section>
     </div>
   );
