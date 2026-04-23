@@ -146,14 +146,10 @@ export async function GET(request: Request) {
     (project) => project.client.showMoviesInEntries && !project.hideMoviesInEntries,
   );
   const movieEligibleProjectIds = movieEligibleProjects.length ? movieEligibleProjects.map((project) => project.id) : ["__none__"];
-
   const countryEligibleProjects = visibleProjects.filter(
-  (project) => project.client.showCountriesInTimeEntries && !project.hideCountriesInEntries,
-);
-
-const countryEligibleProjectIds = countryEligibleProjects.length
-  ? countryEligibleProjects.map((project) => project.id)
-  : ["__none__"];
+    (project) => project.client.showCountriesInTimeEntries && !project.hideCountriesInEntries,
+  );
+  const countryEligibleProjectIds = countryEligibleProjects.length ? countryEligibleProjects.map((project) => project.id) : ["__none__"];
 
   const supervisorAssignments =
     user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
@@ -255,6 +251,7 @@ const countryEligibleProjectIds = countryEligibleProjects.length
     const taskProjectId = searchParams.get("taskProjectId") ?? "all";
     const taskSubProjectId = searchParams.get("taskSubProjectId") ?? "all";
     const taskCountryId = searchParams.get("taskCountryId") ?? "all";
+    const taskMovieId = searchParams.get("taskMovieId") ?? "all";
     const { fromBoundary, toBoundary } = buildDateRange(fromDate, toDate);
 
     const entries = await db.timeEntry.findMany({
@@ -265,6 +262,7 @@ const countryEligibleProjectIds = countryEligibleProjects.length
         ...(taskProjectId !== "all" ? { projectId: taskProjectId } : {}),
         ...(taskSubProjectId !== "all" ? { subProjectId: taskSubProjectId } : {}),
         ...(taskCountryId !== "all" ? { countryId: taskCountryId } : {}),
+        ...(taskMovieId !== "all" ? { movieId: taskMovieId } : {}),
         ...employeeWhereClause,
       },
       include: {
@@ -272,6 +270,7 @@ const countryEligibleProjectIds = countryEligibleProjects.length
         project: { include: { client: true } },
         subProject: true,
         country: true,
+        movie: true,
       },
       orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
     });
@@ -301,18 +300,19 @@ const countryEligibleProjectIds = countryEligibleProjects.length
 
     return csvResponse(
       [
-        ["Client Name", "Project Name", "Sub-Project Name", "Task Name", "Task Description", "Country Code", "Employee Role", "Mins"],
+        ["Client Name", "Project Name", "Sub-Project Name", "Task Name", "Task Description", "Movie", "Country Code", "Employee Role", "Mins"],
         ...rows.map((entry) => [
           entry.project.client.name,
           entry.project.name,
           entry.subProject?.name ?? "-",
           entry.taskName,
           entry.notes?.trim() ? entry.notes : "-",
+          entry.movie?.title ?? "-",
           entry.country?.isoCode ?? "-",
           formatRole(entry.employee.functionalRole),
           String(entry.minutesSpent),
         ]),
-        ["", "", "", "", "", "", "Total Time", formatMinutes(totalMinutes)],
+        ["", "", "", "", "", "", "", "Total Time", formatMinutes(totalMinutes)],
       ],
       "task-wise-detailed-minutes",
       taskClientId !== "all" ? clientNameById.get(taskClientId) : undefined,
@@ -399,7 +399,7 @@ const countryEligibleProjectIds = countryEligibleProjects.length
       [
         ["Movie Name", "Client Name", "Project Name", "Sub-Project Name", "Country", "Mins"],
         ...rows.map((row) => [row.movieName, row.clientName, row.projectName, row.subProjectName, row.countryCode, String(row.totalMinutes)]),
-        ["", "", "", "", "Total Time", formatMinutes(totalMinutes)],
+        ["", "", "", "", "", "Total Time", formatMinutes(totalMinutes)],
       ],
       "movie-wise-minutes",
       movieClientId !== "all" ? clientNameById.get(movieClientId) : undefined,
@@ -413,6 +413,7 @@ const countryEligibleProjectIds = countryEligibleProjects.length
     const dayProjectId = searchParams.get("dayProjectId") ?? "all";
     const daySubProjectId = searchParams.get("daySubProjectId") ?? "all";
     const dayCountryId = searchParams.get("dayCountryId") ?? "all";
+    const dayMovieId = searchParams.get("dayMovieId") ?? "all";
     const { fromBoundary, toBoundary } = buildDateRange(fromDate, toDate);
 
     const entries = await db.timeEntry.findMany({
@@ -423,17 +424,19 @@ const countryEligibleProjectIds = countryEligibleProjects.length
         ...(dayProjectId !== "all" ? { projectId: dayProjectId } : {}),
         ...(daySubProjectId !== "all" ? { subProjectId: daySubProjectId } : {}),
         ...(dayCountryId !== "all" ? { countryId: dayCountryId } : {}),
+        ...(dayMovieId !== "all" ? { movieId: dayMovieId } : {}),
         ...employeeWhereClause,
       },
       include: {
         project: { include: { client: true } },
         subProject: true,
         country: true,
+        movie: true,
       },
       orderBy: [{ workDate: "asc" }, { createdAt: "asc" }],
     });
 
-    const map = new Map<string, { dateKey: string; clientName: string; projectName: string; subProjectName: string; countryName: string; countryCode: string; totalMinutes: number }>();
+    const map = new Map<string, { dateKey: string; clientName: string; projectName: string; subProjectName: string; countryName: string; countryCode: string; movieName: string; totalMinutes: number }>();
     for (const entry of entries) {
       const dateKey = entry.workDate.toISOString().slice(0, 10);
       const clientName = entry.project.client.name;
@@ -441,8 +444,9 @@ const countryEligibleProjectIds = countryEligibleProjects.length
       const subProjectName = entry.subProject?.name ?? "-";
       const countryName = entry.country?.name ?? "Unspecified";
       const countryCode = entry.country?.isoCode ?? "-";
-      const key = `${dateKey}__${clientName}__${projectName}__${subProjectName}__${countryCode}__${countryName}`;
-      const row = map.get(key) ?? { dateKey, clientName, projectName, subProjectName, countryName, countryCode, totalMinutes: 0 };
+      const movieName = entry.movie?.title ?? "-";
+      const key = `${dateKey}__${clientName}__${projectName}__${subProjectName}__${countryCode}__${countryName}__${movieName}`;
+      const row = map.get(key) ?? { dateKey, clientName, projectName, subProjectName, countryName, countryCode, movieName, totalMinutes: 0 };
       row.totalMinutes += entry.minutesSpent;
       map.set(key, row);
     }
@@ -459,6 +463,8 @@ const countryEligibleProjectIds = countryEligibleProjects.length
           return row.subProjectName;
         case "countryCode":
           return row.countryCode;
+        case "movieName":
+          return row.movieName;
         case "totalMinutes":
           return row.totalMinutes;
         case "dateKey":
@@ -470,9 +476,9 @@ const countryEligibleProjectIds = countryEligibleProjects.length
 
     return csvResponse(
       [
-        ["Date", "Client", "Project", "Sub-Project", "Country", "Mins"],
-        ...rows.map((row) => [formatReportDate(new Date(`${row.dateKey}T12:00:00`)), row.clientName, row.projectName, row.subProjectName, row.countryCode === "-" ? row.countryName : `${row.countryCode} - ${row.countryName}`, String(row.totalMinutes)]),
-        ["", "", "", "", "Total Time", formatMinutes(totalMinutes)],
+        ["Date", "Client", "Project", "Sub-Project", "Movie", "Country", "Mins"],
+        ...rows.map((row) => [formatReportDate(new Date(`${row.dateKey}T12:00:00`)), row.clientName, row.projectName, row.subProjectName, row.movieName, row.countryCode === "-" ? row.countryName : `${row.countryCode} - ${row.countryName}`, String(row.totalMinutes)]),
+        ["", "", "", "", "", "Total Time", formatMinutes(totalMinutes)],
       ],
       "day-wise-minutes",
       dayClientId !== "all" ? clientNameById.get(dayClientId) : undefined,
@@ -486,6 +492,7 @@ const countryEligibleProjectIds = countryEligibleProjects.length
     const countryProjectId = searchParams.get("countryProjectId") ?? "all";
     const countrySubProjectId = searchParams.get("countrySubProjectId") ?? "all";
     const countryCountryId = searchParams.get("countryCountryId") ?? "all";
+    const countryMovieId = searchParams.get("countryMovieId") ?? "all";
     const { fromBoundary, toBoundary } = buildDateRange(fromDate, toDate);
 
     const entries = await db.timeEntry.findMany({
@@ -496,6 +503,7 @@ const countryEligibleProjectIds = countryEligibleProjects.length
         ...(countryProjectId !== "all" ? { projectId: countryProjectId } : {}),
         ...(countrySubProjectId !== "all" ? { subProjectId: countrySubProjectId } : {}),
         ...(countryCountryId !== "all" ? { countryId: countryCountryId } : {}),
+        ...(countryMovieId !== "all" ? { movieId: countryMovieId } : {}),
         OR: [{ subProjectId: null }, { subProject: { is: { hideCountriesInEntries: false } } }],
         ...employeeWhereClause,
       },
@@ -503,18 +511,20 @@ const countryEligibleProjectIds = countryEligibleProjects.length
         project: { include: { client: true } },
         subProject: true,
         country: true,
+        movie: true,
       },
     });
 
-    const map = new Map<string, { clientName: string; projectName: string; subProjectName: string; countryName: string; countryCode: string; totalMinutes: number }>();
+    const map = new Map<string, { clientName: string; projectName: string; subProjectName: string; countryName: string; countryCode: string; movieName: string; totalMinutes: number }>();
     for (const entry of entries) {
       const clientName = entry.project.client.name;
       const projectName = entry.project.name;
       const subProjectName = entry.subProject?.name ?? "-";
       const countryCode = entry.country?.isoCode ?? "-";
       const countryName = entry.country?.name ?? "Unspecified";
-      const key = `${clientName}__${projectName}__${subProjectName}__${countryCode}__${countryName}`;
-      const row = map.get(key) ?? { clientName, projectName, subProjectName, countryName, countryCode, totalMinutes: 0 };
+      const movieName = entry.movie?.title ?? "-";
+      const key = `${clientName}__${projectName}__${subProjectName}__${countryCode}__${countryName}__${movieName}`;
+      const row = map.get(key) ?? { clientName, projectName, subProjectName, countryName, countryCode, movieName, totalMinutes: 0 };
       row.totalMinutes += entry.minutesSpent;
       map.set(key, row);
     }
@@ -533,6 +543,8 @@ const countryEligibleProjectIds = countryEligibleProjects.length
           return row.totalMinutes;
         case "countryName":
           return row.countryName;
+        case "movieName":
+          return row.movieName;
         case "countryCode":
         default:
           return row.countryCode;
@@ -542,9 +554,9 @@ const countryEligibleProjectIds = countryEligibleProjects.length
 
     return csvResponse(
       [
-        ["Country", "Client", "Project", "Sub-Project", "Mins"],
-        ...rows.map((row) => [row.countryCode === "-" ? row.countryName : `${row.countryCode} - ${row.countryName}`, row.clientName, row.projectName, row.subProjectName, String(row.totalMinutes)]),
-        ["", "", "", "Total Time", formatMinutes(totalMinutes)],
+        ["Country", "Movie", "Client", "Project", "Sub-Project", "Mins"],
+        ...rows.map((row) => [row.countryCode === "-" ? row.countryName : `${row.countryCode} - ${row.countryName}`, row.movieName, row.clientName, row.projectName, row.subProjectName, String(row.totalMinutes)]),
+        ["", "", "", "", "Total Time", formatMinutes(totalMinutes)],
       ],
       "country-wise-minutes",
       countryClientId !== "all" ? clientNameById.get(countryClientId) : undefined,

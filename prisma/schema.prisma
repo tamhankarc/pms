@@ -151,6 +151,7 @@ model User {
   approverForEmployees      LeaveApproverAssignment[] @relation("LeaveApproverUser")
   leaveApprovalsAssignedBy  LeaveApproverAssignment[] @relation("LeaveApproverAssignedBy")
   leaveYearProfiles        LeaveYearProfile[]
+  announcementRecipients   DashboardAnnouncementRecipient[]
 
   @@index([userType, isActive])
   @@index([functionalRole, isActive])
@@ -481,6 +482,10 @@ model AttendanceLog {
   latitude       Decimal              @db.Decimal(10, 7)
   longitude      Decimal              @db.Decimal(10, 7)
   city           String?
+  town           String?
+  village        String?
+  stateDistrict  String?
+  state          String?
   createdAt      DateTime             @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
@@ -549,6 +554,35 @@ model LeaveYearProfile {
 
   @@unique([userId, year])
   @@index([year])
+}
+
+model DashboardAnnouncement {
+  id          String   @id @default(cuid())
+  heading     String?
+  description String   @db.Text
+  startsAt    DateTime
+  endsAt      DateTime
+  targetAll   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  recipients DashboardAnnouncementRecipient[]
+
+  @@index([isActive, startsAt, endsAt])
+}
+
+model DashboardAnnouncementRecipient {
+  id             String   @id @default(cuid())
+  announcementId String
+  userId         String
+
+  announcement DashboardAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([announcementId, userId])
+  @@index([userId])
 }
 
 model OfficialHoliday {

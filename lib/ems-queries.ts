@@ -179,6 +179,10 @@ export async function getAdminDashboardData(attendanceDateKey: string, leaveStar
           type: true,
           markedAt: true,
           city: true,
+          town: true,
+          village: true,
+          stateDistrict: true,
+          state: true,
         },
       },
     },
@@ -227,6 +231,24 @@ export async function getAdminDashboardData(attendanceDateKey: string, leaveStar
     }),
     leaveRows: approvedLeaves,
   };
+}
+
+export async function getActiveDashboardAnnouncementsForUser(user: { id: string; userType: string; functionalRole?: string | null }) {
+  const now = new Date();
+  const rows = await db.dashboardAnnouncement.findMany({
+    where: {
+      isActive: true,
+      startsAt: { lte: now },
+      endsAt: { gte: now },
+      OR: [
+        { targetAll: true },
+        { recipients: { some: { userId: user.id } } },
+      ],
+    },
+    orderBy: [{ startsAt: 'desc' }, { createdAt: 'desc' }],
+  });
+
+  return rows.filter((row) => !(row.targetAll && user.userType === 'ADMIN' && user.functionalRole === 'DIRECTOR'));
 }
 
 export async function getAttendanceStatusForUser(userId: string) {

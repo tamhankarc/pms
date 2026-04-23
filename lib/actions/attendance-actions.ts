@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { clearSession, requireUserForAction } from "@/lib/auth";
 import { canMarkAttendance } from "@/lib/permissions";
-import { reverseGeocodeCity } from "@/lib/geo";
+import { reverseGeocodeLocation } from "@/lib/geo";
 import { getAttendanceWorkDateKey, getDayBoundsUtcFromIstDateKey, getMarkInWindowLabel, getMarkOutWindowLabel, isMarkInWindow, isMarkOutWindow } from "@/lib/ist";
 import { getLeaveBalanceForUser } from "@/lib/ems-queries";
 
@@ -54,7 +54,8 @@ export async function markAttendanceAction(formData: FormData) {
     throw new Error("Invalid attendance action.");
   }
 
-  const city = await reverseGeocodeCity(latitude, longitude);
+  const location = await reverseGeocodeLocation(latitude, longitude);
+  const city = location?.city || location?.town || location?.village || location?.stateDistrict || location?.state || null;
 
   await db.attendanceLog.create({
     data: {
@@ -64,6 +65,10 @@ export async function markAttendanceAction(formData: FormData) {
       latitude,
       longitude,
       city,
+      town: location?.town ?? null,
+      village: location?.village ?? null,
+      stateDistrict: location?.stateDistrict ?? null,
+      state: location?.state ?? null,
     },
   });
 

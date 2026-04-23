@@ -3,8 +3,10 @@ import {
   Bell,
   CalendarDays,
   ClipboardList,
+  Download,
   FolderKanban,
   Hourglass,
+  Megaphone,
   MapPin,
   TimerReset,
 } from "lucide-react";
@@ -15,6 +17,7 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { ApprovedLeaveCalendar } from "@/components/ems/approved-leave-calendar";
 import { AttendanceActionsCard } from "@/components/ems/attendance-actions-card";
 import { AttendanceCalendar } from "@/components/ems/attendance-calendar";
+import { AttendanceSelectedDateFilters } from "@/components/ems/attendance-selected-date-filters";
 import { ApproverAssignmentForm } from "@/components/ems/approver-assignment-form";
 import { DashboardBillingFilters } from "@/components/dashboard-billing-filters";
 import { requireUser } from "@/lib/auth";
@@ -33,6 +36,8 @@ import {
   isHR,
 } from "@/lib/permissions";
 import {
+  getAdminDashboardData,
+  getActiveDashboardAnnouncementsForUser,
   getApprovedLeaveMonthCalendar,
   getApproverOptions,
   getAttendanceCalendarData,
@@ -48,6 +53,7 @@ import {
   isMarkInWindow,
   isMarkOutWindow,
 } from "@/lib/ist";
+import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 import { formatMinutes } from "@/lib/utils";
 
 function toDateInputValue(value: Date) {
@@ -69,6 +75,23 @@ function getDefaultBillingRange() {
 
 function normalizeDateInput(value?: string) {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
+}
+
+function isWeekendAttendanceDate(dateKey: string) {
+  const value = new Date(`${dateKey}T12:00:00`);
+  const day = value.getDay();
+  return day === 0 || day === 6;
+}
+
+
+function buildDashboardQuery(params: Record<string, string | undefined>) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (typeof value === "string" && value.length > 0) {
+      search.set(key, value);
+    }
+  });
+  return search.toString();
 }
 
 function getLeaveBreakupLabel(row: {
@@ -204,6 +227,11 @@ export default async function DashboardPage({
     billingPage?: string;
     leaveMonth?: string;
     month?: string;
+    attendanceDate?: string;
+    attendanceMode?: string;
+    attendancePage?: string;
+    approvedLeaveSelectedDate?: string;
+    dashboardSection?: string;
   }>;
 }) {
   const user = await requireUser();
@@ -213,6 +241,14 @@ export default async function DashboardPage({
     params.leaveMonth && /^\d{4}-\d{2}$/.test(params.leaveMonth)
       ? params.leaveMonth
       : todayKey.slice(0, 7);
+  const attendanceDate =
+    params.attendanceDate && /^\d{4}-\d{2}-\d{2}$/.test(params.attendanceDate)
+      ? params.attendanceDate
+      : todayKey;
+  const attendanceMode = params.attendanceMode === "absent" ? "absent" : "present";
+  const attendancePage = parsePageParam(params.attendancePage);
+  const approvedLeaveSelectedDate = params.approvedLeaveSelectedDate && /^\d{4}-\d{2}-\d{2}$/.test(params.approvedLeaveSelectedDate) ? params.approvedLeaveSelectedDate : undefined;
+  const attendanceWeekend = isWeekendAttendanceDate(attendanceDate);
 
   const defaultBillingRange = getDefaultBillingRange();
   const billingStartDate = normalizeDateInput(params.billingStartDate) ?? defaultBillingRange.startDate;
@@ -235,6 +271,15 @@ export default async function DashboardPage({
   const showApprovedLeaveBlock = isAdmin(user) || userIsHR || isManager || isTeamLead;
   const showManagementSummary = !isEmployee && !isTeamLead && !isManager && !userIsHR;
   const showProjectOverviewSection = !userIsHR;
+  const showApprovedLeaveSection = showApprovedLeaveBlock;
+  const showSelectedAttendanceSection = showEMSAdminPanel;
+  const showDashboardToggle = showApprovedLeaveSection && showSelectedAttendanceSection;
+  const requestedDashboardSection = params.dashboardSection === "attendance-selected-date" ? "attendance-selected-date" : "approved-leave";
+  const activeDashboardSection = showDashboardToggle
+    ? requestedDashboardSection
+    : showSelectedAttendanceSection
+      ? "attendance-selected-date"
+      : "approved-leave";
 
   const resolvedJoiningDate = showAttendanceCard
     ? (
@@ -266,6 +311,8 @@ export default async function DashboardPage({
     leaveCalendarData,
     employeeSnapshot,
     focusCalendarData,
+    adminDashboardData,
+    activeAnnouncements,
   ] = await Promise.all([
     isAccountsBilling ? Promise.resolve(null) : getDashboardStats(user),
     isAccountsBilling ? Promise.resolve([]) : getVisibleProjects(user),
@@ -297,6 +344,8 @@ export default async function DashboardPage({
     showApprovedLeaveBlock ? getApprovedLeaveMonthCalendar(leaveMonth) : Promise.resolve(null),
     showAttendanceCard ? getEmployeeDashboardSnapshot(user.id) : Promise.resolve(null),
     showAttendanceCard ? getAttendanceCalendarData(user.id, focusMonth, resolvedJoiningDate) : Promise.resolve(null),
+    showEMSAdminPanel ? getAdminDashboardData(attendanceDate) : Promise.resolve(null),
+    getActiveDashboardAnnouncementsForUser(user),
   ]);
 
   const canOpenLeaveApprovals = isAdmin(user) || userIsHR || selectedApproverIds.includes(user.id);
@@ -312,6 +361,19 @@ export default async function DashboardPage({
   const shift = employeeSnapshot?.leaveBalance.shift ?? "DAY";
   const canMarkInNow = showAttendanceCard ? !hasMarkIn && isMarkInWindow(new Date(), shift) : false;
   const canMarkOutNow = showAttendanceCard ? hasMarkIn && !hasMarkOut && isMarkOutWindow(new Date(), shift) : false;
+
+  const attendanceRows = (adminDashboardData?.attendanceRows ?? []).filter((row) =>
+    attendanceMode === "present" ? Boolean(row.markIn) : !row.markIn,
+  );
+  const attendancePagination = paginateItems(attendanceRows, attendancePage, DEFAULT_PAGE_SIZE);
+  const attendanceExportHref = (() => {
+    const search = new URLSearchParams({
+      attendanceDate,
+      attendanceMode,
+    });
+    if (attendanceWeekend) search.set("weekend", "true");
+    return `/dashboard/attendance-export?${search.toString()}`;
+  })();
 
   if (isAccountsBilling) {
     return (
@@ -348,6 +410,35 @@ export default async function DashboardPage({
         }
       />
 
+      {activeAnnouncements.length > 0 ? (
+        <section className="space-y-3">
+          {activeAnnouncements.map((announcement) => (
+            <div
+              key={announcement.id}
+              className="rounded-2xl border-l-4 border-amber-500 border-t border-r border-b border-amber-200 bg-amber-50/90 px-5 py-4 shadow-sm"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                  <Megaphone className="h-4 w-4" />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  {announcement.heading ? (
+                    <p className="text-sm font-semibold uppercase tracking-wide text-amber-900">
+                      {announcement.heading}
+                    </p>
+                  ) : null}
+
+                  <p className={`text-sm font-semibold text-slate-800 ${announcement.heading ? "mt-1" : ""}`}>
+                    {announcement.description}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </section>
+      ) : null}
+
       {pendingCount > 0 && canOpenLeaveApprovals ? (
         <section className="rounded-3xl border border-amber-200 bg-amber-50 px-6 py-5 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -364,6 +455,61 @@ export default async function DashboardPage({
             </div>
             <Link className="btn-secondary" href="/leave-approvals">
               Open Leave Approvals
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
+      {showDashboardToggle ? (
+        <section className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/dashboard?${buildDashboardQuery({
+                leaveMonth,
+                month: params.month,
+                attendanceDate,
+                attendanceMode,
+                attendancePage: params.attendancePage,
+                billingStartDate,
+                billingEndDate,
+                billingClientId,
+                billingProjectId,
+                billingModel: billingModel || undefined,
+                approvedLeaveSelectedDate,
+                dashboardSection: "approved-leave",
+              })}#approved-leave-calendar`}
+              scroll={false}
+              className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
+                activeDashboardSection === "approved-leave"
+                  ? "bg-slate-900 text-white"
+                  : "bg-slate-50 text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              Employees on approved leave
+            </Link>
+            <Link
+              href={`/dashboard?${buildDashboardQuery({
+                leaveMonth,
+                month: params.month,
+                attendanceDate,
+                attendanceMode,
+                attendancePage: params.attendancePage,
+                billingStartDate,
+                billingEndDate,
+                billingClientId,
+                billingProjectId,
+                billingModel: billingModel || undefined,
+                approvedLeaveSelectedDate,
+                dashboardSection: "attendance-selected-date",
+              })}#attendance-selected-date`}
+              scroll={false}
+              className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
+                activeDashboardSection === "attendance-selected-date"
+                  ? "bg-slate-900 text-white"
+                  : "bg-slate-50 text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              Attendance for selected date
             </Link>
           </div>
         </section>
@@ -465,7 +611,7 @@ export default async function DashboardPage({
         </div>
       ) : null}
 
-      {showApprovedLeaveBlock && leaveCalendarData ? (
+      {showApprovedLeaveSection && activeDashboardSection === "approved-leave" && leaveCalendarData ? (
         <ApprovedLeaveCalendar
           title="Employees on approved leave"
           subtitle="Select any date to see the employees on approved leave for that day."
@@ -477,8 +623,99 @@ export default async function DashboardPage({
             billingProjectId,
             billingModel,
             month: params.month,
+            attendanceDate,
+            attendanceMode,
+            attendancePage: params.attendancePage,
+            approvedLeaveSelectedDate,
+            dashboardSection: activeDashboardSection,
           }}
         />
+      ) : null}
+
+      {showSelectedAttendanceSection && activeDashboardSection === "attendance-selected-date" ? (
+        <>
+          <section id="attendance-selected-date" className="card mx-auto max-w-5xl p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="section-title">Attendance for selected date</h2>
+                <p className="section-subtitle">Employees include Role Based Managers, Team Leads, and Employees.</p>
+              </div>
+              <Link className="btn-secondary inline-flex items-center gap-2" href={attendanceExportHref}>
+                <Download className="h-4 w-4" />
+                Export {attendanceMode === "absent" ? "Absentee" : "Presentee"} list
+              </Link>
+            </div>
+
+            <AttendanceSelectedDateFilters
+              attendanceDate={attendanceDate}
+              attendanceMode={attendanceMode}
+              leaveMonth={leaveMonth}
+              month={params.month}
+              billingStartDate={billingStartDate}
+              billingEndDate={billingEndDate}
+              billingClientId={billingClientId}
+              billingProjectId={billingProjectId}
+              billingModel={billingModel}
+              approvedLeaveSelectedDate={approvedLeaveSelectedDate}
+              dashboardSection={activeDashboardSection}
+            />
+          </section>
+
+          <section className="table-wrap" id="attendance-list">
+            <table className="table-base">
+              <thead className="table-head">
+                <tr>
+                  <th className="table-cell">Employee</th>
+                  <th className="table-cell">Functional role</th>
+                  <th className="table-cell">In-Time</th>
+                  <th className="table-cell">Out-Time</th>
+                  <th className="table-cell">City</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {attendancePagination.items.map((row) => (
+                  <tr key={row.id}>
+                    <td className="table-cell font-medium text-slate-900">{row.fullName}</td>
+                    <td className="table-cell">{(row.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}</td>
+                    <td className="table-cell">{formatTimeInIst(row.markIn?.markedAt ?? null)}</td>
+                    <td className="table-cell">{formatTimeInIst(row.markOut?.markedAt ?? null)}</td>
+                    <td className="table-cell">{row.city || "—"}</td>
+                  </tr>
+                ))}
+                {attendancePagination.totalItems === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="table-cell text-center text-sm text-slate-500">
+                      No {attendanceMode === "absent" ? "absentee" : "presentee"} rows found.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+            <PaginationControls
+              basePath="/dashboard"
+              currentPage={attendancePagination.currentPage}
+              totalPages={attendancePagination.totalPages}
+              totalItems={attendancePagination.totalItems}
+              pageSize={attendancePagination.pageSize}
+              searchParams={{
+                attendanceDate,
+                attendanceMode,
+                leaveMonth,
+                month: params.month,
+                attendancePage: params.attendancePage,
+                billingStartDate,
+                billingEndDate,
+                billingClientId,
+                billingProjectId,
+                billingModel,
+                approvedLeaveSelectedDate,
+                dashboardSection: activeDashboardSection,
+              }}
+              pageParam="attendancePage"
+              anchor="#attendance-list"
+            />
+          </section>
+        </>
       ) : null}
 
       {showManagementSummary ? (

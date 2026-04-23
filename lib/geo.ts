@@ -1,4 +1,12 @@
-export async function reverseGeocodeCity(latitude: number, longitude: number) {
+export type ReverseGeocodeLocation = {
+  city: string | null;
+  town: string | null;
+  village: string | null;
+  stateDistrict: string | null;
+  state: string | null;
+};
+
+export async function reverseGeocodeLocation(latitude: number, longitude: number): Promise<ReverseGeocodeLocation | null> {
   try {
     const url = new URL("https://nominatim.openstreetmap.org/reverse");
     url.searchParams.set("format", "jsonv2");
@@ -16,7 +24,7 @@ export async function reverseGeocodeCity(latitude: number, longitude: number) {
     });
 
     if (!response.ok) return null;
-    const data = await response.json() as {
+    const data = (await response.json()) as {
       address?: {
         city?: string;
         town?: string;
@@ -27,13 +35,13 @@ export async function reverseGeocodeCity(latitude: number, longitude: number) {
       };
     };
 
-    return data.address?.city
-      || data.address?.town
-      || data.address?.village
-      || data.address?.county
-      || data.address?.state_district
-      || data.address?.state
-      || null;
+    return {
+      city: data.address?.city ?? null,
+      town: data.address?.town ?? null,
+      village: data.address?.village ?? null,
+      stateDistrict: data.address?.state_district ?? data.address?.county ?? null,
+      state: data.address?.state ?? null,
+    };
   } catch {
     return null;
   }

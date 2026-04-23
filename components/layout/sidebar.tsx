@@ -17,6 +17,7 @@ import {
   Layers3,
   Languages,
   ListChecks,
+  Bell,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/auth";
 import {
@@ -128,6 +129,7 @@ export function getSidebarItems(user: SessionUser, canAccessLeaveApprovals: bool
       { href: "/leave-requests", label: "Leave Requests", icon: CalendarDays },
       ...(canAccessLeaveApprovals ? [{ href: "/leave-approvals", label: "Leave Approvals", icon: CheckCheck }] : []),
       { href: "/leave-admin", label: "Leave Administration", icon: CalendarDays },
+      { href: "/announcements", label: "Announcements", icon: Bell },
       { href: "/profile", label: "My Profile", icon: UserCog },
       { href: "/change-password", label: "Change Password", icon: KeyRound },
     ];
