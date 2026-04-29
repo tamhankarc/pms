@@ -43,8 +43,10 @@ export default async function SubProjectEditPage({ params }: { params: Promise<{
           clientName: project.client.name,
           clientShowsCountriesInEntries: project.client.showCountriesInTimeEntries,
           clientShowsMoviesInEntries: project.client.showMoviesInEntries,
+          clientShowsAssetTypesInEntries: project.client.showAssetTypesInEntries,
           hideCountriesInEntries: project.hideCountriesInEntries,
           hideMoviesInEntries: project.hideMoviesInEntries,
+          hideAssetTypesInEntries: project.hideAssetTypesInEntries,
         }))}
         action={updateSubProjectAction}
         initialValues={{

@@ -12,8 +12,10 @@ type ProjectOption = {
   clientName: string;
   clientShowsCountriesInEntries: boolean;
   clientShowsMoviesInEntries: boolean;
+  clientShowsAssetTypesInEntries: boolean;
   hideCountriesInEntries: boolean;
   hideMoviesInEntries: boolean;
+  hideAssetTypesInEntries: boolean;
 };
 
 const initialState: SubProjectFormState = {};
@@ -36,6 +38,7 @@ export function SubProjectForm({
     isActive?: boolean;
     hideCountriesInEntries?: boolean;
     hideMoviesInEntries?: boolean;
+    hideAssetTypesInEntries?: boolean;
   };
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
@@ -48,6 +51,7 @@ export function SubProjectForm({
   const [projectId, setProjectId] = useState(initialValues?.projectId ?? "");
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(initialValues?.hideCountriesInEntries ?? false);
   const [hideMoviesInEntries, setHideMoviesInEntries] = useState(initialValues?.hideMoviesInEntries ?? false);
+  const [hideAssetTypesInEntries, setHideAssetTypesInEntries] = useState(initialValues?.hideAssetTypesInEntries ?? false);
 
   const filteredProjects = useMemo(() => {
     if (!clientId) return projects;
@@ -67,8 +71,10 @@ export function SubProjectForm({
   const selectedProject = projects.find((project) => project.id === projectId);
   const canOverrideCountries = Boolean(selectedProject?.clientShowsCountriesInEntries);
   const canOverrideMovies = Boolean(selectedProject?.clientShowsMoviesInEntries);
+  const canOverrideAssetTypes = Boolean(selectedProject?.clientShowsAssetTypesInEntries);
   const projectAlreadyHidesCountries = Boolean(selectedProject?.hideCountriesInEntries);
   const projectAlreadyHidesMovies = Boolean(selectedProject?.hideMoviesInEntries);
+  const projectAlreadyHidesAssetTypes = Boolean(selectedProject?.hideAssetTypesInEntries);
 
   useEffect(() => {
     if (!canOverrideCountries || projectAlreadyHidesCountries) {
@@ -82,11 +88,18 @@ export function SubProjectForm({
     }
   }, [canOverrideMovies, projectAlreadyHidesMovies]);
 
+  useEffect(() => {
+    if (!canOverrideAssetTypes || projectAlreadyHidesAssetTypes) {
+      setHideAssetTypesInEntries(false);
+    }
+  }, [canOverrideAssetTypes, projectAlreadyHidesAssetTypes]);
+
   return (
     <form action={formAction} className="card p-6">
       {mode === "edit" && initialValues?.id ? <input type="hidden" name="id" value={initialValues.id} /> : null}
       {hideCountriesInEntries ? <input type="hidden" name="hideCountriesInEntries" value="on" /> : null}
       {hideMoviesInEntries ? <input type="hidden" name="hideMoviesInEntries" value="on" /> : null}
+      {hideAssetTypesInEntries ? <input type="hidden" name="hideAssetTypesInEntries" value="on" /> : null}
 
       <h2 className="section-title">{mode === "create" ? "Create Sub Project" : "Edit Sub Project"}</h2>
       <p className="section-subtitle">
@@ -119,6 +132,7 @@ export function SubProjectForm({
               setProjectId("");
               setHideCountriesInEntries(false);
               setHideMoviesInEntries(false);
+              setHideAssetTypesInEntries(false);
             }}
             options={[{ value: "", label: "Select client" }, ...uniqueClients.map((client) => ({ value: client.id, label: client.name }))]}
             placeholder="Select client"
@@ -140,6 +154,7 @@ export function SubProjectForm({
               setProjectId(value);
               setHideCountriesInEntries(false);
               setHideMoviesInEntries(false);
+              setHideAssetTypesInEntries(false);
 
               if (!value) {
                 return;
@@ -193,6 +208,23 @@ export function SubProjectForm({
             </label>
             {projectAlreadyHidesMovies ? (
               <p className="text-sm text-amber-700">Movies are already hidden for this project, so the sub-project override is not needed.</p>
+            ) : null}
+          </>
+        ) : null}
+
+        {canOverrideAssetTypes ? (
+          <>
+            <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${projectAlreadyHidesAssetTypes ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+              <input
+                type="checkbox"
+                checked={hideAssetTypesInEntries}
+                onChange={(event) => setHideAssetTypesInEntries(event.target.checked)}
+                disabled={projectAlreadyHidesAssetTypes}
+              />
+              Hide asset type dropdown in Time Entries and Estimates for this sub project
+            </label>
+            {projectAlreadyHidesAssetTypes ? (
+              <p className="text-sm text-amber-700">Asset Types are already hidden for this project, so the sub-project override is not needed.</p>
             ) : null}
           </>
         ) : null}

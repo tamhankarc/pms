@@ -19,6 +19,7 @@ const timeSchema = z.object({
   subProjectId: z.string().optional(),
   countryId: z.string().optional(),
   movieId: z.string().optional(),
+  assetTypeId: z.string().optional(),
   languageId: z.string().optional(),
   workDate: z.string().min(1),
   taskName: z.string().trim().min(2, "Task name is required.").max(200),
@@ -47,7 +48,7 @@ function isFutureWorkDate(workDate: string) {
 async function getProjectForClient(projectId: string, clientId: string) {
   return db.project.findFirst({
     where: { id: projectId, clientId, isActive: true, status: "ACTIVE" },
-    include: { client: true, subProjects: { select: { id: true, hideCountriesInEntries: true, hideMoviesInEntries: true } } },
+    include: { client: true, subProjects: { select: { id: true, hideCountriesInEntries: true, hideMoviesInEntries: true, hideAssetTypesInEntries: true } } },
   });
 }
 
@@ -225,12 +226,14 @@ async function validateClientFieldRequirements(
   {
     countryId,
     movieId,
+    assetTypeId,
     languageId,
     clientId,
     subProjectId,
   }: {
     countryId?: string;
     movieId?: string;
+    assetTypeId?: string;
     languageId?: string;
     clientId: string;
     subProjectId?: string;
@@ -238,7 +241,7 @@ async function validateClientFieldRequirements(
 ) {
   const project = await db.project.findUnique({
     where: { id: projectId },
-    include: { client: true, subProjects: { select: { id: true, hideCountriesInEntries: true, hideMoviesInEntries: true } } },
+    include: { client: true, subProjects: { select: { id: true, hideCountriesInEntries: true, hideMoviesInEntries: true, hideAssetTypesInEntries: true } } },
   });
 
   if (!project) {
@@ -262,6 +265,10 @@ async function validateClientFieldRequirements(
     project.client.showMoviesInEntries &&
     !project.hideMoviesInEntries &&
     !subProject?.hideMoviesInEntries;
+  const assetTypeEnabled =
+    project.client.showAssetTypesInEntries &&
+    !project.hideAssetTypesInEntries &&
+    !subProject?.hideAssetTypesInEntries;
 
   if (countryEnabled && !countryId) {
     return { valid: false as const, error: "Country is required for the selected client." };
@@ -277,6 +284,10 @@ async function validateClientFieldRequirements(
 
   if (!movieEnabled && movieId) {
     return { valid: false as const, error: "Movie is not enabled for the selected project/sub-project." };
+  }
+
+  if (!assetTypeEnabled && assetTypeId) {
+    return { valid: false as const, error: "Asset Type is not enabled for the selected project/sub-project." };
   }
 
   if (!project.client.showLanguagesInEntries && languageId) {
@@ -295,6 +306,17 @@ async function validateClientFieldRequirements(
 
     if (!movie) {
       return { valid: false as const, error: "Selected movie does not belong to the selected client." };
+    }
+  }
+
+  if (assetTypeId) {
+    const assetType = await db.assetType.findFirst({
+      where: { id: assetTypeId, clientId: project.clientId, isActive: true },
+      select: { id: true },
+    });
+
+    if (!assetType) {
+      return { valid: false as const, error: "Selected asset type does not belong to the selected client." };
     }
   }
 
@@ -329,6 +351,7 @@ export async function createTimeEntryAction(
       subProjectId: formData.get("subProjectId") || undefined,
       countryId: formData.get("countryId") || undefined,
       movieId: formData.get("movieId") || undefined,
+      assetTypeId: formData.get("assetTypeId") || undefined,
       languageId: formData.get("languageId") || undefined,
       workDate: formData.get("workDate"),
       taskName: formData.get("taskName"),
@@ -372,6 +395,7 @@ export async function createTimeEntryAction(
       clientId: parsed.data.clientId,
       countryId: parsed.data.countryId,
       movieId: parsed.data.movieId,
+      assetTypeId: parsed.data.assetTypeId,
       languageId: parsed.data.languageId,
       subProjectId: parsed.data.subProjectId,
     });
@@ -400,6 +424,7 @@ export async function createTimeEntryAction(
         subProjectId: parsed.data.subProjectId || null,
         countryId: parsed.data.countryId || null,
         movieId: parsed.data.movieId || null,
+        assetTypeId: parsed.data.assetTypeId || null,
         languageId: parsed.data.languageId || null,
         workDate: new Date(parsed.data.workDate),
         taskName: parsed.data.taskName,
@@ -444,6 +469,7 @@ export async function updateTimeEntryAction(
       subProjectId: formData.get("subProjectId") || undefined,
       countryId: formData.get("countryId") || undefined,
       movieId: formData.get("movieId") || undefined,
+      assetTypeId: formData.get("assetTypeId") || undefined,
       languageId: formData.get("languageId") || undefined,
       workDate: formData.get("workDate"),
       taskName: formData.get("taskName"),
@@ -506,6 +532,7 @@ export async function updateTimeEntryAction(
       clientId: parsed.data.clientId,
       countryId: parsed.data.countryId,
       movieId: parsed.data.movieId,
+      assetTypeId: parsed.data.assetTypeId,
       languageId: parsed.data.languageId,
       subProjectId: parsed.data.subProjectId,
     });
@@ -536,6 +563,7 @@ export async function updateTimeEntryAction(
         subProjectId: parsed.data.subProjectId || null,
         countryId: parsed.data.countryId || null,
         movieId: parsed.data.movieId || null,
+        assetTypeId: parsed.data.assetTypeId || null,
         languageId: parsed.data.languageId || null,
         workDate: new Date(parsed.data.workDate),
         taskName: parsed.data.taskName,

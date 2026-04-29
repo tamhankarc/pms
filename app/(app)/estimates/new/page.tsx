@@ -9,11 +9,12 @@ import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/p
 export default async function NewEstimatePage() {
   const user = await requireUser();
 
-  const [projects, countries, movies, languages, supervisorAssignments, roleScopedUsers, allActiveEmployees, allSubProjects] =
+  const [projects, countries, movies, assetTypes, languages, supervisorAssignments, roleScopedUsers, allActiveEmployees, allSubProjects] =
     await Promise.all([
       getVisibleProjects(user, { allowedStatuses: ["ACTIVE", "ON_HOLD"] }),
       db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
       db.movie.findMany({ where: { isActive: true }, orderBy: { title: "asc" } }),
+      db.assetType.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
       db.language.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
       user.userType === "TEAM_LEAD"
         ? db.employeeTeamLead.findMany({
@@ -125,6 +126,8 @@ export default async function NewEstimatePage() {
             hideCountriesInEntries: project.hideCountriesInEntries,
             showMoviesInEntries: project.client.showMoviesInEntries,
             hideMoviesInEntries: project.hideMoviesInEntries,
+            showAssetTypesInEntries: project.client.showAssetTypesInEntries,
+            hideAssetTypesInEntries: project.hideAssetTypesInEntries,
             showLanguagesInEntries: project.client.showLanguagesInEntries,
             assignedUserIds: project.assignedUsers.map((assignment) => assignment.userId),
           }))}
@@ -135,9 +138,11 @@ export default async function NewEstimatePage() {
             assignedUserIds: subProject.assignments.map((row) => row.userId),
             hideCountriesInEntries: subProject.hideCountriesInEntries,
             hideMoviesInEntries: subProject.hideMoviesInEntries,
+            hideAssetTypesInEntries: subProject.hideAssetTypesInEntries,
           }))}
           countries={countries.map((country) => ({ id: country.id, name: country.name }))}
           movies={movies.map((movie) => ({ id: movie.id, title: movie.title, clientId: movie.clientId }))}
+          assetTypes={assetTypes.map((assetType) => ({ id: assetType.id, name: assetType.name, clientId: assetType.clientId }))}
           languages={languages.map((language) => ({
             id: language.id,
             name: language.name,

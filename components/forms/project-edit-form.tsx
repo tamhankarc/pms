@@ -23,6 +23,7 @@ export function ProjectEditForm({
   clientUsesProjectTypes,
   clientShowsCountriesInEntries,
   clientShowsMoviesInEntries,
+  clientShowsAssetTypesInEntries,
   initialValues,
 }: {
   projectId: string;
@@ -31,6 +32,7 @@ export function ProjectEditForm({
   clientUsesProjectTypes: boolean;
   clientShowsCountriesInEntries: boolean;
   clientShowsMoviesInEntries: boolean;
+  clientShowsAssetTypesInEntries: boolean;
   initialValues: {
     projectTypeId: string | null;
     name: string;
@@ -41,6 +43,7 @@ export function ProjectEditForm({
     description: string | null;
     hideCountriesInEntries: boolean;
     hideMoviesInEntries: boolean;
+    hideAssetTypesInEntries: boolean;
   };
 }) {
   const [billingModel, setBillingModel] = useState<BillingModel>(initialValues.billingModel);
@@ -48,6 +51,7 @@ export function ProjectEditForm({
   const [status, setStatus] = useState<ProjectStatus>(initialValues.status);
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(initialValues.hideCountriesInEntries);
   const [hideMoviesInEntries, setHideMoviesInEntries] = useState(initialValues.hideMoviesInEntries);
+  const [hideAssetTypesInEntries, setHideAssetTypesInEntries] = useState(initialValues.hideAssetTypesInEntries);
   const boundAction = updateProjectAction.bind(null, projectId);
   const [state, formAction, pending] = useActionState(boundAction, initialState);
 
@@ -58,6 +62,7 @@ export function ProjectEditForm({
       <input type="hidden" name="status" value={status} />
       {hideCountriesInEntries ? <input type="hidden" name="hideCountriesInEntries" value="on" /> : null}
       {hideMoviesInEntries ? <input type="hidden" name="hideMoviesInEntries" value="on" /> : null}
+      {hideAssetTypesInEntries ? <input type="hidden" name="hideAssetTypesInEntries" value="on" /> : null}
 
       <h2 className="section-title">Edit project</h2>
       <p className="section-subtitle">
@@ -169,6 +174,17 @@ export function ProjectEditForm({
               onChange={(event) => setHideMoviesInEntries(event.target.checked)}
             />
             Hide movie dropdown in Time Entries and Estimates for this project
+          </label>
+        ) : null}
+
+        {clientShowsAssetTypesInEntries ? (
+          <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={hideAssetTypesInEntries}
+              onChange={(event) => setHideAssetTypesInEntries(event.target.checked)}
+            />
+            Hide asset type dropdown in Time Entries and Estimates for this project
           </label>
         ) : null}
 

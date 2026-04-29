@@ -17,6 +17,8 @@ type EstimateProjectOption = {
   hideCountriesInEntries: boolean;
   showMoviesInEntries: boolean;
   hideMoviesInEntries: boolean;
+  showAssetTypesInEntries: boolean;
+  hideAssetTypesInEntries: boolean;
   showLanguagesInEntries: boolean;
   assignedUserIds: string[];
 };
@@ -28,6 +30,7 @@ type EstimateSubProjectOption = {
   assignedUserIds: string[];
   hideCountriesInEntries: boolean;
   hideMoviesInEntries: boolean;
+  hideAssetTypesInEntries: boolean;
 };
 
 type EstimateEmployeeOption = {
@@ -39,6 +42,12 @@ type EstimateEmployeeOption = {
 type MovieOption = {
   id: string;
   title: string;
+  clientId: string;
+};
+
+type AssetTypeOption = {
+  id: string;
+  name: string;
   clientId: string;
 };
 
@@ -63,6 +72,7 @@ export function EstimateCreateForm({
   subProjects,
   countries,
   movies,
+  assetTypes,
   languages,
   currentUserId,
   currentUserType,
@@ -74,6 +84,7 @@ export function EstimateCreateForm({
   subProjects: EstimateSubProjectOption[];
   countries: { id: string; name: string }[];
   movies: MovieOption[];
+  assetTypes: AssetTypeOption[];
   languages: LanguageOption[];
   currentUserId: string;
   currentUserType: string;
@@ -170,6 +181,11 @@ export function EstimateCreateForm({
     [movies, selectedClientId],
   );
 
+  const filteredAssetTypes = useMemo(
+    () => assetTypes.filter((assetType) => assetType.clientId === selectedClientId),
+    [assetTypes, selectedClientId],
+  );
+
   const showEmployeeField = assignableEmployees.length > 1;
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const selectedSubProject = subProjects.find((subProject) => subProject.id === selectedSubProjectId);
@@ -182,6 +198,11 @@ export function EstimateCreateForm({
     selectedProject?.showMoviesInEntries &&
       !selectedProject?.hideMoviesInEntries &&
       !selectedSubProject?.hideMoviesInEntries,
+  );
+  const showAssetTypeField = Boolean(
+    selectedProject?.showAssetTypesInEntries &&
+      !selectedProject?.hideAssetTypesInEntries &&
+      !selectedSubProject?.hideAssetTypesInEntries,
   );
   const showLanguageField = Boolean(selectedProject?.showLanguagesInEntries);
   const countryRequired = showCountryField;
@@ -332,6 +353,24 @@ export function EstimateCreateForm({
               placeholder="No specific movie"
               searchPlaceholder="Search movies..."
               emptyLabel="No movies found."
+            />
+          </div>
+        ) : null}
+
+        {showAssetTypeField ? (
+          <div>
+            <FormLabel htmlFor="assetTypeId">Asset Type</FormLabel>
+            <SearchableCombobox
+              id="assetTypeId"
+              name="assetTypeId"
+              defaultValue={""}
+              options={[
+                { value: "", label: "No specific asset type" },
+                ...filteredAssetTypes.map((assetType) => ({ value: assetType.id, label: assetType.name })),
+              ]}
+              placeholder="No specific asset type"
+              searchPlaceholder="Search asset types..."
+              emptyLabel="No asset types found."
             />
           </div>
         ) : null}

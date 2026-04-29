@@ -15,6 +15,7 @@ const schema = z.object({
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   hideCountriesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   hideMoviesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  hideAssetTypesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
 
 export async function createSubProjectAction(
@@ -31,6 +32,7 @@ export async function createSubProjectAction(
       isActive: formData.get("isActive") ?? "on",
       hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
       hideMoviesInEntries: formData.get("hideMoviesInEntries") ?? undefined,
+      hideAssetTypesInEntries: formData.get("hideAssetTypesInEntries") ?? undefined,
     });
 
     if (!parsed.success) {
@@ -44,7 +46,7 @@ export async function createSubProjectAction(
       where: { id: parsed.data.projectId },
       select: {
         id: true,
-        client: { select: { showCountriesInTimeEntries: true, showMoviesInEntries: true } },
+        client: { select: { showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true } },
       },
     });
 
@@ -63,6 +65,9 @@ export async function createSubProjectAction(
           : false,
         hideMoviesInEntries: project.client.showMoviesInEntries
           ? Boolean(parsed.data.hideMoviesInEntries)
+          : false,
+        hideAssetTypesInEntries: project.client.showAssetTypesInEntries
+          ? Boolean(parsed.data.hideAssetTypesInEntries)
           : false,
       },
     });
@@ -97,6 +102,7 @@ export async function updateSubProjectAction(
       isActive: formData.get("isActive") ?? undefined,
       hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
       hideMoviesInEntries: formData.get("hideMoviesInEntries") ?? undefined,
+      hideAssetTypesInEntries: formData.get("hideAssetTypesInEntries") ?? undefined,
     });
 
     if (!parsed.success || !parsed.data.id) {
@@ -112,7 +118,7 @@ export async function updateSubProjectAction(
       where: { id: parsed.data.projectId },
       select: {
         id: true,
-        client: { select: { showCountriesInTimeEntries: true, showMoviesInEntries: true } },
+        client: { select: { showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true } },
       },
     });
 
@@ -132,6 +138,9 @@ export async function updateSubProjectAction(
           : false,
         hideMoviesInEntries: project.client.showMoviesInEntries
           ? Boolean(parsed.data.hideMoviesInEntries)
+          : false,
+        hideAssetTypesInEntries: project.client.showAssetTypesInEntries
+          ? Boolean(parsed.data.hideAssetTypesInEntries)
           : false,
       },
     });

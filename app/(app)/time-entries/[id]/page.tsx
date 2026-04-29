@@ -15,7 +15,7 @@ export default async function EditTimeEntryPage({
   const { id } = await params;
   const user = await requireUser();
 
-  const [entry, countries, movies, languages, projects, allSubProjects] = await Promise.all([
+  const [entry, countries, movies, assetTypes, languages, projects, allSubProjects] = await Promise.all([
     db.timeEntry.findUnique({
       where: { id },
       include: {
@@ -31,6 +31,10 @@ export default async function EditTimeEntryPage({
     db.movie.findMany({
       where: { isActive: true },
       orderBy: { title: "asc" },
+    }),
+    db.assetType.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
     }),
     db.language.findMany({
       where: { isActive: true },
@@ -107,6 +111,7 @@ export default async function EditTimeEntryPage({
             subProjectId: entry.subProjectId,
             countryId: entry.countryId,
             movieId: entry.movieId,
+            assetTypeId: entry.assetTypeId,
             languageId: entry.languageId,
             workDate: entry.workDate,
             taskName: entry.taskName,
@@ -116,6 +121,7 @@ export default async function EditTimeEntryPage({
           }}
           countries={countries.map((country) => ({ id: country.id, name: country.name }))}
           movies={movies.map((movie) => ({ id: movie.id, title: movie.title, clientId: movie.clientId }))}
+          assetTypes={assetTypes.map((assetType) => ({ id: assetType.id, name: assetType.name, clientId: assetType.clientId }))}
           languages={languages.map((language) => ({
             id: language.id,
             name: language.name,
@@ -130,6 +136,8 @@ export default async function EditTimeEntryPage({
             hideCountriesInEntries: project.hideCountriesInEntries,
             showMoviesInEntries: project.client.showMoviesInEntries,
             hideMoviesInEntries: project.hideMoviesInEntries,
+            showAssetTypesInEntries: project.client.showAssetTypesInEntries,
+            hideAssetTypesInEntries: project.hideAssetTypesInEntries,
             showLanguagesInEntries: project.client.showLanguagesInEntries,
             assignedUserIds: project.assignedUsers.map((assignment) => assignment.userId),
           }))}
@@ -140,6 +148,7 @@ export default async function EditTimeEntryPage({
             assignedUserIds: subProject.assignments.map((row) => row.userId),
             hideCountriesInEntries: subProject.hideCountriesInEntries,
             hideMoviesInEntries: subProject.hideMoviesInEntries,
+            hideAssetTypesInEntries: subProject.hideAssetTypesInEntries,
           }))}
           allowUnassignedSubProjects
         />

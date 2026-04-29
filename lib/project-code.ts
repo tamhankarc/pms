@@ -103,3 +103,31 @@ export async function generateMovieCode(clientId: string, movieTitle: string) {
 
   return code;
 }
+
+
+export async function generateAssetTypeCode(clientId: string, assetTypeName: string) {
+  const client = await db.client.findUnique({
+    where: { id: clientId },
+    select: { code: true, name: true },
+  });
+
+  if (!client) {
+    throw new Error("Client not found for asset type code generation.");
+  }
+
+  const clientPrefix = (client.code?.trim() || makePrefix(client.name, "CLT")).toUpperCase();
+  const assetTypePrefix = makePrefix(assetTypeName, "AST");
+  const basePrefix = `${clientPrefix}-${assetTypePrefix}`;
+
+  const count = await db.assetType.count({ where: { clientId } });
+
+  let sequence = count + 1;
+  let code = `${basePrefix}-${String(sequence).padStart(3, "0")}`;
+
+  while (await db.assetType.findUnique({ where: { code }, select: { id: true } })) {
+    sequence += 1;
+    code = `${basePrefix}-${String(sequence).padStart(3, "0")}`;
+  }
+
+  return code;
+}

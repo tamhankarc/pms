@@ -97,6 +97,7 @@ export default async function ClientEditPage({ params }: { params: Promise<{ id:
             isActive: client.isActive,
             showCountriesInTimeEntries: client.showCountriesInTimeEntries,
             showMoviesInEntries: client.showMoviesInEntries,
+            showAssetTypesInEntries: client.showAssetTypesInEntries,
             showLanguagesInEntries: client.showLanguagesInEntries,
             enableProjectTypes: client.enableProjectTypes,
           }}

@@ -55,6 +55,7 @@ export default async function EditProjectPage({
         clientUsesProjectTypes={project.client.enableProjectTypes}
         clientShowsCountriesInEntries={project.client.showCountriesInTimeEntries}
         clientShowsMoviesInEntries={project.client.showMoviesInEntries}
+        clientShowsAssetTypesInEntries={project.client.showAssetTypesInEntries}
         initialValues={{
           projectTypeId: project.projectTypeId,
           name: project.name,
@@ -67,6 +68,7 @@ export default async function EditProjectPage({
           description: project.description,
           hideCountriesInEntries: project.hideCountriesInEntries,
           hideMoviesInEntries: project.hideMoviesInEntries,
+          hideAssetTypesInEntries: project.hideAssetTypesInEntries,
         }}
       />
     </div>

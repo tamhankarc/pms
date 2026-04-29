@@ -16,6 +16,7 @@ const clientSchema = z.object({
   name: z.string().trim().min(2, "Client name is required."),
   showCountriesInTimeEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   showMoviesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  showAssetTypesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   showLanguagesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   enableProjectTypes: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
@@ -32,6 +33,7 @@ export async function createClientAction(
       name: String(formData.get("name") ?? ""),
       showCountriesInTimeEntries: formData.get("showCountriesInTimeEntries") ?? undefined,
       showMoviesInEntries: formData.get("showMoviesInEntries") ?? undefined,
+      showAssetTypesInEntries: formData.get("showAssetTypesInEntries") ?? undefined,
       showLanguagesInEntries: formData.get("showLanguagesInEntries") ?? undefined,
       enableProjectTypes: formData.get("enableProjectTypes") ?? undefined,
       isActive: formData.get("isActive") ?? "on",
@@ -52,6 +54,7 @@ export async function createClientAction(
         code: generatedCode,
         showCountriesInTimeEntries: Boolean(parsed.data.showCountriesInTimeEntries),
         showMoviesInEntries: Boolean(parsed.data.showMoviesInEntries),
+        showAssetTypesInEntries: Boolean(parsed.data.showAssetTypesInEntries),
         showLanguagesInEntries: Boolean(parsed.data.showLanguagesInEntries),
         enableProjectTypes: Boolean(parsed.data.enableProjectTypes),
         isActive: Boolean(parsed.data.isActive),
@@ -61,6 +64,7 @@ export async function createClientAction(
     revalidatePath("/clients");
     revalidatePath("/projects/new");
     revalidatePath("/movies");
+    revalidatePath("/asset-type");
     revalidatePath("/time-entries");
     revalidatePath("/estimates");
     revalidatePath("/sub-project");
@@ -86,6 +90,7 @@ export async function updateClientAction(
       name: String(formData.get("name") ?? ""),
       showCountriesInTimeEntries: formData.get("showCountriesInTimeEntries") ?? undefined,
       showMoviesInEntries: formData.get("showMoviesInEntries") ?? undefined,
+      showAssetTypesInEntries: formData.get("showAssetTypesInEntries") ?? undefined,
       showLanguagesInEntries: formData.get("showLanguagesInEntries") ?? undefined,
       enableProjectTypes: formData.get("enableProjectTypes") ?? undefined,
       isActive: formData.get("isActive") ?? undefined,
@@ -116,6 +121,7 @@ export async function updateClientAction(
         code,
         showCountriesInTimeEntries: Boolean(parsed.data.showCountriesInTimeEntries),
         showMoviesInEntries: Boolean(parsed.data.showMoviesInEntries),
+        showAssetTypesInEntries: Boolean(parsed.data.showAssetTypesInEntries),
         showLanguagesInEntries: Boolean(parsed.data.showLanguagesInEntries),
         enableProjectTypes: Boolean(parsed.data.enableProjectTypes),
         isActive: Boolean(parsed.data.isActive),
@@ -127,6 +133,7 @@ export async function updateClientAction(
     revalidatePath(`/clients/${parsed.data.id}/project-types`);
     revalidatePath("/projects/new");
     revalidatePath("/movies");
+    revalidatePath("/asset-type");
     revalidatePath("/time-entries");
     revalidatePath("/estimates");
     revalidatePath("/sub-project");

@@ -12,7 +12,7 @@ export default async function EditEstimatePage({
   const { id } = await params;
   const user = await requireUser();
 
-  const [estimate, countries, movies, languages, projects, subProjects] = await Promise.all([
+  const [estimate, countries, movies, assetTypes, languages, projects, subProjects] = await Promise.all([
     db.estimate.findUnique({
       where: { id },
       include: {
@@ -39,6 +39,10 @@ export default async function EditEstimatePage({
     db.movie.findMany({
       where: { isActive: true },
       orderBy: { title: "asc" },
+    }),
+    db.assetType.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
     }),
     db.language.findMany({
       where: { isActive: true },
@@ -133,6 +137,7 @@ export default async function EditEstimatePage({
             subProjectId: estimate.subProjectId,
             countryId: estimate.countryId,
             movieId: estimate.movieId,
+            assetTypeId: estimate.assetTypeId,
             languageId: estimate.languageId,
             workDate: estimate.workDate,
             estimatedMinutes: estimate.estimatedMinutes,
@@ -147,6 +152,8 @@ export default async function EditEstimatePage({
             hideCountriesInEntries: project.hideCountriesInEntries,
             showMoviesInEntries: project.client.showMoviesInEntries,
             hideMoviesInEntries: project.hideMoviesInEntries,
+            showAssetTypesInEntries: project.client.showAssetTypesInEntries,
+            hideAssetTypesInEntries: project.hideAssetTypesInEntries,
             showLanguagesInEntries: project.client.showLanguagesInEntries,
             assignedUserIds: project.assignedUsers.map((assignment) => assignment.userId),
           }))}
@@ -157,9 +164,11 @@ export default async function EditEstimatePage({
             assignedUserIds: subProject.assignments.map((row) => row.userId),
             hideCountriesInEntries: subProject.hideCountriesInEntries,
             hideMoviesInEntries: subProject.hideMoviesInEntries,
+            hideAssetTypesInEntries: subProject.hideAssetTypesInEntries,
           }))}
           countries={countries.map((country) => ({ id: country.id, name: country.name }))}
           movies={movies.map((movie) => ({ id: movie.id, title: movie.title, clientId: movie.clientId }))}
+          assetTypes={assetTypes.map((assetType) => ({ id: assetType.id, name: assetType.name, clientId: assetType.clientId }))}
           languages={languages.map((language) => ({
             id: language.id,
             name: language.name,

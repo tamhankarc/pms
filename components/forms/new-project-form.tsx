@@ -11,6 +11,7 @@ type Client = {
   enableProjectTypes: boolean;
   showCountriesInTimeEntries: boolean;
   showMoviesInEntries: boolean;
+  showAssetTypesInEntries: boolean;
 };
 
 type ProjectType = {
@@ -37,6 +38,7 @@ export function NewProjectForm({
   const [status, setStatus] = useState<ProjectStatus>("DRAFT");
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(false);
   const [hideMoviesInEntries, setHideMoviesInEntries] = useState(false);
+  const [hideAssetTypesInEntries, setHideAssetTypesInEntries] = useState(false);
   const [state, formAction, pending] = useActionState(createProjectAction, initialState);
 
   const selectedClient = clients.find((client) => client.id === clientId);
@@ -54,6 +56,7 @@ export function NewProjectForm({
       <input type="hidden" name="status" value={status} />
       {hideCountriesInEntries ? <input type="hidden" name="hideCountriesInEntries" value="on" /> : null}
       {hideMoviesInEntries ? <input type="hidden" name="hideMoviesInEntries" value="on" /> : null}
+      {hideAssetTypesInEntries ? <input type="hidden" name="hideAssetTypesInEntries" value="on" /> : null}
 
       <h2 className="section-title">Create project</h2>
       <p className="section-subtitle">
@@ -85,6 +88,7 @@ export function NewProjectForm({
               setProjectTypeId("");
               setHideCountriesInEntries(false);
               setHideMoviesInEntries(false);
+              setHideAssetTypesInEntries(false);
             }}
             options={clients.map((client) => ({ value: client.id, label: client.name }))}
             placeholder="Select client"
@@ -181,6 +185,17 @@ export function NewProjectForm({
               onChange={(event) => setHideMoviesInEntries(event.target.checked)}
             />
             Hide movie dropdown in Time Entries and Estimates for this project
+          </label>
+        ) : null}
+
+        {selectedClient?.showAssetTypesInEntries ? (
+          <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={hideAssetTypesInEntries}
+              onChange={(event) => setHideAssetTypesInEntries(event.target.checked)}
+            />
+            Hide asset type dropdown in Time Entries and Estimates for this project
           </label>
         ) : null}
 

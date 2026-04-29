@@ -18,6 +18,8 @@ type TimeEntryProjectOption = {
   hideCountriesInEntries: boolean;
   showMoviesInEntries: boolean;
   hideMoviesInEntries: boolean;
+  showAssetTypesInEntries: boolean;
+  hideAssetTypesInEntries: boolean;
   showLanguagesInEntries: boolean;
   assignedUserIds: string[];
 };
@@ -29,11 +31,18 @@ type TimeEntrySubProjectOption = {
   assignedUserIds: string[];
   hideCountriesInEntries: boolean;
   hideMoviesInEntries: boolean;
+  hideAssetTypesInEntries: boolean;
 };
 
 type MovieOption = {
   id: string;
   title: string;
+  clientId: string;
+};
+
+type AssetTypeOption = {
+  id: string;
+  name: string;
   clientId: string;
 };
 
@@ -57,6 +66,7 @@ export function TimeEntryEditForm({
   entry,
   countries,
   movies,
+  assetTypes,
   languages,
   projects,
   subProjects,
@@ -72,6 +82,7 @@ export function TimeEntryEditForm({
     subProjectId: string | null;
     countryId: string | null;
     movieId: string | null;
+    assetTypeId: string | null;
     languageId: string | null;
     workDate: Date;
     taskName: string;
@@ -81,6 +92,7 @@ export function TimeEntryEditForm({
   };
   countries: { id: string; name: string }[];
   movies: MovieOption[];
+  assetTypes: AssetTypeOption[];
   languages: LanguageOption[];
   projects: TimeEntryProjectOption[];
   subProjects: TimeEntrySubProjectOption[];
@@ -141,6 +153,11 @@ export function TimeEntryEditForm({
     [movies, selectedClientId],
   );
 
+  const filteredAssetTypes = useMemo(
+    () => assetTypes.filter((assetType) => assetType.clientId === selectedClientId),
+    [assetTypes, selectedClientId],
+  );
+
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const selectedSubProject = subProjects.find((subProject) => subProject.id === selectedSubProjectId);
   const showCountryField = Boolean(
@@ -152,6 +169,11 @@ export function TimeEntryEditForm({
     selectedProject?.showMoviesInEntries &&
       !selectedProject?.hideMoviesInEntries &&
       !selectedSubProject?.hideMoviesInEntries,
+  );
+  const showAssetTypeField = Boolean(
+    selectedProject?.showAssetTypesInEntries &&
+      !selectedProject?.hideAssetTypesInEntries &&
+      !selectedSubProject?.hideAssetTypesInEntries,
   );
   const showLanguageField = Boolean(selectedProject?.showLanguagesInEntries);
   const countryRequired = showCountryField;
@@ -284,6 +306,24 @@ export function TimeEntryEditForm({
               placeholder="No specific movie"
               searchPlaceholder="Search movies..."
               emptyLabel="No movies found."
+            />
+          </div>
+        ) : null}
+
+        {showAssetTypeField ? (
+          <div>
+            <FormLabel htmlFor="assetTypeId">Asset Type</FormLabel>
+            <SearchableCombobox
+              id="assetTypeId"
+              name="assetTypeId"
+              defaultValue={entry.assetTypeId ?? ""}
+              options={[
+                { value: "", label: "No specific asset type" },
+                ...filteredAssetTypes.map((assetType) => ({ value: assetType.id, label: assetType.name })),
+              ]}
+              placeholder="No specific asset type"
+              searchPlaceholder="Search asset types..."
+              emptyLabel="No asset types found."
             />
           </div>
         ) : null}

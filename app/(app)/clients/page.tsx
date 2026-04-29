@@ -118,6 +118,8 @@ export default async function ClientsPage({
                     </div>
                     <div className="text-xs text-slate-600">
                       Movies: {client.showMoviesInEntries ? "Optional" : "Hidden"}
+                      <br />
+                      Asset Types: {client.showAssetTypesInEntries ? "Optional" : "Hidden"}
                     </div>
                   </td>
                   <td className="table-cell">
