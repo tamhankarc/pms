@@ -18,7 +18,8 @@ type UserTypeFilter =
   | "ADMIN"
   | "REPORT_VIEWER"
   | "ACCOUNTS"
-  | "HR";
+  | "HR"
+  | "OPERATIONS";
 
 function toUserTypeFilter(value: string | undefined): UserTypeFilter {
   switch (value) {
@@ -29,6 +30,7 @@ function toUserTypeFilter(value: string | undefined): UserTypeFilter {
     case "REPORT_VIEWER":
     case "ACCOUNTS":
     case "HR":
+    case "OPERATIONS":
       return value;
     default:
       return "all";
@@ -65,6 +67,7 @@ export default async function UsersPage({
       ...(status === "active" ? { isActive: true } : {}),
       ...(status === "inactive" ? { isActive: false } : {}),
       ...(userType !== "all" ? { userType } : {}),
+      ...(currentUser.userType === "HR" ? { NOT: { userType: "OPERATIONS" } } : {}),
     },
     include: {
       employeeSupervisors: { include: { teamLead: true } },
@@ -122,6 +125,7 @@ export default async function UsersPage({
               { value: "REPORT_VIEWER", label: "Report Viewer" },
               { value: "ACCOUNTS", label: "Accounts" },
               { value: "HR", label: "HR" },
+              ...(currentUser.userType === "ADMIN" ? [{ value: "OPERATIONS", label: "Operations" }] : []),
             ]}
             placeholder="All user types"
             searchPlaceholder="Search user types..."
@@ -133,7 +137,7 @@ export default async function UsersPage({
         </form>
       </div>
 
-      {showCreate && canManageUsers(currentUser) ? <UserManageForm mode="create" action={createUserAction} /> : null}
+      {showCreate && canManageUsers(currentUser) ? <UserManageForm mode="create" action={createUserAction} allowOperationsUserType={currentUser.userType === "ADMIN"} /> : null}
 
       <div className="table-wrap">
         <table className="table-base">

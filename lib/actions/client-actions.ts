@@ -28,7 +28,7 @@ export async function createClientAction(
   formData: FormData,
 ): Promise<ClientFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
 
     const parsed = clientSchema.safeParse({
       name: String(formData.get("name") ?? ""),
@@ -87,7 +87,7 @@ export async function updateClientAction(
   formData: FormData,
 ): Promise<ClientFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
 
     const parsed = clientSchema.safeParse({
       id: String(formData.get("id") ?? ""),
@@ -155,7 +155,7 @@ export async function updateClientAction(
 }
 
 export async function toggleClientStatusAction(formData: FormData) {
-  await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+  await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
 
   const clientId = String(formData.get("clientId") || "");
   if (!clientId) throw new Error("Client is required.");

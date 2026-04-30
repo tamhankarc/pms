@@ -25,7 +25,7 @@ async function validateProjectBelongsToClient(clientId: string, projectId: strin
 
 export async function createContactPersonAction(_prevState: ContactPersonFormState, formData: FormData): Promise<ContactPersonFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN"]);
+    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
     const parsed = contactPersonSchema.safeParse({
       clientId: String(formData.get("clientId") ?? ""),
       projectId: String(formData.get("projectId") ?? ""),
@@ -45,7 +45,7 @@ export async function createContactPersonAction(_prevState: ContactPersonFormSta
 
 export async function updateContactPersonAction(_prevState: ContactPersonFormState, formData: FormData): Promise<ContactPersonFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN"]);
+    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
     const parsed = contactPersonSchema.safeParse({
       id: String(formData.get("id") ?? ""),
       clientId: String(formData.get("clientId") ?? ""),

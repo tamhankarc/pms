@@ -206,6 +206,14 @@ export function NewProjectForm({
           Add to Billing
         </label>
 
+        <div className="md:col-span-2">
+          <FormLabel htmlFor="additionalCharges">Additional Chargers (USD)</FormLabel>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
+            <input id="additionalCharges" className="input currency-input" name="additionalCharges" type="number" min="0" step="0.01" defaultValue="0.00" />
+          </div>
+        </div>
+
         {billingModel === "FIXED_FULL" ? (
           <div className="md:col-span-2">
             <FormLabel htmlFor="fixedContractHours" required>

@@ -23,6 +23,33 @@ const HR_ALLOWED_PATHS = [
   "/profile",
   "/change-password",
 ];
+const OPERATIONS_ALLOWED_PATHS = [
+  "/dashboard",
+  "/clients",
+  "/movies",
+  "/asset-type",
+  "/countries",
+  "/languages",
+  "/projects",
+  "/sub-project",
+  "/sub-projects",
+  "/user-assignments",
+  "/contact-persons",
+  "/profile",
+  "/change-password",
+];
+const MASTER_DATA_PATHS = [
+  "/clients",
+  "/movies",
+  "/asset-type",
+  "/countries",
+  "/languages",
+  "/projects",
+  "/sub-project",
+  "/sub-projects",
+  "/user-assignments",
+  "/contact-persons",
+];
 const TEAM_LEAD_BLOCKED_PATHS = ["/users", "/team-lead-assignments", "/reports", "/leave-admin"];
 
 async function getSessionPayload(request: NextRequest) {
@@ -73,6 +100,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
+  if (session?.userType === "OPERATIONS" && !isAllowed(pathname, OPERATIONS_ALLOWED_PATHS)) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  if (isAllowed(pathname, MASTER_DATA_PATHS) && session?.userType !== "ADMIN" && session?.userType !== "OPERATIONS") {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
   if (session?.userType === "TEAM_LEAD") {
     const blocked = TEAM_LEAD_BLOCKED_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
     if (blocked) {
@@ -80,20 +115,8 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-
-  if (pathname === "/contact-persons" || pathname.startsWith("/contact-persons/")) {
+  if (pathname === "/movie-billing-heads" || pathname.startsWith("/movie-billing-heads/")) {
     if (session?.userType !== "ADMIN") {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
-  }
-
-  if (pathname === "/countries" || pathname.startsWith("/countries/")) {
-    const allowed =
-      session?.userType === "ADMIN" ||
-      session?.userType === "MANAGER" ||
-      session?.userType === "TEAM_LEAD" ||
-      session?.userType === "HR";
-    if (!allowed) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   }

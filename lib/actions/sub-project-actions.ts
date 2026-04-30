@@ -23,7 +23,7 @@ export async function createSubProjectAction(
   formData: FormData,
 ): Promise<SubProjectFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
 
     const parsed = schema.safeParse({
       projectId: String(formData.get("projectId") ?? ""),
@@ -92,7 +92,7 @@ export async function updateSubProjectAction(
   formData: FormData,
 ): Promise<SubProjectFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
 
     const parsed = schema.safeParse({
       id: String(formData.get("id") ?? ""),
@@ -162,7 +162,7 @@ export async function updateSubProjectAction(
 }
 
 export async function toggleSubProjectStatusAction(formData: FormData): Promise<void> {
-  await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+  await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
 
   const subProjectId = String(formData.get("subProjectId") ?? "");
   if (!subProjectId) {

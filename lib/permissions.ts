@@ -31,6 +31,7 @@ export function isEmployee(user: UserLike) { return getUserType(user) === "EMPLO
 export function isReportViewer(user: UserLike) { return getUserType(user) === "REPORT_VIEWER"; }
 export function isAccounts(user: UserLike) { return getUserType(user) === "ACCOUNTS"; }
 export function isHR(user: UserLike) { return getUserType(user) === "HR"; }
+export function isOperations(user: UserLike) { return getUserType(user) === "OPERATIONS"; }
 export function isProjectManager(user: UserLike) { return isManager(user) && getFunctionalRole(user) === "PROJECT_MANAGER"; }
 export function isAdminProjectManager(user: UserLike) { return isAdmin(user) && getFunctionalRole(user) === "PROJECT_MANAGER"; }
 export function isRoleScopedManager(user: UserLike) { return isManager(user) && getFunctionalRole(user) !== "PROJECT_MANAGER"; }
@@ -43,14 +44,15 @@ export function canComprehensivelyModerateProject(user: UserLike) { return isAdm
 export function canFullyModerateProject(user: UserLike) { return canComprehensivelyModerateProject(user); }
 export function canManageUsers(user: UserLike) { return isAdmin(user) || isHR(user); }
 export function canAssignTeamLeads(user: UserLike) { return isAdmin(user) || isManager(user) || isHR(user); }
-export function canCreateOrEditProject(user: UserLike) { return isAdmin(user) || isManager(user) || isTeamLead(user); }
+export function canManageMasterData(user: UserLike) { return isAdmin(user) || isOperations(user); }
+export function canCreateOrEditProject(user: UserLike) { return canManageMasterData(user); }
 export function canCreateProjects(user: UserLike) { return canCreateOrEditProject(user); }
-export function canSeeAllProjects(user: UserLike) { return isAdmin(user) || isManager(user) || isTeamLead(user) || isReportViewer(user) || isAccounts(user) || isHR(user); }
-export function canManageCountries(user: UserLike) { return isAdmin(user) || isManager(user) || isTeamLead(user) || isHR(user); }
-export function canManageLanguages(user: UserLike) { return isAdmin(user) || isManager(user) || isTeamLead(user) || isHR(user); }
-export function canManageClients(user: UserLike) { return isAdmin(user) || isManager(user) || isTeamLead(user) || isHR(user); }
-export function canManageProjectTypes(user: UserLike) { return isAdmin(user) || isManager(user) || isTeamLead(user) || isHR(user); }
-export function canManageAssignments(user: UserLike) { return isAdmin(user) || isManager(user) || isTeamLead(user) || isHR(user); }
+export function canSeeAllProjects(user: UserLike) { return isAdmin(user) || isOperations(user) || isManager(user) || isTeamLead(user) || isReportViewer(user) || isAccounts(user) || isHR(user); }
+export function canManageCountries(user: UserLike) { return canManageMasterData(user); }
+export function canManageLanguages(user: UserLike) { return canManageMasterData(user); }
+export function canManageClients(user: UserLike) { return canManageMasterData(user); }
+export function canManageProjectTypes(user: UserLike) { return canManageMasterData(user); }
+export function canManageAssignments(user: UserLike) { return canManageMasterData(user); }
 
 export function canSeeBillingDashboard(user: UserLike) {
   return (

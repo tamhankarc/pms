@@ -28,7 +28,7 @@ export async function createMovieAction(
   formData: FormData,
 ): Promise<MovieFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
 
     const parsed = movieSchema.safeParse({
       clientId: formData.get("clientId"),
@@ -98,7 +98,7 @@ export async function updateMovieAction(
   formData: FormData,
 ): Promise<MovieFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
 
     const parsed = movieSchema.safeParse({
       id: formData.get("id"),
@@ -176,7 +176,7 @@ export async function updateMovieAction(
 }
 
 export async function toggleMovieStatusAction(formData: FormData) {
-  await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+  await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
 
   const movieId = String(formData.get("movieId") || "");
   if (!movieId) throw new Error("Movie is required.");

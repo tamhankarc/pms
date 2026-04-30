@@ -101,6 +101,11 @@ export default async function ProjectDetailPage({
               </div>
 
               <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">Additional Chargers</dt>
+                <dd className="mt-1 text-sm text-slate-800">${Number(project.additionalCharges ?? 0).toFixed(2)}</dd>
+              </div>
+
+              <div>
                 <dt className="text-xs uppercase tracking-wide text-slate-500">Status</dt>
                 <dd className="mt-1 text-sm text-slate-800">
                   {project.status.replaceAll("_", " ")}

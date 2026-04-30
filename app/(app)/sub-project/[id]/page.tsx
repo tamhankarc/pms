@@ -58,6 +58,7 @@ export default async function SubProjectEditPage({ params }: { params: Promise<{
           isActive: subProject.isActive,
           hideCountriesInEntries: subProject.hideCountriesInEntries,
           hideMoviesInEntries: subProject.hideMoviesInEntries,
+          hideAssetTypesInEntries: subProject.hideAssetTypesInEntries,
         }}
       />
     </div>

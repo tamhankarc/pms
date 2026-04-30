@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { requireUserTypes } from "@/lib/auth";
 
 export default async function ContactPersonEditPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireUserTypes(["ADMIN"]);
+  await requireUserTypes(["ADMIN", "OPERATIONS"]);
   const { id } = await params;
   const [clients, projects, contactPerson] = await Promise.all([
     db.client.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),

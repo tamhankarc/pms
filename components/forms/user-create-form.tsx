@@ -24,6 +24,7 @@ const userTypes = [
   "REPORT_VIEWER",
   "ACCOUNTS",
   "HR",
+  "OPERATIONS",
 ] as const;
 
 type FunctionalRole = (typeof operationalFunctionalRoles)[number] | "BILLING";

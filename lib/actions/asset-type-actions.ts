@@ -19,7 +19,7 @@ const assetTypeSchema = z.object({
 
 export async function createAssetTypeAction(_prevState: AssetTypeFormState, formData: FormData): Promise<AssetTypeFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
     const parsed = assetTypeSchema.safeParse({ clientId: formData.get("clientId"), name: formData.get("name"), cost: formData.get("cost") ?? "0", description: formData.get("description") || "", isActive: formData.get("isActive") ?? "on" });
     if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message || "Invalid asset type payload." };
     const generatedCode = await generateAssetTypeCode(parsed.data.clientId, parsed.data.name);
@@ -31,7 +31,7 @@ export async function createAssetTypeAction(_prevState: AssetTypeFormState, form
 
 export async function updateAssetTypeAction(_prevState: AssetTypeFormState, formData: FormData): Promise<AssetTypeFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
     const parsed = assetTypeSchema.safeParse({ id: formData.get("id"), clientId: formData.get("clientId"), name: formData.get("name"), cost: formData.get("cost") ?? "0", description: formData.get("description") || "", isActive: formData.get("isActive") ?? undefined });
     if (!parsed.success || !parsed.data.id) return { success: false, error: parsed.success ? "Asset Type is required." : parsed.error.issues[0]?.message };
     const existingAssetType = await db.assetType.findUnique({ where: { id: parsed.data.id }, select: { code: true } });
@@ -44,7 +44,7 @@ export async function updateAssetTypeAction(_prevState: AssetTypeFormState, form
 }
 
 export async function toggleAssetTypeStatusAction(formData: FormData) {
-  await requireUserTypesForAction(["ADMIN", "MANAGER", "TEAM_LEAD"]);
+  await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
   const assetTypeId = String(formData.get("assetTypeId") || "");
   if (!assetTypeId) throw new Error("Asset Type is required.");
   const assetType = await db.assetType.findUnique({ where: { id: assetTypeId } });

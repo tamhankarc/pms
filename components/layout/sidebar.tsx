@@ -29,6 +29,7 @@ import {
   canManageLanguages,
   canManageUsers,
   isHR,
+  isOperations,
   isRoleScopedManager,
 } from "@/lib/permissions";
 
@@ -103,11 +104,30 @@ const employeeItems: SidebarNavItem[] = [
   { href: "/change-password", label: "Change Password", icon: KeyRound },
 ];
 
+const operationsItems: SidebarNavItem[] = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/clients", label: "Clients", icon: Building2 },
+  { href: "/movies", label: "Movies", icon: Clapperboard },
+  { href: "/asset-type", label: "Asset Types", icon: Box },
+  { href: "/countries", label: "Countries", icon: Globe2, access: "countries" },
+  { href: "/languages", label: "Languages", icon: Languages, access: "languages" },
+  { href: "/projects", label: "Projects", icon: FolderKanban },
+  { href: "/sub-project", label: "Sub Projects", icon: Layers3 },
+  { href: "/user-assignments", label: "User Assignments", icon: ListChecks },
+  { href: "/contact-persons", label: "Contact Persons", icon: Contact },
+  { href: "/profile", label: "My Profile", icon: UserCog },
+  { href: "/change-password", label: "Change Password", icon: KeyRound },
+];
+
 const accountsItems: SidebarNavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/change-password", label: "Change Password", icon: KeyRound },
 ];
+
+function isMasterDataHref(href: string) {
+  return ["/clients", "/movies", "/asset-type", "/countries", "/languages", "/projects", "/sub-project", "/user-assignments", "/contact-persons"].includes(href);
+}
 
 function filterAccess(items: SidebarNavItem[], user: SessionUser) {
   return items.filter(
@@ -123,7 +143,11 @@ export function getSidebarItems(user: SessionUser, canAccessLeaveApprovals: bool
   }
 
   if (user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) {
-    return withLeaveItems(filterAccess(teamLeadItems, user), user, canAccessLeaveApprovals);
+    return withLeaveItems(filterAccess(teamLeadItems, user).filter((item) => !isMasterDataHref(item.href)), user, canAccessLeaveApprovals);
+  }
+
+  if (isOperations(user)) {
+    return filterAccess(operationsItems, user);
   }
 
   if (user.userType === "ACCOUNTS") {
@@ -145,8 +169,9 @@ export function getSidebarItems(user: SessionUser, canAccessLeaveApprovals: bool
 
   const merged = withLeaveItems(filterAccess(fullItems, user), user, canAccessLeaveApprovals);
   return merged.filter((item) => {
+    if (isMasterDataHref(item.href) && user.userType !== "ADMIN" && user.userType !== "OPERATIONS") return false;
     if (item.href === "/users" && !canManageUsers(user)) return false;
-    if (item.href === "/contact-persons" && user.userType !== "ADMIN") return false;
+    if (item.href === "/contact-persons" && user.userType !== "ADMIN" && user.userType !== "OPERATIONS") return false;
     if (item.href === "/movie-billing-heads" && user.userType !== "ADMIN") return false;
     return true;
   });

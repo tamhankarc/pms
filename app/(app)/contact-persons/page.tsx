@@ -7,7 +7,7 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
 export default async function ContactPersonsPage({ searchParams }: { searchParams?: Promise<{ q?: string; clientId?: string; projectId?: string; page?: string }>; }) {
-  await requireUserTypes(["ADMIN"]);
+  await requireUserTypes(["ADMIN", "OPERATIONS"]);
   const params = (await searchParams) ?? {};
   const q = params.q?.trim() ?? "";
   const clientId = params.clientId ?? "all";

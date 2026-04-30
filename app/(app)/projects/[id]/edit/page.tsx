@@ -70,6 +70,7 @@ export default async function EditProjectPage({
           hideMoviesInEntries: project.hideMoviesInEntries,
           hideAssetTypesInEntries: project.hideAssetTypesInEntries,
           addToBilling: project.addToBilling,
+          additionalCharges: project.additionalCharges == null ? null : Number(project.additionalCharges),
         }}
       />
     </div>

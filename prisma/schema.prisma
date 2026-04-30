@@ -15,6 +15,7 @@ enum UserType {
   REPORT_VIEWER
   ACCOUNTS
   HR
+  OPERATIONS
 }
 
 enum FunctionalRoleCode {
@@ -336,6 +337,7 @@ model Project {
   status             ProjectStatus @default(DRAFT)
   fixedContractHours Decimal?      @db.Decimal(10, 2)
   fixedMonthlyHours  Decimal?      @db.Decimal(10, 2)
+  additionalCharges  Decimal       @default(0) @db.Decimal(12, 2)
   startDate          DateTime?
   endDate            DateTime?
   isActive           Boolean       @default(true)

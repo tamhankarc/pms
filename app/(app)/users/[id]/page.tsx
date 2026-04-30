@@ -22,6 +22,7 @@ export default async function UserEditPage({
   });
 
   if (!user) notFound();
+  if (currentUser.userType === "HR" && user.userType === "OPERATIONS") redirect("/users");
 
   return (
     <div className="space-y-6">
@@ -38,6 +39,7 @@ export default async function UserEditPage({
       <UserManageForm
         mode="edit"
         action={updateUserAction}
+        allowOperationsUserType={currentUser.userType === "ADMIN"}
         initialValues={{
           id: user.id,
           fullName: user.fullName,

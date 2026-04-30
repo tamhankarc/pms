@@ -26,6 +26,7 @@ const userTypes = [
   "REPORT_VIEWER",
   "ACCOUNTS",
   "HR",
+  "OPERATIONS",
 ] as const;
 
 type FunctionalRole = (typeof operationalFunctionalRoles)[number] | "BILLING";
@@ -33,6 +34,7 @@ type FunctionalRole = (typeof operationalFunctionalRoles)[number] | "BILLING";
 type UserManageFormProps = {
   mode: "create" | "edit";
   action: (state: UserFormState, formData: FormData) => Promise<UserFormState>;
+  allowOperationsUserType?: boolean;
   initialValues?: {
     id?: string;
     fullName?: string;
@@ -85,7 +87,7 @@ function PasswordField({ defaultVisible = false }: { defaultVisible?: boolean })
   );
 }
 
-export function UserManageForm({ mode, action, initialValues }: UserManageFormProps) {
+export function UserManageForm({ mode, action, initialValues, allowOperationsUserType = true }: UserManageFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [userType, setUserType] = useState<(typeof userTypes)[number]>(initialValues?.userType ?? "EMPLOYEE");
   const [functionalRole, setFunctionalRole] = useState<FunctionalRole>(initialValues?.functionalRole ?? "DEVELOPER");
@@ -111,6 +113,7 @@ export function UserManageForm({ mode, action, initialValues }: UserManageFormPr
     }
   }, [sameAsCurrent, currentAddress]);
 
+  const availableUserTypes = allowOperationsUserType ? userTypes : userTypes.filter((type) => type !== "OPERATIONS");
   const availableFunctionalRoles = userType === "ACCOUNTS" ? (["BILLING"] as const) : operationalFunctionalRoles;
 
   function handleUserTypeChange(nextUserType: (typeof userTypes)[number]) {
@@ -173,7 +176,7 @@ export function UserManageForm({ mode, action, initialValues }: UserManageFormPr
             id="userType"
             value={userType}
             onValueChange={(value) => handleUserTypeChange(value as (typeof userTypes)[number])}
-            options={userTypes.map((type) => ({ value: type, label: type.replaceAll("_", " ") }))}
+            options={availableUserTypes.map((type) => ({ value: type, label: type.replaceAll("_", " ") }))}
             placeholder="Select user type"
             searchPlaceholder="Search user types..."
             emptyLabel="No user type found."
@@ -272,6 +275,10 @@ export function UserManageForm({ mode, action, initialValues }: UserManageFormPr
         ) : userType === "HR" ? (
           <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
             HR users can access EMS dashboard, leave approvals, users, profile, and password change pages.
+          </div>
+        ) : userType === "OPERATIONS" ? (
+          <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Operations users can manage Clients, Movies, Asset Types, Countries, Languages, Projects, Sub Projects, User Assignments, and Contact Persons.
           </div>
         ) : null}
 

@@ -30,6 +30,7 @@ const userTypes = [
   "REPORT_VIEWER",
   "ACCOUNTS",
   "HR",
+  "OPERATIONS",
 ] as const;
 
 type FunctionalRole = (typeof functionalRoles)[number];
@@ -147,8 +148,8 @@ export async function createUserAction(
       };
     }
 
-    if (actor.userType !== "ADMIN" && (parsed.data.userType === "MANAGER" || parsed.data.userType === "ADMIN" || parsed.data.userType === "HR")) {
-      return { success: false, error: "Only Admin can create Manager, Admin, or HR users." };
+    if (actor.userType !== "ADMIN" && (parsed.data.userType === "MANAGER" || parsed.data.userType === "ADMIN" || parsed.data.userType === "HR" || parsed.data.userType === "OPERATIONS")) {
+      return { success: false, error: "Only Admin can create Manager, Admin, HR, or Operations users." };
     }
 
     validateUserTypeRoleCombination(parsed.data.userType, parsed.data.functionalRole);
@@ -232,8 +233,13 @@ export async function updateUserAction(
       };
     }
 
-    if (actor.userType !== "ADMIN" && (parsed.data.userType === "MANAGER" || parsed.data.userType === "ADMIN" || parsed.data.userType === "HR")) {
-      return { success: false, error: "Only Admin can assign Manager, Admin, or HR user type." };
+    if (actor.userType !== "ADMIN" && (parsed.data.userType === "MANAGER" || parsed.data.userType === "ADMIN" || parsed.data.userType === "HR" || parsed.data.userType === "OPERATIONS")) {
+      return { success: false, error: "Only Admin can assign Manager, Admin, HR, or Operations user type." };
+    }
+
+    const targetUser = await db.user.findUnique({ where: { id: parsed.data.id }, select: { userType: true } });
+    if (actor.userType !== "ADMIN" && (parsed.data.userType === "OPERATIONS" || targetUser?.userType === "OPERATIONS")) {
+      return { success: false, error: "Only Admin can manage Operations users." };
     }
 
     validateUserTypeRoleCombination(parsed.data.userType, parsed.data.functionalRole);
@@ -279,12 +285,13 @@ export async function updateUserAction(
 }
 
 export async function toggleUserStatusAction(formData: FormData) {
-  await requireUserTypesForAction(["ADMIN", "HR"]);
+  const actor = await requireUserTypesForAction(["ADMIN", "HR"]);
   const userId = String(formData.get("userId") || "");
   if (!userId) throw new Error("User is required.");
 
   const user = await db.user.findUnique({ where: { id: userId } });
   if (!user) throw new Error("User not found.");
+  if (actor.userType !== "ADMIN" && user.userType === "OPERATIONS") throw new Error("Only Admin can manage Operations users.");
 
   await db.user.update({
     where: { id: userId },

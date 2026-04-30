@@ -7,7 +7,8 @@ export type CurrentUser = {
     | "EMPLOYEE"
     | "REPORT_VIEWER"
     | "ACCOUNTS"
-    | "HR";
+    | "HR"
+    | "OPERATIONS";
   functionalRole?:
     | "DEVELOPER"
     | "QA"
