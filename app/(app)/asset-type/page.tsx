@@ -2,8 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { db } from "@/lib/db";
-import { createAssetTypeAction, toggleAssetTypeStatusAction } from "@/lib/actions/asset-type-actions";
-import { AssetTypeForm } from "@/components/forms/asset-type-form";
+import { toggleAssetTypeStatusAction } from "@/lib/actions/asset-type-actions";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
@@ -34,18 +33,15 @@ export default async function AssetTypesPage({ searchParams }: { searchParams?: 
           <button className="btn-secondary" type="submit">Apply</button>
         </form>
       </div>
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="table-wrap">
-          <table className="table-base">
-            <thead className="table-head"><tr><th className="table-cell">Asset Type</th><th className="table-cell">Client</th><th className="table-cell">Cost</th><th className="table-cell">Status</th><th className="table-cell">Action</th></tr></thead>
-            <tbody className="divide-y divide-slate-100">
-              {paginatedAssetTypes.map((assetType) => (<tr key={assetType.id}><td className="table-cell"><div className="font-medium text-slate-900">{assetType.name}</div></td><td className="table-cell">{assetType.client.name}</td><td className="table-cell font-medium text-slate-900">{formatUsd(assetType.cost)}</td><td className="table-cell"><span className={assetType.isActive ? "badge-emerald" : "badge-slate"}>{assetType.isActive ? "Active" : "Inactive"}</span></td><td className="table-cell"><div className="flex gap-2"><Link href={`/asset-type/${assetType.id}`} className="btn-secondary text-xs">Edit</Link><form action={toggleAssetTypeStatusAction}><input type="hidden" name="assetTypeId" value={assetType.id} /><button className="btn-secondary text-xs">{assetType.isActive ? "Deactivate" : "Activate"}</button></form></div></td></tr>))}
-              {assetTypes.length === 0 ? (<tr><td colSpan={5} className="table-cell text-center text-sm text-slate-500">No asset types found.</td></tr>) : null}
-            </tbody>
-          </table>
-          <PaginationControls basePath="/asset-type" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, status, clientId }} />
-        </div>
-        <AssetTypeForm clients={clients} action={createAssetTypeAction} title="Create Asset Type" submitLabel="Create Asset Type" />
+      <div className="table-wrap">
+        <table className="table-base">
+          <thead className="table-head"><tr><th className="table-cell">Asset Type</th><th className="table-cell">Client</th><th className="table-cell">Cost</th><th className="table-cell">Status</th><th className="table-cell">Action</th></tr></thead>
+          <tbody className="divide-y divide-slate-100">
+            {paginatedAssetTypes.map((assetType) => (<tr key={assetType.id}><td className="table-cell"><div className="font-medium text-slate-900">{assetType.name}</div></td><td className="table-cell">{assetType.client.name}</td><td className="table-cell font-medium text-slate-900">{formatUsd(assetType.cost)}</td><td className="table-cell"><span className={assetType.isActive ? "badge-emerald" : "badge-slate"}>{assetType.isActive ? "Active" : "Inactive"}</span></td><td className="table-cell"><div className="flex gap-2"><Link href={`/asset-type/${assetType.id}`} className="btn-secondary text-xs">Edit</Link><form action={toggleAssetTypeStatusAction}><input type="hidden" name="assetTypeId" value={assetType.id} /><button className="btn-secondary text-xs">{assetType.isActive ? "Deactivate" : "Activate"}</button></form></div></td></tr>))}
+            {assetTypes.length === 0 ? (<tr><td colSpan={5} className="table-cell text-center text-sm text-slate-500">No asset types found.</td></tr>) : null}
+          </tbody>
+        </table>
+        <PaginationControls basePath="/asset-type" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, status, clientId }} />
       </div>
     </div>
   );

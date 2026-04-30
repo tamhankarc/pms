@@ -40,7 +40,7 @@ export function AssetTypeForm({ clients, action, initialValues, submitLabel, tit
           <FormLabel htmlFor="cost" required>Cost (US dollar)</FormLabel>
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
-            <input id="cost" name="cost" type="number" min="0" step="0.01" className="input pl-7" defaultValue={initialValues?.cost ?? "0.00"} required />
+            <input id="cost" name="cost" type="number" min="0" step="0.01" className="input currency-input" defaultValue={initialValues?.cost ?? "0.00"} required />
           </div>
         </div>
         <div>

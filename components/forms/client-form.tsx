@@ -62,7 +62,7 @@ export function ClientForm({ mode, action, initialValues }: ClientFormProps) {
           <FormLabel htmlFor="hourlyCost">Per hour cost (USD)</FormLabel>
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
-            <input id="hourlyCost" name="hourlyCost" type="number" min="0" step="0.01" className="input pl-7" defaultValue={initialValues?.hourlyCost ?? "0.00"} />
+            <input id="hourlyCost" name="hourlyCost" type="number" min="0" step="0.01" className="input currency-input" defaultValue={initialValues?.hourlyCost ?? "0.00"} />
           </div>
         </div>
 
