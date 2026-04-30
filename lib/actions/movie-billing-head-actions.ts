@@ -61,6 +61,7 @@ export async function createMovieBillingHeadAction(_prevState: MovieBillingHeadF
         isActive: Boolean(parsed.data.isActive),
       },
     });
+    revalidatePath("/client-billing-heads");
     revalidatePath("/movie-billing-heads");
     revalidatePath("/movies");
     return { success: true };
@@ -108,8 +109,9 @@ export async function updateMovieBillingHeadAction(_prevState: MovieBillingHeadF
         isActive: Boolean(parsed.data.isActive),
       },
     });
+    revalidatePath("/client-billing-heads");
     revalidatePath("/movie-billing-heads");
-    revalidatePath(`/movie-billing-heads/${parsed.data.id}`);
+    revalidatePath(`/client-billing-heads/${parsed.data.id}`);
     revalidatePath("/movies");
     return { success: true };
   } catch (error) {
@@ -124,6 +126,7 @@ export async function toggleMovieBillingHeadStatusAction(formData: FormData) {
   const head = await db.movieBillingHead.findUnique({ where: { id } });
   if (!head) throw new Error("Billing head not found.");
   await db.movieBillingHead.update({ where: { id }, data: { isActive: !head.isActive } });
+  revalidatePath("/client-billing-heads");
   revalidatePath("/movie-billing-heads");
-  revalidatePath(`/movie-billing-heads/${id}`);
+  revalidatePath(`/client-billing-heads/${id}`);
 }

@@ -115,7 +115,12 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (pathname === "/movie-billing-heads" || pathname.startsWith("/movie-billing-heads/")) {
+  if (
+    pathname === "/client-billing-heads" ||
+    pathname.startsWith("/client-billing-heads/") ||
+    pathname === "/movie-billing-heads" ||
+    pathname.startsWith("/movie-billing-heads/")
+  ) {
     if (session?.userType !== "ADMIN") {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }

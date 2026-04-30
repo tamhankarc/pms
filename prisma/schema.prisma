@@ -200,6 +200,7 @@ model Client {
   projectTypes   ProjectType[]
   contactPersons ContactPerson[]
   movieBillingHeads MovieBillingHead[]
+  movieBillingHeadAssignments MovieBillingHeadAssignment[]
 
   @@index([isActive])
 }
@@ -259,6 +260,7 @@ model Movie {
   client      Client      @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   estimates   Estimate[]
   timeEntries TimeEntry[]
+  movieBillingHeadAssignments MovieBillingHeadAssignment[]
 
   @@index([clientId, isActive])
   @@index([title])
@@ -281,10 +283,35 @@ model MovieBillingHead {
   updatedAt       DateTime                  @updatedAt
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  movieAssignments MovieBillingHeadAssignment[]
 
   @@unique([clientId, name])
   @@index([clientId, isActive])
   @@index([name])
+}
+
+
+model MovieBillingHeadAssignment {
+  id            String   @id @default(cuid())
+  clientId      String
+  countryId     String
+  movieId       String
+  billingHeadId String
+  units         Decimal? @db.Decimal(12, 2)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  client      Client           @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  country     Country          @relation(fields: [countryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  movie       Movie            @relation(fields: [movieId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  billingHead MovieBillingHead @relation(fields: [billingHeadId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([countryId, movieId, billingHeadId])
+  @@index([clientId])
+  @@index([movieId])
+  @@index([billingHeadId])
+  @@index([isActive])
 }
 
 model AssetType {
@@ -332,6 +359,7 @@ model Country {
 
   estimates   Estimate[]
   timeEntries TimeEntry[]
+  movieBillingHeadAssignments MovieBillingHeadAssignment[]
 
   @@index([isActive])
   @@index([name])
