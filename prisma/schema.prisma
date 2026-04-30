@@ -170,12 +170,32 @@ model Client {
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
-  movies       Movie[]
-  assetTypes   AssetType[]
-  projects     Project[]
-  projectTypes ProjectType[]
+  movies         Movie[]
+  assetTypes     AssetType[]
+  projects       Project[]
+  projectTypes   ProjectType[]
+  contactPersons ContactPerson[]
 
   @@index([isActive])
+}
+
+
+model ContactPerson {
+  id            String   @id @default(cuid())
+  clientId      String
+  projectId     String
+  name          String
+  email         String
+  contactNumber String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  client  Client  @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([email])
 }
 
 model ProjectType {
@@ -218,6 +238,7 @@ model AssetType {
   name        String
   code        String?  @unique
   description String?  @db.Text
+  cost        Decimal  @default(0) @db.Decimal(12, 2)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -293,6 +314,7 @@ model Project {
   estimates           Estimate[]
   timeEntries         TimeEntry[]
   billingTransactions BillingTransaction[]
+  contactPersons      ContactPerson[]
 
   @@index([clientId, isActive])
   @@index([projectTypeId])

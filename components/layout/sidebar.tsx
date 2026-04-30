@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   TimerReset,
   UserCog,
+  Contact,
   Layers3,
   Languages,
   ListChecks,
@@ -66,6 +67,7 @@ const fullItems: SidebarNavItem[] = [
   { href: "/sub-project", label: "Sub Projects", icon: Layers3 },
   { href: "/user-assignments", label: "User Assignments", icon: ListChecks },
   { href: "/users", label: "Users", icon: ShieldCheck },
+  { href: "/contact-persons", label: "Contact Persons", icon: Contact },
   { href: "/time-entries", label: "Time Entries", icon: TimerReset },
   { href: "/estimates", label: "Estimates", icon: ClipboardCheck },
   { href: "/team-lead-assignments", label: "Team Lead Assignments", icon: BriefcaseBusiness },
@@ -139,10 +141,11 @@ export function getSidebarItems(user: SessionUser, canAccessLeaveApprovals: bool
   }
 
   const merged = withLeaveItems(filterAccess(fullItems, user), user, canAccessLeaveApprovals);
-  if (!canManageUsers(user)) {
-    return merged.filter((item) => item.href !== "/users");
-  }
-  return merged;
+  return merged.filter((item) => {
+    if (item.href === "/users" && !canManageUsers(user)) return false;
+    if (item.href === "/contact-persons" && user.userType !== "ADMIN") return false;
+    return true;
+  });
 }
 
 export function Sidebar({ user, canAccessLeaveApprovals }: { user: SessionUser; canAccessLeaveApprovals: boolean }) {

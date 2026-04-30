@@ -7,6 +7,11 @@ import { AssetTypeForm } from "@/components/forms/asset-type-form";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
+function formatUsd(value: { toString: () => string } | number | string) {
+  const amount = Number(value.toString());
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number.isFinite(amount) ? amount : 0);
+}
+
 export default async function AssetTypesPage({ searchParams }: { searchParams?: Promise<{ q?: string; status?: string; clientId?: string; page?: string }>; }) {
   const params = (await searchParams) ?? {};
   const q = params.q?.trim() ?? "";
@@ -20,7 +25,7 @@ export default async function AssetTypesPage({ searchParams }: { searchParams?: 
   const { items: paginatedAssetTypes, currentPage, totalPages, totalItems, pageSize } = paginateItems(assetTypes, page, DEFAULT_PAGE_SIZE);
   return (
     <div>
-      <PageHeader title="Asset Types" description="Create and manage client-specific asset types. Asset Type code is generated automatically." actions={<Link href="/asset-type/new" className="btn-primary">Create Asset Type</Link>} />
+      <PageHeader title="Asset Types" description="Create and manage client-specific asset types with cost in US dollars. Asset Type code is generated automatically." actions={<Link href="/asset-type/new" className="btn-primary">Create Asset Type</Link>} />
       <div className="mb-6 card p-4">
         <form className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]" method="get">
           <input className="input" name="q" defaultValue={q} placeholder="Search by asset type name" />
@@ -32,10 +37,10 @@ export default async function AssetTypesPage({ searchParams }: { searchParams?: 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="table-wrap">
           <table className="table-base">
-            <thead className="table-head"><tr><th className="table-cell">Asset Type</th><th className="table-cell">Client</th><th className="table-cell">Status</th><th className="table-cell">Action</th></tr></thead>
+            <thead className="table-head"><tr><th className="table-cell">Asset Type</th><th className="table-cell">Client</th><th className="table-cell">Cost</th><th className="table-cell">Status</th><th className="table-cell">Action</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {paginatedAssetTypes.map((assetType) => (<tr key={assetType.id}><td className="table-cell"><div className="font-medium text-slate-900">{assetType.name}</div></td><td className="table-cell">{assetType.client.name}</td><td className="table-cell"><span className={assetType.isActive ? "badge-emerald" : "badge-slate"}>{assetType.isActive ? "Active" : "Inactive"}</span></td><td className="table-cell"><div className="flex gap-2"><Link href={`/asset-type/${assetType.id}`} className="btn-secondary text-xs">Edit</Link><form action={toggleAssetTypeStatusAction}><input type="hidden" name="assetTypeId" value={assetType.id} /><button className="btn-secondary text-xs">{assetType.isActive ? "Deactivate" : "Activate"}</button></form></div></td></tr>))}
-              {assetTypes.length === 0 ? (<tr><td colSpan={4} className="table-cell text-center text-sm text-slate-500">No asset types found.</td></tr>) : null}
+              {paginatedAssetTypes.map((assetType) => (<tr key={assetType.id}><td className="table-cell"><div className="font-medium text-slate-900">{assetType.name}</div></td><td className="table-cell">{assetType.client.name}</td><td className="table-cell font-medium text-slate-900">{formatUsd(assetType.cost)}</td><td className="table-cell"><span className={assetType.isActive ? "badge-emerald" : "badge-slate"}>{assetType.isActive ? "Active" : "Inactive"}</span></td><td className="table-cell"><div className="flex gap-2"><Link href={`/asset-type/${assetType.id}`} className="btn-secondary text-xs">Edit</Link><form action={toggleAssetTypeStatusAction}><input type="hidden" name="assetTypeId" value={assetType.id} /><button className="btn-secondary text-xs">{assetType.isActive ? "Deactivate" : "Activate"}</button></form></div></td></tr>))}
+              {assetTypes.length === 0 ? (<tr><td colSpan={5} className="table-cell text-center text-sm text-slate-500">No asset types found.</td></tr>) : null}
             </tbody>
           </table>
           <PaginationControls basePath="/asset-type" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, status, clientId }} />

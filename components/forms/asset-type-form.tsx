@@ -11,7 +11,7 @@ type Client = { id: string; name: string };
 export function AssetTypeForm({ clients, action, initialValues, submitLabel, title }: {
   clients: Client[];
   action: (state: AssetTypeFormState, formData: FormData) => Promise<AssetTypeFormState>;
-  initialValues?: { id?: string; clientId: string; name: string; description: string | null; isActive: boolean; };
+  initialValues?: { id?: string; clientId: string; name: string; description: string | null; cost: string | number; isActive: boolean; };
   submitLabel: string;
   title: string;
 }) {
@@ -35,6 +35,13 @@ export function AssetTypeForm({ clients, action, initialValues, submitLabel, tit
         <div>
           <FormLabel htmlFor="name" required>Asset Type name</FormLabel>
           <input id="name" name="name" className="input" defaultValue={initialValues?.name ?? ""} required />
+        </div>
+        <div>
+          <FormLabel htmlFor="cost" required>Cost (US dollar)</FormLabel>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
+            <input id="cost" name="cost" type="number" min="0" step="0.01" className="input pl-7" defaultValue={initialValues?.cost ?? "0.00"} required />
+          </div>
         </div>
         <div>
           <FormLabel htmlFor="description">Description</FormLabel>

@@ -62,6 +62,7 @@ export async function createClientAction(
     });
 
     revalidatePath("/clients");
+    revalidatePath("/clients/new");
     revalidatePath("/projects/new");
     revalidatePath("/movies");
     revalidatePath("/asset-type");
@@ -129,6 +130,7 @@ export async function updateClientAction(
     });
 
     revalidatePath("/clients");
+    revalidatePath("/clients/new");
     revalidatePath(`/clients/${parsed.data.id}`);
     revalidatePath(`/clients/${parsed.data.id}/project-types`);
     revalidatePath("/projects/new");

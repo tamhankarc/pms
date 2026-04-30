@@ -80,6 +80,13 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+
+  if (pathname === "/contact-persons" || pathname.startsWith("/contact-persons/")) {
+    if (session?.userType !== "ADMIN") {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+  }
+
   if (pathname === "/countries" || pathname.startsWith("/countries/")) {
     const allowed =
       session?.userType === "ADMIN" ||
