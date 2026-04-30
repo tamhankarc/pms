@@ -39,6 +39,7 @@ export function NewProjectForm({
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(false);
   const [hideMoviesInEntries, setHideMoviesInEntries] = useState(false);
   const [hideAssetTypesInEntries, setHideAssetTypesInEntries] = useState(false);
+  const [addToBilling, setAddToBilling] = useState(false);
   const [state, formAction, pending] = useActionState(createProjectAction, initialState);
 
   const selectedClient = clients.find((client) => client.id === clientId);
@@ -57,6 +58,7 @@ export function NewProjectForm({
       {hideCountriesInEntries ? <input type="hidden" name="hideCountriesInEntries" value="on" /> : null}
       {hideMoviesInEntries ? <input type="hidden" name="hideMoviesInEntries" value="on" /> : null}
       {hideAssetTypesInEntries ? <input type="hidden" name="hideAssetTypesInEntries" value="on" /> : null}
+      {addToBilling ? <input type="hidden" name="addToBilling" value="on" /> : null}
 
       <h2 className="section-title">Create project</h2>
       <p className="section-subtitle">
@@ -198,6 +200,11 @@ export function NewProjectForm({
             Hide asset type dropdown in Time Entries and Estimates for this project
           </label>
         ) : null}
+
+        <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <input type="checkbox" checked={addToBilling} onChange={(event) => setAddToBilling(event.target.checked)} />
+          Add to Billing
+        </label>
 
         {billingModel === "FIXED_FULL" ? (
           <div className="md:col-span-2">

@@ -19,6 +19,7 @@ const clientSchema = z.object({
   showAssetTypesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   showLanguagesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   enableProjectTypes: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  hourlyCost: z.coerce.number().min(0, "Per hour cost cannot be negative.").optional(),
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
 
@@ -36,6 +37,7 @@ export async function createClientAction(
       showAssetTypesInEntries: formData.get("showAssetTypesInEntries") ?? undefined,
       showLanguagesInEntries: formData.get("showLanguagesInEntries") ?? undefined,
       enableProjectTypes: formData.get("enableProjectTypes") ?? undefined,
+      hourlyCost: formData.get("hourlyCost") ?? "0",
       isActive: formData.get("isActive") ?? "on",
     });
 
@@ -57,6 +59,7 @@ export async function createClientAction(
         showAssetTypesInEntries: Boolean(parsed.data.showAssetTypesInEntries),
         showLanguagesInEntries: Boolean(parsed.data.showLanguagesInEntries),
         enableProjectTypes: Boolean(parsed.data.enableProjectTypes),
+        hourlyCost: parsed.data.hourlyCost ?? 0,
         isActive: Boolean(parsed.data.isActive),
       },
     });
@@ -94,6 +97,7 @@ export async function updateClientAction(
       showAssetTypesInEntries: formData.get("showAssetTypesInEntries") ?? undefined,
       showLanguagesInEntries: formData.get("showLanguagesInEntries") ?? undefined,
       enableProjectTypes: formData.get("enableProjectTypes") ?? undefined,
+      hourlyCost: formData.get("hourlyCost") ?? "0",
       isActive: formData.get("isActive") ?? undefined,
     });
 
@@ -125,6 +129,7 @@ export async function updateClientAction(
         showAssetTypesInEntries: Boolean(parsed.data.showAssetTypesInEntries),
         showLanguagesInEntries: Boolean(parsed.data.showLanguagesInEntries),
         enableProjectTypes: Boolean(parsed.data.enableProjectTypes),
+        hourlyCost: parsed.data.hourlyCost ?? 0,
         isActive: Boolean(parsed.data.isActive),
       },
     });

@@ -44,6 +44,7 @@ export function ProjectEditForm({
     hideCountriesInEntries: boolean;
     hideMoviesInEntries: boolean;
     hideAssetTypesInEntries: boolean;
+    addToBilling: boolean;
   };
 }) {
   const [billingModel, setBillingModel] = useState<BillingModel>(initialValues.billingModel);
@@ -52,6 +53,7 @@ export function ProjectEditForm({
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(initialValues.hideCountriesInEntries);
   const [hideMoviesInEntries, setHideMoviesInEntries] = useState(initialValues.hideMoviesInEntries);
   const [hideAssetTypesInEntries, setHideAssetTypesInEntries] = useState(initialValues.hideAssetTypesInEntries);
+  const [addToBilling, setAddToBilling] = useState(initialValues.addToBilling);
   const boundAction = updateProjectAction.bind(null, projectId);
   const [state, formAction, pending] = useActionState(boundAction, initialState);
 
@@ -63,6 +65,7 @@ export function ProjectEditForm({
       {hideCountriesInEntries ? <input type="hidden" name="hideCountriesInEntries" value="on" /> : null}
       {hideMoviesInEntries ? <input type="hidden" name="hideMoviesInEntries" value="on" /> : null}
       {hideAssetTypesInEntries ? <input type="hidden" name="hideAssetTypesInEntries" value="on" /> : null}
+      {addToBilling ? <input type="hidden" name="addToBilling" value="on" /> : null}
 
       <h2 className="section-title">Edit project</h2>
       <p className="section-subtitle">
@@ -187,6 +190,11 @@ export function ProjectEditForm({
             Hide asset type dropdown in Time Entries and Estimates for this project
           </label>
         ) : null}
+
+        <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <input type="checkbox" checked={addToBilling} onChange={(event) => setAddToBilling(event.target.checked)} />
+          Add to Billing
+        </label>
 
         {billingModel === "FIXED_FULL" ? (
           <div className="md:col-span-2">

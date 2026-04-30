@@ -212,6 +212,14 @@ async function validateClientFieldRequirements(
   return { valid: true as const };
 }
 
+
+async function validateFixedFullProject(projectId: string) {
+  const project = await db.project.findUnique({ where: { id: projectId }, select: { billingModel: true } });
+  if (!project) return { valid: false as const, error: "Project not found." };
+  if (project.billingModel !== "FIXED_FULL") return { valid: false as const, error: "Estimates can only be added to projects with Billing model Fixed Full." };
+  return { valid: true as const };
+}
+
 async function canActForEstimateEmployee(
   user: Awaited<ReturnType<typeof requireUserForAction>>,
   employeeId: string,
@@ -377,6 +385,11 @@ export async function createEstimateAction(
       return { success: false, error: "You cannot submit estimates to this project." };
     }
 
+    const fixedFullCheck = await validateFixedFullProject(parsed.data.projectId);
+    if (!fixedFullCheck.valid) {
+      return { success: false, error: fixedFullCheck.error };
+    }
+
     const employeeCanUseSelectedProject = await employeeCanUseProject(parsed.data.projectId, employeeId);
     if (!employeeCanUseSelectedProject) {
       return {
@@ -495,6 +508,11 @@ export async function updateEstimateAction(
     const canUseProject = await userCanUseProject(user, parsed.data.projectId);
     if (!canUseProject && !canFullyModerateProject(user)) {
       return { success: false, error: "You cannot use this project for the estimate." };
+    }
+
+    const fixedFullCheck = await validateFixedFullProject(parsed.data.projectId);
+    if (!fixedFullCheck.valid) {
+      return { success: false, error: fixedFullCheck.error };
     }
 
     const employeeCanUseSelectedProject = await employeeCanUseProject(parsed.data.projectId, estimate.employeeId);

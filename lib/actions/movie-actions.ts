@@ -16,6 +16,10 @@ const movieSchema = z.object({
   clientId: z.string().min(1, "Client is required."),
   title: z.string().min(2, "Movie title is required."),
   description: z.string().optional(),
+  billingDomestic: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  billingIntl: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  billingOther: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  otherCountryIds: z.array(z.string()).optional(),
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
 
@@ -30,6 +34,10 @@ export async function createMovieAction(
       clientId: formData.get("clientId"),
       title: formData.get("title"),
       description: formData.get("description") || "",
+      billingDomestic: formData.get("billingDomestic") ?? undefined,
+      billingIntl: formData.get("billingIntl") ?? undefined,
+      billingOther: formData.get("billingOther") ?? undefined,
+      otherCountryIds: formData.getAll("otherCountryIds").map(String),
       isActive: formData.get("isActive") ?? "on",
     });
 
@@ -40,6 +48,10 @@ export async function createMovieAction(
       };
     }
 
+    if ((parsed.data.billingDomestic || parsed.data.billingIntl) && parsed.data.billingOther) return { success: false, error: "Domestic/INTL and Other cannot be selected together." };
+    if (!parsed.data.billingDomestic && !parsed.data.billingIntl && !parsed.data.billingOther) return { success: false, error: "Select at least one movie billing region." };
+    if (parsed.data.billingOther && !(parsed.data.otherCountryIds?.length)) return { success: false, error: "Select one or more countries for Other billing region." };
+
     const generatedCode = await generateMovieCode(parsed.data.clientId, parsed.data.title);
 
     await db.movie.create({
@@ -48,6 +60,22 @@ export async function createMovieAction(
         title: parsed.data.title.trim(),
         code: generatedCode,
         description: parsed.data.description?.trim() || null,
+        billingRegion: parsed.data.billingOther ? "OTHER" : parsed.data.billingIntl && !parsed.data.billingDomestic ? "INTL" : "DOMESTIC",
+        billingDomestic: Boolean(parsed.data.billingDomestic),
+        billingIntl: Boolean(parsed.data.billingIntl),
+        billingOther: Boolean(parsed.data.billingOther),
+        otherCountryIds: parsed.data.billingOther ? JSON.stringify(parsed.data.otherCountryIds ?? []) : null,
+        billingUnitsJson: JSON.stringify(
+          Object.fromEntries(
+            Array.from(formData.entries())
+              .filter(([key]) => key.startsWith("billingHeadUnit_"))
+              .map(([key, value]): [string, number] => [
+                key.replace("billingHeadUnit_", ""),
+                Number(value || 0),
+              ])
+              .filter(([, value]) => Number.isFinite(value) && value > 0)
+          )
+        ),
         isActive: Boolean(parsed.data.isActive),
       },
     });
@@ -77,6 +105,10 @@ export async function updateMovieAction(
       clientId: formData.get("clientId"),
       title: formData.get("title"),
       description: formData.get("description") || "",
+      billingDomestic: formData.get("billingDomestic") ?? undefined,
+      billingIntl: formData.get("billingIntl") ?? undefined,
+      billingOther: formData.get("billingOther") ?? undefined,
+      otherCountryIds: formData.getAll("otherCountryIds").map(String),
       isActive: formData.get("isActive") ?? undefined,
     });
 
@@ -96,6 +128,10 @@ export async function updateMovieAction(
       return { success: false, error: "Movie not found." };
     }
 
+    if ((parsed.data.billingDomestic || parsed.data.billingIntl) && parsed.data.billingOther) return { success: false, error: "Domestic/INTL and Other cannot be selected together." };
+    if (!parsed.data.billingDomestic && !parsed.data.billingIntl && !parsed.data.billingOther) return { success: false, error: "Select at least one movie billing region." };
+    if (parsed.data.billingOther && !(parsed.data.otherCountryIds?.length)) return { success: false, error: "Select one or more countries for Other billing region." };
+
     const code = existingMovie.code?.trim() || (await generateMovieCode(parsed.data.clientId, parsed.data.title));
 
     await db.movie.update({
@@ -105,6 +141,22 @@ export async function updateMovieAction(
         title: parsed.data.title.trim(),
         code,
         description: parsed.data.description?.trim() || null,
+        billingRegion: parsed.data.billingOther ? "OTHER" : parsed.data.billingIntl && !parsed.data.billingDomestic ? "INTL" : "DOMESTIC",
+        billingDomestic: Boolean(parsed.data.billingDomestic),
+        billingIntl: Boolean(parsed.data.billingIntl),
+        billingOther: Boolean(parsed.data.billingOther),
+        otherCountryIds: parsed.data.billingOther ? JSON.stringify(parsed.data.otherCountryIds ?? []) : null,
+        billingUnitsJson: JSON.stringify(
+          Object.fromEntries(
+            Array.from(formData.entries())
+              .filter(([key]) => key.startsWith("billingHeadUnit_"))
+              .map(([key, value]): [string, number] => [
+                key.replace("billingHeadUnit_", ""),
+                Number(value || 0),
+              ])
+              .filter(([, value]) => Number.isFinite(value) && value > 0)
+          )
+        ),
         isActive: Boolean(parsed.data.isActive),
       },
     });

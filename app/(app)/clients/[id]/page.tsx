@@ -100,6 +100,7 @@ export default async function ClientEditPage({ params }: { params: Promise<{ id:
             showAssetTypesInEntries: client.showAssetTypesInEntries,
             showLanguagesInEntries: client.showLanguagesInEntries,
             enableProjectTypes: client.enableProjectTypes,
+            hourlyCost: Number(client.hourlyCost ?? 0).toFixed(2),
           }}
         />
       </div>

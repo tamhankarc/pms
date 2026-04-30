@@ -69,6 +69,7 @@ export default async function EditProjectPage({
           hideCountriesInEntries: project.hideCountriesInEntries,
           hideMoviesInEntries: project.hideMoviesInEntries,
           hideAssetTypesInEntries: project.hideAssetTypesInEntries,
+          addToBilling: project.addToBilling,
         }}
       />
     </div>

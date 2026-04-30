@@ -66,6 +66,22 @@ enum BillingTransactionType {
   ADJUSTMENT
 }
 
+enum MovieBillingHeadCompulsion {
+  FIXED_COMPULSORY
+  FIXED_OPTIONAL
+}
+
+enum MovieBillingHeadCostType {
+  WHOLE_COST
+  PER_UNIT_COST
+}
+
+enum MovieBillingRegion {
+  DOMESTIC
+  INTL
+  OTHER
+}
+
 
 enum AttendanceActionType {
   MARK_IN
@@ -167,6 +183,7 @@ model Client {
   showAssetTypesInEntries    Boolean  @default(false)
   showLanguagesInEntries     Boolean  @default(false)
   enableProjectTypes         Boolean  @default(false)
+  hourlyCost                 Decimal  @default(0) @db.Decimal(12, 2)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
@@ -175,6 +192,7 @@ model Client {
   projects       Project[]
   projectTypes   ProjectType[]
   contactPersons ContactPerson[]
+  movieBillingHeads MovieBillingHead[]
 
   @@index([isActive])
 }
@@ -220,6 +238,12 @@ model Movie {
   title       String
   code        String?  @unique
   description String?  @db.Text
+  billingRegion MovieBillingRegion @default(DOMESTIC)
+  billingDomestic Boolean @default(true)
+  billingIntl Boolean @default(false)
+  billingOther Boolean @default(false)
+  otherCountryIds String? @db.Text
+  billingUnitsJson String? @db.Text
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -230,6 +254,25 @@ model Movie {
 
   @@index([clientId, isActive])
   @@index([title])
+}
+
+model MovieBillingHead {
+  id              String                    @id @default(cuid())
+  clientId        String
+  name            String
+  compulsionType  MovieBillingHeadCompulsion @default(FIXED_COMPULSORY)
+  costType        MovieBillingHeadCostType   @default(WHOLE_COST)
+  domesticCost    Decimal                   @default(0) @db.Decimal(12, 2)
+  intlCost        Decimal                   @default(0) @db.Decimal(12, 2)
+  isActive        Boolean                   @default(true)
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([clientId, name])
+  @@index([clientId, isActive])
+  @@index([name])
 }
 
 model AssetType {
@@ -303,6 +346,7 @@ model Project {
   hideCountriesInEntries Boolean   @default(false)
   hideMoviesInEntries    Boolean   @default(false)
   hideAssetTypesInEntries Boolean   @default(false)
+  addToBilling Boolean @default(false)
 
   client      Client       @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   projectType ProjectType? @relation(fields: [projectTypeId], references: [id], onDelete: SetNull, onUpdate: Cascade)

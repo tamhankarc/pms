@@ -49,7 +49,7 @@ export default async function EditEstimatePage({
       orderBy: { name: "asc" },
     }),
     db.project.findMany({
-      where: { isActive: true, status: { in: ["ACTIVE", "ON_HOLD"] } },
+      where: { isActive: true, status: { in: ["ACTIVE", "ON_HOLD"] }, billingModel: "FIXED_FULL" },
       include: {
         client: true,
         assignedUsers: true,
@@ -57,7 +57,7 @@ export default async function EditEstimatePage({
       orderBy: { name: "asc" },
     }),
     db.subProject.findMany({
-      where: { isActive: true, project: { isActive: true, status: { in: ["ACTIVE", "ON_HOLD"] } } },
+      where: { isActive: true, project: { isActive: true, status: { in: ["ACTIVE", "ON_HOLD"] }, billingModel: "FIXED_FULL" } },
       include: { assignments: true },
       orderBy: { name: "asc" },
     })

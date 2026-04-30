@@ -18,11 +18,13 @@ export default async function MoviesPage({
   const clientId = params.clientId ?? "all";
   const page = parsePageParam(params.page);
 
-  const [clients, movies] = await Promise.all([
+  const [clients, countries, billingHeads, movies] = await Promise.all([
     db.client.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
     }),
+    db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.movieBillingHead.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, clientId: true, costType: true } }),
     db.movie.findMany({
       where: {
         ...(q ? { title: { contains: q } } : {}),
@@ -85,6 +87,7 @@ export default async function MoviesPage({
               <tr>
                 <th className="table-cell">Movie</th>
                 <th className="table-cell">Client</th>
+                <th className="table-cell">Billing Region</th>
                 <th className="table-cell">Status</th>
                 <th className="table-cell">Action</th>
               </tr>
@@ -96,6 +99,7 @@ export default async function MoviesPage({
                     <div className="font-medium text-slate-900">{movie.title}</div>
                   </td>
                   <td className="table-cell">{movie.client.name}</td>
+                  <td className="table-cell">{[movie.billingDomestic ? "Domestic" : null, movie.billingIntl ? "INTL" : null, movie.billingOther ? "Other" : null].filter(Boolean).join(", ") || ""}</td>
                   <td className="table-cell">
                     <span className={movie.isActive ? "badge-emerald" : "badge-slate"}>
                       {movie.isActive ? "Active" : "Inactive"}
@@ -118,7 +122,7 @@ export default async function MoviesPage({
               ))}
               {movies.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="table-cell text-center text-sm text-slate-500">
+                  <td colSpan={5} className="table-cell text-center text-sm text-slate-500">
                     No movies found.
                   </td>
                 </tr>
@@ -128,7 +132,7 @@ export default async function MoviesPage({
           <PaginationControls basePath="/movies" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, status, clientId }} />
         </div>
 
-        <MovieForm clients={clients} action={createMovieAction} title="Create movie" submitLabel="Create movie" />
+        <MovieForm clients={clients} countries={countries} billingHeads={billingHeads} action={createMovieAction} title="Create movie" submitLabel="Create movie" />
       </div>
     </div>
   );

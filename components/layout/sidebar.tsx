@@ -16,6 +16,7 @@ import {
   TimerReset,
   UserCog,
   Contact,
+  ReceiptText,
   Layers3,
   Languages,
   ListChecks,
@@ -60,6 +61,7 @@ const fullItems: SidebarNavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/clients", label: "Clients", icon: Building2 },
   { href: "/movies", label: "Movies", icon: Clapperboard },
+  { href: "/movie-billing-heads", label: "Movie Billing Heads", icon: ReceiptText },
   { href: "/asset-type", label: "Asset Types", icon: Box },
   { href: "/countries", label: "Countries", icon: Globe2, access: "countries" },
   { href: "/languages", label: "Languages", icon: Languages, access: "languages" },
@@ -80,6 +82,7 @@ const teamLeadItems: SidebarNavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/clients", label: "Clients", icon: Building2 },
   { href: "/movies", label: "Movies", icon: Clapperboard },
+  { href: "/movie-billing-heads", label: "Movie Billing Heads", icon: ReceiptText },
   { href: "/asset-type", label: "Asset Types", icon: Box },
   { href: "/countries", label: "Countries", icon: Globe2, access: "countries" },
   { href: "/languages", label: "Languages", icon: Languages, access: "languages" },
@@ -144,6 +147,7 @@ export function getSidebarItems(user: SessionUser, canAccessLeaveApprovals: bool
   return merged.filter((item) => {
     if (item.href === "/users" && !canManageUsers(user)) return false;
     if (item.href === "/contact-persons" && user.userType !== "ADMIN") return false;
+    if (item.href === "/movie-billing-heads" && user.userType !== "ADMIN") return false;
     return true;
   });
 }
