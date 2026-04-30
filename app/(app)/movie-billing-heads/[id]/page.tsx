@@ -14,5 +14,27 @@ export default async function EditMovieBillingHeadPage({ params }: { params: Pro
     db.client.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
   if (!head) notFound();
-  return <div className="mx-auto max-w-3xl space-y-6"><PageHeader title={`Edit Billing Head · ${head.name}`} description="Update client-specific movie billing head details." actions={<Link href="/movie-billing-heads" className="btn-secondary">Back to Billing Heads</Link>} /><MovieBillingHeadForm clients={clients} action={updateMovieBillingHeadAction} title="Edit billing head" submitLabel="Save changes" initialValues={{ id: head.id, clientId: head.clientId, name: head.name, compulsionType: head.compulsionType, costType: head.costType, domesticCost: Number(head.domesticCost).toFixed(2), intlCost: Number(head.intlCost).toFixed(2), isActive: head.isActive }} /></div>;
+  return (
+    <div className="mx-auto max-w-3xl space-y-6">
+      <PageHeader title={`Edit Billing Head · ${head.name}`} description="Update client-specific movie billing head details." actions={<Link href="/movie-billing-heads" className="btn-secondary">Back to Billing Heads</Link>} />
+      <MovieBillingHeadForm
+        clients={clients}
+        action={updateMovieBillingHeadAction}
+        title="Edit billing head"
+        submitLabel="Save changes"
+        initialValues={{
+          id: head.id,
+          clientId: head.clientId,
+          name: head.name,
+          compulsionType: head.compulsionType,
+          domesticCompulsionType: head.domesticCompulsionType ?? head.compulsionType,
+          intlCompulsionType: head.intlCompulsionType ?? head.compulsionType,
+          costType: head.costType,
+          domesticCost: Number(head.domesticCost).toFixed(2),
+          intlCost: Number(head.intlCost).toFixed(2),
+          isActive: head.isActive,
+        }}
+      />
+    </div>
+  );
 }

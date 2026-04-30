@@ -11,7 +11,9 @@ const schema = z.object({
   id: z.string().optional(),
   clientId: z.string().min(1, "Client is required."),
   name: z.string().trim().min(2, "Billing head name is required."),
-  compulsionType: z.enum(["FIXED_COMPULSORY", "FIXED_OPTIONAL"]),
+  compulsionType: z.enum(["FIXED_COMPULSORY", "FIXED_OPTIONAL"]).optional(),
+  domesticCompulsionType: z.enum(["FIXED_COMPULSORY", "FIXED_OPTIONAL"]),
+  intlCompulsionType: z.enum(["FIXED_COMPULSORY", "FIXED_OPTIONAL"]),
   costType: z.enum(["WHOLE_COST", "PER_UNIT_COST"]),
   domesticCost: z.coerce.number().min(0, "Domestic cost cannot be negative."),
   intlCost: z.coerce.number().min(0, "INTL cost cannot be negative."),
@@ -21,10 +23,14 @@ const schema = z.object({
 export async function createMovieBillingHeadAction(_prevState: MovieBillingHeadFormState, formData: FormData): Promise<MovieBillingHeadFormState> {
   try {
     await requireUserTypesForAction(["ADMIN"]);
+    const domesticCompulsionType = formData.get("domesticCompulsionType") ?? formData.get("compulsionType") ?? "FIXED_COMPULSORY";
+    const intlCompulsionType = formData.get("intlCompulsionType") ?? formData.get("compulsionType") ?? "FIXED_COMPULSORY";
     const parsed = schema.safeParse({
       clientId: formData.get("clientId"),
       name: formData.get("name"),
-      compulsionType: formData.get("compulsionType"),
+      compulsionType: formData.get("compulsionType") ?? domesticCompulsionType,
+      domesticCompulsionType,
+      intlCompulsionType,
       costType: formData.get("costType"),
       domesticCost: formData.get("domesticCost") ?? "0",
       intlCost: formData.get("intlCost") ?? "0",
@@ -35,7 +41,9 @@ export async function createMovieBillingHeadAction(_prevState: MovieBillingHeadF
       data: {
         clientId: parsed.data.clientId,
         name: parsed.data.name,
-        compulsionType: parsed.data.compulsionType,
+        compulsionType: parsed.data.domesticCompulsionType,
+        domesticCompulsionType: parsed.data.domesticCompulsionType,
+        intlCompulsionType: parsed.data.intlCompulsionType,
         costType: parsed.data.costType,
         domesticCost: parsed.data.domesticCost,
         intlCost: parsed.data.intlCost,
@@ -53,11 +61,15 @@ export async function createMovieBillingHeadAction(_prevState: MovieBillingHeadF
 export async function updateMovieBillingHeadAction(_prevState: MovieBillingHeadFormState, formData: FormData): Promise<MovieBillingHeadFormState> {
   try {
     await requireUserTypesForAction(["ADMIN"]);
+    const domesticCompulsionType = formData.get("domesticCompulsionType") ?? formData.get("compulsionType") ?? "FIXED_COMPULSORY";
+    const intlCompulsionType = formData.get("intlCompulsionType") ?? formData.get("compulsionType") ?? "FIXED_COMPULSORY";
     const parsed = schema.safeParse({
       id: formData.get("id"),
       clientId: formData.get("clientId"),
       name: formData.get("name"),
-      compulsionType: formData.get("compulsionType"),
+      compulsionType: formData.get("compulsionType") ?? domesticCompulsionType,
+      domesticCompulsionType,
+      intlCompulsionType,
       costType: formData.get("costType"),
       domesticCost: formData.get("domesticCost") ?? "0",
       intlCost: formData.get("intlCost") ?? "0",
@@ -69,7 +81,9 @@ export async function updateMovieBillingHeadAction(_prevState: MovieBillingHeadF
       data: {
         clientId: parsed.data.clientId,
         name: parsed.data.name,
-        compulsionType: parsed.data.compulsionType,
+        compulsionType: parsed.data.domesticCompulsionType,
+        domesticCompulsionType: parsed.data.domesticCompulsionType,
+        intlCompulsionType: parsed.data.intlCompulsionType,
         costType: parsed.data.costType,
         domesticCost: parsed.data.domesticCost,
         intlCost: parsed.data.intlCost,
