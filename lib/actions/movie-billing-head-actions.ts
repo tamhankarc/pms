@@ -7,11 +7,15 @@ import { requireUserTypesForAction } from "@/lib/auth";
 
 export type MovieBillingHeadFormState = { success?: boolean; error?: string };
 
+const checkboxSchema = z.preprocess((value) => value === "on" || value === "true" || value === "1", z.boolean());
+
 const schema = z.object({
   id: z.string().optional(),
   clientId: z.string().min(1, "Client is required."),
   name: z.string().trim().min(2, "Billing head name is required."),
   compulsionType: z.enum(["FIXED_COMPULSORY", "FIXED_OPTIONAL"]).optional(),
+  domesticActive: checkboxSchema,
+  intlActive: checkboxSchema,
   domesticCompulsionType: z.enum(["FIXED_COMPULSORY", "FIXED_OPTIONAL"]),
   intlCompulsionType: z.enum(["FIXED_COMPULSORY", "FIXED_OPTIONAL"]),
   costType: z.enum(["WHOLE_COST", "PER_UNIT_COST"]),
@@ -23,12 +27,16 @@ const schema = z.object({
 export async function createMovieBillingHeadAction(_prevState: MovieBillingHeadFormState, formData: FormData): Promise<MovieBillingHeadFormState> {
   try {
     await requireUserTypesForAction(["ADMIN"]);
+    const domesticActive = formData.get("domesticActive") ?? "off";
+    const intlActive = formData.get("intlActive") ?? "off";
     const domesticCompulsionType = formData.get("domesticCompulsionType") ?? formData.get("compulsionType") ?? "FIXED_COMPULSORY";
     const intlCompulsionType = formData.get("intlCompulsionType") ?? formData.get("compulsionType") ?? "FIXED_COMPULSORY";
     const parsed = schema.safeParse({
       clientId: formData.get("clientId"),
       name: formData.get("name"),
       compulsionType: formData.get("compulsionType") ?? domesticCompulsionType,
+      domesticActive,
+      intlActive,
       domesticCompulsionType,
       intlCompulsionType,
       costType: formData.get("costType"),
@@ -37,6 +45,7 @@ export async function createMovieBillingHeadAction(_prevState: MovieBillingHeadF
       isActive: formData.get("isActive") ?? "on",
     });
     if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message || "Invalid billing head payload." };
+    if (!parsed.data.domesticActive && !parsed.data.intlActive) return { success: false, error: "Activate Domestic, INTL, or both for this billing head." };
     await db.movieBillingHead.create({
       data: {
         clientId: parsed.data.clientId,
@@ -44,9 +53,11 @@ export async function createMovieBillingHeadAction(_prevState: MovieBillingHeadF
         compulsionType: parsed.data.domesticCompulsionType,
         domesticCompulsionType: parsed.data.domesticCompulsionType,
         intlCompulsionType: parsed.data.intlCompulsionType,
+        domesticActive: parsed.data.domesticActive,
+        intlActive: parsed.data.intlActive,
         costType: parsed.data.costType,
-        domesticCost: parsed.data.domesticCost,
-        intlCost: parsed.data.intlCost,
+        domesticCost: parsed.data.domesticActive ? parsed.data.domesticCost : 0,
+        intlCost: parsed.data.intlActive ? parsed.data.intlCost : 0,
         isActive: Boolean(parsed.data.isActive),
       },
     });
@@ -61,6 +72,8 @@ export async function createMovieBillingHeadAction(_prevState: MovieBillingHeadF
 export async function updateMovieBillingHeadAction(_prevState: MovieBillingHeadFormState, formData: FormData): Promise<MovieBillingHeadFormState> {
   try {
     await requireUserTypesForAction(["ADMIN"]);
+    const domesticActive = formData.get("domesticActive") ?? "off";
+    const intlActive = formData.get("intlActive") ?? "off";
     const domesticCompulsionType = formData.get("domesticCompulsionType") ?? formData.get("compulsionType") ?? "FIXED_COMPULSORY";
     const intlCompulsionType = formData.get("intlCompulsionType") ?? formData.get("compulsionType") ?? "FIXED_COMPULSORY";
     const parsed = schema.safeParse({
@@ -68,6 +81,8 @@ export async function updateMovieBillingHeadAction(_prevState: MovieBillingHeadF
       clientId: formData.get("clientId"),
       name: formData.get("name"),
       compulsionType: formData.get("compulsionType") ?? domesticCompulsionType,
+      domesticActive,
+      intlActive,
       domesticCompulsionType,
       intlCompulsionType,
       costType: formData.get("costType"),
@@ -76,6 +91,7 @@ export async function updateMovieBillingHeadAction(_prevState: MovieBillingHeadF
       isActive: formData.get("isActive") ?? undefined,
     });
     if (!parsed.success || !parsed.data.id) return { success: false, error: parsed.success ? "Billing head is required." : parsed.error.issues[0]?.message };
+    if (!parsed.data.domesticActive && !parsed.data.intlActive) return { success: false, error: "Activate Domestic, INTL, or both for this billing head." };
     await db.movieBillingHead.update({
       where: { id: parsed.data.id },
       data: {
@@ -84,9 +100,11 @@ export async function updateMovieBillingHeadAction(_prevState: MovieBillingHeadF
         compulsionType: parsed.data.domesticCompulsionType,
         domesticCompulsionType: parsed.data.domesticCompulsionType,
         intlCompulsionType: parsed.data.intlCompulsionType,
+        domesticActive: parsed.data.domesticActive,
+        intlActive: parsed.data.intlActive,
         costType: parsed.data.costType,
-        domesticCost: parsed.data.domesticCost,
-        intlCost: parsed.data.intlCost,
+        domesticCost: parsed.data.domesticActive ? parsed.data.domesticCost : 0,
+        intlCost: parsed.data.intlActive ? parsed.data.intlCost : 0,
         isActive: Boolean(parsed.data.isActive),
       },
     });

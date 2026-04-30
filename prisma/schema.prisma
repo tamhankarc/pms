@@ -83,6 +83,12 @@ enum MovieBillingRegion {
   OTHER
 }
 
+enum MovieStatus {
+  WORKING
+  COMPLETED
+  COMPLETED_BILLED
+}
+
 
 enum AttendanceActionType {
   MARK_IN
@@ -245,6 +251,7 @@ model Movie {
   billingOther Boolean @default(false)
   otherCountryIds String? @db.Text
   billingUnitsJson String? @db.Text
+  status      MovieStatus @default(WORKING)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -264,6 +271,8 @@ model MovieBillingHead {
   compulsionType         MovieBillingHeadCompulsion @default(FIXED_COMPULSORY)
   domesticCompulsionType MovieBillingHeadCompulsion @default(FIXED_COMPULSORY)
   intlCompulsionType     MovieBillingHeadCompulsion @default(FIXED_COMPULSORY)
+  domesticActive         Boolean                   @default(true)
+  intlActive             Boolean                   @default(true)
   costType               MovieBillingHeadCostType   @default(WHOLE_COST)
   domesticCost           Decimal                   @default(0) @db.Decimal(12, 2)
   intlCost               Decimal                   @default(0) @db.Decimal(12, 2)

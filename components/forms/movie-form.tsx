@@ -8,20 +8,28 @@ import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 
 type Client = { id: string; name: string };
 type Country = { id: string; name: string };
+type MovieStatus = "WORKING" | "COMPLETED" | "COMPLETED_BILLED";
 type BillingHead = { id: string; name: string; clientId: string; costType: "WHOLE_COST" | "PER_UNIT_COST" };
 const initialState: MovieFormState = {};
+
+const movieStatusOptions = [
+  { value: "WORKING", label: "Working" },
+  { value: "COMPLETED", label: "Completed" },
+  { value: "COMPLETED_BILLED", label: "Completed & Billed" },
+];
 
 export function MovieForm({ clients, countries = [], billingHeads = [], action, initialValues, submitLabel, title }: {
   clients: Client[];
   countries?: Country[];
   billingHeads?: BillingHead[];
   action: (state: MovieFormState, formData: FormData) => Promise<MovieFormState>;
-  initialValues?: { id?: string; clientId: string; title: string; description: string | null; isActive: boolean; billingDomestic?: boolean; billingIntl?: boolean; billingOther?: boolean; otherCountryIds?: string[]; billingUnits?: Record<string, number> };
+  initialValues?: { id?: string; clientId: string; title: string; description: string | null; status?: MovieStatus; isActive: boolean; billingDomestic?: boolean; billingIntl?: boolean; billingOther?: boolean; otherCountryIds?: string[]; billingUnits?: Record<string, number> };
   submitLabel: string;
   title: string;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [selectedClientId, setSelectedClientId] = useState(initialValues?.clientId ?? "");
+  const [movieStatus, setMovieStatus] = useState<MovieStatus>(initialValues?.status ?? "WORKING");
   const [billingDomestic, setBillingDomestic] = useState(initialValues?.billingDomestic ?? true);
   const [billingIntl, setBillingIntl] = useState(initialValues?.billingIntl ?? false);
   const [billingOther, setBillingOther] = useState(initialValues?.billingOther ?? false);
@@ -36,6 +44,7 @@ export function MovieForm({ clients, countries = [], billingHeads = [], action, 
     <form action={formAction} className="card p-6">
       {initialValues?.id ? <input type="hidden" name="id" value={initialValues.id} /> : null}
       <input type="hidden" name="clientId" value={selectedClientId} />
+      <input type="hidden" name="status" value={movieStatus} />
       {billingDomestic ? <input type="hidden" name="billingDomestic" value="on" /> : null}
       {billingIntl ? <input type="hidden" name="billingIntl" value="on" /> : null}
       {billingOther ? <input type="hidden" name="billingOther" value="on" /> : null}
@@ -47,6 +56,7 @@ export function MovieForm({ clients, countries = [], billingHeads = [], action, 
       <div className="mt-5 space-y-4">
         <div><FormLabel htmlFor="clientId" required>Client</FormLabel><SearchableCombobox id="clientId" options={clientOptions} value={selectedClientId} onValueChange={(value) => { setSelectedClientId(value); }} placeholder="Select client" searchPlaceholder="Search clients..." emptyLabel="No client found." /></div>
         <div><FormLabel htmlFor="title" required>Movie title</FormLabel><input id="title" name="title" className="input" defaultValue={initialValues?.title ?? ""} required /></div>
+        <div><FormLabel htmlFor="status" required>Status</FormLabel><SearchableCombobox id="status" options={movieStatusOptions} value={movieStatus} onValueChange={(value) => setMovieStatus(value as MovieStatus)} placeholder="Select status" searchPlaceholder="Search statuses..." emptyLabel="No status found." required /></div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <FormLabel required>Billing region</FormLabel>
           <div className="mt-3 grid gap-3 md:grid-cols-3">

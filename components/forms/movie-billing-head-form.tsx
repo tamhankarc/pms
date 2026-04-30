@@ -30,6 +30,8 @@ export function MovieBillingHeadForm({ clients, action, initialValues, submitLab
     compulsionType?: CompulsionType;
     domesticCompulsionType?: CompulsionType;
     intlCompulsionType?: CompulsionType;
+    domesticActive?: boolean;
+    intlActive?: boolean;
     costType: CostType;
     domesticCost: string | number;
     intlCost: string | number;
@@ -40,6 +42,8 @@ export function MovieBillingHeadForm({ clients, action, initialValues, submitLab
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [clientId, setClientId] = useState(initialValues?.clientId ?? "");
+  const [domesticActive, setDomesticActive] = useState(initialValues?.domesticActive ?? true);
+  const [intlActive, setIntlActive] = useState(initialValues?.intlActive ?? true);
   const [domesticCompulsionType, setDomesticCompulsionType] = useState<CompulsionType>(initialValues?.domesticCompulsionType ?? initialValues?.compulsionType ?? "FIXED_COMPULSORY");
   const [intlCompulsionType, setIntlCompulsionType] = useState<CompulsionType>(initialValues?.intlCompulsionType ?? initialValues?.compulsionType ?? "FIXED_COMPULSORY");
   const [costType, setCostType] = useState<CostType>(initialValues?.costType ?? "WHOLE_COST");
@@ -49,6 +53,8 @@ export function MovieBillingHeadForm({ clients, action, initialValues, submitLab
     <form action={formAction} className="card p-6">
       {initialValues?.id ? <input type="hidden" name="id" value={initialValues.id} /> : null}
       <input type="hidden" name="clientId" value={clientId} />
+      <input type="hidden" name="domesticActive" value={domesticActive ? "on" : "off"} />
+      <input type="hidden" name="intlActive" value={intlActive ? "on" : "off"} />
       <input type="hidden" name="domesticCompulsionType" value={domesticCompulsionType} />
       <input type="hidden" name="intlCompulsionType" value={intlCompulsionType} />
       <input type="hidden" name="compulsionType" value={domesticCompulsionType} />
@@ -62,22 +68,36 @@ export function MovieBillingHeadForm({ clients, action, initialValues, submitLab
         <div className="md:col-span-2"><FormLabel htmlFor="name" required>Billing head name</FormLabel><input id="name" name="name" className="input" defaultValue={initialValues?.name ?? ""} required /></div>
         <div className="md:col-span-2"><FormLabel htmlFor="costType" required>Cost type</FormLabel><SearchableCombobox id="costType" value={costType} onValueChange={(v) => setCostType(v as CostType)} options={costTypeOptions} placeholder="Select cost type" searchPlaceholder="Search cost types..." emptyLabel="No cost type found." required /></div>
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <h3 className="text-sm font-semibold text-slate-900">Domestic billing</h3>
-          <p className="mt-1 text-xs text-slate-500">Head type and cost used for US country billing.</p>
-          <div className="mt-4 space-y-4">
-            <div><FormLabel htmlFor="domesticCompulsionType" required>Head type - Domestic</FormLabel><SearchableCombobox id="domesticCompulsionType" value={domesticCompulsionType} onValueChange={(v) => setDomesticCompulsionType(v as CompulsionType)} options={headTypeOptions} placeholder="Select domestic type" searchPlaceholder="Search types..." emptyLabel="No type found." required /></div>
-            <div><FormLabel htmlFor="domesticCost" required>Domestic cost (USD)</FormLabel><div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span><input id="domesticCost" name="domesticCost" type="number" min="0" step="0.01" className="input currency-input" defaultValue={initialValues?.domesticCost ?? "0.00"} required /></div></div>
+        <div className={`rounded-2xl border p-4 ${domesticActive ? "border-slate-200 bg-slate-50" : "border-slate-200 bg-slate-100 text-slate-400"}`}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Domestic billing</h3>
+              <p className="mt-1 text-xs text-slate-500">Head type and cost used for US country billing.</p>
+            </div>
+            <label className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700">
+              <input type="checkbox" checked={domesticActive} onChange={(e) => setDomesticActive(e.target.checked)} /> Active
+            </label>
           </div>
+          <fieldset disabled={!domesticActive} className="mt-4 space-y-4 disabled:cursor-not-allowed disabled:opacity-60">
+            <div><FormLabel htmlFor="domesticCompulsionType" required={domesticActive}>Head type - Domestic</FormLabel><SearchableCombobox id="domesticCompulsionType" value={domesticCompulsionType} onValueChange={(v) => setDomesticCompulsionType(v as CompulsionType)} options={headTypeOptions} placeholder="Select domestic type" searchPlaceholder="Search types..." emptyLabel="No type found." disabled={!domesticActive} required={domesticActive} /></div>
+            <div><FormLabel htmlFor="domesticCost" required={domesticActive}>Domestic cost (USD)</FormLabel><div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span><input id="domesticCost" name="domesticCost" type="number" min="0" step="0.01" className="input currency-input" defaultValue={initialValues?.domesticCost ?? "0.00"} disabled={!domesticActive} required={domesticActive} /></div></div>
+          </fieldset>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <h3 className="text-sm font-semibold text-slate-900">INTL billing</h3>
-          <p className="mt-1 text-xs text-slate-500">Head type and cost used for all non-US country billing.</p>
-          <div className="mt-4 space-y-4">
-            <div><FormLabel htmlFor="intlCompulsionType" required>Head type - INTL</FormLabel><SearchableCombobox id="intlCompulsionType" value={intlCompulsionType} onValueChange={(v) => setIntlCompulsionType(v as CompulsionType)} options={headTypeOptions} placeholder="Select INTL type" searchPlaceholder="Search types..." emptyLabel="No type found." required /></div>
-            <div><FormLabel htmlFor="intlCost" required>INTL cost (USD)</FormLabel><div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span><input id="intlCost" name="intlCost" type="number" min="0" step="0.01" className="input currency-input" defaultValue={initialValues?.intlCost ?? "0.00"} required /></div></div>
+        <div className={`rounded-2xl border p-4 ${intlActive ? "border-slate-200 bg-slate-50" : "border-slate-200 bg-slate-100 text-slate-400"}`}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">INTL billing</h3>
+              <p className="mt-1 text-xs text-slate-500">Head type and cost used for all non-US country billing.</p>
+            </div>
+            <label className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700">
+              <input type="checkbox" checked={intlActive} onChange={(e) => setIntlActive(e.target.checked)} /> Active
+            </label>
           </div>
+          <fieldset disabled={!intlActive} className="mt-4 space-y-4 disabled:cursor-not-allowed disabled:opacity-60">
+            <div><FormLabel htmlFor="intlCompulsionType" required={intlActive}>Head type - INTL</FormLabel><SearchableCombobox id="intlCompulsionType" value={intlCompulsionType} onValueChange={(v) => setIntlCompulsionType(v as CompulsionType)} options={headTypeOptions} placeholder="Select INTL type" searchPlaceholder="Search types..." emptyLabel="No type found." disabled={!intlActive} required={intlActive} /></div>
+            <div><FormLabel htmlFor="intlCost" required={intlActive}>INTL cost (USD)</FormLabel><div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span><input id="intlCost" name="intlCost" type="number" min="0" step="0.01" className="input currency-input" defaultValue={initialValues?.intlCost ?? "0.00"} disabled={!intlActive} required={intlActive} /></div></div>
+          </fieldset>
         </div>
 
         <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700"><input type="checkbox" name="isActive" defaultChecked={initialValues?.isActive ?? true} /> Active billing head</label>

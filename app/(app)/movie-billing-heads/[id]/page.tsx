@@ -29,6 +29,8 @@ export default async function EditMovieBillingHeadPage({ params }: { params: Pro
           compulsionType: head.compulsionType,
           domesticCompulsionType: head.domesticCompulsionType ?? head.compulsionType,
           intlCompulsionType: head.intlCompulsionType ?? head.compulsionType,
+          domesticActive: head.domesticActive,
+          intlActive: head.intlActive,
           costType: head.costType,
           domesticCost: Number(head.domesticCost).toFixed(2),
           intlCost: Number(head.intlCost).toFixed(2),

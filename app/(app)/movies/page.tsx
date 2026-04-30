@@ -7,6 +7,12 @@ import { MovieForm } from "@/components/forms/movie-form";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
+function formatMovieWorkflowStatus(status: string) {
+  if (status === "COMPLETED_BILLED") return "Completed & Billed";
+  if (status === "COMPLETED") return "Completed";
+  return "Working";
+}
+
 export default async function MoviesPage({
   searchParams,
 }: {
@@ -88,6 +94,7 @@ export default async function MoviesPage({
                 <th className="table-cell">Movie</th>
                 <th className="table-cell">Client</th>
                 <th className="table-cell">Billing Region</th>
+                <th className="table-cell">Movie Status</th>
                 <th className="table-cell">Status</th>
                 <th className="table-cell">Action</th>
               </tr>
@@ -99,7 +106,8 @@ export default async function MoviesPage({
                     <div className="font-medium text-slate-900">{movie.title}</div>
                   </td>
                   <td className="table-cell">{movie.client.name}</td>
-                  <td className="table-cell">{[movie.billingDomestic ? "Domestic" : null, movie.billingIntl ? "INTL" : null, movie.billingOther ? "Other" : null].filter(Boolean).join(", ") || ""}</td>
+                  <td className="table-cell">{[movie.billingDomestic ? "Domestic" : null, movie.billingIntl ? "INTL" : null, movie.billingOther ? "Other" : null].filter(Boolean).join(", ") || "—"}</td>
+                  <td className="table-cell"><span className="badge-blue">{formatMovieWorkflowStatus(movie.status)}</span></td>
                   <td className="table-cell">
                     <span className={movie.isActive ? "badge-emerald" : "badge-slate"}>
                       {movie.isActive ? "Active" : "Inactive"}
@@ -122,7 +130,7 @@ export default async function MoviesPage({
               ))}
               {movies.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="table-cell text-center text-sm text-slate-500">
+                  <td colSpan={6} className="table-cell text-center text-sm text-slate-500">
                     No movies found.
                   </td>
                 </tr>

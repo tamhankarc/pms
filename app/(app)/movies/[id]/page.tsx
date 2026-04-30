@@ -54,6 +54,7 @@ export default async function MovieEditPage({
             clientId: movie.clientId,
             title: movie.title,
             description: movie.description,
+            status: movie.status,
             isActive: movie.isActive,
             billingDomestic: movie.billingDomestic,
             billingIntl: movie.billingIntl,
