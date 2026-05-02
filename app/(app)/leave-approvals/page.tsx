@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { requireUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { canViewEMSAdminDashboard, isAdmin, isAdminProjectManager, isHR } from "@/lib/permissions";
+import { canAccessMenuItem, canViewEMSAdminDashboard, isAdmin, isAdminProjectManager, isHR } from "@/lib/permissions";
 import { getLeaveApprovalsForUser, getGlobalApproverAssignmentIds } from "@/lib/ems-queries";
 import { formatDateInIst } from "@/lib/ist";
 import { paginateItems, parsePageParam } from "@/lib/pagination";
@@ -17,7 +17,7 @@ export default async function LeaveApprovalsPage({
   const selectedApproverIds = await getGlobalApproverAssignmentIds();
   const isDesignatedApprover = selectedApproverIds.includes(user.id);
   const isAdminPmApprover = isAdminProjectManager(user) && isDesignatedApprover;
-  const canAccessPage = isAdmin(user) || isHR(user) || isDesignatedApprover;
+  const canAccessPage = isAdmin(user) || isHR(user) || isDesignatedApprover || canAccessMenuItem(user, "leave-approvals");
 
   if (!canAccessPage) {
     redirect("/dashboard");

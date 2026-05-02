@@ -41,6 +41,7 @@ export default async function UserEditPage({
         mode="edit"
         action={updateUserAction}
         allowOperationsUserType={currentUser.userType === "ADMIN"}
+        canUpdatePassword={currentUser.userType === "ADMIN"}
         initialValues={{
           id: user.id,
           fullName: user.fullName,

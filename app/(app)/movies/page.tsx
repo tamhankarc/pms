@@ -1,3 +1,6 @@
+import { canManageMovies } from "@/lib/permissions";
+import { requireUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
@@ -14,10 +17,14 @@ function formatMovieWorkflowStatus(status: string) {
 }
 
 export default async function MoviesPage({
+
   searchParams,
 }: {
   searchParams?: Promise<{ q?: string; status?: string; clientId?: string; page?: string }>;
 }) {
+  const currentUser = await requireUser();
+  if (!canManageMovies(currentUser)) redirect("/dashboard");
+
   const params = (await searchParams) ?? {};
   const q = params.q?.trim() ?? "";
   const status = params.status ?? "all";

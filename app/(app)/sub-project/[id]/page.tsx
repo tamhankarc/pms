@@ -1,11 +1,17 @@
+import { canManageSubProjects } from "@/lib/permissions";
+import { requireUser } from "@/lib/auth";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/ui/page-header";
 import { SubProjectForm } from "@/components/forms/sub-project-form";
 import { updateSubProjectAction } from "@/lib/actions/sub-project-actions";
 
-export default async function SubProjectEditPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function SubProjectEditPage({
+ params }: { params: Promise<{ id: string }> }) {
+  const currentUser = await requireUser();
+  if (!canManageSubProjects(currentUser)) redirect("/dashboard");
+
   const { id } = await params;
 
   const [subProject, projects] = await Promise.all([

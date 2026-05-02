@@ -1,8 +1,10 @@
+import { canManageClientBillingHeads } from "@/lib/permissions";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { db } from "@/lib/db";
-import { requireUserTypes } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { toggleMovieBillingHeadStatusAction } from "@/lib/actions/movie-billing-head-actions";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
@@ -15,8 +17,11 @@ function formatActiveCost(isActive: boolean, value: unknown) {
   return isActive ? `$${Number(value).toFixed(2)}` : "";
 }
 
-export default async function MovieBillingHeadsPage({ searchParams }: { searchParams?: Promise<{ q?: string; clientId?: string; status?: string; page?: string }> }) {
-  await requireUserTypes(["ADMIN"]);
+export default async function MovieBillingHeadsPage({
+ searchParams }: { searchParams?: Promise<{ q?: string; clientId?: string; status?: string; page?: string }> }) {
+  const currentUser = await requireUser();
+  if (!canManageClientBillingHeads(currentUser)) redirect("/dashboard");
+
   const params = (await searchParams) ?? {};
   const q = params.q?.trim() ?? "";
   const clientId = params.clientId ?? "all";

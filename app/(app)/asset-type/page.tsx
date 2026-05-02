@@ -1,3 +1,6 @@
+import { canManageAssetTypes } from "@/lib/permissions";
+import { requireUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
@@ -11,7 +14,11 @@ function formatUsd(value: { toString: () => string } | number | string) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number.isFinite(amount) ? amount : 0);
 }
 
-export default async function AssetTypesPage({ searchParams }: { searchParams?: Promise<{ q?: string; status?: string; clientId?: string; page?: string }>; }) {
+export default async function AssetTypesPage({
+ searchParams }: { searchParams?: Promise<{ q?: string; status?: string; clientId?: string; page?: string }>; }) {
+  const currentUser = await requireUser();
+  if (!canManageAssetTypes(currentUser)) redirect("/dashboard");
+
   const params = (await searchParams) ?? {};
   const q = params.q?.trim() ?? "";
   const status = params.status ?? "all";

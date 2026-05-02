@@ -1,5 +1,7 @@
+import { canManageClients } from "@/lib/permissions";
+import { requireUser } from "@/lib/auth";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/ui/page-header";
 import { ProjectTypeForm } from "@/components/forms/project-type-form";
@@ -8,12 +10,16 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
 export default async function ClientProjectTypesPage({
+
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
   searchParams?: Promise<{ create?: string; page?: string }>;
 }) {
+  const currentUser = await requireUser();
+  if (!canManageClients(currentUser)) redirect("/dashboard");
+
   const { id } = await params;
   const sp = (await searchParams) ?? {};
   const page = parsePageParam(sp.page);

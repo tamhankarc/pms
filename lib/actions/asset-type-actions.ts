@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireUserTypesForAction } from "@/lib/auth";
+import { requireUserForAction } from "@/lib/auth";
+import { canManageAssetTypes } from "@/lib/permissions";
 import { generateAssetTypeCode } from "@/lib/project-code";
 
 export type AssetTypeFormState = { success?: boolean; error?: string; };
@@ -17,9 +18,15 @@ const assetTypeSchema = z.object({
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
 
+
+async function requireCanManageAssetTypes() {
+  const user = await requireUserForAction();
+  if (!canManageAssetTypes(user)) throw new Error("You are not allowed to manage asset types.");
+  return user;
+}
 export async function createAssetTypeAction(_prevState: AssetTypeFormState, formData: FormData): Promise<AssetTypeFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
+    await requireCanManageAssetTypes();
     const parsed = assetTypeSchema.safeParse({ clientId: formData.get("clientId"), name: formData.get("name"), cost: formData.get("cost") ?? "0", description: formData.get("description") || "", isActive: formData.get("isActive") ?? "on" });
     if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message || "Invalid asset type payload." };
     const generatedCode = await generateAssetTypeCode(parsed.data.clientId, parsed.data.name);
@@ -31,7 +38,7 @@ export async function createAssetTypeAction(_prevState: AssetTypeFormState, form
 
 export async function updateAssetTypeAction(_prevState: AssetTypeFormState, formData: FormData): Promise<AssetTypeFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
+    await requireCanManageAssetTypes();
     const parsed = assetTypeSchema.safeParse({ id: formData.get("id"), clientId: formData.get("clientId"), name: formData.get("name"), cost: formData.get("cost") ?? "0", description: formData.get("description") || "", isActive: formData.get("isActive") ?? undefined });
     if (!parsed.success || !parsed.data.id) return { success: false, error: parsed.success ? "Asset Type is required." : parsed.error.issues[0]?.message };
     const existingAssetType = await db.assetType.findUnique({ where: { id: parsed.data.id }, select: { code: true } });
@@ -44,7 +51,7 @@ export async function updateAssetTypeAction(_prevState: AssetTypeFormState, form
 }
 
 export async function toggleAssetTypeStatusAction(formData: FormData) {
-  await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
+  await requireCanManageAssetTypes();
   const assetTypeId = String(formData.get("assetTypeId") || "");
   if (!assetTypeId) throw new Error("Asset Type is required.");
   const assetType = await db.assetType.findUnique({ where: { id: assetTypeId } });

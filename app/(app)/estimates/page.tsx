@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { PageHeader } from "@/components/ui/page-header";
@@ -6,7 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatMinutes } from "@/lib/utils";
 import { deleteEstimateAction, reviewEstimateAction } from "@/lib/actions/estimate-actions";
-import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/permissions";
+import { canFullyModerateProject, isManager, isRoleScopedManager, canAccessMenuItem } from "@/lib/permissions";
 import { getVisibleProjects } from "@/lib/queries";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
@@ -62,6 +63,7 @@ export default async function EstimatesPage({
   searchParams?: Promise<{ clientId?: string; projectId?: string; fromDate?: string; toDate?: string; page?: string }>;
 }) {
   const user = await requireUser();
+  if (!canAccessMenuItem(user, "estimates")) redirect("/dashboard");
   const params = (await searchParams) ?? {};
   const selectedClientId = params.clientId ?? "all";
   const selectedProjectId = params.projectId ?? "all";

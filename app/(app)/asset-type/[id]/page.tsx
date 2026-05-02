@@ -1,11 +1,17 @@
+import { canManageAssetTypes } from "@/lib/permissions";
+import { requireUser } from "@/lib/auth";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { db } from "@/lib/db";
 import { updateAssetTypeAction } from "@/lib/actions/asset-type-actions";
 import { AssetTypeForm } from "@/components/forms/asset-type-form";
 
-export default async function AssetTypeEditPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AssetTypeEditPage({
+ params }: { params: Promise<{ id: string }> }) {
+  const currentUser = await requireUser();
+  if (!canManageAssetTypes(currentUser)) redirect("/dashboard");
+
   const { id } = await params;
   const [clients, assetType] = await Promise.all([db.client.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }), db.assetType.findUnique({ where: { id }, include: { client: true } })]);
   if (!assetType) notFound();

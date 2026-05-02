@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireUserTypesForAction } from "@/lib/auth";
+import { requireUserForAction } from "@/lib/auth";
+import { canManageMovieBillingHeads } from "@/lib/permissions";
 
 export type MovieBillingHeadAssignmentFormState = { success?: boolean; error?: string };
 
@@ -51,9 +52,15 @@ async function validateOptionalHeadForSelection(clientId: string, countryId: str
   return { ok: true as const, costType: head.costType };
 }
 
+
+async function requireCanManageMovieBillingHeads() {
+  const user = await requireUserForAction();
+  if (!canManageMovieBillingHeads(user)) throw new Error("You are not allowed to manage movie billing heads.");
+  return user;
+}
 export async function createMovieBillingHeadAssignmentAction(_prevState: MovieBillingHeadAssignmentFormState, formData: FormData): Promise<MovieBillingHeadAssignmentFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN"]);
+    await requireCanManageMovieBillingHeads();
     const parsed = schema.safeParse({
       clientId: formData.get("clientId"),
       countryId: formData.get("countryId"),
@@ -86,7 +93,7 @@ export async function createMovieBillingHeadAssignmentAction(_prevState: MovieBi
 
 export async function updateMovieBillingHeadAssignmentAction(_prevState: MovieBillingHeadAssignmentFormState, formData: FormData): Promise<MovieBillingHeadAssignmentFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN"]);
+    await requireCanManageMovieBillingHeads();
     const parsed = schema.safeParse({
       id: formData.get("id"),
       clientId: formData.get("clientId"),
@@ -121,7 +128,7 @@ export async function updateMovieBillingHeadAssignmentAction(_prevState: MovieBi
 }
 
 export async function toggleMovieBillingHeadAssignmentStatusAction(formData: FormData) {
-  await requireUserTypesForAction(["ADMIN"]);
+  await requireCanManageMovieBillingHeads();
   const id = String(formData.get("id") || "");
   if (!id) throw new Error("Movie billing head is required.");
   const row = await db.movieBillingHeadAssignment.findUnique({ where: { id } });

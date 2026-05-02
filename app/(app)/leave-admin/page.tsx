@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { requireUser } from "@/lib/auth";
-import { isHR } from "@/lib/permissions";
+import { canAccessMenuItem, isHR } from "@/lib/permissions";
 import { getLeaveAdminList } from "@/lib/ems-queries";
 import { createOfficialHolidayAction, deleteOfficialHolidayAction } from "@/lib/actions/hr-leave-admin-actions";
 import { formatDateInIst } from "@/lib/ist";
@@ -15,7 +15,7 @@ export default async function LeaveAdminPage({
   searchParams?: Promise<{ page?: string; functionalRole?: string; userId?: string }>;
 }) {
   const user = await requireUser();
-  if (!isHR(user)) {
+  if (!isHR(user) && !canAccessMenuItem(user, "leave-admin")) {
     return <div className="space-y-6"><PageHeader title="Leave Administration" description="Only HR can access this page." /></div>;
   }
   const params = (await searchParams) ?? {};

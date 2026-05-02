@@ -2,7 +2,7 @@ import { saveAnnouncementAction } from "@/lib/actions/announcement-actions";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/ui/page-header";
-import { isHR } from "@/lib/permissions";
+import { canAccessMenuItem } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import { AnnouncementAudienceSelector } from "@/components/announcements/announcement-audience-selector";
 
@@ -23,7 +23,7 @@ function formatDateTimeInIst(value: Date) {
 
 export default async function AnnouncementsPage() {
   const user = await requireUser();
-  if (!isHR(user)) redirect("/dashboard");
+  if (!canAccessMenuItem(user, "announcements")) redirect("/dashboard");
 
   const [announcements, eligibleUsers] = await Promise.all([
     db.dashboardAnnouncement.findMany({

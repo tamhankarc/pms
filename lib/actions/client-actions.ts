@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireUserTypesForAction } from "@/lib/auth";
+import { requireUserForAction } from "@/lib/auth";
+import { canManageClients } from "@/lib/permissions";
 import { generateClientCode } from "@/lib/project-code";
 
 export type ClientFormState = {
@@ -23,12 +24,18 @@ const clientSchema = z.object({
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
 
+
+async function requireCanManageClients() {
+  const user = await requireUserForAction();
+  if (!canManageClients(user)) throw new Error("You are not allowed to manage clients.");
+  return user;
+}
 export async function createClientAction(
   _prevState: ClientFormState,
   formData: FormData,
 ): Promise<ClientFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
+    await requireCanManageClients();
 
     const parsed = clientSchema.safeParse({
       name: String(formData.get("name") ?? ""),
@@ -87,7 +94,7 @@ export async function updateClientAction(
   formData: FormData,
 ): Promise<ClientFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
+    await requireCanManageClients();
 
     const parsed = clientSchema.safeParse({
       id: String(formData.get("id") ?? ""),
@@ -155,7 +162,7 @@ export async function updateClientAction(
 }
 
 export async function toggleClientStatusAction(formData: FormData) {
-  await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
+  await requireCanManageClients();
 
   const clientId = String(formData.get("clientId") || "");
   if (!clientId) throw new Error("Client is required.");

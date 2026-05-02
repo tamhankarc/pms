@@ -1,9 +1,16 @@
+import { canManageClients } from "@/lib/permissions";
+import { requireUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ClientForm } from "@/components/forms/client-form";
 import { PageHeader } from "@/components/ui/page-header";
 import { createClientAction } from "@/lib/actions/client-actions";
 
 export default async function NewClientPage() {
+  const currentUser = await requireUser();
+  if (!canManageClients(currentUser)) redirect("/dashboard");
+
+
   return (
     <div className="space-y-6">
       <PageHeader

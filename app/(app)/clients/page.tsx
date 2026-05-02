@@ -1,3 +1,6 @@
+import { canManageClients } from "@/lib/permissions";
+import { requireUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
@@ -7,10 +10,14 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
 export default async function ClientsPage({
+
   searchParams,
 }: {
   searchParams?: Promise<{ q?: string; status?: string; page?: string }>;
 }) {
+  const currentUser = await requireUser();
+  if (!canManageClients(currentUser)) redirect("/dashboard");
+
   const params = (await searchParams) ?? {};
   const q = params.q?.trim() ?? "";
   const status = params.status ?? "all";

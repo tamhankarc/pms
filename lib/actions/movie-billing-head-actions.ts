@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireUserTypesForAction } from "@/lib/auth";
+import { requireUserForAction } from "@/lib/auth";
+import { canManageClientBillingHeads } from "@/lib/permissions";
 
 export type MovieBillingHeadFormState = { success?: boolean; error?: string };
 
@@ -24,9 +25,15 @@ const schema = z.object({
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
 
+
+async function requireCanManageClientBillingHeads() {
+  const user = await requireUserForAction();
+  if (!canManageClientBillingHeads(user)) throw new Error("You are not allowed to manage billing heads.");
+  return user;
+}
 export async function createMovieBillingHeadAction(_prevState: MovieBillingHeadFormState, formData: FormData): Promise<MovieBillingHeadFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN"]);
+    await requireCanManageClientBillingHeads();
     const domesticActive = formData.get("domesticActive") ?? "off";
     const intlActive = formData.get("intlActive") ?? "off";
     const domesticCompulsionType = formData.get("domesticCompulsionType") ?? formData.get("compulsionType") ?? "FIXED_COMPULSORY";
@@ -72,7 +79,7 @@ export async function createMovieBillingHeadAction(_prevState: MovieBillingHeadF
 
 export async function updateMovieBillingHeadAction(_prevState: MovieBillingHeadFormState, formData: FormData): Promise<MovieBillingHeadFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN"]);
+    await requireCanManageClientBillingHeads();
     const domesticActive = formData.get("domesticActive") ?? "off";
     const intlActive = formData.get("intlActive") ?? "off";
     const domesticCompulsionType = formData.get("domesticCompulsionType") ?? formData.get("compulsionType") ?? "FIXED_COMPULSORY";
@@ -120,7 +127,7 @@ export async function updateMovieBillingHeadAction(_prevState: MovieBillingHeadF
 }
 
 export async function toggleMovieBillingHeadStatusAction(formData: FormData) {
-  await requireUserTypesForAction(["ADMIN"]);
+  await requireCanManageClientBillingHeads();
   const id = String(formData.get("id") || "");
   if (!id) throw new Error("Billing head is required.");
   const head = await db.movieBillingHead.findUnique({ where: { id } });

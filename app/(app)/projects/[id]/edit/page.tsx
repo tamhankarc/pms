@@ -1,14 +1,20 @@
+import { canCreateOrEditProject } from "@/lib/permissions";
+import { requireUser } from "@/lib/auth";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/ui/page-header";
 import { ProjectEditForm } from "@/components/forms/project-edit-form";
 
 export default async function EditProjectPage({
+
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const currentUser = await requireUser();
+  if (!canCreateOrEditProject(currentUser)) redirect("/dashboard");
+
   const { id } = await params;
 
   const project = await db.project.findUnique({

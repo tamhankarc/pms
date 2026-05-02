@@ -1,12 +1,17 @@
+import { canManageMovieBillingHeads } from "@/lib/permissions";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { db } from "@/lib/db";
-import { requireUserTypes } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { MovieBillingHeadAssignmentForm } from "@/components/forms/movie-billing-head-assignment-form";
 import { createMovieBillingHeadAssignmentAction } from "@/lib/actions/movie-billing-head-assignment-actions";
 
 export default async function NewMovieBillingHeadPage() {
-  await requireUserTypes(["ADMIN"]);
+  const currentUser = await requireUser();
+  if (!canManageMovieBillingHeads(currentUser)) redirect("/dashboard");
+
+
   const [clients, countries, movies, billingHeads] = await Promise.all([
     db.client.findMany({ where: { isActive: true, movieBillingHeads: { some: { isActive: true, OR: [{ domesticActive: true, domesticCompulsionType: "FIXED_OPTIONAL" }, { intlActive: true, intlCompulsionType: "FIXED_OPTIONAL" }] } } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, isoCode: true } }),

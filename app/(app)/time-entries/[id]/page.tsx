@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getVisibleProjects } from "@/lib/queries";
-import { canFullyModerateProject, isManager } from "@/lib/permissions";
+import { canFullyModerateProject, isManager, canAccessMenuItem } from "@/lib/permissions";
 import { TimeEntryEditForm } from "@/components/forms/time-entry-edit-form";
 
 export default async function EditTimeEntryPage({
@@ -14,6 +14,7 @@ export default async function EditTimeEntryPage({
 }) {
   const { id } = await params;
   const user = await requireUser();
+  if (!canAccessMenuItem(user, "time-entries")) redirect("/dashboard");
 
   const [entry, countries, movies, assetTypes, languages, projects, allSubProjects] = await Promise.all([
     db.timeEntry.findUnique({

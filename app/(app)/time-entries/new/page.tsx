@@ -1,13 +1,15 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getVisibleProjects } from "@/lib/queries";
 import { TimeEntryCreateForm } from "@/components/forms/time-entry-create-form";
-import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/permissions";
+import { canFullyModerateProject, isManager, isRoleScopedManager, canAccessMenuItem } from "@/lib/permissions";
 
 export default async function NewTimeEntryPage() {
   const user = await requireUser();
+  if (!canAccessMenuItem(user, "time-entries")) redirect("/dashboard");
 
   const [projects, countries, movies, assetTypes, languages, supervisorAssignments, roleScopedUsers, allActiveEmployees, allSubProjects] =
     await Promise.all([

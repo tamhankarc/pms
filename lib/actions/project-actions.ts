@@ -5,7 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction, requireUserTypesForAction } from "@/lib/auth";
 import { generateProjectCode } from "@/lib/project-code";
-import { canManageMasterData } from "@/lib/permissions";
+import { canCreateOrEditProject } from "@/lib/permissions";
 
 export type ProjectFormState = { success?: boolean; error?: string };
 
@@ -27,7 +27,7 @@ const baseSchema = z.object({
 
 async function requireMasterDataActionUser() {
   const user = await requireUserForAction();
-  if (!canManageMasterData(user)) {
+  if (!canCreateOrEditProject(user)) {
     throw new Error("You do not have permission to perform this action.");
   }
   return user;

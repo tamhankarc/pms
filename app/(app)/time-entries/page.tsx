@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { ListReportFilters } from "@/components/forms/list-report-filters";
@@ -7,7 +8,7 @@ import { db } from "@/lib/db";
 import { getVisibleProjects } from "@/lib/queries";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 import { formatMinutes } from "@/lib/utils";
-import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/permissions";
+import { canFullyModerateProject, isManager, isRoleScopedManager, canAccessMenuItem } from "@/lib/permissions";
 import { deleteTimeEntryAction } from "@/lib/actions/time-actions";
 
 function normalizeDateInput(value?: string) {
@@ -28,6 +29,7 @@ export default async function TimeEntriesPage({
   searchParams?: Promise<{ clientId?: string; projectId?: string; fromDate?: string; toDate?: string; page?: string }>;
 }) {
   const user = await requireUser();
+  if (!canAccessMenuItem(user, "time-entries")) redirect("/dashboard");
   const params = (await searchParams) ?? {};
   const selectedClientId = params.clientId ?? "all";
   const selectedProjectId = params.projectId ?? "all";

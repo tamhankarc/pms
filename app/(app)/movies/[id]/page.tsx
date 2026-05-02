@@ -1,15 +1,21 @@
+import { canManageMovies } from "@/lib/permissions";
+import { requireUser } from "@/lib/auth";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { db } from "@/lib/db";
 import { updateMovieAction } from "@/lib/actions/movie-actions";
 import { MovieForm } from "@/components/forms/movie-form";
 
 export default async function MovieEditPage({
+
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const currentUser = await requireUser();
+  if (!canManageMovies(currentUser)) redirect("/dashboard");
+
   const { id } = await params;
 
   const [clients, countries, billingHeads, movie] = await Promise.all([

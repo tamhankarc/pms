@@ -1,3 +1,6 @@
+import { canManageSubProjects } from "@/lib/permissions";
+import { requireUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { SubProjectListFilters } from "@/components/forms/sub-project-list-filters";
@@ -7,10 +10,14 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
 export default async function SubProjectPage({
+
   searchParams,
 }: {
   searchParams?: Promise<{ clientId?: string; projectId?: string; page?: string }>;
 }) {
+  const currentUser = await requireUser();
+  if (!canManageSubProjects(currentUser)) redirect("/dashboard");
+
   const params = (await searchParams) ?? {};
   const selectedClientId = params.clientId ?? "";
   const selectedProjectId = params.projectId ?? "";

@@ -1,5 +1,7 @@
+import { canSeeAllProjects } from "@/lib/permissions";
+import { requireUser } from "@/lib/auth";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { createBillingTransactionAction } from "@/lib/actions/project-actions";
@@ -7,10 +9,14 @@ import { db } from "@/lib/db";
 import { formatMinutes } from "@/lib/utils";
 
 export default async function ProjectDetailPage({
+
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const currentUser = await requireUser();
+  if (!canSeeAllProjects(currentUser)) redirect("/dashboard");
+
   const { id } = await params;
   const project = await db.project.findUnique({
     where: { id },

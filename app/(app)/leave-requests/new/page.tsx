@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/auth";
-import { canAccessLeaveRequests } from "@/lib/permissions";
+import { canAccessLeaveRequests, canAccessMenuItem } from "@/lib/permissions";
 import { getIstDateKey } from "@/lib/ist";
 import { createLeaveRequestAction } from "@/lib/actions/leave-actions";
 import { getLeaveRequestsForUser } from "@/lib/ems-queries";
@@ -10,7 +10,7 @@ import { LeaveRequestForm } from "@/components/ems/leave-request-form";
 export default async function NewLeaveRequestPage() {
   const user = await requireUser();
 
-  if (!canAccessLeaveRequests(user)) {
+  if (!canAccessLeaveRequests(user) && !canAccessMenuItem(user, "leave-requests")) {
     return (
       <div className="space-y-6">
         <PageHeader title="Create Leave Request" description="This account does not have access to leave requests." />

@@ -1,8 +1,10 @@
+import { canManageMovieBillingHeads } from "@/lib/permissions";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { db } from "@/lib/db";
-import { requireUserTypes } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { toggleMovieBillingHeadAssignmentStatusAction } from "@/lib/actions/movie-billing-head-assignment-actions";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
@@ -18,8 +20,11 @@ function formatHeadCost(row: { country: { isoCode: string | null; name: string }
   return formatMoney(isDomestic ? row.billingHead.domesticCost : row.billingHead.intlCost);
 }
 
-export default async function MovieBillingHeadsPage({ searchParams }: { searchParams?: Promise<{ q?: string; clientId?: string; countryId?: string; status?: string; page?: string }> }) {
-  await requireUserTypes(["ADMIN"]);
+export default async function MovieBillingHeadsPage({
+ searchParams }: { searchParams?: Promise<{ q?: string; clientId?: string; countryId?: string; status?: string; page?: string }> }) {
+  const currentUser = await requireUser();
+  if (!canManageMovieBillingHeads(currentUser)) redirect("/dashboard");
+
   const params = (await searchParams) ?? {};
   const q = params.q?.trim() ?? "";
   const clientId = params.clientId ?? "all";

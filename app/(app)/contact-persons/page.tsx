@@ -1,13 +1,18 @@
+import { canManageContactPersons } from "@/lib/permissions";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { db } from "@/lib/db";
-import { requireUserTypes } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
-export default async function ContactPersonsPage({ searchParams }: { searchParams?: Promise<{ q?: string; clientId?: string; projectId?: string; page?: string }>; }) {
-  await requireUserTypes(["ADMIN", "OPERATIONS"]);
+export default async function ContactPersonsPage({
+ searchParams }: { searchParams?: Promise<{ q?: string; clientId?: string; projectId?: string; page?: string }>; }) {
+  const currentUser = await requireUser();
+  if (!canManageContactPersons(currentUser)) redirect("/dashboard");
+
   const params = (await searchParams) ?? {};
   const q = params.q?.trim() ?? "";
   const clientId = params.clientId ?? "all";

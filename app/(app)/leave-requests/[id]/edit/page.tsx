@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/auth";
-import { canAccessLeaveRequests } from "@/lib/permissions";
+import { canAccessLeaveRequests, canAccessMenuItem } from "@/lib/permissions";
 import { getIstDateKey } from "@/lib/ist";
 import { updateLeaveRequestAction } from "@/lib/actions/leave-actions";
 import { getLeaveRequestsForUser } from "@/lib/ems-queries";
@@ -30,7 +30,7 @@ export default async function EditLeaveRequestPage({
   const user = await requireUser();
   const routeParams = await params;
 
-  if (!canAccessLeaveRequests(user)) {
+  if (!canAccessLeaveRequests(user) && !canAccessMenuItem(user, "leave-requests")) {
     return (
       <div className="space-y-6">
         <PageHeader title="Edit Leave Request" description="This account does not have access to leave requests." />

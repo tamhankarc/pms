@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getOrCreateLeaveYearProfile } from "@/lib/ems-queries";
 import { getIstDateKey } from "@/lib/ist";
-import { isHR } from "@/lib/permissions";
+import { canAccessMenuItem, isHR } from "@/lib/permissions";
 import { updateLeaveAdminUserAction } from "@/lib/actions/hr-leave-admin-actions";
 
 export default async function LeaveAdminUserPage({
@@ -16,7 +16,7 @@ export default async function LeaveAdminUserPage({
   searchParams?: Promise<{ returnTo?: string }>;
 }) {
   const user = await requireUser();
-  if (!isHR(user)) {
+  if (!isHR(user) && !canAccessMenuItem(user, "leave-admin")) {
     return <div className="space-y-6"><PageHeader title="Leave Administration" description="Only HR can access this page." /></div>;
   }
   const routeParams = await params;

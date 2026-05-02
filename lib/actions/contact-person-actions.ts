@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireUserTypesForAction } from "@/lib/auth";
+import { requireUserForAction } from "@/lib/auth";
+import { canManageContactPersons } from "@/lib/permissions";
 
 export type ContactPersonFormState = { success?: boolean; error?: string };
 
@@ -23,9 +24,15 @@ async function validateProjectBelongsToClient(clientId: string, projectId: strin
   }
 }
 
+
+async function requireCanManageContactPersons() {
+  const user = await requireUserForAction();
+  if (!canManageContactPersons(user)) throw new Error("You are not allowed to manage contact persons.");
+  return user;
+}
 export async function createContactPersonAction(_prevState: ContactPersonFormState, formData: FormData): Promise<ContactPersonFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
+    await requireCanManageContactPersons();
     const parsed = contactPersonSchema.safeParse({
       clientId: String(formData.get("clientId") ?? ""),
       projectId: String(formData.get("projectId") ?? ""),
@@ -45,7 +52,7 @@ export async function createContactPersonAction(_prevState: ContactPersonFormSta
 
 export async function updateContactPersonAction(_prevState: ContactPersonFormState, formData: FormData): Promise<ContactPersonFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
+    await requireCanManageContactPersons();
     const parsed = contactPersonSchema.safeParse({
       id: String(formData.get("id") ?? ""),
       clientId: String(formData.get("clientId") ?? ""),

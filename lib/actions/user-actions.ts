@@ -211,6 +211,7 @@ export async function updateUserAction(
       fullName: formData.get("fullName"),
       username: formData.get("username"),
       email: formData.get("email"),
+      password: formData.get("password") || undefined,
       userType: formData.get("userType"),
       functionalRole: formData.get("functionalRole"),
       employeeCode: formData.get("employeeCode") || "",
@@ -248,12 +249,18 @@ export async function updateUserAction(
       return { success: false, error: "Only Admin can manage Operations users." };
     }
 
+    if (parsed.data.password && actor.userType !== "ADMIN") {
+      return { success: false, error: "Only Admin can update passwords for users." };
+    }
+
     validateUserTypeRoleCombination(parsed.data.userType, parsed.data.functionalRole);
     const { currentAddress, permanentAddress, permanentSameAsCurrent } = buildAddressPayload(parsed.data);
+    const passwordUpdate = parsed.data.password ? { passwordHash: await hashPassword(parsed.data.password) } : {};
 
     await db.user.update({
       where: { id: parsed.data.id },
       data: {
+        ...passwordUpdate,
         fullName: parsed.data.fullName,
         username: parsed.data.username.toLowerCase(),
         email: parsed.data.email.toLowerCase(),

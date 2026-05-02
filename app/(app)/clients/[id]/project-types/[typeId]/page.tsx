@@ -1,5 +1,7 @@
+import { requireUser } from "@/lib/auth";
+import { canManageClients } from "@/lib/permissions";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/ui/page-header";
 import { ProjectTypeForm } from "@/components/forms/project-type-form";
@@ -10,6 +12,8 @@ export default async function EditClientProjectTypePage({
 }: {
   params: Promise<{ id: string; typeId: string }>;
 }) {
+  const currentUser = await requireUser();
+  if (!canManageClients(currentUser)) redirect("/dashboard");
   const { id, typeId } = await params;
 
   const row = await db.projectType.findFirst({

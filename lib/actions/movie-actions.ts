@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireUserTypesForAction } from "@/lib/auth";
+import { requireUserForAction } from "@/lib/auth";
+import { canManageMovies } from "@/lib/permissions";
 import { generateMovieCode } from "@/lib/project-code";
 
 export type MovieFormState = {
@@ -24,12 +25,18 @@ const movieSchema = z.object({
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
 
+
+async function requireCanManageMovies() {
+  const user = await requireUserForAction();
+  if (!canManageMovies(user)) throw new Error("You are not allowed to manage movies.");
+  return user;
+}
 export async function createMovieAction(
   _prevState: MovieFormState,
   formData: FormData,
 ): Promise<MovieFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
+    await requireCanManageMovies();
 
     const parsed = movieSchema.safeParse({
       clientId: formData.get("clientId"),
@@ -101,7 +108,7 @@ export async function updateMovieAction(
   formData: FormData,
 ): Promise<MovieFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
+    await requireCanManageMovies();
 
     const parsed = movieSchema.safeParse({
       id: formData.get("id"),
@@ -181,7 +188,7 @@ export async function updateMovieAction(
 }
 
 export async function toggleMovieStatusAction(formData: FormData) {
-  await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
+  await requireCanManageMovies();
 
   const movieId = String(formData.get("movieId") || "");
   if (!movieId) throw new Error("Movie is required.");

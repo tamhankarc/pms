@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { canFullyModerateProject } from "@/lib/permissions";
+import { canFullyModerateProject, canAccessMenuItem } from "@/lib/permissions";
 import { EstimateEditForm } from "@/components/forms/estimate-edit-form";
 
 export default async function EditEstimatePage({
@@ -11,6 +11,7 @@ export default async function EditEstimatePage({
 }) {
   const { id } = await params;
   const user = await requireUser();
+  if (!canAccessMenuItem(user, "estimates")) redirect("/dashboard");
 
   const [estimate, countries, movies, assetTypes, languages, projects, subProjects] = await Promise.all([
     db.estimate.findUnique({

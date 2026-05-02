@@ -1,3 +1,6 @@
+import { canManageSubProjects } from "@/lib/permissions";
+import { requireUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { db } from "@/lib/db";
@@ -5,10 +8,14 @@ import { SubProjectForm } from "@/components/forms/sub-project-form";
 import { createSubProjectAction } from "@/lib/actions/sub-project-actions";
 
 export default async function NewSubProjectPage({
+
   searchParams,
 }: {
   searchParams?: Promise<{ clientId?: string; projectId?: string }>;
 }) {
+  const currentUser = await requireUser();
+  if (!canManageSubProjects(currentUser)) redirect("/dashboard");
+
   const params = (await searchParams) ?? {};
 
   const projects = await db.project.findMany({

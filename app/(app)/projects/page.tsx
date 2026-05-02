@@ -1,10 +1,11 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getVisibleProjects } from "@/lib/queries";
-import { canCreateProjects } from "@/lib/permissions";
+import { canCreateProjects, canSeeAllProjects } from "@/lib/permissions";
 import { toggleProjectStatusAction } from "@/lib/actions/project-actions";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
@@ -49,7 +50,11 @@ function projectTableRows(projects: Awaited<ReturnType<typeof getVisibleProjects
   });
 }
 
-export default async function ProjectsPage({ searchParams }: { searchParams?: Promise<Record<string, string | undefined>> }) {
+export default async function ProjectsPage({
+ searchParams }: { searchParams?: Promise<Record<string, string | undefined>> }) {
+  const currentUser = await requireUser();
+  if (!canSeeAllProjects(currentUser)) redirect("/dashboard");
+
   const user = await requireUser();
   const params = (await searchParams) ?? {};
   const standardFilters = { q: params.q ?? "", status: params.status ?? "all", billingModel: params.billingModel ?? "all", clientId: params.clientId ?? "all" };

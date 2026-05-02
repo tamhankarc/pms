@@ -1,11 +1,17 @@
+import { canManageClients } from "@/lib/permissions";
+import { requireUser } from "@/lib/auth";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ClientForm } from "@/components/forms/client-form";
 import { PageHeader } from "@/components/ui/page-header";
 import { updateClientAction } from "@/lib/actions/client-actions";
 import { db } from "@/lib/db";
 
-export default async function ClientEditPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ClientEditPage({
+ params }: { params: Promise<{ id: string }> }) {
+  const currentUser = await requireUser();
+  if (!canManageClients(currentUser)) redirect("/dashboard");
+
   const { id } = await params;
 
   const client = await db.client.findUnique({

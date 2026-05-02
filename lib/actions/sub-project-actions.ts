@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireUserTypesForAction } from "@/lib/auth";
+import { requireUserForAction } from "@/lib/auth";
+import { canManageSubProjects } from "@/lib/permissions";
 
 export type SubProjectFormState = { success?: boolean; error?: string };
 
@@ -18,12 +19,18 @@ const schema = z.object({
   hideAssetTypesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
 
+
+async function requireCanManageSubProjects() {
+  const user = await requireUserForAction();
+  if (!canManageSubProjects(user)) throw new Error("You are not allowed to manage sub projects.");
+  return user;
+}
 export async function createSubProjectAction(
   _prev: SubProjectFormState,
   formData: FormData,
 ): Promise<SubProjectFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
+    await requireCanManageSubProjects();
 
     const parsed = schema.safeParse({
       projectId: String(formData.get("projectId") ?? ""),
@@ -92,7 +99,7 @@ export async function updateSubProjectAction(
   formData: FormData,
 ): Promise<SubProjectFormState> {
   try {
-    await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
+    await requireCanManageSubProjects();
 
     const parsed = schema.safeParse({
       id: String(formData.get("id") ?? ""),
@@ -162,7 +169,7 @@ export async function updateSubProjectAction(
 }
 
 export async function toggleSubProjectStatusAction(formData: FormData): Promise<void> {
-  await requireUserTypesForAction(["ADMIN", "OPERATIONS"]);
+  await requireCanManageSubProjects();
 
   const subProjectId = String(formData.get("subProjectId") ?? "");
   if (!subProjectId) {

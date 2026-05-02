@@ -14,7 +14,7 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getVisibleProjects } from "@/lib/queries";
-import { isRoleScopedManager } from "@/lib/permissions";
+import { isRoleScopedManager, canAccessMenuItem } from "@/lib/permissions";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 import { formatMinutes } from "@/lib/utils";
 
@@ -304,6 +304,7 @@ export default async function ReportsPage({
     redirect("/reports/client-wise-minutes");
   }
   const user = await requireUser();
+  if (!canAccessMenuItem(user, "reports")) redirect("/dashboard");
   const params = (await searchParams) ?? {};
   const activeReportSlug = normalizeReportSlug(activeReportName);
   const reportsBasePath = `/reports/${activeReportSlug}`;

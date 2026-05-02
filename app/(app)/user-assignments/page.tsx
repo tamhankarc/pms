@@ -1,3 +1,6 @@
+import { canManageAssignments } from "@/lib/permissions";
+import { requireUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { UserAssignmentListFilters } from "@/components/forms/user-assignment-list-filters";
@@ -7,6 +10,7 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
 export default async function UserAssignmentsPage({
+
   searchParams,
 }: {
   searchParams?: Promise<{
@@ -19,6 +23,9 @@ export default async function UserAssignmentsPage({
     page?: string;
   }>;
 }) {
+  const currentUser = await requireUser();
+  if (!canManageAssignments(currentUser)) redirect("/dashboard");
+
   const params = (await searchParams) ?? {};
   const page = parsePageParam(params.page);
 

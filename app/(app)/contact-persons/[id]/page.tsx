@@ -1,13 +1,17 @@
+import { canManageContactPersons } from "@/lib/permissions";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { ContactPersonForm } from "@/components/forms/contact-person-form";
 import { updateContactPersonAction } from "@/lib/actions/contact-person-actions";
 import { db } from "@/lib/db";
-import { requireUserTypes } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 
-export default async function ContactPersonEditPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireUserTypes(["ADMIN", "OPERATIONS"]);
+export default async function ContactPersonEditPage({
+ params }: { params: Promise<{ id: string }> }) {
+  const currentUser = await requireUser();
+  if (!canManageContactPersons(currentUser)) redirect("/dashboard");
+
   const { id } = await params;
   const [clients, projects, contactPerson] = await Promise.all([
     db.client.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),

@@ -2,7 +2,7 @@ import type { FunctionalRoleCode } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getVisibleProjects } from "@/lib/queries";
-import { isRoleScopedManager } from "@/lib/permissions";
+import { canAccessMenuItem, isRoleScopedManager } from "@/lib/permissions";
 import { formatMinutes } from "@/lib/utils";
 
 function normalizeDateInput(value: string | null) {
@@ -130,6 +130,9 @@ export async function GET(request: Request) {
   const user = await getSession();
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
+  }
+  if (!canAccessMenuItem(user, "reports")) {
+    return new Response("Forbidden", { status: 403 });
   }
 
   const { searchParams } = new URL(request.url);

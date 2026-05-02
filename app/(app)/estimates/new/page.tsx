@@ -1,13 +1,15 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { EstimateCreateForm } from "@/components/forms/estimate-create-form";
 import { getVisibleProjects } from "@/lib/queries";
-import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/permissions";
+import { canFullyModerateProject, isManager, isRoleScopedManager, canAccessMenuItem } from "@/lib/permissions";
 
 export default async function NewEstimatePage() {
   const user = await requireUser();
+  if (!canAccessMenuItem(user, "estimates")) redirect("/dashboard");
 
   const [projects, countries, movies, assetTypes, languages, supervisorAssignments, roleScopedUsers, allActiveEmployees, allSubProjects] =
     await Promise.all([

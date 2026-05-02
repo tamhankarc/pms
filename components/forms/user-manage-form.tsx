@@ -36,6 +36,7 @@ type UserManageFormProps = {
   mode: "create" | "edit";
   action: (state: UserFormState, formData: FormData) => Promise<UserFormState>;
   allowOperationsUserType?: boolean;
+  canUpdatePassword?: boolean;
   initialValues?: {
     id?: string;
     fullName?: string;
@@ -66,16 +67,16 @@ type UserManageFormProps = {
 
 const initialState: UserFormState = {};
 
-function PasswordField({ defaultVisible = false }: { defaultVisible?: boolean }) {
+function PasswordField({ defaultVisible = false, required = true, label = "Temporary password", helpText }: { defaultVisible?: boolean; required?: boolean; label?: string; helpText?: string }) {
   const [visible, setVisible] = useState(defaultVisible);
 
   return (
     <div className="md:col-span-2">
-      <FormLabel htmlFor="password" required>
-        Temporary password
+      <FormLabel htmlFor="password" required={required}>
+        {label}
       </FormLabel>
       <div className="relative">
-        <input id="password" className="input pr-24" name="password" type={visible ? "text" : "password"} required />
+        <input id="password" className="input pr-24" name="password" type={visible ? "text" : "password"} required={required} minLength={6} autoComplete="new-password" />
         <button
           type="button"
           className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-600 hover:text-slate-900"
@@ -85,11 +86,12 @@ function PasswordField({ defaultVisible = false }: { defaultVisible?: boolean })
           {visible ? "Hide" : "Show"}
         </button>
       </div>
+      {helpText ? <p className="mt-1 text-xs text-slate-500">{helpText}</p> : null}
     </div>
   );
 }
 
-export function UserManageForm({ mode, action, initialValues, allowOperationsUserType = true }: UserManageFormProps) {
+export function UserManageForm({ mode, action, initialValues, allowOperationsUserType = true, canUpdatePassword = false }: UserManageFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [userType, setUserType] = useState<(typeof userTypes)[number]>(initialValues?.userType ?? "EMPLOYEE");
   const [functionalRole, setFunctionalRole] = useState<FunctionalRole>(initialValues?.functionalRole ?? "DEVELOPER");
@@ -181,6 +183,13 @@ export function UserManageForm({ mode, action, initialValues, allowOperationsUse
         </div>
 
         {mode === "create" ? <PasswordField /> : null}
+        {mode === "edit" && canUpdatePassword ? (
+          <PasswordField
+            required={false}
+            label="New password"
+            helpText="Leave blank to keep the current password. Admin users can update passwords for any user from this edit page."
+          />
+        ) : null}
 
         <div>
           <FormLabel htmlFor="userType" required>

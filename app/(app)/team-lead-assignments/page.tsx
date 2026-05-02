@@ -1,3 +1,6 @@
+import { redirect } from "next/navigation";
+import { requireUser } from "@/lib/auth";
+import { canAccessMenuItem } from "@/lib/permissions";
 import { PageHeader } from "@/components/ui/page-header";
 import { db } from "@/lib/db";
 import { TeamLeadAssignmentForm } from "@/components/forms/team-lead-assignment-form";
@@ -10,6 +13,8 @@ export default async function TeamLeadAssignmentsPage({
 }: {
   searchParams?: Promise<{ page?: string; role?: string; employeeId?: string }>;
 }) {
+  const user = await requireUser();
+  if (!canAccessMenuItem(user, "team-lead-assignments")) redirect("/dashboard");
   const params = (await searchParams) ?? {};
   const page = parsePageParam(params.page);
   const selectedRole = params.role ?? "all";

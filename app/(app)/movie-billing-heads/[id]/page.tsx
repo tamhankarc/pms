@@ -1,13 +1,17 @@
+import { canManageMovieBillingHeads } from "@/lib/permissions";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { db } from "@/lib/db";
-import { requireUserTypes } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { MovieBillingHeadAssignmentForm } from "@/components/forms/movie-billing-head-assignment-form";
 import { updateMovieBillingHeadAssignmentAction } from "@/lib/actions/movie-billing-head-assignment-actions";
 
-export default async function EditMovieBillingHeadPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireUserTypes(["ADMIN"]);
+export default async function EditMovieBillingHeadPage({
+ params }: { params: Promise<{ id: string }> }) {
+  const currentUser = await requireUser();
+  if (!canManageMovieBillingHeads(currentUser)) redirect("/dashboard");
+
   const { id } = await params;
   const [row, clients, countries, movies, billingHeads] = await Promise.all([
     db.movieBillingHeadAssignment.findUnique({ where: { id }, include: { movie: true, billingHead: true } }),

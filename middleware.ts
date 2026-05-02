@@ -59,7 +59,7 @@ async function getSessionPayload(request: NextRequest) {
 
   try {
     const verified = await jwtVerify(token, new TextEncoder().encode(secret));
-    return verified.payload as { userType?: string; functionalRole?: string } | null;
+    return verified.payload as { userType?: string; functionalRole?: string; extraMenuKeys?: string[] } | null;
   } catch {
     return null;
   }
@@ -67,6 +67,43 @@ async function getSessionPayload(request: NextRequest) {
 
 function isAllowed(pathname: string, allowedPaths: string[]) {
   return allowedPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
+
+const MENU_ROUTE_PREFIXES: Record<string, string> = {
+  clients: "/clients",
+  movies: "/movies",
+  "client-billing-heads": "/client-billing-heads",
+  "movie-billing-heads": "/movie-billing-heads",
+  "asset-type": "/asset-type",
+  countries: "/countries",
+  languages: "/languages",
+  projects: "/projects",
+  "sub-project": "/sub-project",
+  "user-assignments": "/user-assignments",
+  users: "/users",
+  "contact-persons": "/contact-persons",
+  "time-entries": "/time-entries",
+  estimates: "/estimates",
+  "team-lead-assignments": "/team-lead-assignments",
+  reports: "/reports",
+  "leave-requests": "/leave-requests",
+  "leave-approvals": "/leave-approvals",
+  "leave-admin": "/leave-admin",
+  announcements: "/announcements",
+  profile: "/profile",
+  "change-password": "/change-password",
+};
+
+function isManagedMenuPath(pathname: string) {
+  return Object.values(MENU_ROUTE_PREFIXES).some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
+
+function hasExtraMenuRouteAccess(pathname: string, extraMenuKeys?: string[]) {
+  if (!extraMenuKeys?.length) return false;
+  return extraMenuKeys.some((key) => {
+    const path = MENU_ROUTE_PREFIXES[key];
+    return path ? pathname === path || pathname.startsWith(`${path}/`) : false;
+  });
 }
 
 export async function middleware(request: NextRequest) {
@@ -86,6 +123,10 @@ export async function middleware(request: NextRequest) {
 
   if (authed && (pathname === "/" || pathname === "/login" || pathname === "/unsupported-device")) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  if (isManagedMenuPath(pathname)) {
+    return NextResponse.next();
   }
 
   if (session?.userType === "EMPLOYEE" && !isAllowed(pathname, EMPLOYEE_ALLOWED_PATHS)) {
