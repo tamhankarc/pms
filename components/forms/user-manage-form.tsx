@@ -6,6 +6,7 @@ import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import type { UserFormState } from "@/lib/actions/user-actions";
 import { AddressFields } from "@/components/forms/address-fields";
 import { createDefaultAddress, type AddressValue } from "@/lib/address";
+import { getExtraMenuOptionsForUserType, normalizeMenuKeys, type MenuKey } from "@/lib/menu-access";
 
 const operationalFunctionalRoles = [
   "DEVELOPER",
@@ -59,6 +60,7 @@ type UserManageFormProps = {
     permanentState?: string | null;
     permanentCountry?: "IN" | "US" | null;
     permanentPostalCode?: string | null;
+    extraMenuKeys?: MenuKey[];
   };
 };
 
@@ -92,6 +94,7 @@ export function UserManageForm({ mode, action, initialValues, allowOperationsUse
   const [userType, setUserType] = useState<(typeof userTypes)[number]>(initialValues?.userType ?? "EMPLOYEE");
   const [functionalRole, setFunctionalRole] = useState<FunctionalRole>(initialValues?.functionalRole ?? "DEVELOPER");
   const [sameAsCurrent, setSameAsCurrent] = useState(initialValues?.permanentSameAsCurrent ?? false);
+  const [extraMenuKeys, setExtraMenuKeys] = useState<MenuKey[]>(normalizeMenuKeys(initialValues?.extraMenuKeys ?? []));
   const [currentAddress, setCurrentAddress] = useState<AddressValue>({
     addressLine: initialValues?.currentAddressLine ?? "",
     city: initialValues?.currentCity ?? "",
@@ -115,14 +118,25 @@ export function UserManageForm({ mode, action, initialValues, allowOperationsUse
 
   const availableUserTypes = allowOperationsUserType ? userTypes : userTypes.filter((type) => type !== "OPERATIONS");
   const availableFunctionalRoles = userType === "ACCOUNTS" ? (["BILLING"] as const) : operationalFunctionalRoles;
+  const extraMenuOptions = getExtraMenuOptionsForUserType(userType);
+  const availableExtraMenuKeySet = new Set(extraMenuOptions.map((item) => item.key));
 
   function handleUserTypeChange(nextUserType: (typeof userTypes)[number]) {
     setUserType(nextUserType);
+    setExtraMenuKeys((current) => current.filter((key) => getExtraMenuOptionsForUserType(nextUserType).some((item) => item.key === key)));
     if (nextUserType === "ACCOUNTS") {
       setFunctionalRole("BILLING");
     } else if (functionalRole === "BILLING") {
       setFunctionalRole("DEVELOPER");
     }
+  }
+
+  function toggleExtraMenu(key: MenuKey, checked: boolean) {
+    setExtraMenuKeys((current) => {
+      if (!availableExtraMenuKeySet.has(key)) return current;
+      if (checked) return normalizeMenuKeys([...current, key]);
+      return current.filter((item) => item !== key);
+    });
   }
 
   return (
@@ -267,6 +281,39 @@ export function UserManageForm({ mode, action, initialValues, allowOperationsUse
           onChange={setPermanentAddress}
           disabled={sameAsCurrent}
         />
+
+        <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+            <div>
+              <FormLabel htmlFor="extraMenuAccess">Additional visible menus</FormLabel>
+              <p className="mt-1 text-xs text-slate-500">
+                If nothing is selected, the user will see only the standard menus for the selected user type. Selected menus are shown in addition to the standard user-type menus.
+              </p>
+            </div>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+              {extraMenuKeys.length} selected
+            </span>
+          </div>
+
+          {extraMenuOptions.length > 0 ? (
+            <div id="extraMenuAccess" className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {extraMenuOptions.map((menu) => (
+                <label key={menu.key} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    name="extraMenuKeys"
+                    value={menu.key}
+                    checked={extraMenuKeys.includes(menu.key)}
+                    onChange={(event) => toggleExtraMenu(menu.key, event.target.checked)}
+                  />
+                  <span>{menu.label}</span>
+                </label>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-slate-500">This user type already has access to all available menus.</p>
+          )}
+        </div>
 
         {userType === "ACCOUNTS" ? (
           <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">

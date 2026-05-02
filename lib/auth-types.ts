@@ -21,6 +21,7 @@ export type CurrentUser = {
     | "OTHER"
     | "UNASSIGNED"
     | null;
+  extraMenuKeys?: string[];
   email?: string;
   fullName?: string | null;
 };

@@ -7,6 +7,8 @@ import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import type { FunctionalRoleCode, UserType } from "@prisma/client";
+import type { MenuKey } from "@/lib/menu-access";
+import { parseMenuKeysJson } from "@/lib/menu-access";
 
 export type SessionUser = {
   id: string;
@@ -17,6 +19,7 @@ export type SessionUser = {
   designation?: string | null;
   userType: UserType;
   functionalRole: FunctionalRoleCode | "UNASSIGNED";
+  extraMenuKeys?: MenuKey[];
 };
 
 const COOKIE_NAME = "pms_session";
@@ -63,7 +66,23 @@ export async function getSession() {
 
   try {
     const { payload } = await jwtVerify(token, getSecret());
-    return payload as unknown as SessionUser;
+    const session = payload as unknown as SessionUser;
+
+    if (session.id) {
+      const user = await db.user.findUnique({
+        where: { id: session.id },
+        select: { extraMenuItemsJson: true, isActive: true },
+      });
+
+      if (!user?.isActive) return null;
+
+      return {
+        ...session,
+        extraMenuKeys: parseMenuKeysJson(user.extraMenuItemsJson),
+      };
+    }
+
+    return session;
   } catch {
     return null;
   }
@@ -125,6 +144,7 @@ export async function authenticate(usernameOrEmail: string, password: string) {
       functionalRole: true,
       passwordHash: true,
       isActive: true,
+      extraMenuItemsJson: true,
     },
   });
 
@@ -142,5 +162,6 @@ export async function authenticate(usernameOrEmail: string, password: string) {
     designation: user.designation ?? null,
     userType: user.userType,
     functionalRole: user.functionalRole ?? "UNASSIGNED",
+    extraMenuKeys: parseMenuKeysJson(user.extraMenuItemsJson),
   } satisfies SessionUser;
 }

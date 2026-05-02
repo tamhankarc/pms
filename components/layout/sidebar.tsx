@@ -23,6 +23,8 @@ import {
   Bell,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/auth";
+import type { MenuKey } from "@/lib/menu-access";
+import { menuItems, normalizeMenuKeys } from "@/lib/menu-access";
 import {
   canAccessLeaveRequests,
   canManageCountries,
@@ -34,96 +36,140 @@ import {
 } from "@/lib/permissions";
 
 export type SidebarNavItem = {
+  key: MenuKey;
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   access?: "countries" | "languages";
 };
 
+const iconByMenuKey: Record<MenuKey, React.ComponentType<{ className?: string }>> = {
+  dashboard: LayoutDashboard,
+  clients: Building2,
+  movies: Clapperboard,
+  "client-billing-heads": ReceiptText,
+  "movie-billing-heads": ReceiptText,
+  "asset-type": Box,
+  countries: Globe2,
+  languages: Languages,
+  projects: FolderKanban,
+  "sub-project": Layers3,
+  "user-assignments": ListChecks,
+  users: ShieldCheck,
+  "contact-persons": Contact,
+  "time-entries": TimerReset,
+  estimates: ClipboardCheck,
+  "team-lead-assignments": BriefcaseBusiness,
+  reports: BarChart3,
+  "leave-requests": CalendarDays,
+  "leave-approvals": CheckCheck,
+  "leave-admin": CalendarDays,
+  announcements: Bell,
+  profile: UserCog,
+  "change-password": KeyRound,
+};
+
+const baseMenuItems: SidebarNavItem[] = menuItems.map((item) => ({
+  ...item,
+  icon: iconByMenuKey[item.key],
+  access: item.key === "countries" ? "countries" : item.key === "languages" ? "languages" : undefined,
+}));
+
+function getItemsByKeys(keys: MenuKey[]) {
+  const keySet = new Set(keys);
+  return baseMenuItems.filter((item) => keySet.has(item.key));
+}
+
 function withLeaveItems(items: SidebarNavItem[], user: SessionUser, canAccessLeaveApprovals: boolean) {
   const nextItems = [...items];
+  const existingKeys = new Set(nextItems.map((item) => item.key));
+
+  function pushIfMissing(key: MenuKey) {
+    if (existingKeys.has(key)) return;
+    const item = baseMenuItems.find((entry) => entry.key === key);
+    if (item) {
+      nextItems.push(item);
+      existingKeys.add(key);
+    }
+  }
 
   if (canAccessLeaveRequests(user)) {
-    nextItems.push({ href: "/leave-requests", label: "Leave Requests", icon: CalendarDays });
+    pushIfMissing("leave-requests");
   }
 
   if (canAccessLeaveApprovals) {
-    nextItems.push({ href: "/leave-approvals", label: "Leave Approvals", icon: CheckCheck });
+    pushIfMissing("leave-approvals");
   }
 
   if (isHR(user)) {
-    nextItems.push({ href: "/leave-admin", label: "Leave Administration", icon: CalendarDays });
+    pushIfMissing("leave-admin");
   }
 
   return nextItems;
 }
 
-const fullItems: SidebarNavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/clients", label: "Clients", icon: Building2 },
-  { href: "/movies", label: "Movies", icon: Clapperboard },
-  { href: "/client-billing-heads", label: "Billing Heads", icon: ReceiptText },
-  { href: "/movie-billing-heads", label: "Movie Billing Heads", icon: ReceiptText },
-  { href: "/asset-type", label: "Asset Types", icon: Box },
-  { href: "/countries", label: "Countries", icon: Globe2, access: "countries" },
-  { href: "/languages", label: "Languages", icon: Languages, access: "languages" },
-  { href: "/projects", label: "Projects", icon: FolderKanban },
-  { href: "/sub-project", label: "Sub Projects", icon: Layers3 },
-  { href: "/user-assignments", label: "User Assignments", icon: ListChecks },
-  { href: "/users", label: "Users", icon: ShieldCheck },
-  { href: "/contact-persons", label: "Contact Persons", icon: Contact },
-  { href: "/time-entries", label: "Time Entries", icon: TimerReset },
-  { href: "/estimates", label: "Estimates", icon: ClipboardCheck },
-  { href: "/team-lead-assignments", label: "Team Lead Assignments", icon: BriefcaseBusiness },
-  { href: "/reports", label: "Reports", icon: BarChart3 },
-  { href: "/profile", label: "My Profile", icon: UserCog },
-  { href: "/change-password", label: "Change Password", icon: KeyRound },
-];
+const fullItems: SidebarNavItem[] = getItemsByKeys([
+  "dashboard",
+  "clients",
+  "movies",
+  "client-billing-heads",
+  "movie-billing-heads",
+  "asset-type",
+  "countries",
+  "languages",
+  "projects",
+  "sub-project",
+  "user-assignments",
+  "users",
+  "contact-persons",
+  "time-entries",
+  "estimates",
+  "team-lead-assignments",
+  "reports",
+  "profile",
+  "change-password",
+]);
 
-const teamLeadItems: SidebarNavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/clients", label: "Clients", icon: Building2 },
-  { href: "/movies", label: "Movies", icon: Clapperboard },
-  { href: "/asset-type", label: "Asset Types", icon: Box },
-  { href: "/countries", label: "Countries", icon: Globe2, access: "countries" },
-  { href: "/languages", label: "Languages", icon: Languages, access: "languages" },
-  { href: "/projects", label: "Projects", icon: FolderKanban },
-  { href: "/sub-project", label: "Sub Projects", icon: Layers3 },
-  { href: "/user-assignments", label: "User Assignments", icon: ListChecks },
-  { href: "/time-entries", label: "Time Entries", icon: TimerReset },
-  { href: "/estimates", label: "Estimates", icon: ClipboardCheck },
-  { href: "/profile", label: "My Profile", icon: UserCog },
-  { href: "/change-password", label: "Change Password", icon: KeyRound },
-];
+const teamLeadItems: SidebarNavItem[] = getItemsByKeys([
+  "dashboard",
+  "clients",
+  "movies",
+  "asset-type",
+  "countries",
+  "languages",
+  "projects",
+  "sub-project",
+  "user-assignments",
+  "time-entries",
+  "estimates",
+  "profile",
+  "change-password",
+]);
 
-const employeeItems: SidebarNavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/time-entries", label: "Time Entries", icon: TimerReset },
-  { href: "/estimates", label: "Estimates", icon: ClipboardCheck },
-  { href: "/profile", label: "My Profile", icon: UserCog },
-  { href: "/change-password", label: "Change Password", icon: KeyRound },
-];
+const employeeItems: SidebarNavItem[] = getItemsByKeys([
+  "dashboard",
+  "time-entries",
+  "estimates",
+  "profile",
+  "change-password",
+]);
 
-const operationsItems: SidebarNavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/clients", label: "Clients", icon: Building2 },
-  { href: "/movies", label: "Movies", icon: Clapperboard },
-  { href: "/asset-type", label: "Asset Types", icon: Box },
-  { href: "/countries", label: "Countries", icon: Globe2, access: "countries" },
-  { href: "/languages", label: "Languages", icon: Languages, access: "languages" },
-  { href: "/projects", label: "Projects", icon: FolderKanban },
-  { href: "/sub-project", label: "Sub Projects", icon: Layers3 },
-  { href: "/user-assignments", label: "User Assignments", icon: ListChecks },
-  { href: "/contact-persons", label: "Contact Persons", icon: Contact },
-  { href: "/profile", label: "My Profile", icon: UserCog },
-  { href: "/change-password", label: "Change Password", icon: KeyRound },
-];
+const operationsItems: SidebarNavItem[] = getItemsByKeys([
+  "dashboard",
+  "clients",
+  "movies",
+  "asset-type",
+  "countries",
+  "languages",
+  "projects",
+  "sub-project",
+  "user-assignments",
+  "contact-persons",
+  "profile",
+  "change-password",
+]);
 
-const accountsItems: SidebarNavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/reports", label: "Reports", icon: BarChart3 },
-  { href: "/change-password", label: "Change Password", icon: KeyRound },
-];
+const accountsItems: SidebarNavItem[] = getItemsByKeys(["dashboard", "reports", "change-password"]);
 
 function isMasterDataHref(href: string) {
   return ["/clients", "/movies", "/asset-type", "/countries", "/languages", "/projects", "/sub-project", "/user-assignments", "/contact-persons"].includes(href);
@@ -137,44 +183,60 @@ function filterAccess(items: SidebarNavItem[], user: SessionUser) {
   );
 }
 
+function appendExtraMenus(items: SidebarNavItem[], user: SessionUser) {
+  const existingKeys = new Set(items.map((item) => item.key));
+  const extraKeys = normalizeMenuKeys(user.extraMenuKeys ?? []);
+  const extras = extraKeys
+    .filter((key) => !existingKeys.has(key))
+    .map((key) => baseMenuItems.find((item) => item.key === key))
+    .filter((item): item is SidebarNavItem => Boolean(item));
+
+  return [...items, ...extras];
+}
+
 export function getSidebarItems(user: SessionUser, canAccessLeaveApprovals: boolean): SidebarNavItem[] {
   if (user.userType === "EMPLOYEE") {
-    return withLeaveItems(employeeItems, user, canAccessLeaveApprovals);
+    return appendExtraMenus(withLeaveItems(employeeItems, user, canAccessLeaveApprovals), user);
   }
 
   if (user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) {
-    return withLeaveItems(filterAccess(teamLeadItems, user).filter((item) => !isMasterDataHref(item.href)), user, canAccessLeaveApprovals);
+    return appendExtraMenus(withLeaveItems(filterAccess(teamLeadItems, user).filter((item) => !isMasterDataHref(item.href)), user, canAccessLeaveApprovals), user);
   }
 
   if (isOperations(user)) {
-    return filterAccess(operationsItems, user);
+    return appendExtraMenus(filterAccess(operationsItems, user), user);
   }
 
   if (user.userType === "ACCOUNTS") {
-    return withLeaveItems(accountsItems, user, canAccessLeaveApprovals);
+    return appendExtraMenus(withLeaveItems(accountsItems, user, canAccessLeaveApprovals), user);
   }
 
   if (user.userType === "HR") {
-    return [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/users", label: "Users", icon: ShieldCheck },
-      { href: "/leave-requests", label: "Leave Requests", icon: CalendarDays },
-      ...(canAccessLeaveApprovals ? [{ href: "/leave-approvals", label: "Leave Approvals", icon: CheckCheck }] : []),
-      { href: "/leave-admin", label: "Leave Administration", icon: CalendarDays },
-      { href: "/announcements", label: "Announcements", icon: Bell },
-      { href: "/profile", label: "My Profile", icon: UserCog },
-      { href: "/change-password", label: "Change Password", icon: KeyRound },
-    ];
+    return appendExtraMenus(
+      getItemsByKeys([
+        "dashboard",
+        "users",
+        "leave-requests",
+        ...(canAccessLeaveApprovals ? (["leave-approvals"] as MenuKey[]) : []),
+        "leave-admin",
+        "announcements",
+        "profile",
+        "change-password",
+      ]),
+      user,
+    );
   }
 
   const merged = withLeaveItems(filterAccess(fullItems, user), user, canAccessLeaveApprovals);
-  return merged.filter((item) => {
+  const filtered = merged.filter((item) => {
     if (isMasterDataHref(item.href) && user.userType !== "ADMIN" && user.userType !== "OPERATIONS") return false;
     if (item.href === "/users" && !canManageUsers(user)) return false;
     if (item.href === "/contact-persons" && user.userType !== "ADMIN" && user.userType !== "OPERATIONS") return false;
     if ((item.href === "/client-billing-heads" || item.href === "/movie-billing-heads") && user.userType !== "ADMIN") return false;
     return true;
   });
+
+  return appendExtraMenus(filtered, user);
 }
 
 export function Sidebar({ user, canAccessLeaveApprovals }: { user: SessionUser; canAccessLeaveApprovals: boolean }) {

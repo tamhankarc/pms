@@ -116,6 +116,7 @@ export async function updateProfileAction(
         designation: true,
         userType: true,
         functionalRole: true,
+        extraMenuItemsJson: true,
       },
     });
 
@@ -128,6 +129,7 @@ export async function updateProfileAction(
       designation: updated.designation ?? null,
       userType: updated.userType,
       functionalRole: updated.functionalRole ?? "UNASSIGNED",
+      extraMenuKeys: currentUser.extraMenuKeys,
     });
 
     revalidatePath("/profile");

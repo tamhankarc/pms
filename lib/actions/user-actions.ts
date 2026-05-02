@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { hashPassword, requireUserTypesForAction } from "@/lib/auth";
 import { normalizeAddressCountry, toAddressSummary } from "@/lib/address";
+import { normalizeMenuKeys } from "@/lib/menu-access";
 
 const operationalRoles = [
   "DEVELOPER",
@@ -108,6 +109,10 @@ function buildAddressPayload(parsed: z.infer<typeof baseSchema>) {
   };
 }
 
+function buildExtraMenuItemsPayload(formData: FormData) {
+  return JSON.stringify(normalizeMenuKeys(formData.getAll("extraMenuKeys")));
+}
+
 export async function createUserAction(
   _prevState: UserFormState,
   formData: FormData,
@@ -182,6 +187,7 @@ export async function createUserAction(
         currentAddress: toAddressSummary(currentAddress),
         permanentAddress: toAddressSummary(permanentAddress),
         permanentSameAsCurrent,
+        extraMenuItemsJson: buildExtraMenuItemsPayload(formData),
         isActive: Boolean(parsed.data.isActive),
       },
     });
@@ -271,6 +277,7 @@ export async function updateUserAction(
         currentAddress: toAddressSummary(currentAddress),
         permanentAddress: toAddressSummary(permanentAddress),
         permanentSameAsCurrent,
+        extraMenuItemsJson: buildExtraMenuItemsPayload(formData),
         isActive: Boolean(parsed.data.isActive),
       },
     });

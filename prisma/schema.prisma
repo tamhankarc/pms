@@ -148,6 +148,7 @@ model User {
   permanentCountry       String?
   permanentPostalCode    String?
   permanentSameAsCurrent Boolean             @default(false)
+  extraMenuItemsJson     String?             @db.Text
   createdAt              DateTime            @default(now())
   updatedAt              DateTime            @updatedAt
 

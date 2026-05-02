@@ -6,6 +6,7 @@ import { updateUserAction } from "@/lib/actions/user-actions";
 import { requireUser } from "@/lib/auth";
 import { canManageUsers } from "@/lib/permissions";
 import { db } from "@/lib/db";
+import { parseMenuKeysJson } from "@/lib/menu-access";
 
 export default async function UserEditPage({
   params,
@@ -73,6 +74,7 @@ export default async function UserEditPage({
           permanentState: user.permanentState,
           permanentCountry: user.permanentCountry as "IN" | "US" | null,
           permanentPostalCode: user.permanentPostalCode,
+          extraMenuKeys: parseMenuKeysJson(user.extraMenuItemsJson),
         }}
       />
     </div>
