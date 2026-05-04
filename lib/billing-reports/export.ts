@@ -383,6 +383,7 @@ export function buildWarnerDomesticReportExcel(data: WarnerDomesticDeliverableDa
     excelRow([data.reportTitle]),
     excelRow(["Client", data.client.name]),
     excelRow(["Movie", data.selectedMovie?.title ?? "-"]),
+    ...(data.reportType === "intl-deliverable" ? [excelRow(["Country", data.selectedCountry?.name ?? "-"])] : []),
     excelRow([]),
     excelRow(["Billing Head / Project", "Cost (USD)"]),
     ...data.rows.flatMap((row, index, rows) => {
@@ -404,7 +405,7 @@ export function buildWarnerDomesticReportExcel(data: WarnerDomesticDeliverableDa
  xmlns:x="urn:schemas-microsoft-com:office:excel"
  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
  xmlns:html="http://www.w3.org/TR/REC-html40">
- ${worksheet("Domestic Deliverable", detailRows)}
+ ${worksheet(data.reportTitle, detailRows)}
 </Workbook>`;
 }
 
@@ -436,7 +437,8 @@ function buildWarnerDomesticPdfPages(data: WarnerDomesticDeliverableData) {
     commands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
     commands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
     commands.push(textCommand(`Movie: ${data.selectedMovie?.title ?? "-"}`, MARGIN_X, TOP_Y - 38, 9));
-    commands.push(textCommand("No records found.", MARGIN_X, TOP_Y - 70, 9));
+    if (data.reportType === "intl-deliverable") commands.push(textCommand(`Country: ${data.selectedCountry?.name ?? "-"}`, MARGIN_X, TOP_Y - 54, 9));
+    commands.push(textCommand("No records found.", MARGIN_X, data.reportType === "intl-deliverable" ? TOP_Y - 86 : TOP_Y - 70, 9));
     pageStreams.push(commands.join("\n"));
     return pageStreams;
   }
@@ -451,7 +453,8 @@ function buildWarnerDomesticPdfPages(data: WarnerDomesticDeliverableData) {
       commands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
       commands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
       commands.push(textCommand(`Movie: ${data.selectedMovie?.title ?? "-"}`, MARGIN_X, TOP_Y - 38, 9));
-      commands.push(textCommand(`Generated: ${new Date().toLocaleString("en-IN")}`, MARGIN_X, TOP_Y - 54, 9));
+      if (data.reportType === "intl-deliverable") commands.push(textCommand(`Country: ${data.selectedCountry?.name ?? "-"}`, MARGIN_X, TOP_Y - 54, 9));
+      commands.push(textCommand(`Generated: ${new Date().toLocaleString("en-IN")}`, MARGIN_X, data.reportType === "intl-deliverable" ? TOP_Y - 70 : TOP_Y - 54, 9));
     } else {
       commands.push(textCommand(`${data.reportTitle} continued`, MARGIN_X, TOP_Y, 13, true));
     }

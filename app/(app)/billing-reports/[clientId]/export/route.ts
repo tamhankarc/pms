@@ -7,6 +7,7 @@ import {
   getAmazonBillingReportData,
   getBillingReportCatalogForClient,
   getWarnerDomesticDeliverableData,
+  getWarnerIntlDeliverableData,
   normalizeAmazonReportType,
 } from "@/lib/billing-reports/amazon";
 import { db } from "@/lib/db";
@@ -36,9 +37,11 @@ export async function GET(
   const reportDefinition = getBillingReportCatalogForClient(client.name)?.[reportType];
   const format = searchParams.get("format") === "pdf" ? "pdf" : "excel";
 
-  if (reportDefinition?.kind === "domestic-deliverable") {
+  if (reportDefinition?.kind === "deliverable") {
     const filters = buildWarnerDomesticDeliverableFilters(searchParams);
-    const data = await getWarnerDomesticDeliverableData({ clientId, filters });
+    const data = reportType === "intl-deliverable"
+      ? await getWarnerIntlDeliverableData({ clientId, filters })
+      : await getWarnerDomesticDeliverableData({ clientId, filters });
     if (!data) redirect("/billing-reports");
 
     if (format === "pdf") {
