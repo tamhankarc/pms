@@ -195,25 +195,6 @@ function AmazonReportsWorkspace({ clientId, activeReport, data }: { clientId: st
 
       <AmazonReportFilters clientId={clientId} reportType={activeReport} data={data} />
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <div className="card p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Project</p>
-          <p className="mt-2 text-sm font-semibold text-slate-900">{data.projectName}</p>
-        </div>
-        <div className="card p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Records</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">{data.rows.length}</p>
-        </div>
-        <div className="card p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Total Cost</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">{formatUsd(data.summaryRows.reduce((sum, row) => sum + row.totalCost, 0))}</p>
-        </div>
-        <div className="card p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Contact Person</p>
-          <p className="mt-2 text-sm font-semibold text-slate-900">{data.contactPersons}</p>
-        </div>
-      </div>
-
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="section-title">{data.reportTitle}</h2>
