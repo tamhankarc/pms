@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { WarnerDeliverableFiltersClient } from "@/components/billing-reports/warner-deliverable-filters";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canViewBillingReports } from "@/lib/permissions";
@@ -155,23 +156,18 @@ function WarnerDeliverableFilters({ clientId, data }: { clientId: string; data: 
     : data.reportType === "intl-deliverable"
       ? "No active Working/Completed INTL movies found."
       : "No active Working/Completed Other/Canada movies found.";
+
   return (
-    <form method="get" action={`/billing-reports/${clientId}`} className="card p-5">
-      <input type="hidden" name="report" value={data.reportType} />
-      <div className={hasCountryFilter ? "grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end" : "grid gap-4 md:grid-cols-[1fr_auto] md:items-end"}>
-        <div>
-          <label className="label" htmlFor="movieId">Movie</label>
-          <SearchableCombobox id="movieId" name="movieId" defaultValue={data.filters.movieId} options={data.movieOptions.map((movie) => ({ value: movie.id, label: movie.title }))} placeholder="Select movie" searchPlaceholder="Search movies..." emptyLabel={movieEmptyLabel} />
-        </div>
-        {hasCountryFilter ? (
-          <div>
-            <label className="label" htmlFor="countryId">Country</label>
-            <SearchableCombobox id="countryId" name="countryId" defaultValue={data.filters.countryId} options={data.countryOptions.map((country) => ({ value: country.id, label: country.name }))} placeholder="Select country" searchPlaceholder="Search countries..." emptyLabel="No countries found for selected movie." />
-          </div>
-        ) : null}
-        <button className="btn-primary" type="submit">Apply</button>
-      </div>
-    </form>
+    <WarnerDeliverableFiltersClient
+      clientId={clientId}
+      reportType={data.reportType}
+      movieId={data.filters.movieId}
+      countryId={data.filters.countryId}
+      movieOptions={data.movieOptions.map((movie) => ({ value: movie.id, label: movie.title }))}
+      countryOptions={data.countryOptions.map((country) => ({ value: country.id, label: country.name }))}
+      hasCountryFilter={hasCountryFilter}
+      movieEmptyLabel={movieEmptyLabel}
+    />
   );
 }
 

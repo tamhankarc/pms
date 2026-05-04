@@ -452,7 +452,7 @@ async function getWarnerDeliverableData({
     orderBy: { title: "asc" },
   });
 
-  const selectedMovieId = filters.movieId || movieOptions[0]?.id || "";
+  const selectedMovieId = filters.movieId || (isDomestic ? movieOptions[0]?.id || "" : "");
   const selectedMovie = selectedMovieId
     ? await db.movie.findFirst({
         where: {
