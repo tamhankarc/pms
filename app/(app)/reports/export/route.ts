@@ -131,7 +131,7 @@ export async function GET(request: Request) {
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
   }
-  if (!canAccessMenuItem(user, "reports")) {
+  if (user.userType === "ACCOUNTS" || !canAccessMenuItem(user, "reports")) {
     return new Response("Forbidden", { status: 403 });
   }
 

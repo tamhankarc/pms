@@ -1,19 +1,22 @@
 import type { SessionUser } from "@/lib/auth";
+import type { BillingReportClientNavItem } from "@/components/layout/sidebar";
 import { MobileSidebar } from "@/components/layout/mobile-sidebar";
 import { logoutAction } from "@/lib/actions/auth-actions";
 
 export function Topbar({
   user,
   canAccessLeaveApprovals,
+  billingReportClients = [],
 }: {
   user: SessionUser;
   canAccessLeaveApprovals: boolean;
+  billingReportClients?: BillingReportClientNavItem[];
 }) {
   return (
     <header className="border-b border-slate-200 bg-white/80 backdrop-blur">
       <div className="container-page flex items-center justify-between gap-4 py-4">
         <div className="flex items-center gap-3">
-          <MobileSidebar user={user} canAccessLeaveApprovals={canAccessLeaveApprovals} />
+          <MobileSidebar user={user} canAccessLeaveApprovals={canAccessLeaveApprovals} billingReportClients={billingReportClients} />
           <div>
             <h1 className="text-lg font-semibold text-slate-900">Project &amp; Leave Management Suite</h1>
           </div>

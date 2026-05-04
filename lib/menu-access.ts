@@ -18,6 +18,7 @@ export const menuItems = [
   { key: "estimates", href: "/estimates", label: "Estimates" },
   { key: "team-lead-assignments", href: "/team-lead-assignments", label: "Team Lead Assignments" },
   { key: "reports", href: "/reports", label: "Reports" },
+  { key: "billing-reports", href: "/billing-reports", label: "Billing Reports" },
   { key: "leave-requests", href: "/leave-requests", label: "Leave Requests" },
   { key: "leave-approvals", href: "/leave-approvals", label: "Leave Approvals" },
   { key: "leave-admin", href: "/leave-admin", label: "Leave Administration" },
@@ -53,7 +54,7 @@ export function getBaseMenuKeysForUserType(userType: UserType | string): MenuKey
     case "HR":
       return ["dashboard", "users", "leave-requests", "leave-approvals", "leave-admin", "announcements", "profile", "change-password"];
     case "ACCOUNTS":
-      return ["dashboard", "reports", "change-password"];
+      return ["billing-reports"];
     case "EMPLOYEE":
       return ["dashboard", "time-entries", "estimates", "leave-requests", "profile", "change-password"];
     case "TEAM_LEAD":
@@ -68,5 +69,10 @@ export function getBaseMenuKeysForUserType(userType: UserType | string): MenuKey
 
 export function getExtraMenuOptionsForUserType(userType: UserType | string) {
   const defaults = new Set(getBaseMenuKeysForUserType(userType));
-  return menuItems.filter((item) => !defaults.has(item.key));
+  return menuItems.filter((item) => {
+    if (defaults.has(item.key)) return false;
+    if (item.key === "billing-reports") return false;
+    if (userType === "ACCOUNTS" && ["dashboard", "reports", "change-password"].includes(item.key)) return false;
+    return true;
+  });
 }

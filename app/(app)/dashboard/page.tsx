@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   Bell,
   CalendarDays,
@@ -235,6 +236,8 @@ export default async function DashboardPage({
   }>;
 }) {
   const user = await requireUser();
+  if (String(user.userType) === "ACCOUNTS") redirect("/billing-reports");
+
   const params = (await searchParams) ?? {};
   const todayKey = getIstDateKey();
   const leaveMonth =
@@ -262,7 +265,6 @@ export default async function DashboardPage({
   const isEmployee = user.userType === "EMPLOYEE";
   const isTeamLead = user.userType === "TEAM_LEAD";
   const isManager = user.userType === "MANAGER";
-  const isAccountsBilling = user.userType === "ACCOUNTS" && user.functionalRole === "BILLING";
 
   const showBillingDashboard = canSeeBillingDashboard(user);
   const showAttendanceCard = canMarkAttendance(user);
@@ -314,8 +316,8 @@ export default async function DashboardPage({
     adminDashboardData,
     activeAnnouncements,
   ] = await Promise.all([
-    isAccountsBilling ? Promise.resolve(null) : getDashboardStats(user),
-    isAccountsBilling ? Promise.resolve([]) : getVisibleProjects(user),
+    getDashboardStats(user),
+    getVisibleProjects(user),
     user.userType === "TEAM_LEAD" ? getManagedEmployees(user.id) : Promise.resolve([]),
     showBillingDashboard
       ? getBillingDashboardData(
@@ -374,27 +376,6 @@ export default async function DashboardPage({
     if (attendanceWeekend) search.set("weekend", "true");
     return `/dashboard/attendance-export?${search.toString()}`;
   })();
-
-  if (isAccountsBilling) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Dashboard" description="Billing dashboard showing project hours by selected date range." />
-        <div id="project-billing-hours">
-          <BillingDashboardSection
-            title="Project billing hours"
-            description="Filter by start date, end date, client, project, and billing type to review time worked across projects."
-            billingStartDate={billingStartDate}
-            billingEndDate={billingEndDate}
-            billingClientId={billingClientId}
-            billingProjectId={billingProjectId}
-            billingModel={billingModel}
-            billingPage={String(billingPage)}
-            billingData={billingData}
-          />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-8">

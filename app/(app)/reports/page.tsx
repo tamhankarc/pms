@@ -304,6 +304,7 @@ export default async function ReportsPage({
     redirect("/reports/client-wise-minutes");
   }
   const user = await requireUser();
+  if (user.userType === "ACCOUNTS") redirect("/billing-reports");
   if (!canAccessMenuItem(user, "reports")) redirect("/dashboard");
   const params = (await searchParams) ?? {};
   const activeReportSlug = normalizeReportSlug(activeReportName);

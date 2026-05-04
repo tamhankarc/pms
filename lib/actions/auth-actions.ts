@@ -26,7 +26,7 @@ export async function loginAction(_state: unknown, formData: FormData) {
   if (!user) return { error: "Invalid credentials or inactive account." };
 
   await createSession(user);
-  redirect("/dashboard");
+  redirect(user.userType === "ACCOUNTS" ? "/billing-reports" : "/dashboard");
 }
 
 export async function logoutAction() {

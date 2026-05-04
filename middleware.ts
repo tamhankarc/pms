@@ -12,7 +12,7 @@ const EMPLOYEE_ALLOWED_PATHS = [
   "/profile",
   "/change-password",
 ];
-const ACCOUNTS_ALLOWED_PATHS = ["/dashboard", "/reports", "/change-password"];
+const ACCOUNTS_ALLOWED_PATHS = ["/billing-reports", "/change-password"];
 const HR_ALLOWED_PATHS = [
   "/dashboard",
   "/users",
@@ -91,6 +91,7 @@ const MENU_ROUTE_PREFIXES: Record<string, string> = {
   "leave-admin": "/leave-admin",
   announcements: "/announcements",
   profile: "/profile",
+  "billing-reports": "/billing-reports",
   "change-password": "/change-password",
 };
 
@@ -122,7 +123,18 @@ export async function middleware(request: NextRequest) {
   }
 
   if (authed && (pathname === "/" || pathname === "/login" || pathname === "/unsupported-device")) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL(session?.userType === "ACCOUNTS" ? "/billing-reports" : "/dashboard", request.url));
+  }
+
+  if (session?.userType === "ACCOUNTS" && (pathname === "/dashboard" || pathname.startsWith("/dashboard/") || pathname === "/reports" || pathname.startsWith("/reports/"))) {
+    return NextResponse.redirect(new URL("/billing-reports", request.url));
+  }
+
+  if (pathname === "/billing-reports" || pathname.startsWith("/billing-reports/")) {
+    if (session?.userType !== "ADMIN" && session?.userType !== "ACCOUNTS") {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+    return NextResponse.next();
   }
 
   if (isManagedMenuPath(pathname)) {
