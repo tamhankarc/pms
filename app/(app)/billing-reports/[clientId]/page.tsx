@@ -13,6 +13,7 @@ import {
   getAmazonBillingReportData,
   getWarnerDomesticDeliverableData,
   getWarnerIntlDeliverableData,
+  getWarnerOtherDeliverableData,
   isWarnerBillingReportClient,
   normalizeAmazonReportType,
   type AmazonReportType,
@@ -148,16 +149,21 @@ function TimeEntryReportsWorkspace({ clientId, activeReport, data }: { clientId:
 }
 
 function WarnerDeliverableFilters({ clientId, data }: { clientId: string; data: WarnerDomesticDeliverableData }) {
-  const isIntl = data.reportType === "intl-deliverable";
+  const hasCountryFilter = data.reportType === "intl-deliverable" || data.reportType === "other-deliverable";
+  const movieEmptyLabel = data.reportType === "domestic-deliverable"
+    ? "No active Working/Completed Domestic movies found."
+    : data.reportType === "intl-deliverable"
+      ? "No active Working/Completed INTL movies found."
+      : "No active Working/Completed Other/Canada movies found.";
   return (
     <form method="get" action={`/billing-reports/${clientId}`} className="card p-5">
       <input type="hidden" name="report" value={data.reportType} />
-      <div className={isIntl ? "grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end" : "grid gap-4 md:grid-cols-[1fr_auto] md:items-end"}>
+      <div className={hasCountryFilter ? "grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end" : "grid gap-4 md:grid-cols-[1fr_auto] md:items-end"}>
         <div>
           <label className="label" htmlFor="movieId">Movie</label>
-          <SearchableCombobox id="movieId" name="movieId" defaultValue={data.filters.movieId} options={data.movieOptions.map((movie) => ({ value: movie.id, label: movie.title }))} placeholder="Select movie" searchPlaceholder="Search movies..." emptyLabel={isIntl ? "No active INTL movies found." : "No active Domestic movies found."} />
+          <SearchableCombobox id="movieId" name="movieId" defaultValue={data.filters.movieId} options={data.movieOptions.map((movie) => ({ value: movie.id, label: movie.title }))} placeholder="Select movie" searchPlaceholder="Search movies..." emptyLabel={movieEmptyLabel} />
         </div>
-        {isIntl ? (
+        {hasCountryFilter ? (
           <div>
             <label className="label" htmlFor="countryId">Country</label>
             <SearchableCombobox id="countryId" name="countryId" defaultValue={data.filters.countryId} options={data.countryOptions.map((country) => ({ value: country.id, label: country.name }))} placeholder="Select country" searchPlaceholder="Search countries..." emptyLabel="No countries found for selected movie." />
@@ -177,15 +183,15 @@ function WarnerDomesticTable({ data }: { data: WarnerDomesticDeliverableData }) 
         <thead className="table-head"><tr><th className="table-cell">Billing Head / Project</th><th className="table-cell">Cost</th></tr></thead>
         <tbody className="divide-y divide-slate-100">
           {!data.selectedMovie ? <tr><td colSpan={2} className="table-cell text-center text-sm text-slate-500">Select an active movie to view deliverables.</td></tr> : null}
-          {data.reportType === "intl-deliverable" && data.selectedMovie && !data.selectedCountry ? <tr><td colSpan={2} className="table-cell text-center text-sm text-slate-500">Select a country with time entries for the selected movie to view deliverables.</td></tr> : null}
-          {data.selectedMovie && (data.reportType !== "intl-deliverable" || data.selectedCountry) && groups.map((group) => {
+          {(data.reportType === "intl-deliverable" || data.reportType === "other-deliverable") && data.selectedMovie && !data.selectedCountry ? <tr><td colSpan={2} className="table-cell text-center text-sm text-slate-500">Select a country with time entries for the selected movie to view deliverables.</td></tr> : null}
+          {data.selectedMovie && ((data.reportType !== "intl-deliverable" && data.reportType !== "other-deliverable") || data.selectedCountry) && groups.map((group) => {
             const rows = data.rows.filter((row) => row.group === group);
             return [
               <tr key={`${group}-header`} className="bg-slate-50"><td colSpan={2} className="table-cell text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">{group}</td></tr>,
               ...(rows.length ? rows.map((row, index) => <tr key={`${group}-${row.label}-${index}`}><td className="table-cell"><div className="font-medium text-slate-900">{row.label}</div>{row.meta ? <div className="text-xs text-slate-500">{row.meta}</div> : null}</td><td className="table-cell whitespace-nowrap font-medium text-slate-900">{formatUsd(row.cost)}</td></tr>) : [<tr key={`${group}-empty`}><td colSpan={2} className="table-cell text-sm text-slate-500">No records available.</td></tr>]),
             ];
           })}
-          {data.selectedMovie && (data.reportType !== "intl-deliverable" || data.selectedCountry) ? <tr className="bg-slate-100"><td className="table-cell font-semibold text-slate-900">Total</td><td className="table-cell font-semibold text-slate-900">{formatUsd(data.totalCost)}</td></tr> : null}
+          {data.selectedMovie && ((data.reportType !== "intl-deliverable" && data.reportType !== "other-deliverable") || data.selectedCountry) ? <tr className="bg-slate-100"><td className="table-cell font-semibold text-slate-900">Total</td><td className="table-cell font-semibold text-slate-900">{formatUsd(data.totalCost)}</td></tr> : null}
         </tbody>
       </table>
     </div>
@@ -193,7 +199,8 @@ function WarnerDomesticTable({ data }: { data: WarnerDomesticDeliverableData }) 
 }
 
 function WarnerDeliverableWorkspace({ clientId, activeReport, data }: { clientId: string; activeReport: AmazonReportType; data: WarnerDomesticDeliverableData }) {
-  const subtitle = data.reportType === "intl-deliverable"
+  const requiresCountry = data.reportType === "intl-deliverable" || data.reportType === "other-deliverable";
+  const subtitle = requiresCountry
     ? data.selectedMovie && data.selectedCountry ? `Deliverable billing for ${data.selectedMovie.title} / ${data.selectedCountry.name}.` : "Select a movie and country to view deliverable billing."
     : data.selectedMovie ? `Deliverable billing for ${data.selectedMovie.title}.` : "Select a movie to view deliverable billing.";
   return (
@@ -239,11 +246,12 @@ export default async function ClientBillingReportPage({ params, searchParams }: 
   const timeEntryReportData = activeReportDefinition?.kind === "time-entry" ? await getAmazonBillingReportData({ clientId, reportType: activeReport, filters }) : null;
   const domesticDeliverableData = isWarnerBillingReportClient(client.name) && activeReport === "domestic-deliverable" ? await getWarnerDomesticDeliverableData({ clientId, filters: domesticFilters }) : null;
   const intlDeliverableData = isWarnerBillingReportClient(client.name) && activeReport === "intl-deliverable" ? await getWarnerIntlDeliverableData({ clientId, filters: domesticFilters }) : null;
+  const otherDeliverableData = isWarnerBillingReportClient(client.name) && activeReport === "other-deliverable" ? await getWarnerOtherDeliverableData({ clientId, filters: domesticFilters }) : null;
 
   return (
     <div>
       <PageHeader title={`${client.name} Billing Report`} description={reportCatalog ? "Use the report tabs to review billing records and export them to Excel or PDF." : "Placeholder billing report page for this client. Client-specific report tables can be added here."} actions={<Link className="btn-secondary" href="/billing-reports">Back to Billing Reports</Link>} />
-      {timeEntryReportData ? <TimeEntryReportsWorkspace clientId={clientId} activeReport={activeReport} data={timeEntryReportData} /> : (domesticDeliverableData || intlDeliverableData) ? <WarnerDeliverableWorkspace clientId={clientId} activeReport={activeReport} data={(domesticDeliverableData || intlDeliverableData)!} /> : activeReportDefinition?.kind === "placeholder" ? <PlaceholderConfiguredReport clientId={clientId} activeReport={activeReport} clientName={client.name} title={activeReportDefinition.title} /> : (
+      {timeEntryReportData ? <TimeEntryReportsWorkspace clientId={clientId} activeReport={activeReport} data={timeEntryReportData} /> : (domesticDeliverableData || intlDeliverableData || otherDeliverableData) ? <WarnerDeliverableWorkspace clientId={clientId} activeReport={activeReport} data={(domesticDeliverableData || intlDeliverableData || otherDeliverableData)!} /> : activeReportDefinition?.kind === "placeholder" ? <PlaceholderConfiguredReport clientId={clientId} activeReport={activeReport} clientName={client.name} title={activeReportDefinition.title} /> : (
         <>
           <div className="grid gap-4 md:grid-cols-4 mb-6">
             <div className="card p-5"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Status</p><p className="mt-2 text-lg font-semibold text-slate-900">{client.isActive ? "Active" : "Inactive"}</p></div>

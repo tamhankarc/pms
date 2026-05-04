@@ -37,7 +37,7 @@ export type AmazonBillingReportData = {
   reportTitle: string;
   projectName: string;
   filters: AmazonBillingReportFilters;
-  movieOptions: { id: string; title: string }[];
+  movieOptions: { id: string; title: string; status?: string }[];
   assetTypeOptions: { id: string; name: string }[];
   rows: AmazonBillingReportRow[];
   summaryRows: AmazonBillingReportSummaryRow[];
@@ -61,10 +61,10 @@ export type WarnerDomesticDeliverableLine = {
 
 export type WarnerDomesticDeliverableData = {
   client: { id: string; name: string; hourlyCost: unknown };
-  reportType: "domestic-deliverable" | "intl-deliverable";
+  reportType: "domestic-deliverable" | "intl-deliverable" | "other-deliverable";
   reportTitle: string;
   filters: WarnerDeliverableFilters;
-  movieOptions: { id: string; title: string }[];
+  movieOptions: { id: string; title: string; status: string }[];
   countryOptions: { id: string; name: string; isoCode: string | null }[];
   selectedMovie: { id: string; title: string } | null;
   selectedCountry: { id: string; name: string; isoCode: string | null } | null;
@@ -136,7 +136,7 @@ export const WARNER_REPORTS: Partial<Record<AmazonReportType, BillingReportDefin
     title: "Other Deliverable",
     projectName: "",
     includeLanguage: false,
-    kind: "placeholder",
+    kind: "deliverable",
   },
 };
 
@@ -386,6 +386,24 @@ function calculateBillingHeadCost(costType: "WHOLE_COST" | "PER_UNIT_COST", cost
   return baseCost;
 }
 
+function formatMovieStatus(status: string) {
+  return status.replaceAll("_", " ").replace("COMPLETED BILLED", "COMPLETED & BILLED");
+}
+
+function isUsCountry(country: { isoCode: string | null; name: string }) {
+  return (country.isoCode ?? "").toUpperCase() === "US" || country.name.trim().toLowerCase() === "united states" || country.name.trim().toLowerCase() === "usa";
+}
+
+function isCanadaCountry(country: { isoCode: string | null; name: string }) {
+  return (country.isoCode ?? "").toUpperCase() === "CA" || country.name.trim().toLowerCase() === "canada";
+}
+
+function getDeliverableReportTitle(reportType: "domestic-deliverable" | "intl-deliverable" | "other-deliverable") {
+  if (reportType === "intl-deliverable") return "Intl Deliverable";
+  if (reportType === "other-deliverable") return "Other Deliverable";
+  return "Domestic Deliverable";
+}
+
 async function getWarnerDeliverableData({
   clientId,
   filters,
@@ -393,9 +411,13 @@ async function getWarnerDeliverableData({
 }: {
   clientId: string;
   filters: WarnerDeliverableFilters;
-  reportType: "domestic-deliverable" | "intl-deliverable";
+  reportType: "domestic-deliverable" | "intl-deliverable" | "other-deliverable";
 }): Promise<WarnerDomesticDeliverableData | null> {
+  const isDomestic = reportType === "domestic-deliverable";
   const isIntl = reportType === "intl-deliverable";
+  const isOther = reportType === "other-deliverable";
+  const reportTitle = getDeliverableReportTitle(reportType);
+
   const client = await db.client.findUnique({
     where: { id: clientId },
     select: { id: true, name: true, hourlyCost: true },
@@ -406,9 +428,27 @@ async function getWarnerDeliverableData({
     where: {
       clientId,
       isActive: true,
-      ...(isIntl ? { billingIntl: true } : { billingDomestic: true }),
+      status: { in: ["WORKING", "COMPLETED"] },
+      ...(isDomestic
+        ? { billingDomestic: true }
+        : isIntl
+          ? { billingIntl: true }
+          : {
+              OR: [
+                { billingOther: true },
+                {
+                  billingIntl: true,
+                  timeEntries: {
+                    some: {
+                      project: { clientId },
+                      country: { is: { OR: [{ isoCode: "CA" }, { name: "Canada" }] } },
+                    },
+                  },
+                },
+              ],
+            }),
     },
-    select: { id: true, title: true },
+    select: { id: true, title: true, status: true, billingOther: true, billingIntl: true },
     orderBy: { title: "asc" },
   });
 
@@ -419,18 +459,42 @@ async function getWarnerDeliverableData({
           id: selectedMovieId,
           clientId,
           isActive: true,
-          ...(isIntl ? { billingIntl: true } : { billingDomestic: true }),
+          status: { in: ["WORKING", "COMPLETED"] },
+          ...(isDomestic
+            ? { billingDomestic: true }
+            : isIntl
+              ? { billingIntl: true }
+              : {
+              OR: [
+                { billingOther: true },
+                {
+                  billingIntl: true,
+                  timeEntries: {
+                    some: {
+                      project: { clientId },
+                      country: { is: { OR: [{ isoCode: "CA" }, { name: "Canada" }] } },
+                    },
+                  },
+                },
+              ],
+            }),
         },
-        select: { id: true, title: true, clientId: true, billingUnitsJson: true },
+        select: { id: true, title: true, status: true, clientId: true, billingUnitsJson: true, billingOther: true, billingIntl: true },
       })
     : null;
+
+  const mappedMovieOptions = movieOptions.map((movie) => ({
+    id: movie.id,
+    title: `${movie.title} (${formatMovieStatus(movie.status)})`,
+    status: movie.status,
+  }));
 
   const emptyData = (countryOptions: WarnerDomesticDeliverableData["countryOptions"] = [], selectedCountry: WarnerDomesticDeliverableData["selectedCountry"] = null): WarnerDomesticDeliverableData => ({
     client,
     reportType,
-    reportTitle: isIntl ? "Intl Deliverable" : "Domestic Deliverable",
+    reportTitle,
     filters: { movieId: selectedMovieId, countryId: filters.countryId || "" },
-    movieOptions,
+    movieOptions: mappedMovieOptions,
     countryOptions,
     selectedMovie: null,
     selectedCountry,
@@ -443,7 +507,7 @@ async function getWarnerDeliverableData({
   let countryOptions: WarnerDomesticDeliverableData["countryOptions"] = [];
   let selectedCountry: WarnerDomesticDeliverableData["selectedCountry"] = null;
 
-  if (isIntl) {
+  if (!isDomestic) {
     const countryEntries = await db.timeEntry.findMany({
       where: {
         movieId: selectedMovie.id,
@@ -457,7 +521,12 @@ async function getWarnerDeliverableData({
 
     const countryMap = new Map<string, { id: string; name: string; isoCode: string | null }>();
     for (const entry of countryEntries) {
-      if (entry.country) countryMap.set(entry.country.id, entry.country);
+      if (!entry.country) continue;
+      const country = entry.country;
+      if (isUsCountry(country)) continue;
+      if (isIntl && isCanadaCountry(country)) continue;
+      if (isOther && !selectedMovie.billingOther && !(selectedMovie.billingIntl && isCanadaCountry(country))) continue;
+      countryMap.set(country.id, country);
     }
     countryOptions = Array.from(countryMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
@@ -470,11 +539,11 @@ async function getWarnerDeliverableData({
       return {
         client,
         reportType,
-        reportTitle: "Intl Deliverable",
+        reportTitle,
         filters: { movieId: selectedMovie.id, countryId: filters.countryId || "" },
-        movieOptions,
+        movieOptions: mappedMovieOptions,
         countryOptions,
-        selectedMovie: { id: selectedMovie.id, title: selectedMovie.title },
+        selectedMovie: { id: selectedMovie.id, title: `${selectedMovie.title} (${formatMovieStatus(selectedMovie.status)})` },
         selectedCountry: null,
         rows: [],
         totalCost: 0,
@@ -482,6 +551,7 @@ async function getWarnerDeliverableData({
     }
   }
 
+  const useIntlBilling = !isDomestic;
   const unitsByHeadId = getMovieBillingUnits(selectedMovie);
   const rows: WarnerDomesticDeliverableLine[] = [];
 
@@ -489,7 +559,7 @@ async function getWarnerDeliverableData({
     where: {
       clientId,
       isActive: true,
-      ...(isIntl
+      ...(useIntlBilling
         ? { intlActive: true, intlCompulsionType: "FIXED_COMPULSORY" }
         : { domesticActive: true, domesticCompulsionType: "FIXED_COMPULSORY" }),
     },
@@ -500,9 +570,9 @@ async function getWarnerDeliverableData({
     const units = unitsByHeadId.get(head.id) ?? (head.costType === "PER_UNIT_COST" ? 0 : 1);
     rows.push({
       label: head.name,
-      cost: calculateBillingHeadCost(head.costType, isIntl ? head.intlCost : head.domesticCost, units),
+      cost: calculateBillingHeadCost(head.costType, useIntlBilling ? head.intlCost : head.domesticCost, units),
       group: "Fixed - Compulsory",
-      meta: head.costType === "PER_UNIT_COST" ? `Per-unit × ${units}` : "Whole cost",
+      meta: head.costType === "PER_UNIT_COST" ? `Per-unit Ã ${units}` : "Whole cost",
     });
   }
 
@@ -511,12 +581,12 @@ async function getWarnerDeliverableData({
       clientId,
       movieId: selectedMovie.id,
       isActive: true,
-      ...(isIntl
-        ? { countryId: selectedCountry?.id ?? "" }
-        : { country: { is: { isoCode: "US" } } }),
+      ...(isDomestic
+        ? { country: { is: { isoCode: "US" } } }
+        : { countryId: selectedCountry?.id ?? "" }),
       billingHead: { is: {
         isActive: true,
-        ...(isIntl
+        ...(useIntlBilling
           ? { intlActive: true, intlCompulsionType: "FIXED_OPTIONAL" }
           : { domesticActive: true, domesticCompulsionType: "FIXED_OPTIONAL" }),
       } },
@@ -531,9 +601,9 @@ async function getWarnerDeliverableData({
     const units = Number(assignment.units ?? 0);
     rows.push({
       label: assignment.billingHead.name,
-      cost: calculateBillingHeadCost(assignment.billingHead.costType, isIntl ? assignment.billingHead.intlCost : assignment.billingHead.domesticCost, units),
+      cost: calculateBillingHeadCost(assignment.billingHead.costType, useIntlBilling ? assignment.billingHead.intlCost : assignment.billingHead.domesticCost, units),
       group: "Fixed - Optional",
-      meta: assignment.billingHead.costType === "PER_UNIT_COST" ? `Per-unit × ${units}` : "Whole cost",
+      meta: assignment.billingHead.costType === "PER_UNIT_COST" ? `Per-unit Ã ${units}` : "Whole cost",
     });
   }
 
@@ -544,7 +614,7 @@ async function getWarnerDeliverableData({
       timeEntries: {
         some: {
           movieId: selectedMovie.id,
-          ...(isIntl ? { countryId: selectedCountry?.id ?? "" } : {}),
+          ...(isDomestic ? {} : { countryId: selectedCountry?.id ?? "" }),
         },
       },
     },
@@ -565,7 +635,7 @@ async function getWarnerDeliverableData({
       label: `${project.name} (${project.status.replaceAll("_", " ")})`,
       cost: fixedHoursCost + additionalCharges,
       group: "Fixed Full Projects",
-      meta: `${Number(project.fixedContractHours ?? 0)} hrs × ${formatUsd(Number(client.hourlyCost ?? 0))}${additionalCharges > 0 ? ` + ${formatUsd(additionalCharges)} additional` : ""}`,
+      meta: `${Number(project.fixedContractHours ?? 0)} hrs Ã ${formatUsd(Number(client.hourlyCost ?? 0))}${additionalCharges > 0 ? ` + ${formatUsd(additionalCharges)} additional` : ""}`,
     });
   }
 
@@ -574,11 +644,11 @@ async function getWarnerDeliverableData({
   return {
     client,
     reportType,
-    reportTitle: isIntl ? "Intl Deliverable" : "Domestic Deliverable",
+    reportTitle,
     filters: { movieId: selectedMovie.id, countryId: selectedCountry?.id ?? "" },
-    movieOptions,
+    movieOptions: mappedMovieOptions,
     countryOptions,
-    selectedMovie: { id: selectedMovie.id, title: selectedMovie.title },
+    selectedMovie: { id: selectedMovie.id, title: `${selectedMovie.title} (${formatMovieStatus(selectedMovie.status)})` },
     selectedCountry,
     rows,
     totalCost,
@@ -603,6 +673,16 @@ export async function getWarnerIntlDeliverableData({
   filters: WarnerDeliverableFilters;
 }): Promise<WarnerDomesticDeliverableData | null> {
   return getWarnerDeliverableData({ clientId, filters, reportType: "intl-deliverable" });
+}
+
+export async function getWarnerOtherDeliverableData({
+  clientId,
+  filters,
+}: {
+  clientId: string;
+  filters: WarnerDeliverableFilters;
+}): Promise<WarnerDomesticDeliverableData | null> {
+  return getWarnerDeliverableData({ clientId, filters, reportType: "other-deliverable" });
 }
 
 export function sanitizeFileSegment(value: string) {
