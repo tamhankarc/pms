@@ -1,6 +1,12 @@
 import { db } from "@/lib/db";
 
-export type AmazonReportType = "social-assets" | "localization";
+export type AmazonReportType =
+  | "social-assets"
+  | "localization"
+  | "wbhe-status"
+  | "domestic-deliverable"
+  | "intl-deliverable"
+  | "other-deliverable";
 
 export type AmazonBillingReportFilters = {
   fromDate: string;
@@ -39,38 +45,93 @@ export type AmazonBillingReportData = {
   projectFound: boolean;
 };
 
+export type WarnerDomesticDeliverableFilters = {
+  movieId: string;
+};
+
+export type WarnerDomesticDeliverableLine = {
+  label: string;
+  cost: number;
+  group: "Fixed - Compulsory" | "Fixed - Optional" | "Fixed Full Projects";
+  meta?: string;
+};
+
+export type WarnerDomesticDeliverableData = {
+  client: { id: string; name: string; hourlyCost: unknown };
+  reportType: "domestic-deliverable";
+  reportTitle: string;
+  filters: WarnerDomesticDeliverableFilters;
+  movieOptions: { id: string; title: string }[];
+  selectedMovie: { id: string; title: string } | null;
+  rows: WarnerDomesticDeliverableLine[];
+  totalCost: number;
+};
+
 export const AMAZON_CLIENT_NAME = "Amazon Studios";
 export const UNIVERSAL_CLIENT_NAME = "Universal Pictures International";
+export const WARNER_CLIENT_NAME = "Warner Bros. Entertainment Inc.";
 
 export type BillingReportDefinition = {
   title: string;
   projectName: string;
   includeLanguage: boolean;
+  kind?: "time-entry" | "domestic-deliverable" | "placeholder";
 };
 
-export const AMAZON_REPORTS: Record<AmazonReportType, BillingReportDefinition> = {
+export const AMAZON_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
   "social-assets": {
     title: "Amazon Social Assets",
     projectName: "AMZ Social QC",
     includeLanguage: false,
+    kind: "time-entry",
   },
   localization: {
     title: "Amazon Localization",
     projectName: "AMZ Social Localization",
     includeLanguage: true,
+    kind: "time-entry",
   },
 };
 
-export const UNIVERSAL_REPORTS: Record<AmazonReportType, BillingReportDefinition> = {
+export const UNIVERSAL_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
   "social-assets": {
     title: "UNI Social Status",
     projectName: "UNI Social QC",
     includeLanguage: false,
+    kind: "time-entry",
   },
   localization: {
     title: "UNI Localization Status",
     projectName: "UNI Social Localization",
     includeLanguage: true,
+    kind: "time-entry",
+  },
+};
+
+export const WARNER_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
+  "wbhe-status": {
+    title: "WBHE Status",
+    projectName: "WB Home Entertainment (Social)",
+    includeLanguage: false,
+    kind: "time-entry",
+  },
+  "domestic-deliverable": {
+    title: "Domestic Deliverable",
+    projectName: "",
+    includeLanguage: false,
+    kind: "domestic-deliverable",
+  },
+  "intl-deliverable": {
+    title: "Intl Deliverable",
+    projectName: "",
+    includeLanguage: false,
+    kind: "placeholder",
+  },
+  "other-deliverable": {
+    title: "Other Deliverable",
+    projectName: "",
+    includeLanguage: false,
+    kind: "placeholder",
   },
 };
 
@@ -78,6 +139,7 @@ export function getBillingReportCatalogForClient(clientName: string) {
   const normalizedClientName = clientName.trim().toLowerCase();
   if (normalizedClientName === AMAZON_CLIENT_NAME.toLowerCase()) return AMAZON_REPORTS;
   if (normalizedClientName === UNIVERSAL_CLIENT_NAME.toLowerCase()) return UNIVERSAL_REPORTS;
+  if (normalizedClientName === WARNER_CLIENT_NAME.toLowerCase()) return WARNER_REPORTS;
   return null;
 }
 
@@ -85,8 +147,14 @@ export function isConfiguredBillingReportClient(clientName: string) {
   return Boolean(getBillingReportCatalogForClient(clientName));
 }
 
-export function normalizeAmazonReportType(value: string | null | undefined): AmazonReportType {
-  return value === "localization" ? "localization" : "social-assets";
+export function isWarnerBillingReportClient(clientName: string) {
+  return clientName.trim().toLowerCase() === WARNER_CLIENT_NAME.toLowerCase();
+}
+
+export function normalizeAmazonReportType(value: string | null | undefined, clientName?: string): AmazonReportType {
+  const allowed = getBillingReportCatalogForClient(clientName ?? "") ?? AMAZON_REPORTS;
+  if (value && Object.prototype.hasOwnProperty.call(allowed, value)) return value as AmazonReportType;
+  return isWarnerBillingReportClient(clientName ?? "") ? "wbhe-status" : "social-assets";
 }
 
 export function toDateInputValue(value: Date) {
@@ -141,6 +209,18 @@ export function buildAmazonBillingReportFilters(searchParams: URLSearchParams | 
   } satisfies AmazonBillingReportFilters;
 }
 
+export function buildWarnerDomesticDeliverableFilters(searchParams: URLSearchParams | Record<string, string | string[] | undefined>) {
+  const getValue = (key: string) => {
+    if (searchParams instanceof URLSearchParams) return searchParams.get(key) ?? undefined;
+    const value = searchParams[key];
+    return Array.isArray(value) ? value[0] : value;
+  };
+
+  return {
+    movieId: getValue("movieId") || "",
+  } satisfies WarnerDomesticDeliverableFilters;
+}
+
 function buildContactPersonLabel(contactPersons: { name: string; email: string }[]) {
   if (!contactPersons.length) return "-";
   return contactPersons.map((person) => `${person.name}${person.email ? ` (${person.email})` : ""}`).join(", ");
@@ -166,6 +246,8 @@ export async function getAmazonBillingReportData({
   if (!reportCatalog) return null;
 
   const reportConfig = reportCatalog[reportType];
+  if (!reportConfig || reportConfig.kind !== "time-entry") return null;
+
   const project = await db.project.findFirst({
     where: {
       clientId,
@@ -275,6 +357,154 @@ export async function getAmazonBillingReportData({
     summaryRows: Array.from(summaryMap.values()).sort((a, b) => a.assetType.localeCompare(b.assetType)),
     contactPersons,
     projectFound: true,
+  };
+}
+
+function getMovieBillingUnits(movie: { billingUnitsJson: string | null }) {
+  if (!movie.billingUnitsJson) return new Map<string, number>();
+  try {
+    const parsed = JSON.parse(movie.billingUnitsJson) as Record<string, unknown>;
+    return new Map(Object.entries(parsed).map(([key, value]) => [key, Number(value || 0)]));
+  } catch {
+    return new Map<string, number>();
+  }
+}
+
+function calculateBillingHeadCost(costType: "WHOLE_COST" | "PER_UNIT_COST", cost: unknown, units: number | null | undefined) {
+  const baseCost = Number(cost ?? 0);
+  if (costType === "PER_UNIT_COST") return baseCost * Number(units || 0);
+  return baseCost;
+}
+
+export async function getWarnerDomesticDeliverableData({
+  clientId,
+  filters,
+}: {
+  clientId: string;
+  filters: WarnerDomesticDeliverableFilters;
+}): Promise<WarnerDomesticDeliverableData | null> {
+  const client = await db.client.findUnique({
+    where: { id: clientId },
+    select: { id: true, name: true, hourlyCost: true },
+  });
+  if (!client) return null;
+
+  const movieOptions = await db.movie.findMany({
+    where: { clientId, isActive: true },
+    select: { id: true, title: true },
+    orderBy: { title: "asc" },
+  });
+
+  const selectedMovieId = filters.movieId || movieOptions[0]?.id || "";
+  const selectedMovie = selectedMovieId
+    ? await db.movie.findUnique({
+        where: { id: selectedMovieId },
+        select: { id: true, title: true, clientId: true, billingUnitsJson: true },
+      })
+    : null;
+
+  if (!selectedMovie || selectedMovie.clientId !== clientId) {
+    return {
+      client,
+      reportType: "domestic-deliverable",
+      reportTitle: "Domestic Deliverable",
+      filters: { movieId: selectedMovieId },
+      movieOptions,
+      selectedMovie: null,
+      rows: [],
+      totalCost: 0,
+    };
+  }
+
+  const unitsByHeadId = getMovieBillingUnits(selectedMovie);
+  const rows: WarnerDomesticDeliverableLine[] = [];
+
+  const compulsoryHeads = await db.movieBillingHead.findMany({
+    where: {
+      clientId,
+      isActive: true,
+      domesticActive: true,
+      domesticCompulsionType: "FIXED_COMPULSORY",
+    },
+    orderBy: { name: "asc" },
+  });
+
+  for (const head of compulsoryHeads) {
+    const units = unitsByHeadId.get(head.id) ?? (head.costType === "PER_UNIT_COST" ? 0 : 1);
+    rows.push({
+      label: head.name,
+      cost: calculateBillingHeadCost(head.costType, head.domesticCost, units),
+      group: "Fixed - Compulsory",
+      meta: head.costType === "PER_UNIT_COST" ? `Per-unit × ${units}` : "Whole cost",
+    });
+  }
+
+  const optionalAssignments = await db.movieBillingHeadAssignment.findMany({
+    where: {
+      clientId,
+      movieId: selectedMovie.id,
+      isActive: true,
+      country: { is: { isoCode: "US" } },
+      billingHead: { is: {
+        isActive: true,
+        domesticActive: true,
+        domesticCompulsionType: "FIXED_OPTIONAL",
+      } },
+    },
+    include: {
+      billingHead: true,
+    },
+    orderBy: { billingHead: { name: "asc" } },
+  });
+
+  for (const assignment of optionalAssignments) {
+    const units = Number(assignment.units ?? 0);
+    rows.push({
+      label: assignment.billingHead.name,
+      cost: calculateBillingHeadCost(assignment.billingHead.costType, assignment.billingHead.domesticCost, units),
+      group: "Fixed - Optional",
+      meta: assignment.billingHead.costType === "PER_UNIT_COST" ? `Per-unit × ${units}` : "Whole cost",
+    });
+  }
+
+  const fixedFullProjects = await db.project.findMany({
+    where: {
+      clientId,
+      billingModel: "FIXED_FULL",
+      timeEntries: { some: { movieId: selectedMovie.id } },
+    },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      fixedContractHours: true,
+      additionalCharges: true,
+    },
+    orderBy: { name: "asc" },
+  });
+
+  for (const project of fixedFullProjects) {
+    const fixedHoursCost = Number(project.fixedContractHours ?? 0) * Number(client.hourlyCost ?? 0);
+    const additionalCharges = Number(project.additionalCharges ?? 0);
+    rows.push({
+      label: `${project.name} (${project.status.replaceAll("_", " ")})`,
+      cost: fixedHoursCost + additionalCharges,
+      group: "Fixed Full Projects",
+      meta: `${Number(project.fixedContractHours ?? 0)} hrs × ${formatUsd(Number(client.hourlyCost ?? 0))}${additionalCharges > 0 ? ` + ${formatUsd(additionalCharges)} additional` : ""}`,
+    });
+  }
+
+  const totalCost = rows.reduce((sum, row) => sum + row.cost, 0);
+
+  return {
+    client,
+    reportType: "domestic-deliverable",
+    reportTitle: "Domestic Deliverable",
+    filters: { movieId: selectedMovie.id },
+    movieOptions,
+    selectedMovie: { id: selectedMovie.id, title: selectedMovie.title },
+    rows,
+    totalCost,
   };
 }
 

@@ -1,5 +1,6 @@
 import {
   type AmazonBillingReportData,
+  type WarnerDomesticDeliverableData,
   formatUsd,
   getExportTimestamp,
   sanitizeFileSegment,
@@ -373,5 +374,109 @@ export function buildAmazonReportPdf(data: AmazonBillingReportData) {
 }
 
 export function buildAmazonReportFileName(data: AmazonBillingReportData, extension: "xls" | "pdf") {
+  return `${sanitizeFileSegment(data.client.name)}_${sanitizeFileSegment(data.reportTitle)}_${getExportTimestamp()}.${extension}`;
+}
+
+
+export function buildWarnerDomesticReportExcel(data: WarnerDomesticDeliverableData) {
+  const detailRows = [
+    excelRow([data.reportTitle]),
+    excelRow(["Client", data.client.name]),
+    excelRow(["Movie", data.selectedMovie?.title ?? "-"]),
+    excelRow([]),
+    excelRow(["Billing Head / Project", "Cost (USD)"]),
+    ...data.rows.flatMap((row, index, rows) => {
+      const previous = rows[index - 1];
+      const groupHeader = !previous || previous.group !== row.group ? [excelRow([row.group])] : [];
+      return [
+        ...groupHeader,
+        excelRow([row.meta ? `${row.label} - ${row.meta}` : row.label, row.cost], [1]),
+      ];
+    }),
+    excelRow([]),
+    excelRow(["Total", data.totalCost], [1]),
+  ];
+
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ ${worksheet("Domestic Deliverable", detailRows)}
+</Workbook>`;
+}
+
+function buildWarnerDomesticPdfPages(data: WarnerDomesticDeliverableData) {
+  const columns: PdfTableColumn[] = [
+    { header: "Billing Head / Project", width: 560 },
+    { header: "Cost", width: 170, align: "right" },
+  ];
+  const rows: PdfTableRow[] = [];
+  let lastGroup = "";
+  for (const row of data.rows) {
+    if (row.group !== lastGroup) {
+      rows.push([row.group, ""]);
+      lastGroup = row.group;
+    }
+    rows.push([row.meta ? `${row.label} - ${row.meta}` : row.label, formatUsd(row.cost)]);
+  }
+  rows.push(["Total", formatUsd(data.totalCost)]);
+
+  const pageStreams: string[] = [];
+  const x = MARGIN_X;
+  const startY = TOP_Y - 88;
+  const laterPageStartY = TOP_Y - 38;
+  let rowIndex = 0;
+  let pageNumber = 1;
+
+  if (!rows.length) {
+    const commands: string[] = [];
+    commands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
+    commands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
+    commands.push(textCommand(`Movie: ${data.selectedMovie?.title ?? "-"}`, MARGIN_X, TOP_Y - 38, 9));
+    commands.push(textCommand("No records found.", MARGIN_X, TOP_Y - 70, 9));
+    pageStreams.push(commands.join("\n"));
+    return pageStreams;
+  }
+
+  while (rowIndex < rows.length) {
+    const commands: string[] = [];
+    const isFirstPage = pageNumber === 1;
+    const currentStartY = isFirstPage ? startY : laterPageStartY;
+    const maxRows = Math.max(1, Math.floor((currentStartY - 42) / SUMMARY_ROW_HEIGHT));
+
+    if (isFirstPage) {
+      commands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
+      commands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
+      commands.push(textCommand(`Movie: ${data.selectedMovie?.title ?? "-"}`, MARGIN_X, TOP_Y - 38, 9));
+      commands.push(textCommand(`Generated: ${new Date().toLocaleString("en-IN")}`, MARGIN_X, TOP_Y - 54, 9));
+    } else {
+      commands.push(textCommand(`${data.reportTitle} continued`, MARGIN_X, TOP_Y, 13, true));
+    }
+
+    drawTableHeader(commands, columns, x, currentStartY);
+    let y = currentStartY - HEADER_HEIGHT;
+    rows.slice(rowIndex, rowIndex + maxRows).forEach((row) => {
+      const isGroupOrTotal = row[1] === "" || row[0] === "Total";
+      if (isGroupOrTotal) commands.push(fillRectCommand(x, y - SUMMARY_ROW_HEIGHT, tableWidth(columns), SUMMARY_ROW_HEIGHT, row[0] === "Total" ? 0.9 : 0.95));
+      drawTableRow(commands, columns, row, x, y, SUMMARY_ROW_HEIGHT, 8);
+      y -= SUMMARY_ROW_HEIGHT;
+    });
+    commands.push(textCommand(`Page ${pageStreams.length + 1}`, PAGE_WIDTH - 82, 18, 8));
+    pageStreams.push(commands.join("\n"));
+    rowIndex += maxRows;
+    pageNumber += 1;
+  }
+
+  return pageStreams;
+}
+
+export function buildWarnerDomesticReportPdf(data: WarnerDomesticDeliverableData) {
+  return buildPdfDocument(buildWarnerDomesticPdfPages(data));
+}
+
+export function buildWarnerDomesticReportFileName(data: WarnerDomesticDeliverableData, extension: "xls" | "pdf") {
   return `${sanitizeFileSegment(data.client.name)}_${sanitizeFileSegment(data.reportTitle)}_${getExportTimestamp()}.${extension}`;
 }
