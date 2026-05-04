@@ -40,8 +40,15 @@ export type AmazonBillingReportData = {
 };
 
 export const AMAZON_CLIENT_NAME = "Amazon Studios";
+export const UNIVERSAL_CLIENT_NAME = "Universal Pictures International";
 
-export const AMAZON_REPORTS: Record<AmazonReportType, { title: string; projectName: string; includeLanguage: boolean }> = {
+export type BillingReportDefinition = {
+  title: string;
+  projectName: string;
+  includeLanguage: boolean;
+};
+
+export const AMAZON_REPORTS: Record<AmazonReportType, BillingReportDefinition> = {
   "social-assets": {
     title: "Amazon Social Assets",
     projectName: "AMZ Social QC",
@@ -53,6 +60,30 @@ export const AMAZON_REPORTS: Record<AmazonReportType, { title: string; projectNa
     includeLanguage: true,
   },
 };
+
+export const UNIVERSAL_REPORTS: Record<AmazonReportType, BillingReportDefinition> = {
+  "social-assets": {
+    title: "UNI Social Status",
+    projectName: "UNI Social QC",
+    includeLanguage: false,
+  },
+  localization: {
+    title: "UNI Localization Status",
+    projectName: "UNI Social Localization",
+    includeLanguage: true,
+  },
+};
+
+export function getBillingReportCatalogForClient(clientName: string) {
+  const normalizedClientName = clientName.trim().toLowerCase();
+  if (normalizedClientName === AMAZON_CLIENT_NAME.toLowerCase()) return AMAZON_REPORTS;
+  if (normalizedClientName === UNIVERSAL_CLIENT_NAME.toLowerCase()) return UNIVERSAL_REPORTS;
+  return null;
+}
+
+export function isConfiguredBillingReportClient(clientName: string) {
+  return Boolean(getBillingReportCatalogForClient(clientName));
+}
 
 export function normalizeAmazonReportType(value: string | null | undefined): AmazonReportType {
   return value === "localization" ? "localization" : "social-assets";
@@ -131,7 +162,10 @@ export async function getAmazonBillingReportData({
 
   if (!client) return null;
 
-  const reportConfig = AMAZON_REPORTS[reportType];
+  const reportCatalog = getBillingReportCatalogForClient(client.name);
+  if (!reportCatalog) return null;
+
+  const reportConfig = reportCatalog[reportType];
   const project = await db.project.findFirst({
     where: {
       clientId,

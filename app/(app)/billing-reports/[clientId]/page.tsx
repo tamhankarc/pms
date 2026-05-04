@@ -6,8 +6,8 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canViewBillingReports } from "@/lib/permissions";
 import {
-  AMAZON_CLIENT_NAME,
   buildAmazonBillingReportFilters,
+  getBillingReportCatalogForClient,
   formatUsd,
   getAmazonBillingReportData,
   normalizeAmazonReportType,
@@ -178,12 +178,13 @@ function AmazonReportSummaryTable({ data }: { data: NonNullable<Awaited<ReturnTy
 }
 
 function AmazonReportsWorkspace({ clientId, activeReport, data }: { clientId: string; activeReport: AmazonReportType; data: NonNullable<Awaited<ReturnType<typeof getAmazonBillingReportData>>> }) {
+  const reportCatalog = getBillingReportCatalogForClient(data.client.name);
   return (
     <div className="space-y-6">
       <div className="card p-4">
         <div className="flex flex-wrap gap-3">
-          <ReportTab clientId={clientId} reportType="social-assets" activeReport={activeReport} label="Amazon Social Assets" />
-          <ReportTab clientId={clientId} reportType="localization" activeReport={activeReport} label="Amazon Localization" />
+          <ReportTab clientId={clientId} reportType="social-assets" activeReport={activeReport} label={reportCatalog?.["social-assets"].title ?? "Social Assets"} />
+          <ReportTab clientId={clientId} reportType="localization" activeReport={activeReport} label={reportCatalog?.localization.title ?? "Localization"} />
         </div>
       </div>
 
@@ -246,8 +247,8 @@ export default async function ClientBillingReportPage({
 
   const fixedFullProjects = client.projects.filter((project) => project.billingModel === "FIXED_FULL").length;
   const workingMovies = client.movies.filter((movie) => movie.status === "WORKING" && movie.isActive).length;
-  const isAmazonStudios = client.name.trim().toLowerCase() === AMAZON_CLIENT_NAME.toLowerCase();
-  const amazonReportData = isAmazonStudios
+  const reportCatalog = getBillingReportCatalogForClient(client.name);
+  const configuredReportData = reportCatalog
     ? await getAmazonBillingReportData({ clientId, reportType: activeReport, filters })
     : null;
 
@@ -255,12 +256,12 @@ export default async function ClientBillingReportPage({
     <div>
       <PageHeader
         title={`${client.name} Billing Report`}
-        description={isAmazonStudios ? "Use the report tabs to review Amazon billing records and export them to Excel or PDF." : "Placeholder billing report page for this client. Client-specific report tables can be added here."}
+        description={reportCatalog ? "Use the report tabs to review billing records and export them to Excel or PDF." : "Placeholder billing report page for this client. Client-specific report tables can be added here."}
         actions={<Link className="btn-secondary" href="/billing-reports">Back to Billing Reports</Link>}
       />
 
-      {amazonReportData ? (
-        <AmazonReportsWorkspace clientId={clientId} activeReport={activeReport} data={amazonReportData} />
+      {configuredReportData ? (
+        <AmazonReportsWorkspace clientId={clientId} activeReport={activeReport} data={configuredReportData} />
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-4 mb-6">
