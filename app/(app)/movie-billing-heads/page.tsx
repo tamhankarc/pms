@@ -2,7 +2,7 @@ import { canManageMovieBillingHeads } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
-import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { MovieBillingHeadAssignmentListFilters } from "@/components/forms/movie-billing-head-assignment-list-filters";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { toggleMovieBillingHeadAssignmentStatusAction } from "@/lib/actions/movie-billing-head-assignment-actions";
@@ -21,24 +21,24 @@ function formatHeadCost(row: { country: { isoCode: string | null; name: string }
 }
 
 export default async function MovieBillingHeadsPage({
- searchParams }: { searchParams?: Promise<{ q?: string; clientId?: string; countryId?: string; status?: string; page?: string }> }) {
+ searchParams }: { searchParams?: Promise<{ q?: string; clientId?: string; movieId?: string; status?: string; page?: string }> }) {
   const currentUser = await requireUser();
   if (!canManageMovieBillingHeads(currentUser)) redirect("/dashboard");
 
   const params = (await searchParams) ?? {};
   const q = params.q?.trim() ?? "";
   const clientId = params.clientId ?? "all";
-  const countryId = params.countryId ?? "all";
+  const movieId = params.movieId ?? "all";
   const status = params.status ?? "all";
   const page = parsePageParam(params.page);
 
-  const [clients, countries, rows] = await Promise.all([
+  const [clients, movies, rows] = await Promise.all([
     db.client.findMany({ where: { isActive: true, movieBillingHeads: { some: { isActive: true, OR: [{ domesticActive: true, domesticCompulsionType: "FIXED_OPTIONAL" }, { intlActive: true, intlCompulsionType: "FIXED_OPTIONAL" }] } } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, isoCode: true } }),
+    db.movie.findMany({ where: { isActive: true, status: "WORKING" }, orderBy: { title: "asc" }, select: { id: true, clientId: true, title: true } }),
     db.movieBillingHeadAssignment.findMany({
       where: {
         ...(clientId !== "all" ? { clientId } : {}),
-        ...(countryId !== "all" ? { countryId } : {}),
+        ...(movieId !== "all" ? { movieId } : {}),
         ...(status === "active" ? { isActive: true } : {}),
         ...(status === "inactive" ? { isActive: false } : {}),
         ...(q ? { OR: [{ movie: { title: { contains: q } } }, { billingHead: { name: { contains: q } } }, { client: { name: { contains: q } } }] } : {}),
@@ -54,13 +54,7 @@ export default async function MovieBillingHeadsPage({
     <div>
       <PageHeader title="Movie Billing Heads" description="Assign Fixed - Optional billing heads to Working movies by client and country." actions={<Link href="/movie-billing-heads/new" className="btn-primary">Create Movie Billing Head</Link>} />
       <div className="mb-6 card p-4">
-        <form className="grid gap-3 md:grid-cols-[1fr_220px_220px_180px_auto]" method="get">
-          <input className="input" name="q" defaultValue={q} placeholder="Search by client, movie, or billing head" />
-          <SearchableCombobox id="clientId" name="clientId" defaultValue={clientId} options={[{ value: "all", label: "All clients" }, ...clients.map((client) => ({ value: client.id, label: client.name }))]} placeholder="All clients" searchPlaceholder="Search clients..." emptyLabel="No client found." />
-          <SearchableCombobox id="countryId" name="countryId" defaultValue={countryId} options={[{ value: "all", label: "All countries" }, ...countries.map((country) => ({ value: country.id, label: country.isoCode ? `${country.name} (${country.isoCode})` : country.name }))]} placeholder="All countries" searchPlaceholder="Search countries..." emptyLabel="No country found." />
-          <SearchableCombobox id="status" name="status" defaultValue={status} options={[{ value: "all", label: "All statuses" }, { value: "active", label: "Active only" }, { value: "inactive", label: "Inactive only" }]} placeholder="All statuses" searchPlaceholder="Search statuses..." emptyLabel="No status found." />
-          <button className="btn-secondary" type="submit">Apply</button>
-        </form>
+        <MovieBillingHeadAssignmentListFilters q={q} clientId={clientId} movieId={movieId} status={status} clients={clients} movies={movies} />
       </div>
       <div className="table-wrap">
         <table className="table-base">
@@ -82,7 +76,7 @@ export default async function MovieBillingHeadsPage({
             {rows.length === 0 ? <tr><td colSpan={9} className="table-cell text-center text-sm text-slate-500">No movie billing heads found.</td></tr> : null}
           </tbody>
         </table>
-        <PaginationControls basePath="/movie-billing-heads" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, clientId, countryId, status }} />
+        <PaginationControls basePath="/movie-billing-heads" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, clientId, movieId, status }} />
       </div>
     </div>
   );

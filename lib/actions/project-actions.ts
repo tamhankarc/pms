@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction, requireUserTypesForAction } from "@/lib/auth";
@@ -13,10 +14,11 @@ const baseSchema = z.object({
   clientId: z.string().optional(),
   projectTypeId: z.string().optional().nullable(),
   name: z.string().min(2, "Project name is required."),
-  billingModel: z.enum(["HOURLY", "FIXED_FULL", "FIXED_MONTHLY"]),
+  billingModel: z.enum(["HOURLY", "FIXED_FULL", "FIXED_MONTHLY", "FIXED_PER_COUNTRY"]),
   fixedContractHours: z.coerce.number().nonnegative().optional(),
   fixedMonthlyHours: z.coerce.number().nonnegative().optional(),
-  additionalCharges: z.coerce.number().nonnegative("Additional Chargers cannot be negative.").optional(),
+  additionalCharges: z.coerce.number().nonnegative("Additional Charges cannot be negative.").optional(),
+  perCountryCharges: z.coerce.number().nonnegative("Per Country Charges cannot be negative.").optional(),
   status: z.enum(["DRAFT", "ACTIVE", "ON_HOLD", "COMPLETED", "ARCHIVED"]),
   description: z.string().optional(),
   hideCountriesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
@@ -49,6 +51,7 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
       fixedContractHours: formData.get("fixedContractHours") || 0,
       fixedMonthlyHours: formData.get("fixedMonthlyHours") || 0,
       additionalCharges: formData.get("additionalCharges") || 0,
+      perCountryCharges: formData.get("perCountryCharges") || 0,
       status: formData.get("status"),
       description: String(formData.get("description") ?? ""),
       hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
@@ -77,7 +80,8 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
         billingModel: parsed.data.billingModel,
         fixedContractHours: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.fixedContractHours ?? 0) : null,
         fixedMonthlyHours: parsed.data.billingModel === "FIXED_MONTHLY" ? (parsed.data.fixedMonthlyHours ?? 0) : null,
-        additionalCharges: parsed.data.additionalCharges ?? 0,
+        additionalCharges: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.additionalCharges ?? 0) : 0,
+        perCountryCharges: parsed.data.billingModel === "FIXED_PER_COUNTRY" ? (parsed.data.perCountryCharges ?? 0) : 0,
         status: parsed.data.status,
         description: parsed.data.description || null,
         createdById: user.id,
@@ -95,8 +99,11 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
     revalidatePath("/dashboard");
     revalidatePath("/time-entries");
     revalidatePath("/estimates");
-    return { success: true };
+    redirect("/projects");
   } catch (error) {
+    if (error && typeof error === "object" && "digest" in error && String((error as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT")) {
+      throw error;
+    }
     return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
   }
 }
@@ -116,6 +123,7 @@ export async function updateProjectAction(projectId: string, _prevState: Project
       fixedContractHours: formData.get("fixedContractHours") || 0,
       fixedMonthlyHours: formData.get("fixedMonthlyHours") || 0,
       additionalCharges: formData.get("additionalCharges") || 0,
+      perCountryCharges: formData.get("perCountryCharges") || 0,
       status: formData.get("status"),
       description: String(formData.get("description") ?? ""),
       hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
@@ -140,7 +148,8 @@ export async function updateProjectAction(projectId: string, _prevState: Project
         billingModel: parsed.data.billingModel,
         fixedContractHours: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.fixedContractHours ?? 0) : null,
         fixedMonthlyHours: parsed.data.billingModel === "FIXED_MONTHLY" ? (parsed.data.fixedMonthlyHours ?? 0) : null,
-        additionalCharges: parsed.data.additionalCharges ?? 0,
+        additionalCharges: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.additionalCharges ?? 0) : 0,
+        perCountryCharges: parsed.data.billingModel === "FIXED_PER_COUNTRY" ? (parsed.data.perCountryCharges ?? 0) : 0,
         status: parsed.data.status,
         description: parsed.data.description || null,
         updatedById: user.id,

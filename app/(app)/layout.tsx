@@ -10,6 +10,7 @@ export default async function AuthenticatedLayout({ children }: { children: Reac
   const canAccessLeaveApprovals = isAdmin(user) || isHR(user) || selectedApproverIds.includes(user.id);
   const billingReportClients = canViewBillingReports(user)
     ? await db.client.findMany({
+        where: { isActive: true, projects: { some: { isActive: true, status: "ACTIVE" } } },
         select: { id: true, name: true },
         orderBy: { name: "asc" },
       })

@@ -227,9 +227,9 @@ export default async function ClientBillingReportPage({ params, searchParams }: 
 
   const client = await db.client.findUnique({
     where: { id: clientId },
-    select: { id: true, name: true, isActive: true, hourlyCost: true, projects: { select: { id: true, billingModel: true, isActive: true } }, movies: { select: { id: true, status: true, isActive: true } }, movieBillingHeads: { select: { id: true } }, movieBillingHeadAssignments: { select: { id: true } } },
+    select: { id: true, name: true, isActive: true, hourlyCost: true, projects: { select: { id: true, billingModel: true, isActive: true, status: true } }, movies: { select: { id: true, status: true, isActive: true } }, movieBillingHeads: { select: { id: true } }, movieBillingHeadAssignments: { select: { id: true } } },
   });
-  if (!client) redirect("/billing-reports");
+  if (!client || !client.isActive || !client.projects.some((project) => project.isActive && project.status === "ACTIVE")) redirect("/billing-reports");
 
   const activeReport = normalizeAmazonReportType(Array.isArray(resolvedSearchParams.report) ? resolvedSearchParams.report[0] : resolvedSearchParams.report, client.name);
   const filters = buildAmazonBillingReportFilters(resolvedSearchParams);

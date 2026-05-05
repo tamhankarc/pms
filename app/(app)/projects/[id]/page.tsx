@@ -41,7 +41,9 @@ export default async function ProjectDetailPage({
   const fixedHours =
     project.billingModel === "FIXED_FULL"
       ? Number(project.fixedContractHours ?? 0)
-      : Number(project.fixedMonthlyHours ?? 0);
+      : project.billingModel === "FIXED_MONTHLY"
+        ? Number(project.fixedMonthlyHours ?? 0)
+        : 0;
 
   return (
     <div>
@@ -106,10 +108,19 @@ export default async function ProjectDetailPage({
                 <dd className="mt-1 text-sm text-slate-800">{project.code || "—"}</dd>
               </div>
 
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Additional Chargers</dt>
-                <dd className="mt-1 text-sm text-slate-800">${Number(project.additionalCharges ?? 0).toFixed(2)}</dd>
-              </div>
+              {project.billingModel === "FIXED_FULL" ? (
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-slate-500">Additional Charges</dt>
+                  <dd className="mt-1 text-sm text-slate-800">${Number(project.additionalCharges ?? 0).toFixed(2)}</dd>
+                </div>
+              ) : null}
+
+              {project.billingModel === "FIXED_PER_COUNTRY" ? (
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-slate-500">Per Country Charges</dt>
+                  <dd className="mt-1 text-sm text-slate-800">${Number(project.perCountryCharges ?? 0).toFixed(2)}</dd>
+                </div>
+              ) : null}
 
               <div>
                 <dt className="text-xs uppercase tracking-wide text-slate-500">Status</dt>

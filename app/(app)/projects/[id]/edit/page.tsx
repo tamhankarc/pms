@@ -77,6 +77,7 @@ export default async function EditProjectPage({
           hideAssetTypesInEntries: project.hideAssetTypesInEntries,
           addToBilling: project.addToBilling,
           additionalCharges: project.additionalCharges == null ? null : Number(project.additionalCharges),
+          perCountryCharges: project.perCountryCharges == null ? null : Number(project.perCountryCharges),
         }}
       />
     </div>

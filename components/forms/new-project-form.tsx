@@ -20,7 +20,7 @@ type ProjectType = {
   clientId: string;
 };
 
-type BillingModel = "HOURLY" | "FIXED_FULL" | "FIXED_MONTHLY";
+type BillingModel = "HOURLY" | "FIXED_FULL" | "FIXED_MONTHLY" | "FIXED_PER_COUNTRY";
 type ProjectStatus = "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "ARCHIVED";
 
 const initialState: ProjectFormState = {};
@@ -137,6 +137,7 @@ export function NewProjectForm({
               { value: "HOURLY", label: "Hourly" },
               { value: "FIXED_FULL", label: "Fixed - Full Project" },
               { value: "FIXED_MONTHLY", label: "Fixed - Monthly" },
+              { value: "FIXED_PER_COUNTRY", label: "Fixed Per Country" },
             ]}
             placeholder="Select billing model"
             searchPlaceholder="Search billing models..."
@@ -206,13 +207,25 @@ export function NewProjectForm({
           Add to Billing
         </label>
 
-        <div className="md:col-span-2">
-          <FormLabel htmlFor="additionalCharges">Additional Chargers (USD)</FormLabel>
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
-            <input id="additionalCharges" className="input currency-input" name="additionalCharges" type="number" min="0" step="0.01" defaultValue="0.00" />
+        {billingModel === "FIXED_FULL" ? (
+          <div className="md:col-span-2">
+            <FormLabel htmlFor="additionalCharges">Additional Charges (USD)</FormLabel>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
+              <input id="additionalCharges" className="input currency-input" name="additionalCharges" type="number" min="0" step="0.01" defaultValue="0.00" />
+            </div>
           </div>
-        </div>
+        ) : null}
+
+        {billingModel === "FIXED_PER_COUNTRY" ? (
+          <div className="md:col-span-2">
+            <FormLabel htmlFor="perCountryCharges">Per Country Charges (USD)</FormLabel>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
+              <input id="perCountryCharges" className="input currency-input" name="perCountryCharges" type="number" min="0" step="0.01" defaultValue="0.00" />
+            </div>
+          </div>
+        ) : null}
 
         {billingModel === "FIXED_FULL" ? (
           <div className="md:col-span-2">

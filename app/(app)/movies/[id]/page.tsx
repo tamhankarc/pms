@@ -67,6 +67,8 @@ export default async function MovieEditPage({
             billingOther: movie.billingOther,
             otherCountryIds: movie.otherCountryIds ? JSON.parse(movie.otherCountryIds) : [],
             billingUnits: movie.billingUnitsJson ? JSON.parse(movie.billingUnitsJson) : {},
+            sonyTicketingBannerCost: movie.sonyTicketingBannerCost == null ? null : Number(movie.sonyTicketingBannerCost),
+            sonyEmailTicketingBannerCost: movie.sonyEmailTicketingBannerCost == null ? null : Number(movie.sonyEmailTicketingBannerCost),
           }}
         />
       </div>

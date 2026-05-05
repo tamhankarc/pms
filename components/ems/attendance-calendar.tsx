@@ -216,10 +216,15 @@ export function AttendanceCalendar({
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h2 className="section-title">Attendance calendar</h2>
-          <p className="section-subtitle">
-            Green: present, Red: absent, Orange: approved leave, Purple: weekend or official holiday, Blue: today,
-            White: future. Weekend or holiday dates change to approved leave only for unpaid sandwich leave cases.
-          </p>
+          <div className="section-subtitle flex flex-wrap items-center gap-x-4 gap-y-2">
+            <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-emerald-100 ring-1 ring-emerald-200" /> Present</span>
+            <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-red-100 ring-1 ring-red-200" /> Absent</span>
+            <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-orange-100 ring-1 ring-orange-200" /> Approved Leave</span>
+            <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-purple-100 ring-1 ring-purple-200" /> Weekend / Official Holiday</span>
+            <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-sky-100 ring-1 ring-sky-200" /> Today</span>
+            <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-white ring-1 ring-slate-200" /> Future</span>
+            <span className="basis-full text-xs text-slate-500">Weekend or holiday dates change to approved leave only for unpaid sandwich leave cases.</span>
+          </div>
         </div>
 
         <div className="flex items-center justify-center gap-3 self-start">

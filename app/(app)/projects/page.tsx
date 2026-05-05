@@ -79,7 +79,7 @@ export default async function ProjectsPage({
   const standardPaged = paginateItems(standardProjects, standardPage, DEFAULT_PAGE_SIZE);
   const fixedPaged = paginateItems(fixedFullProjects, fixedPage, DEFAULT_PAGE_SIZE);
   const statusOptions = [{ value: "all", label: "All statuses" }, { value: "DRAFT", label: "Draft" }, { value: "ACTIVE", label: "Active" }, { value: "ON_HOLD", label: "On Hold" }, { value: "COMPLETED", label: "Completed" }, { value: "ARCHIVED", label: "Archived" }];
-  const billingOptions = [{ value: "all", label: "All billing models" }, { value: "HOURLY", label: "Hourly" }, { value: "FIXED_MONTHLY", label: "Fixed - Monthly" }];
+  const billingOptions = [{ value: "all", label: "All billing models" }, { value: "HOURLY", label: "Hourly" }, { value: "FIXED_MONTHLY", label: "Fixed - Monthly" }, { value: "FIXED_PER_COUNTRY", label: "Fixed Per Country" }];
   const clientComboOptions = [{ value: "all", label: "All clients" }, ...clientOptions.map((client) => ({ value: client.id, label: client.name }))];
   return (
     <div>

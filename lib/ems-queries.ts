@@ -277,6 +277,7 @@ export async function getEmployeeDashboardSnapshot(userId: string) {
       where: {
         userId,
         status: { in: ["PENDING", "APPROVED", "RECONSIDER"] },
+        endDate: { gte: getDayBoundsUtcFromIstDateKey(getIstDateKey()).startUtc },
       },
       orderBy: [{ startDate: "asc" }],
       take: 5,

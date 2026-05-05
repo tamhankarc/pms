@@ -13,17 +13,23 @@ const checkboxSchema = z.preprocess((value) => value === "on" || value === "true
 const schema = z.object({
   id: z.string().optional(),
   clientId: z.string().min(1, "Client is required."),
-  countryId: z.string().min(1, "Country is required."),
   movieId: z.string().min(1, "Movie is required."),
   billingHeadId: z.string().min(1, "Billing head is required."),
+  countryIds: z.array(z.string()).min(1, "Select at least one country."),
   units: z.coerce.number().min(0, "Units cannot be negative.").optional(),
   isActive: checkboxSchema,
 });
 
-async function validateOptionalHeadForSelection(clientId: string, countryId: string, movieId: string, billingHeadId: string) {
-  const [country, movie, head] = await Promise.all([
-    db.country.findUnique({ where: { id: countryId }, select: { isoCode: true, name: true } }),
-    db.movie.findUnique({ where: { id: movieId }, select: { id: true, clientId: true, status: true, isActive: true, title: true } }),
+function isUsCountry(country: { isoCode: string | null; name: string }) {
+  const iso = (country.isoCode ?? "").toUpperCase();
+  const name = country.name.trim().toLowerCase();
+  return iso === "US" || name === "united states" || name === "usa";
+}
+
+async function validateOptionalHeadForSelection(clientId: string, countryIds: string[], movieId: string, billingHeadId: string) {
+  const [countries, movie, head] = await Promise.all([
+    db.country.findMany({ where: { id: { in: countryIds }, isActive: true }, select: { id: true, isoCode: true, name: true } }),
+    db.movie.findUnique({ where: { id: movieId }, select: { id: true, clientId: true, status: true, isActive: true, title: true, billingDomestic: true, billingIntl: true, billingOther: true } }),
     db.movieBillingHead.findUnique({
       where: { id: billingHeadId },
       select: {
@@ -39,51 +45,81 @@ async function validateOptionalHeadForSelection(clientId: string, countryId: str
     }),
   ]);
 
-  if (!country) return { ok: false as const, error: "Country not found." };
+  if (countries.length !== countryIds.length) return { ok: false as const, error: "One or more selected countries are invalid." };
   if (!movie || movie.clientId !== clientId || movie.status !== "WORKING" || !movie.isActive) return { ok: false as const, error: "Select a Working movie for the selected client." };
   if (!head || head.clientId !== clientId || !head.isActive) return { ok: false as const, error: "Select a valid Fixed - Optional billing head for the selected client." };
 
-  const isDomestic = (country.isoCode ?? "").toUpperCase() === "US" || country.name.trim().toLowerCase() === "united states" || country.name.trim().toLowerCase() === "usa";
-  const isValidHead = isDomestic
-    ? head.domesticActive && head.domesticCompulsionType === "FIXED_OPTIONAL"
-    : head.intlActive && head.intlCompulsionType === "FIXED_OPTIONAL";
+  const domesticHeadValid = head.domesticActive && head.domesticCompulsionType === "FIXED_OPTIONAL";
+  const intlHeadValid = head.intlActive && head.intlCompulsionType === "FIXED_OPTIONAL";
+  const movieAllowsDomestic = movie.billingDomestic;
+  const movieAllowsIntl = movie.billingIntl || movie.billingOther;
 
-  if (!isValidHead) return { ok: false as const, error: "Selected billing head is not Fixed - Optional for the selected country." };
+  for (const country of countries) {
+    const isDomestic = isUsCountry(country);
+    if (isDomestic) {
+      if (!movieAllowsDomestic || !domesticHeadValid) return { ok: false as const, error: "Selected billing head is not valid for Domestic / US billing." };
+    } else if (!movieAllowsIntl || !intlHeadValid) {
+      return { ok: false as const, error: "Selected billing head is not valid for INTL billing for the selected movie/country." };
+    }
+  }
+
   return { ok: true as const, costType: head.costType };
 }
-
 
 async function requireCanManageMovieBillingHeads() {
   const user = await requireUserForAction();
   if (!canManageMovieBillingHeads(user)) throw new Error("You are not allowed to manage movie billing heads.");
   return user;
 }
+
+async function saveAssignments(data: z.infer<typeof schema>, replaceExisting: boolean) {
+  const valid = await validateOptionalHeadForSelection(data.clientId, data.countryIds, data.movieId, data.billingHeadId);
+  if (!valid.ok) return { success: false as const, error: valid.error };
+
+  if (replaceExisting) {
+    await db.movieBillingHeadAssignment.deleteMany({
+      where: { clientId: data.clientId, movieId: data.movieId, billingHeadId: data.billingHeadId },
+    });
+  }
+
+  for (const countryId of data.countryIds) {
+    await db.movieBillingHeadAssignment.upsert({
+      where: { countryId_movieId_billingHeadId: { countryId, movieId: data.movieId, billingHeadId: data.billingHeadId } },
+      create: {
+        clientId: data.clientId,
+        countryId,
+        movieId: data.movieId,
+        billingHeadId: data.billingHeadId,
+        units: valid.costType === "PER_UNIT_COST" ? data.units ?? 0 : null,
+        isActive: data.isActive,
+      },
+      update: {
+        clientId: data.clientId,
+        units: valid.costType === "PER_UNIT_COST" ? data.units ?? 0 : null,
+        isActive: data.isActive,
+      },
+    });
+  }
+
+  return { success: true as const };
+}
+
 export async function createMovieBillingHeadAssignmentAction(_prevState: MovieBillingHeadAssignmentFormState, formData: FormData): Promise<MovieBillingHeadAssignmentFormState> {
   try {
     await requireCanManageMovieBillingHeads();
     const parsed = schema.safeParse({
       clientId: formData.get("clientId"),
-      countryId: formData.get("countryId"),
       movieId: formData.get("movieId"),
       billingHeadId: formData.get("billingHeadId"),
+      countryIds: formData.getAll("countryIds").map(String),
       units: formData.get("units") || undefined,
       isActive: formData.get("isActive") ?? "off",
     });
     if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message || "Invalid movie billing head payload." };
 
-    const valid = await validateOptionalHeadForSelection(parsed.data.clientId, parsed.data.countryId, parsed.data.movieId, parsed.data.billingHeadId);
-    if (!valid.ok) return { success: false, error: valid.error };
+    const saved = await saveAssignments(parsed.data, false);
+    if (!saved.success) return { success: false, error: saved.error };
 
-    await db.movieBillingHeadAssignment.create({
-      data: {
-        clientId: parsed.data.clientId,
-        countryId: parsed.data.countryId,
-        movieId: parsed.data.movieId,
-        billingHeadId: parsed.data.billingHeadId,
-        units: valid.costType === "PER_UNIT_COST" ? parsed.data.units ?? 0 : null,
-        isActive: parsed.data.isActive,
-      },
-    });
     revalidatePath("/movie-billing-heads");
     return { success: true };
   } catch (error) {
@@ -97,28 +133,17 @@ export async function updateMovieBillingHeadAssignmentAction(_prevState: MovieBi
     const parsed = schema.safeParse({
       id: formData.get("id"),
       clientId: formData.get("clientId"),
-      countryId: formData.get("countryId"),
       movieId: formData.get("movieId"),
       billingHeadId: formData.get("billingHeadId"),
+      countryIds: formData.getAll("countryIds").map(String),
       units: formData.get("units") || undefined,
       isActive: formData.get("isActive") ?? undefined,
     });
     if (!parsed.success || !parsed.data.id) return { success: false, error: parsed.success ? "Movie billing head is required." : parsed.error.issues[0]?.message };
 
-    const valid = await validateOptionalHeadForSelection(parsed.data.clientId, parsed.data.countryId, parsed.data.movieId, parsed.data.billingHeadId);
-    if (!valid.ok) return { success: false, error: valid.error };
+    const saved = await saveAssignments(parsed.data, true);
+    if (!saved.success) return { success: false, error: saved.error };
 
-    await db.movieBillingHeadAssignment.update({
-      where: { id: parsed.data.id },
-      data: {
-        clientId: parsed.data.clientId,
-        countryId: parsed.data.countryId,
-        movieId: parsed.data.movieId,
-        billingHeadId: parsed.data.billingHeadId,
-        units: valid.costType === "PER_UNIT_COST" ? parsed.data.units ?? 0 : null,
-        isActive: parsed.data.isActive,
-      },
-    });
     revalidatePath("/movie-billing-heads");
     revalidatePath(`/movie-billing-heads/${parsed.data.id}`);
     return { success: true };

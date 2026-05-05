@@ -34,6 +34,7 @@ enum BillingModel {
   HOURLY
   FIXED_FULL
   FIXED_MONTHLY
+  FIXED_PER_COUNTRY
 }
 
 enum ProjectStatus {
@@ -253,6 +254,8 @@ model Movie {
   billingOther Boolean @default(false)
   otherCountryIds String? @db.Text
   billingUnitsJson String? @db.Text
+  sonyTicketingBannerCost Decimal @default(0) @db.Decimal(12, 2)
+  sonyEmailTicketingBannerCost Decimal @default(0) @db.Decimal(12, 2)
   status      MovieStatus @default(WORKING)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -378,6 +381,7 @@ model Project {
   fixedContractHours Decimal?      @db.Decimal(10, 2)
   fixedMonthlyHours  Decimal?      @db.Decimal(10, 2)
   additionalCharges  Decimal       @default(0) @db.Decimal(12, 2)
+  perCountryCharges  Decimal       @default(0) @db.Decimal(12, 2)
   startDate          DateTime?
   endDate            DateTime?
   isActive           Boolean       @default(true)

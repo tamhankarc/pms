@@ -12,7 +12,7 @@ type UpsertProjectInput = {
   clientId: string;
   movieId?: string | null;
   status: "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "ARCHIVED";
-  billingModel: "HOURLY" | "FIXED_FULL" | "FIXED_MONTHLY";
+  billingModel: "HOURLY" | "FIXED_FULL" | "FIXED_MONTHLY" | "FIXED_PER_COUNTRY";
   basisType?: "MOVIE_BASED" | "NON_MOVIE_BASED";
   fixedContractHours?: number | null;
   fixedMonthlyHours?: number | null;
@@ -41,6 +41,8 @@ export async function upsertProject(input: UpsertProjectInput) {
         input.billingModel === "FIXED_FULL" ? (input.fixedContractHours ?? null) : null,
       fixedMonthlyHours:
         input.billingModel === "FIXED_MONTHLY" ? (input.fixedMonthlyHours ?? null) : null,
+      perCountryCharges:
+        input.billingModel === "FIXED_PER_COUNTRY" ? 0 : 0,
       startDate: input.startDate ? new Date(input.startDate) : null,
       endDate: input.endDate ? new Date(input.endDate) : null,
       updatedById: currentUser.id,

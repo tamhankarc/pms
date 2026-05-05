@@ -10,6 +10,7 @@ export default async function BillingReportsPage() {
   if (!canViewBillingReports(user)) redirect("/dashboard");
 
   const clients = await db.client.findMany({
+    where: { isActive: true, projects: { some: { isActive: true, status: "ACTIVE" } } },
     select: {
       id: true,
       name: true,

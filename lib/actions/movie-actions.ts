@@ -23,6 +23,8 @@ const movieSchema = z.object({
   billingOther: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   otherCountryIds: z.array(z.string()).optional(),
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  sonyTicketingBannerCost: z.coerce.number().nonnegative("Ticketing Banner cost cannot be negative.").optional(),
+  sonyEmailTicketingBannerCost: z.coerce.number().nonnegative("Email Ticketing Banner cost cannot be negative.").optional(),
 });
 
 
@@ -48,6 +50,8 @@ export async function createMovieAction(
       billingOther: formData.get("billingOther") ?? undefined,
       otherCountryIds: formData.getAll("otherCountryIds").map(String),
       isActive: formData.get("isActive") ?? "on",
+      sonyTicketingBannerCost: formData.get("sonyTicketingBannerCost") || 0,
+      sonyEmailTicketingBannerCost: formData.get("sonyEmailTicketingBannerCost") || 0,
     });
 
     if (!parsed.success) {
@@ -75,6 +79,8 @@ export async function createMovieAction(
         billingIntl: Boolean(parsed.data.billingIntl),
         billingOther: Boolean(parsed.data.billingOther),
         otherCountryIds: parsed.data.billingOther ? JSON.stringify(parsed.data.otherCountryIds ?? []) : null,
+        sonyTicketingBannerCost: parsed.data.sonyTicketingBannerCost ?? 0,
+        sonyEmailTicketingBannerCost: parsed.data.sonyEmailTicketingBannerCost ?? 0,
         billingUnitsJson: JSON.stringify(
           Object.fromEntries(
             Array.from(formData.entries())
@@ -121,6 +127,8 @@ export async function updateMovieAction(
       billingOther: formData.get("billingOther") ?? undefined,
       otherCountryIds: formData.getAll("otherCountryIds").map(String),
       isActive: formData.get("isActive") ?? undefined,
+      sonyTicketingBannerCost: formData.get("sonyTicketingBannerCost") || 0,
+      sonyEmailTicketingBannerCost: formData.get("sonyEmailTicketingBannerCost") || 0,
     });
 
     if (!parsed.success || !parsed.data.id) {
@@ -158,6 +166,8 @@ export async function updateMovieAction(
         billingIntl: Boolean(parsed.data.billingIntl),
         billingOther: Boolean(parsed.data.billingOther),
         otherCountryIds: parsed.data.billingOther ? JSON.stringify(parsed.data.otherCountryIds ?? []) : null,
+        sonyTicketingBannerCost: parsed.data.sonyTicketingBannerCost ?? 0,
+        sonyEmailTicketingBannerCost: parsed.data.sonyEmailTicketingBannerCost ?? 0,
         billingUnitsJson: JSON.stringify(
           Object.fromEntries(
             Array.from(formData.entries())
