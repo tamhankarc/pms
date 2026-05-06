@@ -3,7 +3,7 @@ export const SONY_PICTURES_CLIENT_ID = "cmn66d3q40002l104n6wvefvl";
 export const SONY_PICTURES_CLASSICS_CLIENT_ID = "cmospbmq30000jl047ytmd4po";
 
 // Add client IDs here when a client should be hidden from Billing Reports menu and /billing-reports.
-export const EXCLUDED_BILLING_REPORT_CLIENT_IDS: string[] = [];
+export const EXCLUDED_BILLING_REPORT_CLIENT_IDS: string[] = ["cmnh43l2b0000l204gwxro5lw"];
 
 export function isBillingReportClientExcluded(clientId: string) {
   return EXCLUDED_BILLING_REPORT_CLIENT_IDS.includes(clientId);

@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canViewBillingReports } from "@/lib/permissions";
 import { isBillingReportClientExcluded } from "@/lib/billing-reports/config";
+import { buildGenericBillingReportFilters, formatUsd as formatGenericUsd, getGenericBillingReportData, type GenericBillingReportBlock, type GenericBillingReportData } from "@/lib/billing-reports/generic";
 import {
   buildAmazonBillingReportFilters,
   buildWarnerDomesticDeliverableFilters,
@@ -220,87 +221,83 @@ function PlaceholderConfiguredReport({ clientId, activeReport, clientName, title
 }
 
 
-type GenericBillingProject = {
-  id: string;
-  name: string;
-  code: string | null;
-  billingModel: string;
-  status: string;
-  fixedContractHours: unknown;
-  fixedMonthlyHours: unknown;
-  additionalCharges: unknown;
-  partialBillingCost: unknown;
-  perCountryCharges: unknown;
-  developerCount: number;
-  perDeveloperCost: unknown;
-};
+function GenericBillingReportFilters({ clientId, filters }: { clientId: string; filters: GenericBillingReportData["filters"] }) {
+  return (
+    <form method="get" action={`/billing-reports/${clientId}`} className="card p-5">
+      <div className="grid gap-4 md:grid-cols-[180px_180px_auto_1fr] md:items-end">
+        <div>
+          <label className="label" htmlFor="fromDate">Date from</label>
+          <input id="fromDate" name="fromDate" type="date" className="input" defaultValue={filters.fromDate} />
+        </div>
+        <div>
+          <label className="label" htmlFor="toDate">Date to</label>
+          <input id="toDate" name="toDate" type="date" className="input" defaultValue={filters.toDate} />
+        </div>
+        <button className="btn-primary" type="submit">Apply</button>
+        <p className="text-sm text-slate-500 md:text-right">Date range is used for Hourly project costs.</p>
+      </div>
+    </form>
+  );
+}
 
-function GenericBillingModelBlock({ title, projects }: { title: string; projects: GenericBillingProject[] }) {
+function GenericExportButtons({ clientId, filters }: { clientId: string; filters: GenericBillingReportData["filters"] }) {
+  const query = buildQueryString({ fromDate: filters.fromDate, toDate: filters.toDate });
+  return (
+    <div className="flex flex-wrap gap-3">
+      <Link className="btn-secondary" href={`/billing-reports/${clientId}/export?format=excel&${query}`}>Export Excel</Link>
+      <Link className="btn-secondary" href={`/billing-reports/${clientId}/export?format=pdf&${query}`}>Export PDF</Link>
+    </div>
+  );
+}
+
+function GenericBillingModelBlock({ block }: { block: GenericBillingReportBlock }) {
+  const isCountryBlock = block.key === "fixedPerCountry";
+  const totalCost = block.rows.reduce((sum, row) => sum + row.cost, 0);
+
   return (
     <section className="table-wrap">
       <div className="border-b border-slate-200 px-6 py-5">
-        <h2 className="section-title">{title}</h2>
-        <p className="section-subtitle">
-          {title === "Fixed - Full Project" ? "Only completed Fixed - Full Project records are shown here." : "Projects currently available under this billing model."}
-        </p>
+        <h2 className="section-title">{block.title}</h2>
+        <p className="section-subtitle">{block.description}</p>
       </div>
       <table className="table-base">
         <thead className="table-head">
           <tr>
             <th className="table-cell">Project</th>
-            <th className="table-cell">Code</th>
-            <th className="table-cell">Status</th>
-            <th className="table-cell">Hours / Units</th>
+            {isCountryBlock ? <th className="table-cell">Country List</th> : <th className="table-cell">Status</th>}
             <th className="table-cell">Costs</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {projects.map((project) => (
-            <tr key={project.id}>
-              <td className="table-cell font-medium text-slate-900">{project.name}</td>
-              <td className="table-cell">{project.code || ""}</td>
-              <td className="table-cell"><span className="badge-blue">{project.status.replaceAll("_", " ")}</span></td>
-              <td className="table-cell">
-                {project.billingModel === "FIXED_FULL" ? `${Number(project.fixedContractHours ?? 0)} fixed hours` : null}
-                {project.billingModel === "FIXED_MONTHLY" ? `${Number(project.fixedMonthlyHours ?? 0)} monthly hours` : null}
-                {project.billingModel === "FIXED_PER_COUNTRY" ? "Per country" : null}
-                {project.billingModel === "HOURLY" ? "Time-entry based" : null}
-                {project.developerCount > 0 ? <div className="text-xs text-slate-500">Developers: {project.developerCount}</div> : null}
-              </td>
-              <td className="table-cell">
-                {project.billingModel === "FIXED_FULL" ? <div>Additional: {formatUsd(Number(project.additionalCharges ?? 0))}</div> : null}
-                {project.billingModel === "FIXED_FULL" ? <div>Partial Billing: {formatUsd(Number(project.partialBillingCost ?? 0))}</div> : null}
-                {project.billingModel === "FIXED_PER_COUNTRY" ? <div>Per Country: {formatUsd(Number(project.perCountryCharges ?? 0))}</div> : null}
-                {project.developerCount > 0 ? <div>Per Developer: {formatUsd(Number(project.perDeveloperCost ?? 0))}</div> : null}
-                {project.billingModel === "HOURLY" || project.billingModel === "FIXED_MONTHLY" ? "" : null}
-              </td>
+          {block.rows.map((row) => (
+            <tr key={row.projectId}>
+              <td className="table-cell font-medium text-slate-900">{row.projectName}</td>
+              {isCountryBlock ? <td className="table-cell">{row.countryList || "-"}</td> : <td className="table-cell"><span className="badge-blue">{row.status}</span></td>}
+              <td className="table-cell whitespace-nowrap font-medium text-slate-900">{formatGenericUsd(row.cost)}</td>
             </tr>
           ))}
-          {projects.length === 0 ? <tr><td colSpan={5} className="table-cell text-center text-sm text-slate-500">No projects available in this block.</td></tr> : null}
+          <tr className="bg-slate-50">
+            <td className="table-cell font-semibold text-slate-900" colSpan={isCountryBlock ? 2 : 2}>Total</td>
+            <td className="table-cell whitespace-nowrap font-semibold text-slate-900">{formatGenericUsd(totalCost)}</td>
+          </tr>
         </tbody>
       </table>
     </section>
   );
 }
 
-function GenericBillingReportWorkspace({ projects }: { projects: GenericBillingProject[] }) {
-  const hourlyProjects = projects.filter((project) => project.billingModel === "HOURLY");
-  const fixedFullProjects = projects.filter((project) => project.billingModel === "FIXED_FULL" && project.status === "COMPLETED");
-  const fixedMonthlyProjects = projects.filter((project) => project.billingModel === "FIXED_MONTHLY");
-  const fixedPerCountryProjects = projects.filter((project) => project.billingModel === "FIXED_PER_COUNTRY");
-  const blocks = [
-    ["Hourly", hourlyProjects],
-    ["Fixed - Full Project", fixedFullProjects],
-    ["Fixed - Monthly", fixedMonthlyProjects],
-    ["Fixed Per Country", fixedPerCountryProjects],
-  ] as const;
-
+function GenericBillingReportWorkspace({ clientId, data }: { clientId: string; data: GenericBillingReportData }) {
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-4">
-        {blocks.map(([label, rows]) => <div key={label} className="card p-5"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{label}</p><p className="mt-2 text-2xl font-semibold text-slate-900">{rows.length}</p></div>)}
+      <GenericBillingReportFilters clientId={clientId} filters={data.filters} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="section-title">Billing by Model</h2>
+          <p className="section-subtitle">Only billing models with valid projects are shown.</p>
+        </div>
+        <GenericExportButtons clientId={clientId} filters={data.filters} />
       </div>
-      {blocks.map(([label, rows]) => <GenericBillingModelBlock key={label} title={label} projects={rows} />)}
+      {data.blocks.length ? data.blocks.map((block) => <GenericBillingModelBlock key={block.key} block={block} />) : <div className="card p-6 text-sm text-slate-600">No billing records are available for the selected filters.</div>}
     </div>
   );
 }
@@ -320,6 +317,7 @@ export default async function ClientBillingReportPage({ params, searchParams }: 
 
   const activeReport = normalizeAmazonReportType(Array.isArray(resolvedSearchParams.report) ? resolvedSearchParams.report[0] : resolvedSearchParams.report, client.name);
   const filters = buildAmazonBillingReportFilters(resolvedSearchParams);
+  const genericFilters = buildGenericBillingReportFilters(resolvedSearchParams);
   const domesticFilters = buildWarnerDomesticDeliverableFilters(resolvedSearchParams);
   const reportCatalog = getBillingReportCatalogForClient(client.name, client.id);
   const activeReportDefinition = reportCatalog?.[activeReport];
@@ -327,11 +325,12 @@ export default async function ClientBillingReportPage({ params, searchParams }: 
   const domesticDeliverableData = isWarnerBillingReportClient(client.name) && activeReport === "domestic-deliverable" ? await getWarnerDomesticDeliverableData({ clientId, filters: domesticFilters }) : null;
   const intlDeliverableData = isWarnerBillingReportClient(client.name) && activeReport === "intl-deliverable" ? await getWarnerIntlDeliverableData({ clientId, filters: domesticFilters }) : null;
   const otherDeliverableData = isWarnerBillingReportClient(client.name) && activeReport === "other-deliverable" ? await getWarnerOtherDeliverableData({ clientId, filters: domesticFilters }) : null;
+  const genericBillingReportData = !reportCatalog ? await getGenericBillingReportData({ clientId, filters: genericFilters }) : null;
 
   return (
     <div>
       <PageHeader title={`${client.name} Billing Report`} description={reportCatalog ? "Use the report tabs to review configured billing records." : "Review projects grouped by billing model. Fixed - Full Project shows completed projects only."} actions={<Link className="btn-secondary" href="/billing-reports">Back to Billing Reports</Link>} />
-      {timeEntryReportData ? <TimeEntryReportsWorkspace clientId={clientId} activeReport={activeReport} data={timeEntryReportData} /> : (domesticDeliverableData || intlDeliverableData || otherDeliverableData) ? <WarnerDeliverableWorkspace clientId={clientId} activeReport={activeReport} data={(domesticDeliverableData || intlDeliverableData || otherDeliverableData)!} /> : activeReportDefinition?.kind === "placeholder" ? <PlaceholderConfiguredReport clientId={clientId} activeReport={activeReport} clientName={client.name} title={activeReportDefinition.title} /> : <GenericBillingReportWorkspace projects={client.projects} />}
+      {timeEntryReportData ? <TimeEntryReportsWorkspace clientId={clientId} activeReport={activeReport} data={timeEntryReportData} /> : (domesticDeliverableData || intlDeliverableData || otherDeliverableData) ? <WarnerDeliverableWorkspace clientId={clientId} activeReport={activeReport} data={(domesticDeliverableData || intlDeliverableData || otherDeliverableData)!} /> : activeReportDefinition?.kind === "placeholder" ? <PlaceholderConfiguredReport clientId={clientId} activeReport={activeReport} clientName={client.name} title={activeReportDefinition.title} /> : <GenericBillingReportWorkspace clientId={clientId} data={genericBillingReportData!} />}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import {
 } from "@/lib/billing-reports/amazon";
 import { db } from "@/lib/db";
 import { isBillingReportClientExcluded } from "@/lib/billing-reports/config";
+import { buildGenericBillingReportFilters, getGenericBillingReportData } from "@/lib/billing-reports/generic";
 import {
   buildAmazonReportExcel,
   buildAmazonReportFileName,
@@ -20,6 +21,9 @@ import {
   buildWarnerDomesticReportExcel,
   buildWarnerDomesticReportFileName,
   buildWarnerDomesticReportPdf,
+  buildGenericBillingReportExcel,
+  buildGenericBillingReportPdf,
+  getGenericBillingReportFileName,
 } from "@/lib/billing-reports/export";
 
 export async function GET(
@@ -67,7 +71,31 @@ export async function GET(
     });
   }
 
-  if (reportDefinition?.kind === "placeholder") return new Response("Export is not available yet for this placeholder report.", { status: 404 });
+  if (!reportDefinition) {
+    const filters = buildGenericBillingReportFilters(searchParams);
+    const data = await getGenericBillingReportData({ clientId, filters });
+    if (!data) redirect("/billing-reports");
+
+    if (format === "pdf") {
+      const pdf = buildGenericBillingReportPdf(data);
+      return new Response(Buffer.from(pdf, "binary"), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${getGenericBillingReportFileName(data, "pdf")}"`,
+        },
+      });
+    }
+
+    const excel = buildGenericBillingReportExcel(data);
+    return new Response(excel, {
+      headers: {
+        "Content-Type": "application/vnd.ms-excel; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${getGenericBillingReportFileName(data, "xls")}"`,
+      },
+    });
+  }
+
+  if (reportDefinition.kind === "placeholder") return new Response("Export is not available yet for this placeholder report.", { status: 404 });
 
   const filters = buildAmazonBillingReportFilters(searchParams);
   const data = await getAmazonBillingReportData({ clientId, reportType, filters });

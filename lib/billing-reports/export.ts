@@ -5,6 +5,8 @@ import {
   getExportTimestamp,
   sanitizeFileSegment,
 } from "@/lib/billing-reports/amazon";
+import type { GenericBillingReportData } from "@/lib/billing-reports/generic";
+import { getGenericBillingReportFileName } from "@/lib/billing-reports/generic";
 
 function escapeXml(value: string | number) {
   return String(value)
@@ -483,3 +485,127 @@ export function buildWarnerDomesticReportPdf(data: WarnerDomesticDeliverableData
 export function buildWarnerDomesticReportFileName(data: WarnerDomesticDeliverableData, extension: "xls" | "pdf") {
   return `${sanitizeFileSegment(data.client.name)}_${sanitizeFileSegment(data.reportTitle)}_${getExportTimestamp()}.${extension}`;
 }
+
+export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
+  const worksheets = data.blocks.map((block) => {
+    const header = block.key === "fixedPerCountry"
+      ? excelRow(["Project", "Country List", "Cost (USD)"])
+      : excelRow(["Project", "Status", "Cost (USD)"]);
+    const rows = [
+      excelRow([block.title]),
+      excelRow(["Client", data.client.name]),
+      ...(block.key === "hourly" ? [excelRow(["Date Range", `${data.filters.fromDate} to ${data.filters.toDate}`])] : []),
+      excelRow([]),
+      header,
+      ...block.rows.map((row) => block.key === "fixedPerCountry"
+        ? excelRow([row.projectName, row.countryList ?? "-", row.cost], [2])
+        : excelRow([row.projectName, row.status, row.cost], [2])),
+      excelRow([]),
+      excelRow(["Total", "", block.rows.reduce((sum, row) => sum + row.cost, 0)], [2]),
+    ];
+    return worksheet(block.title.slice(0, 31), rows);
+  });
+
+  const summaryRows = [
+    excelRow(["Billing Report Summary"]),
+    excelRow(["Client", data.client.name]),
+    excelRow(["Hourly Date Range", `${data.filters.fromDate} to ${data.filters.toDate}`]),
+    excelRow([]),
+    excelRow(["Billing Model", "Total Cost (USD)"]),
+    ...data.blocks.map((block) => excelRow([block.title, block.rows.reduce((sum, row) => sum + row.cost, 0)], [1])),
+    excelRow([]),
+    excelRow(["Grand Total", data.blocks.reduce((sum, block) => sum + block.rows.reduce((blockSum, row) => blockSum + row.cost, 0), 0)], [1]),
+  ];
+
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ ${worksheet("Summary", summaryRows)}
+ ${worksheets.join("\n")}
+</Workbook>`;
+}
+
+function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
+  const pageStreams: string[] = [];
+  const summaryCommands: string[] = [];
+  summaryCommands.push(textCommand("Billing Report Summary", MARGIN_X, TOP_Y, 15, true));
+  summaryCommands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
+  summaryCommands.push(textCommand(`Hourly Date Range: ${data.filters.fromDate} to ${data.filters.toDate}`, MARGIN_X, TOP_Y - 38, 9));
+  summaryCommands.push(textCommand(`Generated: ${new Date().toLocaleString("en-IN")}`, MARGIN_X, TOP_Y - 54, 9));
+
+  const summaryColumns: PdfTableColumn[] = [
+    { header: "Billing Model", width: 440 },
+    { header: "Total Cost", width: 170, align: "right" },
+  ];
+  const summaryRows: PdfTableRow[] = [
+    ...data.blocks.map((block) => [block.title, formatUsd(block.rows.reduce((sum, row) => sum + row.cost, 0))] as PdfTableRow),
+    ["Grand Total", formatUsd(data.blocks.reduce((sum, block) => sum + block.rows.reduce((blockSum, row) => blockSum + row.cost, 0), 0))],
+  ];
+  drawTableHeader(summaryCommands, summaryColumns, MARGIN_X, TOP_Y - 86);
+  let summaryY = TOP_Y - 86 - HEADER_HEIGHT;
+  summaryRows.forEach((row) => {
+    if (row[0] === "Grand Total") summaryCommands.push(fillRectCommand(MARGIN_X, summaryY - SUMMARY_ROW_HEIGHT, tableWidth(summaryColumns), SUMMARY_ROW_HEIGHT, 0.9));
+    drawTableRow(summaryCommands, summaryColumns, row, MARGIN_X, summaryY, SUMMARY_ROW_HEIGHT, 8);
+    summaryY -= SUMMARY_ROW_HEIGHT;
+  });
+  summaryCommands.push(textCommand("Page 1", PAGE_WIDTH - 82, 18, 8));
+  pageStreams.push(summaryCommands.join("\n"));
+
+  for (const block of data.blocks) {
+    const isCountryBlock = block.key === "fixedPerCountry";
+    const columns: PdfTableColumn[] = isCountryBlock
+      ? [
+          { header: "Project", width: 260 },
+          { header: "Country List", width: 360 },
+          { header: "Cost", width: 110, align: "right" },
+        ]
+      : [
+          { header: "Project", width: 420 },
+          { header: "Status", width: 160 },
+          { header: "Cost", width: 150, align: "right" },
+        ];
+    const rows: PdfTableRow[] = block.rows.map((row) => isCountryBlock
+      ? [row.projectName, row.countryList ?? "-", formatUsd(row.cost)]
+      : [row.projectName, row.status, formatUsd(row.cost)]);
+    rows.push(["Total", isCountryBlock ? "" : "", formatUsd(block.rows.reduce((sum, row) => sum + row.cost, 0))]);
+
+    let rowIndex = 0;
+    let pageNumberForBlock = 1;
+    while (rowIndex < rows.length) {
+      const commands: string[] = [];
+      const startY = pageNumberForBlock === 1 ? TOP_Y - 88 : TOP_Y - 38;
+      if (pageNumberForBlock === 1) {
+        commands.push(textCommand(block.title, MARGIN_X, TOP_Y, 15, true));
+        commands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
+        if (block.key === "hourly") commands.push(textCommand(`Date Range: ${data.filters.fromDate} to ${data.filters.toDate}`, MARGIN_X, TOP_Y - 38, 9));
+        commands.push(textCommand(block.description, MARGIN_X, block.key === "hourly" ? TOP_Y - 54 : TOP_Y - 38, 8));
+      } else {
+        commands.push(textCommand(`${block.title} continued`, MARGIN_X, TOP_Y, 13, true));
+      }
+      drawTableHeader(commands, columns, MARGIN_X, startY);
+      let y = startY - HEADER_HEIGHT;
+      const rowsPerPage = Math.max(1, Math.floor((y - 42) / SUMMARY_ROW_HEIGHT));
+      rows.slice(rowIndex, rowIndex + rowsPerPage).forEach((row) => {
+        if (row[0] === "Total") commands.push(fillRectCommand(MARGIN_X, y - SUMMARY_ROW_HEIGHT, tableWidth(columns), SUMMARY_ROW_HEIGHT, 0.9));
+        drawTableRow(commands, columns, row, MARGIN_X, y, SUMMARY_ROW_HEIGHT, 8);
+        y -= SUMMARY_ROW_HEIGHT;
+      });
+      commands.push(textCommand(`Page ${pageStreams.length + 1}`, PAGE_WIDTH - 82, 18, 8));
+      pageStreams.push(commands.join("\n"));
+      rowIndex += rowsPerPage;
+      pageNumberForBlock += 1;
+    }
+  }
+
+  return pageStreams;
+}
+
+export function buildGenericBillingReportPdf(data: GenericBillingReportData) {
+  return buildPdfDocument(buildGenericBillingReportPdfPages(data));
+}
+
+export { getGenericBillingReportFileName };
