@@ -4,13 +4,14 @@ import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canViewBillingReports } from "@/lib/permissions";
+import { billingReportClientVisibilityWhere } from "@/lib/billing-reports/config";
 
 export default async function BillingReportsPage() {
   const user = await requireUser();
   if (!canViewBillingReports(user)) redirect("/dashboard");
 
   const clients = await db.client.findMany({
-    where: { isActive: true, projects: { some: { isActive: true, status: "ACTIVE" } } },
+    where: billingReportClientVisibilityWhere,
     select: {
       id: true,
       name: true,
@@ -25,19 +26,19 @@ export default async function BillingReportsPage() {
     <div>
       <PageHeader
         title="Billing Reports"
-        description="Select a client to open the billing report workspace. Detailed billing calculations will be added in the next phase."
+        description="Select a client to open the billing report workspace."
       />
 
       <div className="grid gap-4 md:grid-cols-3 mb-6">
         <div className="card p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Clients</p>
           <p className="mt-2 text-2xl font-semibold text-slate-900">{clients.length}</p>
-          <p className="mt-1 text-sm text-slate-500">Available for billing report setup</p>
+          <p className="mt-1 text-sm text-slate-500">Visible in billing reports</p>
         </div>
         <div className="card p-5 md:col-span-2">
-          <p className="text-sm font-semibold text-slate-900">Placeholder</p>
+          <p className="text-sm font-semibold text-slate-900">Billing report visibility</p>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            This page currently lists all clients and links to their individual report pages. Client-specific billing report logic can be added here without changing the navigation structure.
+            Only clients with an active working project are listed. Clients added to the exclusion list in code are hidden from this page and from the menu.
           </p>
         </div>
       </div>

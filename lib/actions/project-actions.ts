@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireUserForAction, requireUserTypesForAction } from "@/lib/auth";
+import { requireUserForAction } from "@/lib/auth";
 import { generateProjectCode } from "@/lib/project-code";
 import { canCreateOrEditProject } from "@/lib/permissions";
 
@@ -18,7 +18,10 @@ const baseSchema = z.object({
   fixedContractHours: z.coerce.number().nonnegative().optional(),
   fixedMonthlyHours: z.coerce.number().nonnegative().optional(),
   additionalCharges: z.coerce.number().nonnegative("Additional Charges cannot be negative.").optional(),
+  partialBillingCost: z.coerce.number().nonnegative("Partial Billing cost cannot be negative.").optional(),
   perCountryCharges: z.coerce.number().nonnegative("Per Country Charges cannot be negative.").optional(),
+  developerCount: z.coerce.number().int().nonnegative("Developer count cannot be negative.").optional(),
+  perDeveloperCost: z.coerce.number().nonnegative("Per Developer Cost cannot be negative.").optional(),
   status: z.enum(["DRAFT", "ACTIVE", "ON_HOLD", "COMPLETED", "ARCHIVED"]),
   description: z.string().optional(),
   hideCountriesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
@@ -51,7 +54,10 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
       fixedContractHours: formData.get("fixedContractHours") || 0,
       fixedMonthlyHours: formData.get("fixedMonthlyHours") || 0,
       additionalCharges: formData.get("additionalCharges") || 0,
+      partialBillingCost: formData.get("partialBillingCost") || 0,
       perCountryCharges: formData.get("perCountryCharges") || 0,
+      developerCount: formData.get("developerCount") || 0,
+      perDeveloperCost: formData.get("perDeveloperCost") || 0,
       status: formData.get("status"),
       description: String(formData.get("description") ?? ""),
       hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
@@ -81,7 +87,10 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
         fixedContractHours: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.fixedContractHours ?? 0) : null,
         fixedMonthlyHours: parsed.data.billingModel === "FIXED_MONTHLY" ? (parsed.data.fixedMonthlyHours ?? 0) : null,
         additionalCharges: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.additionalCharges ?? 0) : 0,
+        partialBillingCost: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.partialBillingCost ?? 0) : 0,
         perCountryCharges: parsed.data.billingModel === "FIXED_PER_COUNTRY" ? (parsed.data.perCountryCharges ?? 0) : 0,
+        developerCount: client.id === "cmne6ed2o0000jo04t3363pqz" ? (parsed.data.developerCount ?? 0) : 0,
+        perDeveloperCost: client.id === "cmne6ed2o0000jo04t3363pqz" ? (parsed.data.perDeveloperCost ?? 0) : 0,
         status: parsed.data.status,
         description: parsed.data.description || null,
         createdById: user.id,
@@ -123,7 +132,10 @@ export async function updateProjectAction(projectId: string, _prevState: Project
       fixedContractHours: formData.get("fixedContractHours") || 0,
       fixedMonthlyHours: formData.get("fixedMonthlyHours") || 0,
       additionalCharges: formData.get("additionalCharges") || 0,
+      partialBillingCost: formData.get("partialBillingCost") || 0,
       perCountryCharges: formData.get("perCountryCharges") || 0,
+      developerCount: formData.get("developerCount") || 0,
+      perDeveloperCost: formData.get("perDeveloperCost") || 0,
       status: formData.get("status"),
       description: String(formData.get("description") ?? ""),
       hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
@@ -149,7 +161,10 @@ export async function updateProjectAction(projectId: string, _prevState: Project
         fixedContractHours: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.fixedContractHours ?? 0) : null,
         fixedMonthlyHours: parsed.data.billingModel === "FIXED_MONTHLY" ? (parsed.data.fixedMonthlyHours ?? 0) : null,
         additionalCharges: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.additionalCharges ?? 0) : 0,
+        partialBillingCost: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.partialBillingCost ?? 0) : 0,
         perCountryCharges: parsed.data.billingModel === "FIXED_PER_COUNTRY" ? (parsed.data.perCountryCharges ?? 0) : 0,
+        developerCount: client.id === "cmne6ed2o0000jo04t3363pqz" ? (parsed.data.developerCount ?? 0) : 0,
+        perDeveloperCost: client.id === "cmne6ed2o0000jo04t3363pqz" ? (parsed.data.perDeveloperCost ?? 0) : 0,
         status: parsed.data.status,
         description: parsed.data.description || null,
         updatedById: user.id,
@@ -162,7 +177,6 @@ export async function updateProjectAction(projectId: string, _prevState: Project
 
     revalidatePath("/projects");
     revalidatePath(`/projects/${projectId}`);
-    revalidatePath(`/projects/${projectId}/edit`);
     revalidatePath("/dashboard");
     revalidatePath("/time-entries");
     revalidatePath("/estimates");
@@ -170,17 +184,6 @@ export async function updateProjectAction(projectId: string, _prevState: Project
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
   }
-}
-
-const billingTransactionSchema = z.object({ projectId: z.string().min(1), type: z.enum(["PARTIAL_BILLING", "UPGRADE_PRE_COMPLETION", "UPGRADE_POST_COMPLETION", "ADJUSTMENT"]), amount: z.coerce.number().positive(), note: z.string().optional() });
-
-export async function createBillingTransactionAction(formData: FormData) {
-  await requireUserTypesForAction(["ADMIN", "MANAGER"]);
-  const parsed = billingTransactionSchema.safeParse({ projectId: formData.get("projectId"), type: formData.get("type"), amount: formData.get("amount"), note: formData.get("note") });
-  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || "Invalid billing transaction payload");
-  await db.billingTransaction.create({ data: { projectId: parsed.data.projectId, transactionType: parsed.data.type, amountMoney: parsed.data.amount, amountHours: null, description: parsed.data.note, effectiveDate: new Date() } });
-  revalidatePath(`/projects/${parsed.data.projectId}`);
-  revalidatePath("/projects");
 }
 
 export async function toggleProjectStatusAction(formData: FormData) {

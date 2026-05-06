@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
@@ -97,11 +98,15 @@ export async function createMovieAction(
     });
 
     revalidatePath("/movies");
+    revalidatePath("/movies/new");
     revalidatePath("/projects/new");
     revalidatePath("/time-entries");
     revalidatePath("/estimates");
-    return { success: true };
+    redirect("/movies");
   } catch (error) {
+    if (error && typeof error === "object" && "digest" in error && String((error as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT")) {
+      throw error;
+    }
     return {
       success: false,
       error: error instanceof Error ? error.message : "Something went wrong.",

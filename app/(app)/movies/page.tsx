@@ -5,8 +5,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { db } from "@/lib/db";
-import { createMovieAction, toggleMovieStatusAction } from "@/lib/actions/movie-actions";
-import { MovieForm } from "@/components/forms/movie-form";
+import { toggleMovieStatusAction } from "@/lib/actions/movie-actions";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
@@ -31,13 +30,11 @@ export default async function MoviesPage({
   const clientId = params.clientId ?? "all";
   const page = parsePageParam(params.page);
 
-  const [clients, countries, billingHeads, movies] = await Promise.all([
+  const [clients, movies] = await Promise.all([
     db.client.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
     }),
-    db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    db.movieBillingHead.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, clientId: true, costType: true } }),
     db.movie.findMany({
       where: {
         ...(q ? { title: { contains: q } } : {}),
@@ -56,7 +53,8 @@ export default async function MoviesPage({
     <div>
       <PageHeader
         title="Movies"
-        description="Create and manage movies. Each movie belongs to exactly one client. Movie code is generated automatically."
+        description="Manage movies. Each movie belongs to exactly one client. Movie code is generated automatically."
+        actions={<Link className="btn-primary" href="/movies/new">Create Movie</Link>}
       />
 
       <div className="mb-6 card p-4">
@@ -93,8 +91,7 @@ export default async function MoviesPage({
         </form>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="table-wrap">
+      <div className="table-wrap">
           <table className="table-base">
             <thead className="table-head">
               <tr>
@@ -145,9 +142,6 @@ export default async function MoviesPage({
             </tbody>
           </table>
           <PaginationControls basePath="/movies" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, status, clientId }} />
-        </div>
-
-        <MovieForm clients={clients} countries={countries} billingHeads={billingHeads} action={createMovieAction} title="Create movie" submitLabel="Create movie" />
       </div>
     </div>
   );

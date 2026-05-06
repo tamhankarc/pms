@@ -3,233 +3,50 @@ import { requireUser } from "@/lib/auth";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
-import { SearchableCombobox } from "@/components/ui/searchable-combobox";
-import { createBillingTransactionAction } from "@/lib/actions/project-actions";
+import { ProjectEditForm } from "@/components/forms/project-edit-form";
 import { db } from "@/lib/db";
-import { formatMinutes } from "@/lib/utils";
 
-export default async function ProjectDetailPage({
-
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const currentUser = await requireUser();
   if (!canSeeAllProjects(currentUser)) redirect("/dashboard");
 
   const { id } = await params;
-  const project = await db.project.findUnique({
-    where: { id },
-    include: {
-      client: true,
-      projectType: true,
-      billingTransactions: { orderBy: { createdAt: "desc" } },
-      timeEntries: true,
-    },
-  });
-
+  const project = await db.project.findUnique({ where: { id }, include: { client: true } });
   if (!project) notFound();
 
-  const approvedMinutes = project.timeEntries
-    .filter((entry) => entry.status === "APPROVED")
-    .reduce((sum, entry) => sum + entry.minutesSpent, 0);
-
-  const approvedBillableMinutes = project.timeEntries
-    .filter((entry) => entry.status === "APPROVED" && entry.isBillable)
-    .reduce((sum, entry) => sum + entry.minutesSpent, 0);
-
-  const fixedHours =
-    project.billingModel === "FIXED_FULL"
-      ? Number(project.fixedContractHours ?? 0)
-      : project.billingModel === "FIXED_MONTHLY"
-        ? Number(project.fixedMonthlyHours ?? 0)
-        : 0;
+  const projectTypes = await db.projectType.findMany({ where: { clientId: project.clientId, isActive: true }, orderBy: { name: "asc" } });
 
   return (
-    <div>
-      <PageHeader
-        title={project.name}
-        description={`${project.client.name} · ${project.billingModel.replaceAll("_", " ")}${
-          project.projectType ? ` · ${project.projectType.name}` : ""
-        }`}
-        actions={
-          <Link className="btn-secondary" href={`/projects/${project.id}/edit`}>
-            Edit project
-          </Link>
-        }
+    <div className="space-y-6">
+      <PageHeader title={`Edit ${project.name}`} description="Update project profile, billing model, entry dropdown behavior, and billing report cost fields." actions={<Link className="btn-secondary" href="/projects">Back to Projects</Link>} />
+      <ProjectEditForm
+        projectId={project.id}
+        lockedClientName={project.client.name}
+        clientId={project.clientId}
+        projectTypes={projectTypes}
+        clientUsesProjectTypes={project.client.enableProjectTypes}
+        clientShowsCountriesInEntries={project.client.showCountriesInTimeEntries}
+        clientShowsMoviesInEntries={project.client.showMoviesInEntries}
+        clientShowsAssetTypesInEntries={project.client.showAssetTypesInEntries}
+        initialValues={{
+          projectTypeId: project.projectTypeId,
+          name: project.name,
+          billingModel: project.billingModel,
+          fixedContractHours: project.fixedContractHours == null ? null : Number(project.fixedContractHours),
+          fixedMonthlyHours: project.fixedMonthlyHours == null ? null : Number(project.fixedMonthlyHours),
+          status: project.status,
+          description: project.description,
+          hideCountriesInEntries: project.hideCountriesInEntries,
+          hideMoviesInEntries: project.hideMoviesInEntries,
+          hideAssetTypesInEntries: project.hideAssetTypesInEntries,
+          addToBilling: project.addToBilling,
+          additionalCharges: Number(project.additionalCharges ?? 0),
+          partialBillingCost: Number(project.partialBillingCost ?? 0),
+          perCountryCharges: Number(project.perCountryCharges ?? 0),
+          developerCount: Number(project.developerCount ?? 0),
+          perDeveloperCost: Number(project.perDeveloperCost ?? 0),
+        }}
       />
-
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <section className="space-y-6">
-          <div className="grid gap-5 md:grid-cols-3">
-            <div className="card p-5">
-              <p className="text-sm text-slate-500">Approved effort</p>
-              <p className="mt-2 text-2xl font-semibold">{formatMinutes(approvedMinutes)}</p>
-            </div>
-            <div className="card p-5">
-              <p className="text-sm text-slate-500">Approved billable effort</p>
-              <p className="mt-2 text-2xl font-semibold">{formatMinutes(approvedBillableMinutes)}</p>
-            </div>
-            <div className="card p-5">
-              <p className="text-sm text-slate-500">
-                {project.billingModel === "FIXED_MONTHLY"
-                  ? "Included monthly hours"
-                  : "Fixed contract hours"}
-              </p>
-              <p className="mt-2 text-2xl font-semibold">{fixedHours || 0}</p>
-            </div>
-          </div>
-
-          <div className="card p-6">
-            <h2 className="section-title">Project profile</h2>
-            <p className="section-subtitle">
-              This summary shows how the project is classified and how it is commercially tracked.
-            </p>
-            <dl className="mt-5 grid gap-4 md:grid-cols-2">
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Client</dt>
-                <dd className="mt-1 text-sm text-slate-800">{project.client.name}</dd>
-              </div>
-
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Project type</dt>
-                <dd className="mt-1 text-sm text-slate-800">{project.projectType?.name || "—"}</dd>
-              </div>
-
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Billing model</dt>
-                <dd className="mt-1 text-sm text-slate-800">
-                  {project.billingModel.replaceAll("_", " ")}
-                </dd>
-              </div>
-
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Project code</dt>
-                <dd className="mt-1 text-sm text-slate-800">{project.code || "—"}</dd>
-              </div>
-
-              {project.billingModel === "FIXED_FULL" ? (
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-slate-500">Additional Charges</dt>
-                  <dd className="mt-1 text-sm text-slate-800">${Number(project.additionalCharges ?? 0).toFixed(2)}</dd>
-                </div>
-              ) : null}
-
-              {project.billingModel === "FIXED_PER_COUNTRY" ? (
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-slate-500">Per Country Charges</dt>
-                  <dd className="mt-1 text-sm text-slate-800">${Number(project.perCountryCharges ?? 0).toFixed(2)}</dd>
-                </div>
-              ) : null}
-
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Status</dt>
-                <dd className="mt-1 text-sm text-slate-800">
-                  {project.status.replaceAll("_", " ")}
-                </dd>
-              </div>
-
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Active</dt>
-                <dd className="mt-1 text-sm text-slate-800">{project.isActive ? "Yes" : "No"}</dd>
-              </div>
-
-              <div className="md:col-span-2">
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Description</dt>
-                <dd className="mt-1 text-sm text-slate-800">{project.description || "—"}</dd>
-              </div>
-            </dl>
-          </div>
-
-          <div className="table-wrap">
-            <div className="border-b border-slate-200 px-4 py-4">
-              <h2 className="section-title">Billing transactions</h2>
-              <p className="section-subtitle">
-                Transactions are optional and are used for upgrade or adjustment tracking against the project.
-              </p>
-            </div>
-            <table className="table-base">
-              <thead className="table-head">
-                <tr>
-                  <th className="table-cell">Transaction type</th>
-                  <th className="table-cell">Money adjustment</th>
-                  <th className="table-cell">Hour adjustment</th>
-                  <th className="table-cell">Description</th>
-                  <th className="table-cell">Created</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {project.billingTransactions.map((tx) => (
-                  <tr key={tx.id}>
-                    <td className="table-cell">{tx.transactionType.replaceAll("_", " ")}</td>
-                    <td className="table-cell">
-                      {tx.amountMoney == null ? "—" : Number(tx.amountMoney)}
-                    </td>
-                    <td className="table-cell">
-                      {tx.amountHours == null ? "—" : Number(tx.amountHours)}
-                    </td>
-                    <td className="table-cell">{tx.description || "—"}</td>
-                    <td className="table-cell">
-                      {new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(tx.createdAt)}
-                    </td>
-                  </tr>
-                ))}
-                {project.billingTransactions.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="table-cell text-slate-500">
-                      No transactions yet.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <aside className="card p-6">
-          <h2 className="section-title">Add billing transaction</h2>
-          <p className="section-subtitle">
-            Use this for project upgrades, partial billing records, or adjustments. Add a clear note for reporting clarity.
-          </p>
-
-          <form action={createBillingTransactionAction} className="mt-5 space-y-4">
-            <input type="hidden" name="projectId" value={project.id} />
-            <div>
-              <label className="label">
-                Type <span className="text-red-600">*</span>
-              </label>
-              <SearchableCombobox
-                id="type"
-                name="type"
-                defaultValue="PARTIAL_BILLING"
-                required
-                options={[
-                  { value: "PARTIAL_BILLING", label: "Partial billing" },
-                  { value: "UPGRADE_PRE_COMPLETION", label: "Upgrade before completion" },
-                  { value: "UPGRADE_POST_COMPLETION", label: "Upgrade after completion" },
-                  { value: "ADJUSTMENT", label: "Adjustment" },
-                ]}
-                placeholder="Select type"
-                searchPlaceholder="Search transaction types..."
-                emptyLabel="No transaction type found."
-              />
-            </div>
-            <div>
-              <label className="label">
-                Money adjustment <span className="text-red-600">*</span>
-              </label>
-              <input className="input" name="amount" type="number" step="0.01" required />
-            </div>
-            <div>
-              <label className="label">
-                Note <span className="text-red-600">*</span>
-              </label>
-              <textarea className="input min-h-28" name="note" required />
-            </div>
-            <button className="btn-primary w-full">Save transaction</button>
-          </form>
-        </aside>
-      </div>
     </div>
   );
 }

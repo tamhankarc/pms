@@ -23,6 +23,8 @@ type ProjectType = {
 type BillingModel = "HOURLY" | "FIXED_FULL" | "FIXED_MONTHLY" | "FIXED_PER_COUNTRY";
 type ProjectStatus = "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "ARCHIVED";
 
+const FILMIK_CLIENT_ID = "cmne6ed2o0000jo04t3363pqz";
+
 const initialState: ProjectFormState = {};
 
 export function NewProjectForm({
@@ -43,6 +45,7 @@ export function NewProjectForm({
   const [state, formAction, pending] = useActionState(createProjectAction, initialState);
 
   const selectedClient = clients.find((client) => client.id === clientId);
+  const isFilmikClient = clientId === FILMIK_CLIENT_ID;
 
   const filteredProjectTypes = useMemo(
     () => projectTypes.filter((type) => type.clientId === clientId),
@@ -213,6 +216,37 @@ export function NewProjectForm({
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
               <input id="additionalCharges" className="input currency-input" name="additionalCharges" type="number" min="0" step="0.01" defaultValue="0.00" />
+            </div>
+          </div>
+        ) : null}
+
+
+
+        {billingModel === "FIXED_FULL" ? (
+          <div className="md:col-span-2">
+            <FormLabel htmlFor="partialBillingCost">Partial Billing cost (USD)</FormLabel>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
+              <input id="partialBillingCost" className="input currency-input" name="partialBillingCost" type="number" min="0" step="0.01" defaultValue="0.00" />
+            </div>
+          </div>
+        ) : null}
+
+        {isFilmikClient ? (
+          <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <h3 className="text-sm font-semibold text-slate-900">Developers</h3>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div>
+                <FormLabel htmlFor="developerCount">Count</FormLabel>
+                <input id="developerCount" className="input" name="developerCount" type="number" min="0" step="1" defaultValue="0" />
+              </div>
+              <div>
+                <FormLabel htmlFor="perDeveloperCost">Per Developer Cost (USD)</FormLabel>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
+                  <input id="perDeveloperCost" className="input currency-input" name="perDeveloperCost" type="number" min="0" step="0.01" defaultValue="0.00" />
+                </div>
+              </div>
             </div>
           </div>
         ) : null}

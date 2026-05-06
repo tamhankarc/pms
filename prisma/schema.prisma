@@ -61,13 +61,6 @@ enum TimeEntryStatus {
   REVISED
 }
 
-enum BillingTransactionType {
-  PARTIAL_BILLING
-  UPGRADE_PRE_COMPLETION
-  UPGRADE_POST_COMPLETION
-  ADJUSTMENT
-}
-
 enum MovieBillingHeadCompulsion {
   FIXED_COMPULSORY
   FIXED_OPTIONAL
@@ -381,7 +374,10 @@ model Project {
   fixedContractHours Decimal?      @db.Decimal(10, 2)
   fixedMonthlyHours  Decimal?      @db.Decimal(10, 2)
   additionalCharges  Decimal       @default(0) @db.Decimal(12, 2)
+  partialBillingCost Decimal       @default(0) @db.Decimal(12, 2)
   perCountryCharges  Decimal       @default(0) @db.Decimal(12, 2)
+  developerCount     Int           @default(0)
+  perDeveloperCost   Decimal       @default(0) @db.Decimal(12, 2)
   startDate          DateTime?
   endDate            DateTime?
   isActive           Boolean       @default(true)
@@ -403,7 +399,6 @@ model Project {
   assignedUsers       ProjectUserAssignment[]
   estimates           Estimate[]
   timeEntries         TimeEntry[]
-  billingTransactions BillingTransaction[]
   contactPersons      ContactPerson[]
 
   @@index([clientId, isActive])
@@ -594,23 +589,6 @@ model AuditLog {
   @@index([actorId])
   @@index([entityType, entityId])
   @@index([createdAt])
-}
-
-model BillingTransaction {
-  id              String                 @id @default(cuid())
-  projectId       String
-  transactionType BillingTransactionType
-  amountMoney     Decimal?               @db.Decimal(12, 2)
-  amountHours     Decimal?               @db.Decimal(10, 2)
-  description     String?                @db.Text
-  effectiveDate   DateTime
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
-
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-
-  @@index([projectId, effectiveDate])
-  @@index([transactionType])
 }
 
 

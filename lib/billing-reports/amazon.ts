@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { FILMIK_CLIENT_ID, SONY_PICTURES_CLASSICS_CLIENT_ID, SONY_PICTURES_CLIENT_ID } from "@/lib/billing-reports/config";
 
 export type AmazonReportType =
   | "social-assets"
@@ -75,6 +76,9 @@ export type WarnerDomesticDeliverableData = {
 export const AMAZON_CLIENT_NAME = "Amazon Studios";
 export const UNIVERSAL_CLIENT_NAME = "Universal Pictures International";
 export const WARNER_CLIENT_NAME = "Warner Bros. Entertainment Inc.";
+export const SONY_PICTURES_CLIENT_NAME = "Sony Pictures Entertainment";
+export const SONY_PICTURES_CLASSICS_CLIENT_NAME = "Sony Pictures Classics";
+export const FILMIK_CLIENT_NAME = "Filmik";
 
 export type BillingReportDefinition = {
   title: string;
@@ -140,11 +144,26 @@ export const WARNER_REPORTS: Partial<Record<AmazonReportType, BillingReportDefin
   },
 };
 
-export function getBillingReportCatalogForClient(clientName: string) {
+export const SONY_PICTURES_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
+  "social-assets": { title: "Sony Pictures Entertainment Billing", projectName: "", includeLanguage: false, kind: "placeholder" },
+};
+
+export const SONY_PICTURES_CLASSICS_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
+  "social-assets": { title: "Sony Pictures Classics Billing", projectName: "", includeLanguage: false, kind: "placeholder" },
+};
+
+export const FILMIK_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
+  "social-assets": { title: "Filmik Billing", projectName: "", includeLanguage: false, kind: "placeholder" },
+};
+
+export function getBillingReportCatalogForClient(clientName: string, clientId?: string) {
   const normalizedClientName = clientName.trim().toLowerCase();
   if (normalizedClientName === AMAZON_CLIENT_NAME.toLowerCase()) return AMAZON_REPORTS;
   if (normalizedClientName === UNIVERSAL_CLIENT_NAME.toLowerCase()) return UNIVERSAL_REPORTS;
   if (normalizedClientName === WARNER_CLIENT_NAME.toLowerCase()) return WARNER_REPORTS;
+  if (clientId === SONY_PICTURES_CLIENT_ID || normalizedClientName === SONY_PICTURES_CLIENT_NAME.toLowerCase()) return SONY_PICTURES_REPORTS;
+  if (clientId === SONY_PICTURES_CLASSICS_CLIENT_ID || normalizedClientName === SONY_PICTURES_CLASSICS_CLIENT_NAME.toLowerCase()) return SONY_PICTURES_CLASSICS_REPORTS;
+  if (clientId === FILMIK_CLIENT_ID || normalizedClientName === FILMIK_CLIENT_NAME.toLowerCase()) return FILMIK_REPORTS;
   return null;
 }
 
@@ -252,7 +271,7 @@ export async function getAmazonBillingReportData({
 
   if (!client) return null;
 
-  const reportCatalog = getBillingReportCatalogForClient(client.name);
+  const reportCatalog = getBillingReportCatalogForClient(client.name, client.id);
   if (!reportCatalog) return null;
 
   const reportConfig = reportCatalog[reportType];

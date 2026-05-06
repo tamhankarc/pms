@@ -6,6 +6,7 @@ import { WarnerDeliverableFiltersClient } from "@/components/billing-reports/war
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canViewBillingReports } from "@/lib/permissions";
+import { isBillingReportClientExcluded } from "@/lib/billing-reports/config";
 import {
   buildAmazonBillingReportFilters,
   buildWarnerDomesticDeliverableFilters,
@@ -131,7 +132,7 @@ function TimeEntryReportSummaryTable({ data }: { data: NonNullable<Awaited<Retur
 }
 
 function ReportTabs({ clientId, activeReport, clientName }: { clientId: string; activeReport: AmazonReportType; clientName: string }) {
-  const reportCatalog = getBillingReportCatalogForClient(clientName);
+  const reportCatalog = getBillingReportCatalogForClient(clientName, clientId);
   const tabs = reportCatalog ? (Object.entries(reportCatalog) as Array<[AmazonReportType, { title: string }]>) : [];
   return <div className="card p-4"><div className="flex flex-wrap gap-3">{tabs.map(([reportType, report]) => <ReportTab key={reportType} clientId={clientId} reportType={reportType} activeReport={activeReport} label={report.title} />)}</div></div>;
 }
@@ -218,6 +219,92 @@ function PlaceholderConfiguredReport({ clientId, activeReport, clientName, title
   );
 }
 
+
+type GenericBillingProject = {
+  id: string;
+  name: string;
+  code: string | null;
+  billingModel: string;
+  status: string;
+  fixedContractHours: unknown;
+  fixedMonthlyHours: unknown;
+  additionalCharges: unknown;
+  partialBillingCost: unknown;
+  perCountryCharges: unknown;
+  developerCount: number;
+  perDeveloperCost: unknown;
+};
+
+function GenericBillingModelBlock({ title, projects }: { title: string; projects: GenericBillingProject[] }) {
+  return (
+    <section className="table-wrap">
+      <div className="border-b border-slate-200 px-6 py-5">
+        <h2 className="section-title">{title}</h2>
+        <p className="section-subtitle">
+          {title === "Fixed - Full Project" ? "Only completed Fixed - Full Project records are shown here." : "Projects currently available under this billing model."}
+        </p>
+      </div>
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">Project</th>
+            <th className="table-cell">Code</th>
+            <th className="table-cell">Status</th>
+            <th className="table-cell">Hours / Units</th>
+            <th className="table-cell">Costs</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {projects.map((project) => (
+            <tr key={project.id}>
+              <td className="table-cell font-medium text-slate-900">{project.name}</td>
+              <td className="table-cell">{project.code || ""}</td>
+              <td className="table-cell"><span className="badge-blue">{project.status.replaceAll("_", " ")}</span></td>
+              <td className="table-cell">
+                {project.billingModel === "FIXED_FULL" ? `${Number(project.fixedContractHours ?? 0)} fixed hours` : null}
+                {project.billingModel === "FIXED_MONTHLY" ? `${Number(project.fixedMonthlyHours ?? 0)} monthly hours` : null}
+                {project.billingModel === "FIXED_PER_COUNTRY" ? "Per country" : null}
+                {project.billingModel === "HOURLY" ? "Time-entry based" : null}
+                {project.developerCount > 0 ? <div className="text-xs text-slate-500">Developers: {project.developerCount}</div> : null}
+              </td>
+              <td className="table-cell">
+                {project.billingModel === "FIXED_FULL" ? <div>Additional: {formatUsd(Number(project.additionalCharges ?? 0))}</div> : null}
+                {project.billingModel === "FIXED_FULL" ? <div>Partial Billing: {formatUsd(Number(project.partialBillingCost ?? 0))}</div> : null}
+                {project.billingModel === "FIXED_PER_COUNTRY" ? <div>Per Country: {formatUsd(Number(project.perCountryCharges ?? 0))}</div> : null}
+                {project.developerCount > 0 ? <div>Per Developer: {formatUsd(Number(project.perDeveloperCost ?? 0))}</div> : null}
+                {project.billingModel === "HOURLY" || project.billingModel === "FIXED_MONTHLY" ? "" : null}
+              </td>
+            </tr>
+          ))}
+          {projects.length === 0 ? <tr><td colSpan={5} className="table-cell text-center text-sm text-slate-500">No projects available in this block.</td></tr> : null}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+function GenericBillingReportWorkspace({ projects }: { projects: GenericBillingProject[] }) {
+  const hourlyProjects = projects.filter((project) => project.billingModel === "HOURLY");
+  const fixedFullProjects = projects.filter((project) => project.billingModel === "FIXED_FULL" && project.status === "COMPLETED");
+  const fixedMonthlyProjects = projects.filter((project) => project.billingModel === "FIXED_MONTHLY");
+  const fixedPerCountryProjects = projects.filter((project) => project.billingModel === "FIXED_PER_COUNTRY");
+  const blocks = [
+    ["Hourly", hourlyProjects],
+    ["Fixed - Full Project", fixedFullProjects],
+    ["Fixed - Monthly", fixedMonthlyProjects],
+    ["Fixed Per Country", fixedPerCountryProjects],
+  ] as const;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-4">
+        {blocks.map(([label, rows]) => <div key={label} className="card p-5"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{label}</p><p className="mt-2 text-2xl font-semibold text-slate-900">{rows.length}</p></div>)}
+      </div>
+      {blocks.map(([label, rows]) => <GenericBillingModelBlock key={label} title={label} projects={rows} />)}
+    </div>
+  );
+}
+
 export default async function ClientBillingReportPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await requireUser();
   if (!canViewBillingReports(user)) redirect("/dashboard");
@@ -227,18 +314,15 @@ export default async function ClientBillingReportPage({ params, searchParams }: 
 
   const client = await db.client.findUnique({
     where: { id: clientId },
-    select: { id: true, name: true, isActive: true, hourlyCost: true, projects: { select: { id: true, billingModel: true, isActive: true, status: true } }, movies: { select: { id: true, status: true, isActive: true } }, movieBillingHeads: { select: { id: true } }, movieBillingHeadAssignments: { select: { id: true } } },
+    select: { id: true, name: true, isActive: true, hourlyCost: true, projects: { where: { isActive: true }, select: { id: true, name: true, code: true, billingModel: true, isActive: true, status: true, fixedContractHours: true, fixedMonthlyHours: true, additionalCharges: true, partialBillingCost: true, perCountryCharges: true, developerCount: true, perDeveloperCost: true }, orderBy: { name: "asc" } }, movies: { select: { id: true, status: true, isActive: true } }, movieBillingHeads: { select: { id: true } }, movieBillingHeadAssignments: { select: { id: true } } },
   });
-  if (!client || !client.isActive || !client.projects.some((project) => project.isActive && project.status === "ACTIVE")) redirect("/billing-reports");
+  if (!client || !client.isActive || isBillingReportClientExcluded(client.id) || !client.projects.some((project) => project.isActive && project.status === "ACTIVE")) redirect("/billing-reports");
 
   const activeReport = normalizeAmazonReportType(Array.isArray(resolvedSearchParams.report) ? resolvedSearchParams.report[0] : resolvedSearchParams.report, client.name);
   const filters = buildAmazonBillingReportFilters(resolvedSearchParams);
   const domesticFilters = buildWarnerDomesticDeliverableFilters(resolvedSearchParams);
-  const reportCatalog = getBillingReportCatalogForClient(client.name);
+  const reportCatalog = getBillingReportCatalogForClient(client.name, client.id);
   const activeReportDefinition = reportCatalog?.[activeReport];
-  const fixedFullProjects = client.projects.filter((project) => project.billingModel === "FIXED_FULL").length;
-  const workingMovies = client.movies.filter((movie) => movie.status === "WORKING" && movie.isActive).length;
-
   const timeEntryReportData = activeReportDefinition?.kind === "time-entry" ? await getAmazonBillingReportData({ clientId, reportType: activeReport, filters }) : null;
   const domesticDeliverableData = isWarnerBillingReportClient(client.name) && activeReport === "domestic-deliverable" ? await getWarnerDomesticDeliverableData({ clientId, filters: domesticFilters }) : null;
   const intlDeliverableData = isWarnerBillingReportClient(client.name) && activeReport === "intl-deliverable" ? await getWarnerIntlDeliverableData({ clientId, filters: domesticFilters }) : null;
@@ -246,18 +330,8 @@ export default async function ClientBillingReportPage({ params, searchParams }: 
 
   return (
     <div>
-      <PageHeader title={`${client.name} Billing Report`} description={reportCatalog ? "Use the report tabs to review billing records and export them to Excel or PDF." : "Placeholder billing report page for this client. Client-specific report tables can be added here."} actions={<Link className="btn-secondary" href="/billing-reports">Back to Billing Reports</Link>} />
-      {timeEntryReportData ? <TimeEntryReportsWorkspace clientId={clientId} activeReport={activeReport} data={timeEntryReportData} /> : (domesticDeliverableData || intlDeliverableData || otherDeliverableData) ? <WarnerDeliverableWorkspace clientId={clientId} activeReport={activeReport} data={(domesticDeliverableData || intlDeliverableData || otherDeliverableData)!} /> : activeReportDefinition?.kind === "placeholder" ? <PlaceholderConfiguredReport clientId={clientId} activeReport={activeReport} clientName={client.name} title={activeReportDefinition.title} /> : (
-        <>
-          <div className="grid gap-4 md:grid-cols-4 mb-6">
-            <div className="card p-5"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Status</p><p className="mt-2 text-lg font-semibold text-slate-900">{client.isActive ? "Active" : "Inactive"}</p></div>
-            <div className="card p-5"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Projects</p><p className="mt-2 text-2xl font-semibold text-slate-900">{client.projects.length}</p></div>
-            <div className="card p-5"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Fixed Full Projects</p><p className="mt-2 text-2xl font-semibold text-slate-900">{fixedFullProjects}</p></div>
-            <div className="card p-5"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Working Movies</p><p className="mt-2 text-2xl font-semibold text-slate-900">{workingMovies}</p></div>
-          </div>
-          <div className="card p-6"><h2 className="section-title">Report Placeholder</h2><p className="mt-3 text-sm leading-6 text-slate-600">Billing report content for <span className="font-semibold text-slate-900">{client.name}</span> will appear here. This page is ready for client-specific report tables, date filters, billing head calculations, project costs, movie billing details, and exports.</p><div className="mt-5 grid gap-3 text-sm text-slate-600 md:grid-cols-2"><div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><span className="font-medium text-slate-900">Client hourly cost:</span> ${Number(client.hourlyCost).toFixed(2)}</div><div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><span className="font-medium text-slate-900">Client billing heads:</span> {client.movieBillingHeads.length}</div><div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><span className="font-medium text-slate-900">Movie billing assignments:</span> {client.movieBillingHeadAssignments.length}</div><div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><span className="font-medium text-slate-900">Active movies:</span> {client.movies.filter((movie) => movie.isActive).length}</div></div></div>
-        </>
-      )}
+      <PageHeader title={`${client.name} Billing Report`} description={reportCatalog ? "Use the report tabs to review configured billing records." : "Review projects grouped by billing model. Fixed - Full Project shows completed projects only."} actions={<Link className="btn-secondary" href="/billing-reports">Back to Billing Reports</Link>} />
+      {timeEntryReportData ? <TimeEntryReportsWorkspace clientId={clientId} activeReport={activeReport} data={timeEntryReportData} /> : (domesticDeliverableData || intlDeliverableData || otherDeliverableData) ? <WarnerDeliverableWorkspace clientId={clientId} activeReport={activeReport} data={(domesticDeliverableData || intlDeliverableData || otherDeliverableData)!} /> : activeReportDefinition?.kind === "placeholder" ? <PlaceholderConfiguredReport clientId={clientId} activeReport={activeReport} clientName={client.name} title={activeReportDefinition.title} /> : <GenericBillingReportWorkspace projects={client.projects} />}
     </div>
   );
 }

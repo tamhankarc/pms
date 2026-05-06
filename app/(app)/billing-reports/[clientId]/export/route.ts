@@ -12,6 +12,7 @@ import {
   normalizeAmazonReportType,
 } from "@/lib/billing-reports/amazon";
 import { db } from "@/lib/db";
+import { isBillingReportClientExcluded } from "@/lib/billing-reports/config";
 import {
   buildAmazonReportExcel,
   buildAmazonReportFileName,
@@ -30,12 +31,12 @@ export async function GET(
   if (!canViewBillingReports(user)) return new Response("Forbidden", { status: 403 });
 
   const { clientId } = await params;
-  const client = await db.client.findUnique({ where: { id: clientId }, select: { name: true } });
-  if (!client) redirect("/billing-reports");
+  const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } });
+  if (!client || isBillingReportClientExcluded(client.id)) redirect("/billing-reports");
 
   const { searchParams } = new URL(request.url);
   const reportType = normalizeAmazonReportType(searchParams.get("report"), client.name);
-  const reportDefinition = getBillingReportCatalogForClient(client.name)?.[reportType];
+  const reportDefinition = getBillingReportCatalogForClient(client.name, client.id)?.[reportType];
   const format = searchParams.get("format") === "pdf" ? "pdf" : "excel";
 
   if (reportDefinition?.kind === "deliverable") {

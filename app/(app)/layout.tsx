@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { getGlobalApproverAssignmentIds } from "@/lib/ems-queries";
 import { canViewBillingReports, isAdmin, isHR } from "@/lib/permissions";
 import { db } from "@/lib/db";
+import { billingReportClientVisibilityWhere } from "@/lib/billing-reports/config";
 
 export default async function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
@@ -10,7 +11,7 @@ export default async function AuthenticatedLayout({ children }: { children: Reac
   const canAccessLeaveApprovals = isAdmin(user) || isHR(user) || selectedApproverIds.includes(user.id);
   const billingReportClients = canViewBillingReports(user)
     ? await db.client.findMany({
-        where: { isActive: true, projects: { some: { isActive: true, status: "ACTIVE" } } },
+        where: billingReportClientVisibilityWhere,
         select: { id: true, name: true },
         orderBy: { name: "asc" },
       })

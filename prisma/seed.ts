@@ -6,7 +6,6 @@ import {
   ProjectStatus,
   EstimateStatus,
   TimeEntryStatus,
-  BillingTransactionType,
 } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
@@ -296,28 +295,6 @@ async function main() {
       reviewerId: teamLead.id,
       decisionStatus: TimeEntryStatus.APPROVED,
       remarks: "Approved by Team Lead",
-    },
-  });
-
-  await prisma.billingTransaction.create({
-    data: {
-      projectId: project.id,
-      transactionType: BillingTransactionType.PARTIAL_BILLING,
-      amountMoney: 12000,
-      amountHours: null,
-      description: "Initial milestone billing",
-      effectiveDate: new Date(),
-    },
-  });
-
-  await prisma.billingTransaction.create({
-    data: {
-      projectId: project.id,
-      transactionType: BillingTransactionType.UPGRADE_PRE_COMPLETION,
-      amountMoney: 5000,
-      amountHours: 10,
-      description: "Scope upgrade before completion",
-      effectiveDate: new Date(),
     },
   });
 

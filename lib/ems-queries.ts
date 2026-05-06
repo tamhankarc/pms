@@ -556,7 +556,7 @@ export async function getLeaveRequestsForUser(userId: string, todayDateKey: stri
   const current = await db.leaveRequest.findMany({
     where: {
       userId,
-      OR: [{ endDate: { gte: startUtc } }, { status: { in: ["PENDING", "APPROVED", "RECONSIDER"] } }],
+      endDate: { gte: startUtc },
     },
     include: {
       approver: {
@@ -569,9 +569,7 @@ export async function getLeaveRequestsForUser(userId: string, todayDateKey: stri
   const past = await db.leaveRequest.findMany({
     where: {
       userId,
-      NOT: {
-        OR: [{ endDate: { gte: startUtc } }, { status: { in: ["PENDING", "APPROVED", "RECONSIDER"] } }],
-      },
+      endDate: { lt: startUtc },
     },
     include: {
       approver: {
