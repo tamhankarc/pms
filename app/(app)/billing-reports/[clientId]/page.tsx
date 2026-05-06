@@ -266,8 +266,9 @@ function GenericExportButtons({ clientId, reportType, data }: { clientId: string
 function GenericBillingModelBlock({ block }: { block: GenericBillingReportBlock }) {
   const isCountryBlock = block.key === "fixedPerCountry";
   const totalDeveloperCost = block.rows.reduce((sum, row) => sum + Number(row.developerCost ?? 0), 0);
+  const totalProjectCost = block.rows.reduce((sum, row) => sum + row.projectCost, 0);
   const totalCost = block.rows.reduce((sum, row) => sum + row.cost, 0);
-  const totalLabelColSpan = 2;
+  const totalLabelColSpan = 3;
 
   return (
     <section className="table-wrap">
@@ -279,23 +280,28 @@ function GenericBillingModelBlock({ block }: { block: GenericBillingReportBlock 
         <thead className="table-head">
           <tr>
             <th className="table-cell">Project</th>
+            <th className="table-cell">Contact Person</th>
             {isCountryBlock ? <th className="table-cell">Country List</th> : <th className="table-cell">Status</th>}
             {block.showDeveloperCost ? <th className="table-cell">Developer Cost</th> : null}
-            <th className="table-cell">Costs</th>
+            {block.showDeveloperCost ? <th className="table-cell">Project Cost</th> : null}
+            <th className="table-cell">{block.showDeveloperCost ? "Total Cost" : "Cost"}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {block.rows.map((row) => (
             <tr key={row.projectId}>
               <td className="table-cell font-medium text-slate-900">{row.projectName}</td>
+              <td className="table-cell">{row.contactPerson}</td>
               {isCountryBlock ? <td className="table-cell">{row.countryList || "-"}</td> : <td className="table-cell"><span className="badge-blue">{row.status}</span></td>}
-              {block.showDeveloperCost ? <td className="table-cell whitespace-nowrap font-medium text-slate-900">{Number(row.developerCost ?? 0) > 0 ? formatGenericUsd(Number(row.developerCost ?? 0)) : "-"}</td> : null}
+              {block.showDeveloperCost ? <td className="table-cell whitespace-nowrap font-medium text-slate-900">{row.developerCost !== undefined ? formatGenericUsd(Number(row.developerCost ?? 0)) : "-"}</td> : null}
+              {block.showDeveloperCost ? <td className="table-cell whitespace-nowrap font-medium text-slate-900">{formatGenericUsd(row.projectCost)}</td> : null}
               <td className="table-cell whitespace-nowrap font-medium text-slate-900">{formatGenericUsd(row.cost)}</td>
             </tr>
           ))}
           <tr className="bg-slate-50">
             <td className="table-cell font-semibold text-slate-900" colSpan={totalLabelColSpan}>Total</td>
             {block.showDeveloperCost ? <td className="table-cell whitespace-nowrap font-semibold text-slate-900">{formatGenericUsd(totalDeveloperCost)}</td> : null}
+            {block.showDeveloperCost ? <td className="table-cell whitespace-nowrap font-semibold text-slate-900">{formatGenericUsd(totalProjectCost)}</td> : null}
             <td className="table-cell whitespace-nowrap font-semibold text-slate-900">{formatGenericUsd(totalCost)}</td>
           </tr>
         </tbody>

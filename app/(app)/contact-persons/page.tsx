@@ -28,7 +28,7 @@ export default async function ContactPersonsPage({
         ...(clientId !== "all" ? { clientId } : {}),
         ...(projectId !== "all" ? { projectId } : {}),
       },
-      include: { client: true, project: true },
+      include: { client: true, project: true, movie: true },
       orderBy: { name: "asc" },
     }),
   ]);
@@ -40,7 +40,7 @@ export default async function ContactPersonsPage({
 
   return (
     <div>
-      <PageHeader title="Contact Persons" description="Create and maintain project-specific contact persons." actions={<Link href="/contact-persons/new" className="btn-primary">Create Contact Person</Link>} />
+      <PageHeader title="Contact Persons" description="Create and maintain project-specific or movie-specific contact persons." actions={<Link href="/contact-persons/new" className="btn-primary">Create Contact Person</Link>} />
 
       <div className="mb-6 card p-4">
         <form className="grid gap-3 md:grid-cols-[1fr_220px_220px_auto]" method="get">
@@ -53,7 +53,7 @@ export default async function ContactPersonsPage({
 
       <div className="table-wrap">
         <table className="table-base">
-          <thead className="table-head"><tr><th className="table-cell">Name</th><th className="table-cell">Email</th><th className="table-cell">Contact Number</th><th className="table-cell">Client</th><th className="table-cell">Project</th><th className="table-cell">Action</th></tr></thead>
+          <thead className="table-head"><tr><th className="table-cell">Name</th><th className="table-cell">Email</th><th className="table-cell">Contact Number</th><th className="table-cell">Client</th><th className="table-cell">Assignment</th><th className="table-cell">Action</th></tr></thead>
           <tbody className="divide-y divide-slate-100">
             {paginatedContactPersons.map((person) => (
               <tr key={person.id}>
@@ -61,7 +61,7 @@ export default async function ContactPersonsPage({
                 <td className="table-cell">{person.email}</td>
                 <td className="table-cell">{person.contactNumber || "—"}</td>
                 <td className="table-cell">{person.client.name}</td>
-                <td className="table-cell">{person.project.name}</td>
+                <td className="table-cell">{person.project ? `Project: ${person.project.name}` : person.movie ? `Movie: ${person.movie.title}` : "—"}</td>
                 <td className="table-cell"><Link href={`/contact-persons/${person.id}`} className="btn-secondary text-xs">Edit</Link></td>
               </tr>
             ))}

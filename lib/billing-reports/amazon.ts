@@ -350,7 +350,14 @@ export async function getAmazonBillingReportData({
     orderBy: [{ workDate: "asc" }, { movie: { title: "asc" } }, { taskName: "asc" }],
   });
 
-  const contactPersons = buildContactPersonLabel(project.contactPersons);
+  const movieContactPersons = filters.movieId !== "all"
+    ? await db.contactPerson.findMany({
+        where: { clientId, movieId: filters.movieId },
+        orderBy: { name: "asc" },
+        select: { name: true, email: true },
+      })
+    : [];
+  const contactPersons = movieContactPersons.length ? buildContactPersonLabel(movieContactPersons) : buildContactPersonLabel(project.contactPersons);
 
   const rows: AmazonBillingReportRow[] = entries.map((entry) => ({
     date: formatDisplayDate(entry.workDate),

@@ -83,7 +83,6 @@ enum MovieStatus {
   COMPLETED_BILLED
 }
 
-
 enum AttendanceActionType {
   MARK_IN
   MARK_OUT
@@ -162,12 +161,12 @@ model User {
   timeEntries      TimeEntry[]
   timeEntryReviews TimeEntryReview[] @relation("TimeEntryReviewer")
 
-  attendanceLogs            AttendanceLog[]
-  leaveRequests             LeaveRequest[] @relation("LeaveRequestEmployee")
-  leaveRequestsToApprove    LeaveRequest[] @relation("LeaveRequestApprover")
-  leaveApproverAssignments  LeaveApproverAssignment[] @relation("LeaveApproverEmployee")
-  approverForEmployees      LeaveApproverAssignment[] @relation("LeaveApproverUser")
-  leaveApprovalsAssignedBy  LeaveApproverAssignment[] @relation("LeaveApproverAssignedBy")
+  attendanceLogs           AttendanceLog[]
+  leaveRequests            LeaveRequest[]                   @relation("LeaveRequestEmployee")
+  leaveRequestsToApprove   LeaveRequest[]                   @relation("LeaveRequestApprover")
+  leaveApproverAssignments LeaveApproverAssignment[]        @relation("LeaveApproverEmployee")
+  approverForEmployees     LeaveApproverAssignment[]        @relation("LeaveApproverUser")
+  leaveApprovalsAssignedBy LeaveApproverAssignment[]        @relation("LeaveApproverAssignedBy")
   leaveYearProfiles        LeaveYearProfile[]
   announcementRecipients   DashboardAnnouncementRecipient[]
 
@@ -189,33 +188,37 @@ model Client {
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
-  movies         Movie[]
-  assetTypes     AssetType[]
-  projects       Project[]
-  projectTypes   ProjectType[]
-  contactPersons ContactPerson[]
-  movieBillingHeads MovieBillingHead[]
+  movies                      Movie[]
+  assetTypes                  AssetType[]
+  projects                    Project[]
+  projectTypes                ProjectType[]
+  contactPersons              ContactPerson[]
+  movieBillingHeads           MovieBillingHead[]
   movieBillingHeadAssignments MovieBillingHeadAssignment[]
 
   @@index([isActive])
 }
 
-
 model ContactPerson {
   id            String   @id @default(cuid())
   clientId      String
-  projectId     String
+  projectId     String?
+  movieId       String?
   name          String
   email         String
   contactNumber String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  client  Client  @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  movie     Movie?   @relation(fields: [movieId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  country   Country? @relation(fields: [countryId], references: [id])
+  countryId String?
 
   @@index([clientId])
   @@index([projectId])
+  @@index([movieId])
   @@index([email])
 }
 
@@ -236,27 +239,28 @@ model ProjectType {
 }
 
 model Movie {
-  id          String   @id @default(cuid())
-  clientId    String
-  title       String
-  code        String?  @unique
-  description String?  @db.Text
-  billingRegion MovieBillingRegion @default(DOMESTIC)
-  billingDomestic Boolean @default(true)
-  billingIntl Boolean @default(false)
-  billingOther Boolean @default(false)
-  otherCountryIds String? @db.Text
-  billingUnitsJson String? @db.Text
-  sonyTicketingBannerCost Decimal @default(0) @db.Decimal(12, 2)
-  sonyEmailTicketingBannerCost Decimal @default(0) @db.Decimal(12, 2)
-  status      MovieStatus @default(WORKING)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                           String             @id @default(cuid())
+  clientId                     String
+  title                        String
+  code                         String?            @unique
+  description                  String?            @db.Text
+  billingRegion                MovieBillingRegion @default(DOMESTIC)
+  billingDomestic              Boolean            @default(true)
+  billingIntl                  Boolean            @default(false)
+  billingOther                 Boolean            @default(false)
+  otherCountryIds              String?            @db.Text
+  billingUnitsJson             String?            @db.Text
+  sonyTicketingBannerCost      Decimal            @default(0) @db.Decimal(12, 2)
+  sonyEmailTicketingBannerCost Decimal            @default(0) @db.Decimal(12, 2)
+  status                       MovieStatus        @default(WORKING)
+  isActive                     Boolean            @default(true)
+  createdAt                    DateTime           @default(now())
+  updatedAt                    DateTime           @updatedAt
 
-  client      Client      @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  estimates   Estimate[]
-  timeEntries TimeEntry[]
+  client                      Client                       @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  estimates                   Estimate[]
+  timeEntries                 TimeEntry[]
+  contactPersons              ContactPerson[]
   movieBillingHeadAssignments MovieBillingHeadAssignment[]
 
   @@index([clientId, isActive])
@@ -264,29 +268,28 @@ model Movie {
 }
 
 model MovieBillingHead {
-  id                     String                    @id @default(cuid())
+  id                     String                     @id @default(cuid())
   clientId               String
   name                   String
   compulsionType         MovieBillingHeadCompulsion @default(FIXED_COMPULSORY)
   domesticCompulsionType MovieBillingHeadCompulsion @default(FIXED_COMPULSORY)
   intlCompulsionType     MovieBillingHeadCompulsion @default(FIXED_COMPULSORY)
-  domesticActive         Boolean                   @default(true)
-  intlActive             Boolean                   @default(true)
+  domesticActive         Boolean                    @default(true)
+  intlActive             Boolean                    @default(true)
   costType               MovieBillingHeadCostType   @default(WHOLE_COST)
-  domesticCost           Decimal                   @default(0) @db.Decimal(12, 2)
-  intlCost               Decimal                   @default(0) @db.Decimal(12, 2)
-  isActive        Boolean                   @default(true)
-  createdAt       DateTime                  @default(now())
-  updatedAt       DateTime                  @updatedAt
+  domesticCost           Decimal                    @default(0) @db.Decimal(12, 2)
+  intlCost               Decimal                    @default(0) @db.Decimal(12, 2)
+  isActive               Boolean                    @default(true)
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
 
-  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  client           Client                       @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   movieAssignments MovieBillingHeadAssignment[]
 
   @@unique([clientId, name])
   @@index([clientId, isActive])
   @@index([name])
 }
-
 
 model MovieBillingHeadAssignment {
   id            String   @id @default(cuid())
@@ -354,8 +357,9 @@ model Country {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  estimates   Estimate[]
-  timeEntries TimeEntry[]
+  estimates                   Estimate[]
+  timeEntries                 TimeEntry[]
+  contactPersons              ContactPerson[]
   movieBillingHeadAssignments MovieBillingHeadAssignment[]
 
   @@index([isActive])
@@ -363,43 +367,43 @@ model Country {
 }
 
 model Project {
-  id                 String        @id @default(cuid())
-  clientId           String
-  projectTypeId      String?
-  code               String?       @unique
-  name               String
-  description        String?       @db.Text
-  billingModel       BillingModel
-  status             ProjectStatus @default(DRAFT)
-  fixedContractHours Decimal?      @db.Decimal(10, 2)
-  fixedMonthlyHours  Decimal?      @db.Decimal(10, 2)
-  additionalCharges  Decimal       @default(0) @db.Decimal(12, 2)
-  partialBillingCost Decimal       @default(0) @db.Decimal(12, 2)
-  perCountryCharges  Decimal       @default(0) @db.Decimal(12, 2)
-  developerCount     Int           @default(0)
-  perDeveloperCost   Decimal       @default(0) @db.Decimal(12, 2)
-  startDate          DateTime?
-  endDate            DateTime?
-  isActive           Boolean       @default(true)
-  createdById        String?
-  updatedById        String?
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
-  hideCountriesInEntries Boolean   @default(false)
-  hideMoviesInEntries    Boolean   @default(false)
-  hideAssetTypesInEntries Boolean   @default(false)
-  addToBilling Boolean @default(false)
+  id                      String        @id @default(cuid())
+  clientId                String
+  projectTypeId           String?
+  code                    String?       @unique
+  name                    String
+  description             String?       @db.Text
+  billingModel            BillingModel
+  status                  ProjectStatus @default(DRAFT)
+  fixedContractHours      Decimal?      @db.Decimal(10, 2)
+  fixedMonthlyHours       Decimal?      @db.Decimal(10, 2)
+  additionalCharges       Decimal       @default(0) @db.Decimal(12, 2)
+  partialBillingCost      Decimal       @default(0) @db.Decimal(12, 2)
+  perCountryCharges       Decimal       @default(0) @db.Decimal(12, 2)
+  developerCount          Int           @default(0)
+  perDeveloperCost        Decimal       @default(0) @db.Decimal(12, 2)
+  startDate               DateTime?
+  endDate                 DateTime?
+  isActive                Boolean       @default(true)
+  createdById             String?
+  updatedById             String?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  hideCountriesInEntries  Boolean       @default(false)
+  hideMoviesInEntries     Boolean       @default(false)
+  hideAssetTypesInEntries Boolean       @default(false)
+  addToBilling            Boolean       @default(false)
 
   client      Client       @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   projectType ProjectType? @relation(fields: [projectTypeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   createdBy   User?        @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   updatedBy   User?        @relation("ProjectUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
-  subProjects         SubProject[]
-  assignedUsers       ProjectUserAssignment[]
-  estimates           Estimate[]
-  timeEntries         TimeEntry[]
-  contactPersons      ContactPerson[]
+  subProjects    SubProject[]
+  assignedUsers  ProjectUserAssignment[]
+  estimates      Estimate[]
+  timeEntries    TimeEntry[]
+  contactPersons ContactPerson[]
 
   @@index([clientId, isActive])
   @@index([projectTypeId])
@@ -410,16 +414,16 @@ model Project {
 }
 
 model SubProject {
-  id          String   @id @default(cuid())
-  projectId   String
-  name        String
-  description String?  @db.Text
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  hideCountriesInEntries Boolean @default(false)
-  hideMoviesInEntries    Boolean @default(false)
-  hideAssetTypesInEntries Boolean @default(false)
+  id                      String   @id @default(cuid())
+  projectId               String
+  name                    String
+  description             String?  @db.Text
+  isActive                Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  hideCountriesInEntries  Boolean  @default(false)
+  hideMoviesInEntries     Boolean  @default(false)
+  hideAssetTypesInEntries Boolean  @default(false)
 
   project     Project                @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   assignments SubProjectAssignment[]
@@ -574,7 +578,6 @@ model TimeEntryReview {
   @@index([reviewerId])
 }
 
-
 model AuditLog {
   id          String   @id @default(uuid()) @db.Char(36)
   actorId     String?
@@ -590,7 +593,6 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
 }
-
 
 model AttendanceLog {
   id             String               @id @default(cuid())
@@ -614,26 +616,26 @@ model AttendanceLog {
 }
 
 model LeaveRequest {
-  id                String      @id @default(cuid())
-  userId            String
-  leaveType         LeaveType
-  startDate         DateTime
-  endDate           DateTime
-  reason            String?     @db.Text
-  status            LeaveStatus @default(PENDING)
-  approverId        String?
-  approverComment   String?     @db.Text
-  reconsiderNote    String?     @db.Text
-  cancelledAt       DateTime?
-  approvedAt        DateTime?
-  rejectedAt        DateTime?
-  reconsideredAt    DateTime?
-  totalLeaveDays    Decimal?    @db.Decimal(6, 2)
-  casualDaysUsed    Decimal?    @db.Decimal(6, 2)
-  earnedDaysUsed    Decimal?    @db.Decimal(6, 2)
-  unpaidDaysUsed    Decimal?    @db.Decimal(6, 2)
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  id              String      @id @default(cuid())
+  userId          String
+  leaveType       LeaveType
+  startDate       DateTime
+  endDate         DateTime
+  reason          String?     @db.Text
+  status          LeaveStatus @default(PENDING)
+  approverId      String?
+  approverComment String?     @db.Text
+  reconsiderNote  String?     @db.Text
+  cancelledAt     DateTime?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  reconsideredAt  DateTime?
+  totalLeaveDays  Decimal?    @db.Decimal(6, 2)
+  casualDaysUsed  Decimal?    @db.Decimal(6, 2)
+  earnedDaysUsed  Decimal?    @db.Decimal(6, 2)
+  unpaidDaysUsed  Decimal?    @db.Decimal(6, 2)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
   user     User  @relation("LeaveRequestEmployee", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   approver User? @relation("LeaveRequestApprover", fields: [approverId], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -656,7 +658,6 @@ model LeaveApproverAssignment {
   @@unique([employeeId, approverId])
   @@index([approverId])
 }
-
 
 model LeaveYearProfile {
   id               String           @id @default(cuid())
@@ -693,7 +694,7 @@ model DashboardAnnouncement {
 }
 
 model DashboardAnnouncementRecipient {
-  id             String   @id @default(cuid())
+  id             String @id @default(cuid())
   announcementId String
   userId         String
 

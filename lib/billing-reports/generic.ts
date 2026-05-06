@@ -15,7 +15,9 @@ export type GenericBillingReportOptions = {
 export type GenericBillingReportRow = {
   projectId: string;
   projectName: string;
+  contactPerson: string;
   status: string;
+  projectCost: number;
   cost: number;
   developerCost?: number;
   countryList?: string;
@@ -76,19 +78,24 @@ function sortRows(rows: GenericBillingReportRow[]) {
 }
 
 function getDeveloperCost(project: { developerCount: number; perDeveloperCost: unknown }, includeDeveloperCosts: boolean) {
-  if (!includeDeveloperCosts || Number(project.developerCount || 0) <= 0) return 0;
+  if (!includeDeveloperCosts || Number(project.developerCount || 0) <= 0) return undefined;
   return Number(project.developerCount || 0) * Number(project.perDeveloperCost ?? 0);
 }
 
 function addDeveloperCost(baseCost: number, project: { developerCount: number; perDeveloperCost: unknown }, includeDeveloperCosts: boolean) {
   const developerCost = getDeveloperCost(project, includeDeveloperCosts);
-  return { cost: baseCost + developerCost, developerCost };
+  return { projectCost: baseCost, cost: baseCost + Number(developerCost ?? 0), developerCost };
+}
+
+function buildContactPersonLabel(contactPersons: { name: string; email: string }[]) {
+  if (!contactPersons.length) return "-";
+  return contactPersons.map((person) => `${person.name}${person.email ? ` (${person.email})` : ""}`).join(", ");
 }
 
 function buildBlock(block: Omit<GenericBillingReportBlock, "showDeveloperCost">): GenericBillingReportBlock {
   return {
     ...block,
-    showDeveloperCost: block.rows.some((row) => Number(row.developerCost ?? 0) > 0),
+    showDeveloperCost: block.rows.some((row) => row.developerCost !== undefined),
   };
 }
 
@@ -125,6 +132,10 @@ export async function getGenericBillingReportData({
           perCountryCharges: true,
           developerCount: true,
           perDeveloperCost: true,
+          contactPersons: {
+            orderBy: { name: "asc" },
+            select: { name: true, email: true },
+          },
         },
         orderBy: { name: "asc" },
       },
@@ -161,6 +172,15 @@ export async function getGenericBillingReportData({
     };
   }
 
+  const movieContactPersons = movieSpecific && selectedMovieId
+    ? await db.contactPerson.findMany({
+        where: { clientId, movieId: selectedMovieId },
+        orderBy: { name: "asc" },
+        select: { name: true, email: true },
+      })
+    : [];
+  const movieContactPersonLabel = buildContactPersonLabel(movieContactPersons);
+
   const projectIdsWithSelectedMovie = new Set<string>();
   if (movieSpecific && selectedMovieId) {
     const movieEntries = await db.timeEntry.findMany({
@@ -176,6 +196,10 @@ export async function getGenericBillingReportData({
     : client.projects;
 
   const hourlyCost = Number(client.hourlyCost ?? 0);
+  const getProjectContactPerson = (project: { contactPersons: { name: string; email: string }[] }) => {
+    if (movieSpecific && movieContactPersons.length) return movieContactPersonLabel;
+    return buildContactPersonLabel(project.contactPersons);
+  };
   const hourlyProjectIds = eligibleProjects.filter((project) => project.billingModel === "HOURLY").map((project) => project.id);
   const fromBoundary = toStartOfDay(filters.fromDate);
   const toBoundary = toEndOfDay(filters.toDate);
@@ -205,6 +229,7 @@ export async function getGenericBillingReportData({
       return {
         projectId: project.id,
         projectName: project.name,
+        contactPerson: getProjectContactPerson(project),
         status: formatProjectStatus(project.status),
         ...developer,
       } satisfies GenericBillingReportRow;
@@ -217,6 +242,7 @@ export async function getGenericBillingReportData({
       return {
         projectId: project.id,
         projectName: project.name,
+        contactPerson: getProjectContactPerson(project),
         status: formatProjectStatus(project.status),
         ...developer,
       } satisfies GenericBillingReportRow;
@@ -229,6 +255,7 @@ export async function getGenericBillingReportData({
       return {
         projectId: project.id,
         projectName: project.name,
+        contactPerson: getProjectContactPerson(project),
         status: formatProjectStatus(project.status),
         ...developer,
       } satisfies GenericBillingReportRow;
@@ -267,6 +294,7 @@ export async function getGenericBillingReportData({
         return {
           projectId: project.id,
           projectName: project.name,
+          contactPerson: getProjectContactPerson(project),
           status: formatProjectStatus(project.status),
           countryList: countries.join(", "),
           ...developer,

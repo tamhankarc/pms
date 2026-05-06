@@ -11,16 +11,16 @@ export default async function NewContactPersonPage() {
   const currentUser = await requireUser();
   if (!canManageContactPersons(currentUser)) redirect("/dashboard");
 
-
-  const [clients, projects] = await Promise.all([
-    db.client.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+  const [clients, projects, movies] = await Promise.all([
+    db.client.findMany({ where: { isActive: true }, select: { id: true, name: true, showMoviesInEntries: true }, orderBy: { name: "asc" } }),
     db.project.findMany({ where: { isActive: true }, include: { client: { select: { name: true } } }, orderBy: [{ client: { name: "asc" } }, { name: "asc" }] }),
+    db.movie.findMany({ where: { isActive: true }, include: { client: { select: { name: true } } }, orderBy: [{ client: { name: "asc" } }, { title: "asc" }] }),
   ]);
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Create Contact Person" description="Create a project-specific contact person." actions={<Link href="/contact-persons" className="btn-secondary">Back to Contact Persons</Link>} />
-      <div className="max-w-3xl"><ContactPersonForm clients={clients} projects={projects.map((project) => ({ id: project.id, name: project.name, clientId: project.clientId, clientName: project.client.name }))} action={createContactPersonAction} title="Create Contact Person" submitLabel="Create Contact Person" /></div>
+      <PageHeader title="Create Contact Person" description="Create a project-specific or movie-specific contact person." actions={<Link href="/contact-persons" className="btn-secondary">Back to Contact Persons</Link>} />
+      <div className="max-w-3xl"><ContactPersonForm clients={clients} projects={projects.map((project) => ({ id: project.id, name: project.name, clientId: project.clientId, clientName: project.client.name }))} movies={movies.map((movie) => ({ id: movie.id, title: movie.title, clientId: movie.clientId, clientName: movie.client.name }))} action={createContactPersonAction} title="Create Contact Person" submitLabel="Create Contact Person" /></div>
     </div>
   );
 }
