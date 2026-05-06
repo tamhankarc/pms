@@ -127,8 +127,7 @@ export async function getGenericBillingReportData({
         status: formatProjectStatus(project.status),
         cost: (minutes / 60) * hourlyCost,
       } satisfies GenericBillingReportRow;
-    })
-    .filter((row) => row.cost > 0));
+    }));
 
   const fixedFullRows = sortRows(client.projects
     .filter((project) => project.billingModel === "FIXED_FULL" && project.status === "COMPLETED")
@@ -137,8 +136,7 @@ export async function getGenericBillingReportData({
       projectName: project.name,
       status: formatProjectStatus(project.status),
       cost: (Number(project.fixedContractHours ?? 0) * hourlyCost) + Number(project.additionalCharges ?? 0) - Number(project.partialBillingCost ?? 0),
-    }))
-    .filter((row) => row.cost !== 0));
+    })));
 
   const fixedMonthlyRows = sortRows(client.projects
     .filter((project) => project.billingModel === "FIXED_MONTHLY")
@@ -147,8 +145,7 @@ export async function getGenericBillingReportData({
       projectName: project.name,
       status: formatProjectStatus(project.status),
       cost: Number(project.fixedMonthlyHours ?? 0) * hourlyCost,
-    }))
-    .filter((row) => row.cost !== 0));
+    })));
 
   let fixedPerCountryRows: GenericBillingReportRow[] = [];
   if (client.showCountriesInTimeEntries) {
@@ -186,7 +183,7 @@ export async function getGenericBillingReportData({
           cost: countries.length * Number(project.perCountryCharges ?? 0),
         } satisfies GenericBillingReportRow;
       })
-      .filter((row) => Boolean(row.countryList) && row.cost !== 0));
+      .filter((row) => Boolean(row.countryList)));
   }
 
   const possibleBlocks: GenericBillingReportBlock[] = [
