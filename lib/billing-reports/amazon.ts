@@ -84,7 +84,7 @@ export type BillingReportDefinition = {
   title: string;
   projectName: string;
   includeLanguage: boolean;
-  kind?: "time-entry" | "deliverable" | "placeholder";
+  kind?: "time-entry" | "deliverable" | "placeholder" | "generic-movie" | "generic-filmik";
 };
 
 export const AMAZON_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
@@ -149,11 +149,11 @@ export const SONY_PICTURES_REPORTS: Partial<Record<AmazonReportType, BillingRepo
 };
 
 export const SONY_PICTURES_CLASSICS_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
-  "social-assets": { title: "Sony Pictures Classics Billing", projectName: "", includeLanguage: false, kind: "placeholder" },
+  "social-assets": { title: "Sony Pictures Classics Billing", projectName: "", includeLanguage: false, kind: "generic-movie" },
 };
 
 export const FILMIK_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
-  "social-assets": { title: "Filmik Billing", projectName: "", includeLanguage: false, kind: "placeholder" },
+  "social-assets": { title: "Filmik Billing", projectName: "", includeLanguage: false, kind: "generic-filmik" },
 };
 
 export function getBillingReportCatalogForClient(clientName: string, clientId?: string) {
@@ -471,7 +471,7 @@ async function getWarnerDeliverableData({
     orderBy: { title: "asc" },
   });
 
-  const selectedMovieId = filters.movieId || (isDomestic ? movieOptions[0]?.id || "" : "");
+  const selectedMovieId = filters.movieId || movieOptions[0]?.id || "";
   const selectedMovie = selectedMovieId
     ? await db.movie.findFirst({
         where: {
@@ -549,24 +549,26 @@ async function getWarnerDeliverableData({
     }
     countryOptions = Array.from(countryMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
-    const selectedCountryId = filters.countryId || countryOptions[0]?.id || "";
-    selectedCountry = selectedCountryId
-      ? countryOptions.find((country) => country.id === selectedCountryId) ?? null
-      : null;
+    if (isOther) {
+      const selectedCountryId = filters.countryId || countryOptions[0]?.id || "";
+      selectedCountry = selectedCountryId
+        ? countryOptions.find((country) => country.id === selectedCountryId) ?? null
+        : null;
 
-    if (!selectedCountry) {
-      return {
-        client,
-        reportType,
-        reportTitle,
-        filters: { movieId: selectedMovie.id, countryId: filters.countryId || "" },
-        movieOptions: mappedMovieOptions,
-        countryOptions,
-        selectedMovie: { id: selectedMovie.id, title: `${selectedMovie.title} (${formatMovieStatus(selectedMovie.status)})` },
-        selectedCountry: null,
-        rows: [],
-        totalCost: 0,
-      };
+      if (!selectedCountry) {
+        return {
+          client,
+          reportType,
+          reportTitle,
+          filters: { movieId: selectedMovie.id, countryId: filters.countryId || "" },
+          movieOptions: mappedMovieOptions,
+          countryOptions,
+          selectedMovie: { id: selectedMovie.id, title: `${selectedMovie.title} (${formatMovieStatus(selectedMovie.status)})` },
+          selectedCountry: null,
+          rows: [],
+          totalCost: 0,
+        };
+      }
     }
   }
 
@@ -586,44 +588,95 @@ async function getWarnerDeliverableData({
   });
 
   for (const head of compulsoryHeads) {
+    if (isIntl && head.name.trim().toLowerCase() === "ticketing") {
+      const countryLabels = countryOptions.map((country) => country.isoCode ? `${country.name} (${country.isoCode})` : country.name);
+      rows.push({
+        label: head.name,
+        cost: countryLabels.length * Number(head.intlCost ?? 0),
+        group: "Fixed - Compulsory",
+        meta: countryLabels.length ? `Countries: ${countryLabels.join(", ")}` : "Countries: -",
+      });
+      continue;
+    }
+
     const units = unitsByHeadId.get(head.id) ?? (head.costType === "PER_UNIT_COST" ? 0 : 1);
     rows.push({
       label: head.name,
       cost: calculateBillingHeadCost(head.costType, useIntlBilling ? head.intlCost : head.domesticCost, units),
       group: "Fixed - Compulsory",
-      meta: head.costType === "PER_UNIT_COST" ? `Per-unit Ã ${units}` : "Whole cost",
+      meta: isIntl ? undefined : head.costType === "PER_UNIT_COST" ? `Per-unit × ${units}` : "Whole cost",
     });
   }
 
-  const optionalAssignments = await db.movieBillingHeadAssignment.findMany({
-    where: {
-      clientId,
-      movieId: selectedMovie.id,
-      isActive: true,
-      ...(isDomestic
-        ? { country: { is: { isoCode: "US" } } }
-        : { countryId: selectedCountry?.id ?? "" }),
-      billingHead: { is: {
+  const optionalAssignmentWhere = isIntl
+    ? {
+        clientId,
+        movieId: selectedMovie.id,
         isActive: true,
-        ...(useIntlBilling
-          ? { intlActive: true, intlCompulsionType: "FIXED_OPTIONAL" }
-          : { domesticActive: true, domesticCompulsionType: "FIXED_OPTIONAL" }),
-      } },
-    },
+        countryId: { in: countryOptions.map((country) => country.id) },
+        billingHead: { is: { isActive: true, intlActive: true, intlCompulsionType: "FIXED_OPTIONAL" as const } },
+      }
+    : {
+        clientId,
+        movieId: selectedMovie.id,
+        isActive: true,
+        ...(isDomestic
+          ? { country: { is: { isoCode: "US" } } }
+          : { countryId: selectedCountry?.id ?? "" }),
+        billingHead: { is: {
+          isActive: true,
+          ...(useIntlBilling
+            ? { intlActive: true, intlCompulsionType: "FIXED_OPTIONAL" as const }
+            : { domesticActive: true, domesticCompulsionType: "FIXED_OPTIONAL" as const }),
+        } },
+      };
+
+  const optionalAssignments = await db.movieBillingHeadAssignment.findMany({
+    where: optionalAssignmentWhere,
     include: {
       billingHead: true,
+      country: { select: { id: true, name: true, isoCode: true } },
     },
     orderBy: { billingHead: { name: "asc" } },
   });
 
-  for (const assignment of optionalAssignments) {
-    const units = Number(assignment.units ?? 0);
-    rows.push({
-      label: assignment.billingHead.name,
-      cost: calculateBillingHeadCost(assignment.billingHead.costType, useIntlBilling ? assignment.billingHead.intlCost : assignment.billingHead.domesticCost, units),
-      group: "Fixed - Optional",
-      meta: assignment.billingHead.costType === "PER_UNIT_COST" ? `Per-unit Ã ${units}` : "Whole cost",
-    });
+  if (isIntl) {
+    const assignmentsByHead = new Map<string, typeof optionalAssignments>();
+    for (const assignment of optionalAssignments) {
+      const current = assignmentsByHead.get(assignment.billingHeadId) ?? [];
+      current.push(assignment);
+      assignmentsByHead.set(assignment.billingHeadId, current);
+    }
+
+    for (const assignments of assignmentsByHead.values()) {
+      const firstAssignment = assignments[0];
+      if (!firstAssignment) continue;
+      const countries = assignments
+        .map((assignment) => assignment.country)
+        .filter((country): country is { id: string; name: string; isoCode: string | null } => Boolean(country))
+        .map((country) => country.isoCode ? `${country.name} (${country.isoCode})` : country.name)
+        .sort((a, b) => a.localeCompare(b));
+      const totalCost = assignments.reduce((sum, assignment) => {
+        const units = Number(assignment.units ?? 0);
+        return sum + calculateBillingHeadCost(assignment.billingHead.costType, assignment.billingHead.intlCost, units);
+      }, 0);
+      rows.push({
+        label: firstAssignment.billingHead.name,
+        cost: totalCost,
+        group: "Fixed - Optional",
+        meta: countries.length ? `Countries: ${Array.from(new Set(countries)).join(", ")}` : undefined,
+      });
+    }
+  } else {
+    for (const assignment of optionalAssignments) {
+      const units = Number(assignment.units ?? 0);
+      rows.push({
+        label: assignment.billingHead.name,
+        cost: calculateBillingHeadCost(assignment.billingHead.costType, useIntlBilling ? assignment.billingHead.intlCost : assignment.billingHead.domesticCost, units),
+        group: "Fixed - Optional",
+        meta: assignment.billingHead.costType === "PER_UNIT_COST" ? `Per-unit × ${units}` : "Whole cost",
+      });
+    }
   }
 
   const fixedFullProjects = await db.project.findMany({
@@ -633,7 +686,11 @@ async function getWarnerDeliverableData({
       timeEntries: {
         some: {
           movieId: selectedMovie.id,
-          ...(isDomestic ? {} : { countryId: selectedCountry?.id ?? "" }),
+          ...(isDomestic
+            ? {}
+            : isIntl
+              ? { countryId: { in: countryOptions.map((country) => country.id) } }
+              : { countryId: selectedCountry?.id ?? "" }),
         },
       },
     },
@@ -654,7 +711,7 @@ async function getWarnerDeliverableData({
       label: `${project.name} (${project.status.replaceAll("_", " ")})`,
       cost: fixedHoursCost + additionalCharges,
       group: "Fixed Full Projects",
-      meta: `${Number(project.fixedContractHours ?? 0)} hrs Ã ${formatUsd(Number(client.hourlyCost ?? 0))}${additionalCharges > 0 ? ` + ${formatUsd(additionalCharges)} additional` : ""}`,
+      meta: `${Number(project.fixedContractHours ?? 0)} hrs × ${formatUsd(Number(client.hourlyCost ?? 0))}${additionalCharges > 0 ? ` + ${formatUsd(additionalCharges)} additional` : ""}`,
     });
   }
 

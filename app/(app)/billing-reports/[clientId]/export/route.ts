@@ -71,9 +71,15 @@ export async function GET(
     });
   }
 
-  if (!reportDefinition) {
+  const genericOptions = reportDefinition?.kind === "generic-movie"
+    ? { movieSpecific: true }
+    : reportDefinition?.kind === "generic-filmik"
+      ? { includeDeveloperCosts: true }
+      : undefined;
+
+  if (!reportDefinition || genericOptions) {
     const filters = buildGenericBillingReportFilters(searchParams);
-    const data = await getGenericBillingReportData({ clientId, filters });
+    const data = await getGenericBillingReportData({ clientId, filters, options: genericOptions });
     if (!data) redirect("/billing-reports");
 
     if (format === "pdf") {

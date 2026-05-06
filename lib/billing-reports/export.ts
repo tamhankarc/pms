@@ -385,7 +385,7 @@ export function buildWarnerDomesticReportExcel(data: WarnerDomesticDeliverableDa
     excelRow([data.reportTitle]),
     excelRow(["Client", data.client.name]),
     excelRow(["Movie", data.selectedMovie?.title ?? "-"]),
-    ...((data.reportType === "intl-deliverable" || data.reportType === "other-deliverable") ? [excelRow(["Country", data.selectedCountry?.name ?? "-"])] : []),
+    ...(data.reportType === "other-deliverable" ? [excelRow(["Country", data.selectedCountry?.name ?? "-"])] : []),
     excelRow([]),
     excelRow(["Billing Head / Project", "Cost (USD)"]),
     ...data.rows.flatMap((row, index, rows) => {
@@ -439,8 +439,8 @@ function buildWarnerDomesticPdfPages(data: WarnerDomesticDeliverableData) {
     commands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
     commands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
     commands.push(textCommand(`Movie: ${data.selectedMovie?.title ?? "-"}`, MARGIN_X, TOP_Y - 38, 9));
-    if (data.reportType === "intl-deliverable" || data.reportType === "other-deliverable") commands.push(textCommand(`Country: ${data.selectedCountry?.name ?? "-"}`, MARGIN_X, TOP_Y - 54, 9));
-    commands.push(textCommand("No records found.", MARGIN_X, (data.reportType === "intl-deliverable" || data.reportType === "other-deliverable") ? TOP_Y - 86 : TOP_Y - 70, 9));
+    if (data.reportType === "other-deliverable") commands.push(textCommand(`Country: ${data.selectedCountry?.name ?? "-"}`, MARGIN_X, TOP_Y - 54, 9));
+    commands.push(textCommand("No records found.", MARGIN_X, data.reportType === "other-deliverable" ? TOP_Y - 86 : TOP_Y - 70, 9));
     pageStreams.push(commands.join("\n"));
     return pageStreams;
   }
@@ -455,8 +455,8 @@ function buildWarnerDomesticPdfPages(data: WarnerDomesticDeliverableData) {
       commands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
       commands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
       commands.push(textCommand(`Movie: ${data.selectedMovie?.title ?? "-"}`, MARGIN_X, TOP_Y - 38, 9));
-      if (data.reportType === "intl-deliverable" || data.reportType === "other-deliverable") commands.push(textCommand(`Country: ${data.selectedCountry?.name ?? "-"}`, MARGIN_X, TOP_Y - 54, 9));
-      commands.push(textCommand(`Generated: ${new Date().toLocaleString("en-IN")}`, MARGIN_X, (data.reportType === "intl-deliverable" || data.reportType === "other-deliverable") ? TOP_Y - 70 : TOP_Y - 54, 9));
+      if (data.reportType === "other-deliverable") commands.push(textCommand(`Country: ${data.selectedCountry?.name ?? "-"}`, MARGIN_X, TOP_Y - 54, 9));
+      commands.push(textCommand(`Generated: ${new Date().toLocaleString("en-IN")}`, MARGIN_X, data.reportType === "other-deliverable" ? TOP_Y - 70 : TOP_Y - 54, 9));
     } else {
       commands.push(textCommand(`${data.reportTitle} continued`, MARGIN_X, TOP_Y, 13, true));
     }
@@ -489,19 +489,26 @@ export function buildWarnerDomesticReportFileName(data: WarnerDomesticDeliverabl
 export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
   const worksheets = data.blocks.map((block) => {
     const header = block.key === "fixedPerCountry"
-      ? excelRow(["Project", "Country List", "Cost (USD)"])
-      : excelRow(["Project", "Status", "Cost (USD)"]);
+      ? ["Project", "Country List", ...(block.showDeveloperCost ? ["Developer Cost (USD)"] : []), "Cost (USD)"]
+      : ["Project", "Status", ...(block.showDeveloperCost ? ["Developer Cost (USD)"] : []), "Cost (USD)"];
+    const costIndex = header.length - 1;
+    const developerIndex = block.showDeveloperCost ? header.length - 2 : -1;
+    const numericIndexes = block.showDeveloperCost ? [developerIndex, costIndex] : [costIndex];
     const rows = [
       excelRow([block.title]),
       excelRow(["Client", data.client.name]),
+      ...(data.selectedMovie ? [excelRow(["Movie", data.selectedMovie.title])] : []),
       ...(block.key === "hourly" ? [excelRow(["Date Range", `${data.filters.fromDate} to ${data.filters.toDate}`])] : []),
       excelRow([]),
-      header,
-      ...block.rows.map((row) => block.key === "fixedPerCountry"
-        ? excelRow([row.projectName, row.countryList ?? "-", row.cost], [2])
-        : excelRow([row.projectName, row.status, row.cost], [2])),
+      excelRow(header),
+      ...block.rows.map((row) => {
+        const values = block.key === "fixedPerCountry"
+          ? [row.projectName, row.countryList ?? "-", ...(block.showDeveloperCost ? [Number(row.developerCost ?? 0)] : []), row.cost]
+          : [row.projectName, row.status, ...(block.showDeveloperCost ? [Number(row.developerCost ?? 0)] : []), row.cost];
+        return excelRow(values, numericIndexes);
+      }),
       excelRow([]),
-      excelRow(["Total", "", block.rows.reduce((sum, row) => sum + row.cost, 0)], [2]),
+      excelRow(["Total", "", ...(block.showDeveloperCost ? [block.rows.reduce((sum, row) => sum + Number(row.developerCost ?? 0), 0)] : []), block.rows.reduce((sum, row) => sum + row.cost, 0)], numericIndexes),
     ];
     return worksheet(block.title.slice(0, 31), rows);
   });
@@ -509,12 +516,13 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
   const summaryRows = [
     excelRow(["Billing Report Summary"]),
     excelRow(["Client", data.client.name]),
+    ...(data.selectedMovie ? [excelRow(["Movie", data.selectedMovie.title])] : []),
     excelRow(["Hourly Date Range", `${data.filters.fromDate} to ${data.filters.toDate}`]),
     excelRow([]),
-    excelRow(["Billing Model", "Total Cost (USD)"]),
-    ...data.blocks.map((block) => excelRow([block.title, block.rows.reduce((sum, row) => sum + row.cost, 0)], [1])),
+    excelRow(["Billing Model", "Developer Cost (USD)", "Total Cost (USD)"]),
+    ...data.blocks.map((block) => excelRow([block.title, block.rows.reduce((sum, row) => sum + Number(row.developerCost ?? 0), 0), block.rows.reduce((sum, row) => sum + row.cost, 0)], [1, 2])),
     excelRow([]),
-    excelRow(["Grand Total", data.blocks.reduce((sum, block) => sum + block.rows.reduce((blockSum, row) => blockSum + row.cost, 0), 0)], [1]),
+    excelRow(["Grand Total", data.blocks.reduce((sum, block) => sum + block.rows.reduce((blockSum, row) => blockSum + Number(row.developerCost ?? 0), 0), 0), data.blocks.reduce((sum, block) => sum + block.rows.reduce((blockSum, row) => blockSum + row.cost, 0), 0)], [1, 2]),
   ];
 
   return `<?xml version="1.0"?>
@@ -534,19 +542,21 @@ function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
   const summaryCommands: string[] = [];
   summaryCommands.push(textCommand("Billing Report Summary", MARGIN_X, TOP_Y, 15, true));
   summaryCommands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
-  summaryCommands.push(textCommand(`Hourly Date Range: ${data.filters.fromDate} to ${data.filters.toDate}`, MARGIN_X, TOP_Y - 38, 9));
-  summaryCommands.push(textCommand(`Generated: ${new Date().toLocaleString("en-IN")}`, MARGIN_X, TOP_Y - 54, 9));
+  if (data.selectedMovie) summaryCommands.push(textCommand(`Movie: ${data.selectedMovie.title}`, MARGIN_X, TOP_Y - 38, 9));
+  summaryCommands.push(textCommand(`Hourly Date Range: ${data.filters.fromDate} to ${data.filters.toDate}`, MARGIN_X, data.selectedMovie ? TOP_Y - 54 : TOP_Y - 38, 9));
+  summaryCommands.push(textCommand(`Generated: ${new Date().toLocaleString("en-IN")}`, MARGIN_X, data.selectedMovie ? TOP_Y - 70 : TOP_Y - 54, 9));
 
   const summaryColumns: PdfTableColumn[] = [
-    { header: "Billing Model", width: 440 },
-    { header: "Total Cost", width: 170, align: "right" },
+    { header: "Billing Model", width: 370 },
+    { header: "Developer Cost", width: 140, align: "right" },
+    { header: "Total Cost", width: 150, align: "right" },
   ];
   const summaryRows: PdfTableRow[] = [
-    ...data.blocks.map((block) => [block.title, formatUsd(block.rows.reduce((sum, row) => sum + row.cost, 0))] as PdfTableRow),
-    ["Grand Total", formatUsd(data.blocks.reduce((sum, block) => sum + block.rows.reduce((blockSum, row) => blockSum + row.cost, 0), 0))],
+    ...data.blocks.map((block) => [block.title, formatUsd(block.rows.reduce((sum, row) => sum + Number(row.developerCost ?? 0), 0)), formatUsd(block.rows.reduce((sum, row) => sum + row.cost, 0))] as PdfTableRow),
+    ["Grand Total", formatUsd(data.blocks.reduce((sum, block) => sum + block.rows.reduce((blockSum, row) => blockSum + Number(row.developerCost ?? 0), 0), 0)), formatUsd(data.blocks.reduce((sum, block) => sum + block.rows.reduce((blockSum, row) => blockSum + row.cost, 0), 0))],
   ];
-  drawTableHeader(summaryCommands, summaryColumns, MARGIN_X, TOP_Y - 86);
-  let summaryY = TOP_Y - 86 - HEADER_HEIGHT;
+  drawTableHeader(summaryCommands, summaryColumns, MARGIN_X, TOP_Y - 102);
+  let summaryY = TOP_Y - 102 - HEADER_HEIGHT;
   summaryRows.forEach((row) => {
     if (row[0] === "Grand Total") summaryCommands.push(fillRectCommand(MARGIN_X, summaryY - SUMMARY_ROW_HEIGHT, tableWidth(summaryColumns), SUMMARY_ROW_HEIGHT, 0.9));
     drawTableRow(summaryCommands, summaryColumns, row, MARGIN_X, summaryY, SUMMARY_ROW_HEIGHT, 8);
@@ -559,30 +569,33 @@ function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
     const isCountryBlock = block.key === "fixedPerCountry";
     const columns: PdfTableColumn[] = isCountryBlock
       ? [
-          { header: "Project", width: 260 },
-          { header: "Country List", width: 360 },
+          { header: "Project", width: 230 },
+          { header: "Country List", width: block.showDeveloperCost ? 270 : 380 },
+          ...(block.showDeveloperCost ? [{ header: "Developer Cost", width: 110, align: "right" as const }] : []),
           { header: "Cost", width: 110, align: "right" },
         ]
       : [
-          { header: "Project", width: 420 },
-          { header: "Status", width: 160 },
+          { header: "Project", width: block.showDeveloperCost ? 330 : 420 },
+          { header: "Status", width: 150 },
+          ...(block.showDeveloperCost ? [{ header: "Developer Cost", width: 120, align: "right" as const }] : []),
           { header: "Cost", width: 150, align: "right" },
         ];
     const rows: PdfTableRow[] = block.rows.map((row) => isCountryBlock
-      ? [row.projectName, row.countryList ?? "-", formatUsd(row.cost)]
-      : [row.projectName, row.status, formatUsd(row.cost)]);
-    rows.push(["Total", isCountryBlock ? "" : "", formatUsd(block.rows.reduce((sum, row) => sum + row.cost, 0))]);
+      ? [row.projectName, row.countryList ?? "-", ...(block.showDeveloperCost ? [formatUsd(Number(row.developerCost ?? 0))] : []), formatUsd(row.cost)]
+      : [row.projectName, row.status, ...(block.showDeveloperCost ? [formatUsd(Number(row.developerCost ?? 0))] : []), formatUsd(row.cost)]);
+    rows.push(["Total", "", ...(block.showDeveloperCost ? [formatUsd(block.rows.reduce((sum, row) => sum + Number(row.developerCost ?? 0), 0))] : []), formatUsd(block.rows.reduce((sum, row) => sum + row.cost, 0))]);
 
     let rowIndex = 0;
     let pageNumberForBlock = 1;
     while (rowIndex < rows.length) {
       const commands: string[] = [];
-      const startY = pageNumberForBlock === 1 ? TOP_Y - 88 : TOP_Y - 38;
+      const startY = pageNumberForBlock === 1 ? TOP_Y - 104 : TOP_Y - 38;
       if (pageNumberForBlock === 1) {
         commands.push(textCommand(block.title, MARGIN_X, TOP_Y, 15, true));
         commands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
-        if (block.key === "hourly") commands.push(textCommand(`Date Range: ${data.filters.fromDate} to ${data.filters.toDate}`, MARGIN_X, TOP_Y - 38, 9));
-        commands.push(textCommand(block.description, MARGIN_X, block.key === "hourly" ? TOP_Y - 54 : TOP_Y - 38, 8));
+        if (data.selectedMovie) commands.push(textCommand(`Movie: ${data.selectedMovie.title}`, MARGIN_X, TOP_Y - 38, 9));
+        if (block.key === "hourly") commands.push(textCommand(`Date Range: ${data.filters.fromDate} to ${data.filters.toDate}`, MARGIN_X, data.selectedMovie ? TOP_Y - 54 : TOP_Y - 38, 9));
+        commands.push(textCommand(block.description, MARGIN_X, data.selectedMovie || block.key === "hourly" ? TOP_Y - 70 : TOP_Y - 38, 8));
       } else {
         commands.push(textCommand(`${block.title} continued`, MARGIN_X, TOP_Y, 13, true));
       }
