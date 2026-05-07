@@ -12,9 +12,10 @@ import {
   normalizeAmazonReportType,
 } from "@/lib/billing-reports/amazon";
 import { db } from "@/lib/db";
-import { isBillingReportClientExcluded } from "@/lib/billing-reports/config";
+import { FILMIK_CLIENT_ID, isBillingReportClientExcluded } from "@/lib/billing-reports/config";
 import { buildGenericBillingReportFilters, getGenericBillingReportData } from "@/lib/billing-reports/generic";
 import { buildSonyPicturesReportFilters, getSonyPicturesReportData } from "@/lib/billing-reports/sony";
+import { buildFilmikBillingReportFilters, getFilmikBillingReportData, getFilmikBillingReportFileName } from "@/lib/billing-reports/filmik";
 import {
   buildAmazonReportExcel,
   buildAmazonReportFileName,
@@ -27,6 +28,8 @@ import {
   getGenericBillingReportFileName,
   buildSonyPicturesReportExcel,
   buildSonyPicturesReportPdf,
+  buildFilmikBillingReportExcel,
+  buildFilmikBillingReportPdf,
   getSonyPicturesReportFileName,
 } from "@/lib/billing-reports/export";
 
@@ -99,11 +102,33 @@ export async function GET(
     });
   }
 
+  if (client.id === FILMIK_CLIENT_ID && reportDefinition?.kind === "generic-filmik") {
+    const filters = buildFilmikBillingReportFilters(searchParams);
+    const data = await getFilmikBillingReportData(filters);
+    if (!data) redirect("/billing-reports");
+
+    if (format === "pdf") {
+      const pdf = buildFilmikBillingReportPdf(data);
+      return new Response(Buffer.from(pdf, "binary"), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${getFilmikBillingReportFileName(data, "pdf")}"`,
+        },
+      });
+    }
+
+    const excel = buildFilmikBillingReportExcel(data);
+    return new Response(excel, {
+      headers: {
+        "Content-Type": "application/vnd.ms-excel; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${getFilmikBillingReportFileName(data, "xls")}"`,
+      },
+    });
+  }
+
   const genericOptions = reportDefinition?.kind === "generic-movie"
     ? { movieSpecific: true }
-    : reportDefinition?.kind === "generic-filmik"
-      ? { includeDeveloperCosts: true }
-      : undefined;
+    : undefined;
 
   if (!reportDefinition || genericOptions) {
     const filters = buildGenericBillingReportFilters(searchParams);

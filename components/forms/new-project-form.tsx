@@ -20,6 +20,11 @@ type ProjectType = {
   clientId: string;
 };
 
+type FilmikResourceType = {
+  id: string;
+  name: string;
+};
+
 type BillingModel = "HOURLY" | "FIXED_FULL" | "FIXED_MONTHLY" | "FIXED_PER_COUNTRY";
 type ProjectStatus = "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "ARCHIVED";
 
@@ -30,9 +35,11 @@ const initialState: ProjectFormState = {};
 export function NewProjectForm({
   clients,
   projectTypes,
+  filmikResourceTypes,
 }: {
   clients: Client[];
   projectTypes: ProjectType[];
+  filmikResourceTypes: FilmikResourceType[];
 }) {
   const [billingModel, setBillingModel] = useState<BillingModel>("HOURLY");
   const [clientId, setClientId] = useState("");
@@ -46,6 +53,7 @@ export function NewProjectForm({
 
   const selectedClient = clients.find((client) => client.id === clientId);
   const isFilmikClient = clientId === FILMIK_CLIENT_ID;
+  const currentMonth = new Date().toISOString().slice(0, 7);
 
   const filteredProjectTypes = useMemo(
     () => projectTypes.filter((type) => type.clientId === clientId),
@@ -234,20 +242,29 @@ export function NewProjectForm({
 
         {isFilmikClient ? (
           <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Developers</h3>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div>
-                <FormLabel htmlFor="developerCount">Count</FormLabel>
-                <input id="developerCount" className="input" name="developerCount" type="number" min="0" step="1" defaultValue="0" />
+            <h3 className="text-sm font-semibold text-slate-900">Resources</h3>
+            <p className="mt-1 text-xs text-slate-500">Add count per Filmik resource type and the month from which that count is applicable. These entries are saved as monthly history for billing.</p>
+            {filmikResourceTypes.length ? (
+              <div className="mt-4 space-y-3">
+                {filmikResourceTypes.map((resource) => (
+                  <div key={resource.id} className="grid gap-4 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[1fr_160px_180px] md:items-end">
+                    <div>
+                      <div className="text-sm font-medium text-slate-900">{resource.name}</div>
+                    </div>
+                    <div>
+                      <FormLabel htmlFor={`filmikResourceCount__${resource.id}`}>Count</FormLabel>
+                      <input id={`filmikResourceCount__${resource.id}`} className="input" name={`filmikResourceCount__${resource.id}`} type="number" min="0" step="1" defaultValue="0" />
+                    </div>
+                    <div>
+                      <FormLabel htmlFor={`filmikResourceMonth__${resource.id}`}>Applicable from</FormLabel>
+                      <input id={`filmikResourceMonth__${resource.id}`} className="input" name={`filmikResourceMonth__${resource.id}`} type="month" defaultValue={currentMonth} />
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div>
-                <FormLabel htmlFor="perDeveloperCost">Per Developer Cost (USD)</FormLabel>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
-                  <input id="perDeveloperCost" className="input currency-input" name="perDeveloperCost" type="number" min="0" step="0.01" defaultValue="0.00" />
-                </div>
-              </div>
-            </div>
+            ) : (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Create Filmik resource types from the Filmik Resources menu before assigning resource counts.</div>
+            )}
           </div>
         ) : null}
 

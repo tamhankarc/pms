@@ -193,6 +193,7 @@ model Client {
   projects                    Project[]
   projectTypes                ProjectType[]
   contactPersons              ContactPerson[]
+  filmikResourceTypes          FilmikResourceType[]
   movieBillingHeads           MovieBillingHead[]
   movieBillingHeadAssignments MovieBillingHeadAssignment[]
 
@@ -314,6 +315,41 @@ model MovieBillingHeadAssignment {
   @@index([isActive])
 }
 
+model FilmikResourceType {
+  id        String   @id @default(cuid())
+  clientId  String
+  name      String
+  cost      Decimal  @default(0) @db.Decimal(12, 2)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client        Client                       @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  projectCounts ProjectFilmikResourceCount[]
+
+  @@unique([clientId, name])
+  @@index([clientId, isActive])
+  @@index([name])
+}
+
+model ProjectFilmikResourceCount {
+  id             String   @id @default(cuid())
+  projectId      String
+  resourceTypeId String
+  effectiveMonth DateTime
+  count          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  resourceType FilmikResourceType @relation(fields: [resourceTypeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([projectId, resourceTypeId, effectiveMonth])
+  @@index([projectId])
+  @@index([resourceTypeId])
+  @@index([effectiveMonth])
+}
+
 model AssetType {
   id          String   @id @default(cuid())
   clientId    String
@@ -404,6 +440,7 @@ model Project {
   estimates      Estimate[]
   timeEntries    TimeEntry[]
   contactPersons ContactPerson[]
+  filmikResourceCounts ProjectFilmikResourceCount[]
 
   @@index([clientId, isActive])
   @@index([projectTypeId])

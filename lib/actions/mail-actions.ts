@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { requireUserTypesForAction } from "@/lib/auth";
-import { isMailSendingEnabled, sendAppEmail } from "@/lib/mail/ses";
+import { getSesFromEmailOptions, isMailSendingEnabled, sendAppEmail } from "@/lib/mail/ses";
 
 export type TestMailState = {
   success?: boolean;
@@ -11,6 +11,7 @@ export type TestMailState = {
 
 const testMailSchema = z.object({
   email: z.string().trim().email("Enter a valid email address."),
+  fromEmailOption: z.enum(["primary", "secondary"]).default("primary"),
 });
 
 export async function sendTestMailAction(
@@ -19,7 +20,10 @@ export async function sendTestMailAction(
 ): Promise<TestMailState> {
   try {
     const user = await requireUserTypesForAction(["ADMIN"]);
-    const parsed = testMailSchema.safeParse({ email: formData.get("email") });
+    const parsed = testMailSchema.safeParse({
+      email: formData.get("email"),
+      fromEmailOption: formData.get("fromEmailOption") || "primary",
+    });
 
     if (!parsed.success) {
       return {
@@ -31,6 +35,7 @@ export async function sendTestMailAction(
     const now = new Date();
     const result = await sendAppEmail({
       to: parsed.data.email,
+      fromEmailOption: parsed.data.fromEmailOption,
       subject: "PMS test email",
       html: `
         <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #0f172a;">
@@ -53,8 +58,8 @@ export async function sendTestMailAction(
     return {
       success: true,
       message: result.messageId
-        ? `Test email sent successfully. SES Message ID: ${result.messageId}`
-        : "Test email sent successfully.",
+        ? `Test email sent successfully from ${result.from}. SES Message ID: ${result.messageId}`
+        : `Test email sent successfully from ${result.from}.`,
     };
   } catch (error) {
     return {
@@ -67,6 +72,11 @@ export async function sendTestMailAction(
 export async function getMailSendingStatusForDashboard() {
   await requireUserTypesForAction(["ADMIN"]);
   return isMailSendingEnabled();
+}
+
+export async function getMailFromOptionsForDashboard() {
+  await requireUserTypesForAction(["ADMIN"]);
+  return getSesFromEmailOptions();
 }
 
 function escapeHtml(value: string) {

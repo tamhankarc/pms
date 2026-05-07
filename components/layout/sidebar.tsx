@@ -51,6 +51,7 @@ const iconByMenuKey: Record<MenuKey, React.ComponentType<{ className?: string }>
   "client-billing-heads": ReceiptText,
   "movie-billing-heads": ReceiptText,
   "asset-type": Box,
+  "filmik-resource": Box,
   countries: Globe2,
   languages: Languages,
   projects: FolderKanban,
@@ -117,6 +118,7 @@ const fullItems: SidebarNavItem[] = getItemsByKeys([
   "client-billing-heads",
   "movie-billing-heads",
   "asset-type",
+  "filmik-resource",
   "countries",
   "languages",
   "projects",
@@ -138,6 +140,7 @@ const teamLeadItems: SidebarNavItem[] = getItemsByKeys([
   "clients",
   "movies",
   "asset-type",
+  "filmik-resource",
   "countries",
   "languages",
   "projects",
@@ -162,6 +165,7 @@ const operationsItems: SidebarNavItem[] = getItemsByKeys([
   "clients",
   "movies",
   "asset-type",
+  "filmik-resource",
   "countries",
   "languages",
   "projects",
@@ -175,7 +179,7 @@ const operationsItems: SidebarNavItem[] = getItemsByKeys([
 const accountsItems: SidebarNavItem[] = getItemsByKeys(["billing-reports"]);
 
 function isMasterDataHref(href: string) {
-  return ["/clients", "/movies", "/asset-type", "/countries", "/languages", "/projects", "/sub-project", "/user-assignments", "/contact-persons"].includes(href);
+  return ["/clients", "/movies", "/asset-type", "/filmik-resource", "/countries", "/languages", "/projects", "/sub-project", "/user-assignments", "/contact-persons"].includes(href);
 }
 
 function filterAccess(items: SidebarNavItem[], user: SessionUser) {
@@ -236,6 +240,7 @@ export function getSidebarItems(user: SessionUser, canAccessLeaveApprovals: bool
     if (item.href === "/users" && !canManageUsers(user)) return false;
     if (item.href === "/contact-persons" && user.userType !== "ADMIN" && user.userType !== "OPERATIONS") return false;
     if ((item.href === "/client-billing-heads" || item.href === "/movie-billing-heads") && user.userType !== "ADMIN") return false;
+    if (item.href === "/filmik-resource" && user.userType !== "ADMIN" && user.userType !== "OPERATIONS") return false;
     return true;
   });
 

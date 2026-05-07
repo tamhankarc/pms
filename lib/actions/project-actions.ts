@@ -43,6 +43,58 @@ async function validateProjectType(clientId: string, projectTypeId?: string | nu
   return db.projectType.findFirst({ where: { id: projectTypeId, clientId, isActive: true }, select: { id: true, name: true } });
 }
 
+const FILMIK_CLIENT_ID = "cmne6ed2o0000jo04t3363pqz";
+
+function parseMonthStart(value: string) {
+  if (!/^\d{4}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}-01T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function parseFilmikResourceRows(formData: FormData) {
+  const rows: Array<{ resourceTypeId: string; count: number; effectiveMonth: Date }> = [];
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("filmikResourceCount__")) continue;
+    const resourceTypeId = key.replace("filmikResourceCount__", "");
+    const count = Math.max(0, Math.trunc(Number(value || 0)));
+    const monthValue = String(formData.get(`filmikResourceMonth__${resourceTypeId}`) || "");
+    const effectiveMonth = parseMonthStart(monthValue);
+    if (!resourceTypeId || !effectiveMonth) continue;
+    rows.push({ resourceTypeId, count, effectiveMonth });
+  }
+  return rows;
+}
+
+async function saveFilmikResourceCounts(projectId: string, clientId: string, formData: FormData) {
+  if (clientId !== FILMIK_CLIENT_ID) return;
+  const rows = parseFilmikResourceRows(formData);
+  if (!rows.length) return;
+  const validResourceIds = new Set((await db.filmikResourceType.findMany({
+    where: { clientId: FILMIK_CLIENT_ID, id: { in: rows.map((row) => row.resourceTypeId) } },
+    select: { id: true },
+  })).map((resource) => resource.id));
+
+  for (const row of rows) {
+    if (!validResourceIds.has(row.resourceTypeId)) continue;
+    await db.projectFilmikResourceCount.upsert({
+      where: {
+        projectId_resourceTypeId_effectiveMonth: {
+          projectId,
+          resourceTypeId: row.resourceTypeId,
+          effectiveMonth: row.effectiveMonth,
+        },
+      },
+      create: {
+        projectId,
+        resourceTypeId: row.resourceTypeId,
+        effectiveMonth: row.effectiveMonth,
+        count: row.count,
+      },
+      update: { count: row.count },
+    });
+  }
+}
+
 export async function createProjectAction(_prevState: ProjectFormState, formData: FormData): Promise<ProjectFormState> {
   try {
     const user = await requireMasterDataActionUser();
@@ -77,7 +129,7 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
     if (parsed.data.projectTypeId && !(await validateProjectType(client.id, parsed.data.projectTypeId))) return { success: false, error: "Selected project type is invalid for the chosen client." };
 
     const projectCode = await generateProjectCode(client.id);
-    await db.project.create({
+    const project = await db.project.create({
       data: {
         clientId: client.id,
         projectTypeId: parsed.data.projectTypeId || null,
@@ -89,8 +141,8 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
         additionalCharges: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.additionalCharges ?? 0) : 0,
         partialBillingCost: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.partialBillingCost ?? 0) : 0,
         perCountryCharges: parsed.data.billingModel === "FIXED_PER_COUNTRY" ? (parsed.data.perCountryCharges ?? 0) : 0,
-        developerCount: client.id === "cmne6ed2o0000jo04t3363pqz" ? (parsed.data.developerCount ?? 0) : 0,
-        perDeveloperCost: client.id === "cmne6ed2o0000jo04t3363pqz" ? (parsed.data.perDeveloperCost ?? 0) : 0,
+        developerCount: 0,
+        perDeveloperCost: 0,
         status: parsed.data.status,
         description: parsed.data.description || null,
         createdById: user.id,
@@ -101,6 +153,8 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
         addToBilling: Boolean(parsed.data.addToBilling),
       },
     });
+
+    await saveFilmikResourceCounts(project.id, client.id, formData);
 
     revalidatePath("/projects");
     revalidatePath("/projects/new");
@@ -163,8 +217,8 @@ export async function updateProjectAction(projectId: string, _prevState: Project
         additionalCharges: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.additionalCharges ?? 0) : 0,
         partialBillingCost: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.partialBillingCost ?? 0) : 0,
         perCountryCharges: parsed.data.billingModel === "FIXED_PER_COUNTRY" ? (parsed.data.perCountryCharges ?? 0) : 0,
-        developerCount: client.id === "cmne6ed2o0000jo04t3363pqz" ? (parsed.data.developerCount ?? 0) : 0,
-        perDeveloperCost: client.id === "cmne6ed2o0000jo04t3363pqz" ? (parsed.data.perDeveloperCost ?? 0) : 0,
+        developerCount: 0,
+        perDeveloperCost: 0,
         status: parsed.data.status,
         description: parsed.data.description || null,
         updatedById: user.id,
@@ -174,6 +228,8 @@ export async function updateProjectAction(projectId: string, _prevState: Project
         addToBilling: Boolean(parsed.data.addToBilling),
       },
     });
+
+    await saveFilmikResourceCounts(projectId, client.id, formData);
 
     revalidatePath("/projects");
     revalidatePath(`/projects/${projectId}`);

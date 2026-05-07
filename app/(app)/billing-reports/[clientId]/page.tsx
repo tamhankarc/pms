@@ -6,7 +6,7 @@ import { WarnerDeliverableFiltersClient } from "@/components/billing-reports/war
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canViewBillingReports } from "@/lib/permissions";
-import { isBillingReportClientExcluded } from "@/lib/billing-reports/config";
+import { FILMIK_CLIENT_ID, isBillingReportClientExcluded } from "@/lib/billing-reports/config";
 import {
   buildGenericBillingReportFilters,
   formatUsd as formatGenericUsd,
@@ -14,6 +14,13 @@ import {
   type GenericBillingReportBlock,
   type GenericBillingReportData,
 } from "@/lib/billing-reports/generic";
+import {
+  buildFilmikBillingReportFilters,
+  formatUsd as formatFilmikUsd,
+  getFilmikBillingReportData,
+  getFilmikBillingReportMonthLabel,
+  type FilmikBillingReportData,
+} from "@/lib/billing-reports/filmik";
 import {
   buildSonyPicturesReportFilters,
   formatUsd as formatSonyUsd,
@@ -766,6 +773,134 @@ function SonyPicturesReportWorkspace({
   );
 }
 
+function FilmikBillingReportFilters({
+  clientId,
+  reportType,
+  data,
+}: {
+  clientId: string;
+  reportType: AmazonReportType;
+  data: FilmikBillingReportData;
+}) {
+  return (
+    <form method="get" action={`/billing-reports/${clientId}`} className="card p-5">
+      <input type="hidden" name="report" value={reportType} />
+      <div className="grid gap-4 md:grid-cols-[220px_auto_1fr] md:items-end">
+        <div>
+          <label className="label" htmlFor="month">Month</label>
+          <input id="month" name="month" type="month" className="input" defaultValue={data.filters.month} />
+        </div>
+        <button className="btn-primary" type="submit">Apply</button>
+        <p className="text-sm text-slate-500 md:text-right">Resource counts and project hours are calculated for the selected month.</p>
+      </div>
+    </form>
+  );
+}
+
+function FilmikExportButtons({ clientId, reportType, data }: { clientId: string; reportType: AmazonReportType; data: FilmikBillingReportData }) {
+  const query = buildQueryString({ report: reportType, month: data.filters.month });
+  return (
+    <div className="flex flex-wrap gap-3">
+      <Link className="btn-secondary" href={`/billing-reports/${clientId}/export?format=excel&${query}`}>Export Excel</Link>
+      <Link className="btn-secondary" href={`/billing-reports/${clientId}/export?format=pdf&${query}`}>Export PDF</Link>
+    </div>
+  );
+}
+
+function FilmikResourceCostBlock({ data }: { data: FilmikBillingReportData }) {
+  return (
+    <section className="table-wrap">
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">Resource Type</th>
+            <th className="table-cell">Count</th>
+            <th className="table-cell">Cost</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {data.resourceRows.map((row) => (
+            <tr key={row.resourceTypeId}>
+              <td className="table-cell font-medium text-slate-900">{row.resourceTypeName}</td>
+              <td className="table-cell font-medium text-slate-900">{row.count}</td>
+              <td className="table-cell whitespace-nowrap font-medium text-slate-900">{formatFilmikUsd(row.cost)}</td>
+            </tr>
+          ))}
+          <tr className="bg-slate-50">
+            <td className="table-cell font-semibold text-slate-900">Total</td>
+            <td className="table-cell font-semibold text-slate-900">{data.resourceTotalCount}</td>
+            <td className="table-cell whitespace-nowrap font-semibold text-slate-900">{formatFilmikUsd(data.resourceTotalCost)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+function FilmikCombinedCostBlock({ data }: { data: FilmikBillingReportData }) {
+  return (
+    <section className="table-wrap">
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">Project / Resource</th>
+            <th className="table-cell">Resources / Hours</th>
+            <th className="table-cell">Cost</th>
+            <th className="table-cell">Contact Person</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {data.combinedRows.map((row) => (
+            <tr key={row.key}>
+              <td className="table-cell font-medium text-slate-900">{row.name}</td>
+              <td className="table-cell font-medium text-slate-900">{row.key === "resource-cost" ? row.quantity : `${row.quantity.toFixed(2)}h`}</td>
+              <td className="table-cell whitespace-nowrap font-medium text-slate-900">{formatFilmikUsd(row.cost)}</td>
+              <td className="table-cell">{row.contactPerson}</td>
+            </tr>
+          ))}
+          <tr className="bg-slate-50">
+            <td className="table-cell font-semibold text-slate-900" colSpan={2}>Total</td>
+            <td className="table-cell whitespace-nowrap font-semibold text-slate-900">{formatFilmikUsd(data.combinedTotalCost)}</td>
+            <td className="table-cell">-</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+function FilmikBillingReportWorkspace({
+  clientId,
+  activeReport,
+  data,
+}: {
+  clientId: string;
+  activeReport: AmazonReportType;
+  data: FilmikBillingReportData;
+}) {
+  return (
+    <div className="space-y-6">
+      <ReportTabs clientId={clientId} activeReport={activeReport} clientName={data.client.name} />
+      <FilmikBillingReportFilters clientId={clientId} reportType={activeReport} data={data} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="section-title">{data.client.name} Billing</h2>
+          <p className="section-subtitle">Month: {getFilmikBillingReportMonthLabel(data)}</p>
+        </div>
+        <FilmikExportButtons clientId={clientId} reportType={activeReport} data={data} />
+      </div>
+      <div>
+        <h3 className="mb-3 text-base font-semibold text-slate-900">Resource Cost</h3>
+        <FilmikResourceCostBlock data={data} />
+      </div>
+      <div>
+        <h3 className="mb-3 text-base font-semibold text-slate-900">Project + Resource Cost</h3>
+        <FilmikCombinedCostBlock data={data} />
+      </div>
+    </div>
+  );
+}
+
 function PlaceholderConfiguredReport({
   clientId,
   activeReport,
@@ -1132,6 +1267,7 @@ export default async function ClientBillingReportPage({
   const genericFilters = buildGenericBillingReportFilters(resolvedSearchParams);
   const sonyPicturesFilters =
     buildSonyPicturesReportFilters(resolvedSearchParams);
+  const filmikFilters = buildFilmikBillingReportFilters(resolvedSearchParams);
   const domesticFilters =
     buildWarnerDomesticDeliverableFilters(resolvedSearchParams);
   const reportCatalog = getBillingReportCatalogForClient(
@@ -1178,12 +1314,14 @@ export default async function ClientBillingReportPage({
           filters: sonyPicturesFilters,
         })
       : null;
+  const filmikBillingReportData =
+    client.id === FILMIK_CLIENT_ID && activeReportDefinition?.kind === "generic-filmik"
+      ? await getFilmikBillingReportData(filmikFilters)
+      : null;
   const genericBillingOptions =
     activeReportDefinition?.kind === "generic-movie"
       ? { movieSpecific: true }
-      : activeReportDefinition?.kind === "generic-filmik"
-        ? { includeDeveloperCosts: true }
-        : undefined;
+      : undefined;
   const genericBillingReportData =
     !reportCatalog || genericBillingOptions
       ? await getGenericBillingReportData({
@@ -1219,6 +1357,12 @@ export default async function ClientBillingReportPage({
           clientId={clientId}
           activeReport={activeReport}
           data={sonyPicturesReportData}
+        />
+      ) : filmikBillingReportData ? (
+        <FilmikBillingReportWorkspace
+          clientId={clientId}
+          activeReport={activeReport}
+          data={filmikBillingReportData}
         />
       ) : domesticDeliverableData ||
         intlDeliverableData ||

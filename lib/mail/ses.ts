@@ -12,15 +12,62 @@ function normalizeEmails(value?: string | string[]) {
   return values.map((item) => item.trim()).filter(Boolean);
 }
 
-function getSourceEmail() {
-  const fromEmail = process.env.SES_FROM_EMAIL?.trim();
-  const fromName = process.env.SES_FROM_NAME?.trim() || "PMS System";
+export type SesFromEmailOption = "primary" | "secondary";
 
-  if (!fromEmail) {
+export type SesFromEmailDetails = {
+  key: SesFromEmailOption;
+  label: string;
+  email: string;
+  source: string;
+};
+
+function buildSourceEmail(fromEmail: string, fromName?: string) {
+  const email = fromEmail.trim();
+  const name = fromName?.trim() || "PMS System";
+
+  if (!email) {
+    throw new Error("SES From email is not configured.");
+  }
+
+  return `${name} <${email}>`;
+}
+
+export function getSesFromEmailOptions(): SesFromEmailDetails[] {
+  const fromName = process.env.SES_FROM_NAME?.trim() || "PMS System";
+  const primaryEmail = process.env.SES_FROM_EMAIL?.trim();
+  const secondaryEmail = process.env.SES_FROM_EMAIL_2?.trim();
+  const options: SesFromEmailDetails[] = [];
+
+  if (primaryEmail) {
+    options.push({
+      key: "primary",
+      label: "From email 1",
+      email: primaryEmail,
+      source: buildSourceEmail(primaryEmail, fromName),
+    });
+  }
+
+  if (secondaryEmail) {
+    options.push({
+      key: "secondary",
+      label: "From email 2",
+      email: secondaryEmail,
+      source: buildSourceEmail(secondaryEmail, fromName),
+    });
+  }
+
+  return options;
+}
+
+function getSourceEmail(fromEmailOption: SesFromEmailOption = "primary") {
+  const options = getSesFromEmailOptions();
+  const selected = options.find((option) => option.key === fromEmailOption) ?? options[0];
+
+  if (!selected) {
     throw new Error("SES_FROM_EMAIL is not configured.");
   }
 
-  return `${fromName} <${fromEmail}>`;
+  return selected.source;
 }
 
 export function isMailSendingEnabled() {
@@ -32,6 +79,7 @@ export type SendAppEmailInput = {
   subject: string;
   html?: string;
   text?: string;
+  fromEmailOption?: SesFromEmailOption;
   cc?: string | string[];
   bcc?: string | string[];
   replyTo?: string | string[];
@@ -70,8 +118,10 @@ export async function sendAppEmail(input: SendAppEmailInput) {
     // On production this can come from the server role, task role, instance profile, or env provided by DevOps.
   });
 
+  const sourceEmail = getSourceEmail(input.fromEmailOption);
+
   const command = new SendEmailCommand({
-    Source: getSourceEmail(),
+    Source: sourceEmail,
     Destination: {
       ToAddresses: toAddresses,
       CcAddresses: normalizeEmails(input.cc),
@@ -108,5 +158,6 @@ export async function sendAppEmail(input: SendAppEmailInput) {
   return {
     skipped: false,
     messageId: response.MessageId ?? null,
+    from: sourceEmail,
   };
 }

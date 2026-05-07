@@ -57,7 +57,7 @@ import {
 } from "@/lib/ist";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 import { formatMinutes } from "@/lib/utils";
-import { isMailSendingEnabled } from "@/lib/mail/ses";
+import { getSesFromEmailOptions, isMailSendingEnabled } from "@/lib/mail/ses";
 
 function toDateInputValue(value: Date) {
   const year = value.getFullYear();
@@ -271,6 +271,7 @@ export default async function DashboardPage({
   const showBillingDashboard = canSeeBillingDashboard(user);
   const showTestMailPanel = isAdmin(user);
   const mailSendingEnabled = showTestMailPanel ? isMailSendingEnabled() : false;
+  const testMailFromOptions = showTestMailPanel ? getSesFromEmailOptions() : [];
   const showAttendanceCard = canMarkAttendance(user);
   const showEMSAdminPanel = canViewEMSAdminDashboard(user);
   const userIsHR = isHR(user);
@@ -837,7 +838,9 @@ export default async function DashboardPage({
         </div>
       ) : null}
 
-      {showTestMailPanel ? <TestMailPanel mailEnabled={mailSendingEnabled} /> : null}
+      {showTestMailPanel ? (
+        <TestMailPanel mailEnabled={mailSendingEnabled} fromEmailOptions={testMailFromOptions} />
+      ) : null}
     </div>
   );
 }

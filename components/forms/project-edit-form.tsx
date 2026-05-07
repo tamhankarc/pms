@@ -11,6 +11,13 @@ type ProjectType = {
   clientId: string;
 };
 
+type FilmikResourceType = {
+  id: string;
+  name: string;
+  latestCount: number;
+  latestMonth: string;
+};
+
 type BillingModel = "HOURLY" | "FIXED_FULL" | "FIXED_MONTHLY" | "FIXED_PER_COUNTRY";
 type ProjectStatus = "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "ARCHIVED";
 const FILMIK_CLIENT_ID = "cmne6ed2o0000jo04t3363pqz";
@@ -27,6 +34,7 @@ export function ProjectEditForm({
   clientShowsMoviesInEntries,
   clientShowsAssetTypesInEntries,
   initialValues,
+  filmikResourceTypes,
 }: {
   projectId: string;
   lockedClientName: string;
@@ -36,6 +44,7 @@ export function ProjectEditForm({
   clientShowsCountriesInEntries: boolean;
   clientShowsMoviesInEntries: boolean;
   clientShowsAssetTypesInEntries: boolean;
+  filmikResourceTypes: FilmikResourceType[];
   initialValues: {
     projectTypeId: string | null;
     name: string;
@@ -63,6 +72,7 @@ export function ProjectEditForm({
   const [hideAssetTypesInEntries, setHideAssetTypesInEntries] = useState(initialValues.hideAssetTypesInEntries);
   const [addToBilling, setAddToBilling] = useState(initialValues.addToBilling);
   const isFilmikClient = clientId === FILMIK_CLIENT_ID;
+  const currentMonth = new Date().toISOString().slice(0, 7);
   const boundAction = updateProjectAction.bind(null, projectId);
   const [state, formAction, pending] = useActionState(boundAction, initialState);
 
@@ -230,20 +240,30 @@ export function ProjectEditForm({
 
         {isFilmikClient ? (
           <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Developers</h3>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div>
-                <FormLabel htmlFor="developerCount">Count</FormLabel>
-                <input id="developerCount" className="input" name="developerCount" type="number" min="0" step="1" defaultValue={initialValues.developerCount ?? 0} />
+            <h3 className="text-sm font-semibold text-slate-900">Resources</h3>
+            <p className="mt-1 text-xs text-slate-500">Update count per Filmik resource type and the month from which that count is applicable. A history row is kept for each project/resource/month.</p>
+            {filmikResourceTypes.length ? (
+              <div className="mt-4 space-y-3">
+                {filmikResourceTypes.map((resource) => (
+                  <div key={resource.id} className="grid gap-4 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[1fr_160px_180px] md:items-end">
+                    <div>
+                      <div className="text-sm font-medium text-slate-900">{resource.name}</div>
+                      {resource.latestMonth ? <div className="mt-1 text-xs text-slate-500">Latest saved: {resource.latestCount} from {resource.latestMonth}</div> : null}
+                    </div>
+                    <div>
+                      <FormLabel htmlFor={`filmikResourceCount__${resource.id}`}>Count</FormLabel>
+                      <input id={`filmikResourceCount__${resource.id}`} className="input" name={`filmikResourceCount__${resource.id}`} type="number" min="0" step="1" defaultValue={resource.latestCount} />
+                    </div>
+                    <div>
+                      <FormLabel htmlFor={`filmikResourceMonth__${resource.id}`}>Applicable from</FormLabel>
+                      <input id={`filmikResourceMonth__${resource.id}`} className="input" name={`filmikResourceMonth__${resource.id}`} type="month" defaultValue={resource.latestMonth || currentMonth} />
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div>
-                <FormLabel htmlFor="perDeveloperCost">Per Developer Cost (USD)</FormLabel>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
-                  <input id="perDeveloperCost" className="input currency-input" name="perDeveloperCost" type="number" min="0" step="0.01" defaultValue={initialValues.perDeveloperCost ?? "0.00"} />
-                </div>
-              </div>
-            </div>
+            ) : (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Create Filmik resource types from the Filmik Resources menu before assigning resource counts.</div>
+            )}
           </div>
         ) : null}
 

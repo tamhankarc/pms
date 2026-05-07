@@ -14,7 +14,31 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const project = await db.project.findUnique({ where: { id }, include: { client: true } });
   if (!project) notFound();
 
-  const projectTypes = await db.projectType.findMany({ where: { clientId: project.clientId, isActive: true }, orderBy: { name: "asc" } });
+  const [projectTypes, filmikResourceTypesRaw] = await Promise.all([
+    db.projectType.findMany({ where: { clientId: project.clientId, isActive: true }, orderBy: { name: "asc" } }),
+    project.clientId === "cmne6ed2o0000jo04t3363pqz"
+      ? db.filmikResourceType.findMany({
+          where: { clientId: "cmne6ed2o0000jo04t3363pqz", OR: [{ isActive: true }, { projectCounts: { some: { projectId: project.id } } }] },
+          select: {
+            id: true,
+            name: true,
+            projectCounts: {
+              where: { projectId: project.id },
+              orderBy: { effectiveMonth: "desc" },
+              take: 1,
+              select: { count: true, effectiveMonth: true },
+            },
+          },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([]),
+  ]);
+  const filmikResourceTypes = filmikResourceTypesRaw.map((resource) => ({
+    id: resource.id,
+    name: resource.name,
+    latestCount: resource.projectCounts[0]?.count ?? 0,
+    latestMonth: resource.projectCounts[0]?.effectiveMonth ? resource.projectCounts[0].effectiveMonth.toISOString().slice(0, 7) : "",
+  }));
 
   return (
     <div className="space-y-6">
@@ -28,6 +52,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         clientShowsCountriesInEntries={project.client.showCountriesInTimeEntries}
         clientShowsMoviesInEntries={project.client.showMoviesInEntries}
         clientShowsAssetTypesInEntries={project.client.showAssetTypesInEntries}
+        filmikResourceTypes={filmikResourceTypes}
         initialValues={{
           projectTypeId: project.projectTypeId,
           name: project.name,

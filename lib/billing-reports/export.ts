@@ -8,7 +8,9 @@ import {
 import type { GenericBillingReportData } from "@/lib/billing-reports/generic";
 import { getGenericBillingReportFileName } from "@/lib/billing-reports/generic";
 import type { SonyPicturesReportData } from "@/lib/billing-reports/sony";
+import type { FilmikBillingReportData } from "@/lib/billing-reports/filmik";
 import { getSonyPicturesReportFileName } from "@/lib/billing-reports/sony";
+import { getFilmikBillingReportMonthLabel } from "@/lib/billing-reports/filmik";
 
 function escapeXml(value: string | number) {
   return String(value)
@@ -1444,3 +1446,123 @@ export function buildSonyPicturesReportPdf(data: SonyPicturesReportData) {
 }
 
 export { getSonyPicturesReportFileName };
+
+
+export function buildFilmikBillingReportExcel(data: FilmikBillingReportData) {
+  const resourceRows = [
+    excelRow([`${data.client.name} Billing`]),
+    excelRow(["Client", data.client.name]),
+    excelRow(["Month", getFilmikBillingReportMonthLabel(data)]),
+    excelRow([]),
+    excelRow(["Resource Type", "Count", "Cost (USD)"]),
+    ...data.resourceRows.map((row) => excelRow([row.resourceTypeName, row.count, row.cost], [1, 2])),
+    excelRow([]),
+    excelRow(["Total", data.resourceTotalCount, data.resourceTotalCost], [1, 2]),
+  ];
+
+  const combinedRows = [
+    excelRow([`${data.client.name} Project + Resource Cost`]),
+    excelRow(["Client", data.client.name]),
+    excelRow(["Month", getFilmikBillingReportMonthLabel(data)]),
+    excelRow([]),
+    excelRow(["Project / Resource", "Resources / Hours", "Cost (USD)", "Contact Person"]),
+    ...data.combinedRows.map((row) =>
+      excelRow([
+        row.name,
+        row.key === "resource-cost" ? row.quantity : `${row.quantity.toFixed(2)}h`,
+        row.cost,
+        row.contactPerson,
+      ], [2]),
+    ),
+    excelRow([]),
+    excelRow(["Total", "", data.combinedTotalCost, "-"], [2]),
+  ];
+
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ ${worksheet("Resource Cost", resourceRows)}
+ ${worksheet("Combined Cost", combinedRows)}
+</Workbook>`;
+}
+
+function buildFilmikBillingReportPdfPages(data: FilmikBillingReportData) {
+  const pageStreams: string[] = [];
+  const monthLabel = getFilmikBillingReportMonthLabel(data);
+
+  const resourceCommands: string[] = [];
+  resourceCommands.push(textCommand(`${data.client.name} Billing`, MARGIN_X, TOP_Y, 15, true));
+  resourceCommands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
+  resourceCommands.push(textCommand(`Month: ${monthLabel}`, MARGIN_X, TOP_Y - 38, 9));
+  resourceCommands.push(textCommand("Resource Cost", MARGIN_X, TOP_Y - 62, 12, true));
+  const resourceColumns: PdfTableColumn[] = [
+    { header: "Resource Type", width: 360 },
+    { header: "Count", width: 120, align: "right" },
+    { header: "Cost", width: 150, align: "right" },
+  ];
+  const resourceRows: PdfTableRow[] = [
+    ...data.resourceRows.map((row) => [row.resourceTypeName, row.count, formatUsd(row.cost)] as PdfTableRow),
+    ["Total", data.resourceTotalCount, formatUsd(data.resourceTotalCost)],
+  ];
+  drawTableHeader(resourceCommands, resourceColumns, MARGIN_X, TOP_Y - 88);
+  let resourceY = TOP_Y - 88 - HEADER_HEIGHT;
+  resourceRows.forEach((row) => {
+    if (row[0] === "Total") resourceCommands.push(fillRectCommand(MARGIN_X, resourceY - SUMMARY_ROW_HEIGHT, tableWidth(resourceColumns), SUMMARY_ROW_HEIGHT, 0.9));
+    drawTableRow(resourceCommands, resourceColumns, row, MARGIN_X, resourceY, SUMMARY_ROW_HEIGHT, 8);
+    resourceY -= SUMMARY_ROW_HEIGHT;
+  });
+  resourceCommands.push(textCommand("Page 1", PAGE_WIDTH - 82, 18, 8));
+  pageStreams.push(resourceCommands.join("\n"));
+
+  const combinedColumns: PdfTableColumn[] = [
+    { header: "Project / Resource", width: 260 },
+    { header: "Resources / Hours", width: 120, align: "right" },
+    { header: "Cost", width: 130, align: "right" },
+    { header: "Contact Person", width: 250 },
+  ];
+  const combinedRows: PdfTableRow[] = [
+    ...data.combinedRows.map((row) => [
+      row.name,
+      row.key === "resource-cost" ? row.quantity : `${row.quantity.toFixed(2)}h`,
+      formatUsd(row.cost),
+      row.contactPerson,
+    ] as PdfTableRow),
+    ["Total", "", formatUsd(data.combinedTotalCost), "-"],
+  ];
+  let rowIndex = 0;
+  let pageNo = 2;
+  while (rowIndex < combinedRows.length) {
+    const commands: string[] = [];
+    const first = pageNo === 2;
+    const startY = first ? TOP_Y - 88 : TOP_Y - 38;
+    if (first) {
+      commands.push(textCommand(`${data.client.name} Billing`, MARGIN_X, TOP_Y, 15, true));
+      commands.push(textCommand(`Month: ${monthLabel}`, MARGIN_X, TOP_Y - 22, 9));
+      commands.push(textCommand("Project + Resource Cost", MARGIN_X, TOP_Y - 54, 12, true));
+    } else {
+      commands.push(textCommand(`${data.client.name} Billing continued`, MARGIN_X, TOP_Y, 13, true));
+    }
+    drawTableHeader(commands, combinedColumns, MARGIN_X, startY);
+    let y = startY - HEADER_HEIGHT;
+    const rowsPerPage = Math.max(1, Math.floor((y - 42) / SUMMARY_ROW_HEIGHT));
+    combinedRows.slice(rowIndex, rowIndex + rowsPerPage).forEach((row) => {
+      if (row[0] === "Total") commands.push(fillRectCommand(MARGIN_X, y - SUMMARY_ROW_HEIGHT, tableWidth(combinedColumns), SUMMARY_ROW_HEIGHT, 0.9));
+      drawTableRow(commands, combinedColumns, row, MARGIN_X, y, SUMMARY_ROW_HEIGHT, 8);
+      y -= SUMMARY_ROW_HEIGHT;
+    });
+    commands.push(textCommand(`Page ${pageNo}`, PAGE_WIDTH - 82, 18, 8));
+    pageStreams.push(commands.join("\n"));
+    rowIndex += rowsPerPage;
+    pageNo += 1;
+  }
+
+  return pageStreams;
+}
+
+export function buildFilmikBillingReportPdf(data: FilmikBillingReportData) {
+  return buildPdfDocument(buildFilmikBillingReportPdfPages(data));
+}

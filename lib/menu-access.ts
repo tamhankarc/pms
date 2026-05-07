@@ -7,6 +7,7 @@ export const menuItems = [
   { key: "client-billing-heads", href: "/client-billing-heads", label: "Billing Heads" },
   { key: "movie-billing-heads", href: "/movie-billing-heads", label: "Movie Billing Heads" },
   { key: "asset-type", href: "/asset-type", label: "Asset Types" },
+  { key: "filmik-resource", href: "/filmik-resource", label: "Filmik Resources" },
   { key: "countries", href: "/countries", label: "Countries" },
   { key: "languages", href: "/languages", label: "Languages" },
   { key: "projects", href: "/projects", label: "Projects" },
@@ -50,7 +51,7 @@ export function getBaseMenuKeysForUserType(userType: UserType | string): MenuKey
     case "ADMIN":
       return menuItems.map((item) => item.key);
     case "OPERATIONS":
-      return ["dashboard", "clients", "movies", "asset-type", "countries", "languages", "projects", "sub-project", "user-assignments", "contact-persons", "profile", "change-password"];
+      return ["dashboard", "clients", "movies", "asset-type", "filmik-resource", "countries", "languages", "projects", "sub-project", "user-assignments", "contact-persons", "profile", "change-password"];
     case "HR":
       return ["dashboard", "users", "leave-requests", "leave-approvals", "leave-admin", "announcements", "profile", "change-password"];
     case "ACCOUNTS":
