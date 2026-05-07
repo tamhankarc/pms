@@ -21,6 +21,7 @@ import { AttendanceCalendar } from "@/components/ems/attendance-calendar";
 import { AttendanceSelectedDateFilters } from "@/components/ems/attendance-selected-date-filters";
 import { ApproverAssignmentForm } from "@/components/ems/approver-assignment-form";
 import { DashboardBillingFilters } from "@/components/dashboard-billing-filters";
+import { TestMailPanel } from "@/components/dashboard/test-mail-panel";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
@@ -56,6 +57,7 @@ import {
 } from "@/lib/ist";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 import { formatMinutes } from "@/lib/utils";
+import { isMailSendingEnabled } from "@/lib/mail/ses";
 
 function toDateInputValue(value: Date) {
   const year = value.getFullYear();
@@ -267,6 +269,8 @@ export default async function DashboardPage({
   const isManager = user.userType === "MANAGER";
 
   const showBillingDashboard = canSeeBillingDashboard(user);
+  const showTestMailPanel = isAdmin(user);
+  const mailSendingEnabled = showTestMailPanel ? isMailSendingEnabled() : false;
   const showAttendanceCard = canMarkAttendance(user);
   const showEMSAdminPanel = canViewEMSAdminDashboard(user);
   const userIsHR = isHR(user);
@@ -832,6 +836,8 @@ export default async function DashboardPage({
           />
         </div>
       ) : null}
+
+      {showTestMailPanel ? <TestMailPanel mailEnabled={mailSendingEnabled} /> : null}
     </div>
   );
 }
