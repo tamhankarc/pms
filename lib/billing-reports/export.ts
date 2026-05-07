@@ -7,6 +7,8 @@ import {
 } from "@/lib/billing-reports/amazon";
 import type { GenericBillingReportData } from "@/lib/billing-reports/generic";
 import { getGenericBillingReportFileName } from "@/lib/billing-reports/generic";
+import type { SonyPicturesReportData } from "@/lib/billing-reports/sony";
+import { getSonyPicturesReportFileName } from "@/lib/billing-reports/sony";
 
 function escapeXml(value: string | number) {
   return String(value)
@@ -666,3 +668,98 @@ export function buildGenericBillingReportPdf(data: GenericBillingReportData) {
 }
 
 export { getGenericBillingReportFileName };
+
+
+export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
+  const rows = [
+    excelRow(["Sony Pictures Entertainment Billing"]),
+    excelRow(["Client", data.client.name]),
+    excelRow(["Movie", data.selectedMovie?.title ?? "-"]),
+    excelRow([]),
+    excelRow(["Project", "Country List", "Contact Person", "Billing Model", "Cost (USD)"]),
+    ...data.projectRows.map((row) => excelRow([row.projectName, row.countryList || "-", row.contactPerson, row.billingModel, row.cost], [4])),
+    ...(data.chargeRows.length
+      ? [excelRow([]), excelRow(["Movie Charges"]), ...data.chargeRows.map((row) => excelRow([row.label, "-", "-", "Movie Charge", row.cost], [4]))]
+      : []),
+    excelRow([]),
+    excelRow(["Total", "", "", "", data.totalCost], [4]),
+  ];
+
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ ${worksheet("Sony Billing", rows)}
+</Workbook>`;
+}
+
+function buildSonyPicturesReportPdfPages(data: SonyPicturesReportData) {
+  const columns: PdfTableColumn[] = [
+    { header: "Project / Charge", width: 230 },
+    { header: "Countries", width: 180 },
+    { header: "Contact Person", width: 170 },
+    { header: "Billing Model", width: 95 },
+    { header: "Cost", width: 80, align: "right" },
+  ];
+  const rows: PdfTableRow[] = [
+    ...data.projectRows.map((row) => [row.projectName, row.countryList || "-", row.contactPerson, row.billingModel, formatUsd(row.cost)] as PdfTableRow),
+    ...(data.chargeRows.length ? [["Movie Charges", "", "", "", ""] as PdfTableRow] : []),
+    ...data.chargeRows.map((row) => [row.label, "-", "-", "Movie Charge", formatUsd(row.cost)] as PdfTableRow),
+    ["Total", "", "", "", formatUsd(data.totalCost)] as PdfTableRow,
+  ];
+
+  const pageStreams: string[] = [];
+  const x = MARGIN_X;
+  const startY = TOP_Y - 88;
+  const laterPageStartY = TOP_Y - 38;
+  let rowIndex = 0;
+  let pageNumber = 1;
+
+  if (!data.selectedMovie) {
+    const commands: string[] = [];
+    commands.push(textCommand("Sony Pictures Entertainment Billing", MARGIN_X, TOP_Y, 15, true));
+    commands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
+    commands.push(textCommand("Select a movie to view billing records.", MARGIN_X, TOP_Y - 48, 9));
+    pageStreams.push(commands.join("\n"));
+    return pageStreams;
+  }
+
+  while (rowIndex < rows.length) {
+    const commands: string[] = [];
+    const isFirstPage = pageNumber === 1;
+    const currentStartY = isFirstPage ? startY : laterPageStartY;
+    const maxRows = Math.max(1, Math.floor((currentStartY - 42) / SUMMARY_ROW_HEIGHT));
+
+    if (isFirstPage) {
+      commands.push(textCommand("Sony Pictures Entertainment Billing", MARGIN_X, TOP_Y, 15, true));
+      commands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
+      commands.push(textCommand(`Movie: ${data.selectedMovie.title}`, MARGIN_X, TOP_Y - 38, 9));
+      commands.push(textCommand(`Generated: ${new Date().toLocaleString("en-IN")}`, MARGIN_X, TOP_Y - 54, 9));
+    } else {
+      commands.push(textCommand("Sony Pictures Entertainment Billing continued", MARGIN_X, TOP_Y, 13, true));
+    }
+
+    drawTableHeader(commands, columns, x, currentStartY);
+    let y = currentStartY - HEADER_HEIGHT;
+    rows.slice(rowIndex, rowIndex + maxRows).forEach((row) => {
+      if (row[0] === "Movie Charges" || row[0] === "Total") commands.push(fillRectCommand(x, y - SUMMARY_ROW_HEIGHT, tableWidth(columns), SUMMARY_ROW_HEIGHT, row[0] === "Total" ? 0.9 : 0.95));
+      drawTableRow(commands, columns, row, x, y, SUMMARY_ROW_HEIGHT, 7);
+      y -= SUMMARY_ROW_HEIGHT;
+    });
+    commands.push(textCommand(`Page ${pageStreams.length + 1}`, PAGE_WIDTH - 82, 18, 8));
+    pageStreams.push(commands.join("\n"));
+    rowIndex += maxRows;
+    pageNumber += 1;
+  }
+
+  return pageStreams;
+}
+
+export function buildSonyPicturesReportPdf(data: SonyPicturesReportData) {
+  return buildPdfDocument(buildSonyPicturesReportPdfPages(data));
+}
+
+export { getSonyPicturesReportFileName };

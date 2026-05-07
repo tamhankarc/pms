@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { canViewBillingReports } from "@/lib/permissions";
 import { isBillingReportClientExcluded } from "@/lib/billing-reports/config";
 import { buildGenericBillingReportFilters, formatUsd as formatGenericUsd, getGenericBillingReportData, type GenericBillingReportBlock, type GenericBillingReportData } from "@/lib/billing-reports/generic";
+import { buildSonyPicturesReportFilters, formatUsd as formatSonyUsd, getSonyPicturesReportData, type SonyPicturesReportData } from "@/lib/billing-reports/sony";
 import {
   buildAmazonBillingReportFilters,
   buildWarnerDomesticDeliverableFilters,
@@ -211,6 +212,93 @@ function WarnerDeliverableWorkspace({ clientId, activeReport, data }: { clientId
   );
 }
 
+
+function SonyPicturesReportFilters({ clientId, reportType, data }: { clientId: string; reportType: AmazonReportType; data: SonyPicturesReportData }) {
+  return (
+    <form method="get" action={`/billing-reports/${clientId}`} className="card p-5">
+      <input type="hidden" name="report" value={reportType} />
+      <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+        <div>
+          <label className="label" htmlFor="movieId">Movie</label>
+          <SearchableCombobox id="movieId" name="movieId" defaultValue={data.filters.movieId} options={data.movieOptions.map((movie) => ({ value: movie.id, label: movie.title }))} placeholder="Select movie" searchPlaceholder="Search movies..." emptyLabel="No active Working/Completed movies with time entries found." />
+        </div>
+        <button className="btn-primary" type="submit">Apply</button>
+      </div>
+      <p className="mt-3 text-sm text-slate-500">Only active Working/Completed movies with one or more Time Entries are listed.</p>
+    </form>
+  );
+}
+
+function SonyPicturesExportButtons({ clientId, reportType, data }: { clientId: string; reportType: AmazonReportType; data: SonyPicturesReportData }) {
+  const query = buildQueryString({ report: reportType, movieId: data.filters.movieId });
+  return (
+    <div className="flex flex-wrap gap-3">
+      <Link className="btn-secondary" href={`/billing-reports/${clientId}/export?format=excel&${query}`}>Export Excel</Link>
+      <Link className="btn-secondary" href={`/billing-reports/${clientId}/export?format=pdf&${query}`}>Export PDF</Link>
+    </div>
+  );
+}
+
+function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
+  return (
+    <div className="table-wrap">
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">Project</th>
+            <th className="table-cell">Contact Person</th>
+            <th className="table-cell">Billing Model</th>
+            <th className="table-cell">Cost</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {!data.selectedMovie ? <tr><td colSpan={4} className="table-cell text-center text-sm text-slate-500">Select a movie to view billing records.</td></tr> : null}
+          {data.selectedMovie && data.projectRows.length === 0 ? <tr><td colSpan={4} className="table-cell text-center text-sm text-slate-500">No projects have Time Entries for the selected movie.</td></tr> : null}
+          {data.projectRows.map((row) => (
+            <tr key={row.projectId}>
+              <td className="table-cell">
+                <div className="font-medium text-slate-900">{row.projectName}</div>
+                {row.countryList ? <div className="mt-1 text-xs text-slate-500">Countries: {row.countryList}</div> : null}
+              </td>
+              <td className="table-cell">{row.contactPerson}</td>
+              <td className="table-cell"><span className="badge-blue">{row.billingModel}</span></td>
+              <td className="table-cell whitespace-nowrap font-medium text-slate-900">{formatSonyUsd(row.cost)}</td>
+            </tr>
+          ))}
+          {data.chargeRows.length ? <tr className="bg-slate-50"><td colSpan={4} className="table-cell text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Movie Charges</td></tr> : null}
+          {data.chargeRows.map((row) => (
+            <tr key={row.label}>
+              <td className="table-cell font-medium text-slate-900">{row.label}</td>
+              <td className="table-cell">-</td>
+              <td className="table-cell"><span className="badge-blue">Movie Charge</span></td>
+              <td className="table-cell whitespace-nowrap font-medium text-slate-900">{formatSonyUsd(row.cost)}</td>
+            </tr>
+          ))}
+          {data.selectedMovie ? <tr className="bg-slate-100"><td className="table-cell font-semibold text-slate-900" colSpan={3}>Total</td><td className="table-cell whitespace-nowrap font-semibold text-slate-900">{formatSonyUsd(data.totalCost)}</td></tr> : null}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SonyPicturesReportWorkspace({ clientId, activeReport, data }: { clientId: string; activeReport: AmazonReportType; data: SonyPicturesReportData }) {
+  return (
+    <div className="space-y-6">
+      <ReportTabs clientId={clientId} activeReport={activeReport} clientName={data.client.name} />
+      <SonyPicturesReportFilters clientId={clientId} reportType={activeReport} data={data} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="section-title">Sony Pictures Entertainment Billing</h2>
+          <p className="section-subtitle">Projects are listed without billing-model grouping for the selected movie.</p>
+        </div>
+        <SonyPicturesExportButtons clientId={clientId} reportType={activeReport} data={data} />
+      </div>
+      {data.selectedMovie ? <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">Movie: <span className="font-semibold text-slate-900">{data.selectedMovie.title}</span></div> : null}
+      <SonyPicturesReportTable data={data} />
+    </div>
+  );
+}
+
 function PlaceholderConfiguredReport({ clientId, activeReport, clientName, title }: { clientId: string; activeReport: AmazonReportType; clientName: string; title: string }) {
   return (
     <div className="space-y-6">
@@ -344,6 +432,7 @@ export default async function ClientBillingReportPage({ params, searchParams }: 
   const activeReport = normalizeAmazonReportType(Array.isArray(resolvedSearchParams.report) ? resolvedSearchParams.report[0] : resolvedSearchParams.report, client.name);
   const filters = buildAmazonBillingReportFilters(resolvedSearchParams);
   const genericFilters = buildGenericBillingReportFilters(resolvedSearchParams);
+  const sonyPicturesFilters = buildSonyPicturesReportFilters(resolvedSearchParams);
   const domesticFilters = buildWarnerDomesticDeliverableFilters(resolvedSearchParams);
   const reportCatalog = getBillingReportCatalogForClient(client.name, client.id);
   const activeReportDefinition = reportCatalog?.[activeReport];
@@ -351,6 +440,7 @@ export default async function ClientBillingReportPage({ params, searchParams }: 
   const domesticDeliverableData = isWarnerBillingReportClient(client.name) && activeReport === "domestic-deliverable" ? await getWarnerDomesticDeliverableData({ clientId, filters: domesticFilters }) : null;
   const intlDeliverableData = isWarnerBillingReportClient(client.name) && activeReport === "intl-deliverable" ? await getWarnerIntlDeliverableData({ clientId, filters: domesticFilters }) : null;
   const otherDeliverableData = isWarnerBillingReportClient(client.name) && activeReport === "other-deliverable" ? await getWarnerOtherDeliverableData({ clientId, filters: domesticFilters }) : null;
+  const sonyPicturesReportData = activeReportDefinition?.kind === "sony-movie" ? await getSonyPicturesReportData({ clientId, filters: sonyPicturesFilters }) : null;
   const genericBillingOptions = activeReportDefinition?.kind === "generic-movie"
     ? { movieSpecific: true }
     : activeReportDefinition?.kind === "generic-filmik"
@@ -363,7 +453,7 @@ export default async function ClientBillingReportPage({ params, searchParams }: 
   return (
     <div>
       <PageHeader title={`${client.name} Billing Report`} description={reportCatalog ? "Use the report tabs to review configured billing records." : "Review projects grouped by billing model. Fixed - Full Project shows completed projects only."} actions={<Link className="btn-secondary" href="/billing-reports">Back to Billing Reports</Link>} />
-      {timeEntryReportData ? <TimeEntryReportsWorkspace clientId={clientId} activeReport={activeReport} data={timeEntryReportData} /> : (domesticDeliverableData || intlDeliverableData || otherDeliverableData) ? <WarnerDeliverableWorkspace clientId={clientId} activeReport={activeReport} data={(domesticDeliverableData || intlDeliverableData || otherDeliverableData)!} /> : activeReportDefinition?.kind === "placeholder" ? <PlaceholderConfiguredReport clientId={clientId} activeReport={activeReport} clientName={client.name} title={activeReportDefinition.title} /> : <GenericBillingReportWorkspace clientId={clientId} reportType={reportCatalog ? activeReport : undefined} clientName={reportCatalog ? client.name : undefined} data={genericBillingReportData!} />}
+      {timeEntryReportData ? <TimeEntryReportsWorkspace clientId={clientId} activeReport={activeReport} data={timeEntryReportData} /> : sonyPicturesReportData ? <SonyPicturesReportWorkspace clientId={clientId} activeReport={activeReport} data={sonyPicturesReportData} /> : (domesticDeliverableData || intlDeliverableData || otherDeliverableData) ? <WarnerDeliverableWorkspace clientId={clientId} activeReport={activeReport} data={(domesticDeliverableData || intlDeliverableData || otherDeliverableData)!} /> : activeReportDefinition?.kind === "placeholder" ? <PlaceholderConfiguredReport clientId={clientId} activeReport={activeReport} clientName={client.name} title={activeReportDefinition.title} /> : <GenericBillingReportWorkspace clientId={clientId} reportType={reportCatalog ? activeReport : undefined} clientName={reportCatalog ? client.name : undefined} data={genericBillingReportData!} />}
     </div>
   );
 }

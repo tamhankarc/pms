@@ -84,7 +84,7 @@ export type BillingReportDefinition = {
   title: string;
   projectName: string;
   includeLanguage: boolean;
-  kind?: "time-entry" | "deliverable" | "placeholder" | "generic-movie" | "generic-filmik";
+  kind?: "time-entry" | "deliverable" | "placeholder" | "generic-movie" | "generic-filmik" | "sony-movie";
 };
 
 export const AMAZON_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
@@ -145,7 +145,7 @@ export const WARNER_REPORTS: Partial<Record<AmazonReportType, BillingReportDefin
 };
 
 export const SONY_PICTURES_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
-  "social-assets": { title: "Sony Pictures Entertainment Billing", projectName: "", includeLanguage: false, kind: "placeholder" },
+  "social-assets": { title: "Sony Pictures Entertainment Billing", projectName: "", includeLanguage: false, kind: "sony-movie" },
 };
 
 export const SONY_PICTURES_CLASSICS_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
@@ -455,6 +455,7 @@ async function getWarnerDeliverableData({
       clientId,
       isActive: true,
       status: { in: ["WORKING", "COMPLETED"] },
+      ...(!isDomestic ? { timeEntries: { some: { project: { clientId } } } } : {}),
       ...(isDomestic
         ? { billingDomestic: true }
         : isIntl
@@ -486,6 +487,7 @@ async function getWarnerDeliverableData({
           clientId,
           isActive: true,
           status: { in: ["WORKING", "COMPLETED"] },
+          ...(!isDomestic ? { timeEntries: { some: { project: { clientId } } } } : {}),
           ...(isDomestic
             ? { billingDomestic: true }
             : isIntl

@@ -14,6 +14,7 @@ import {
 import { db } from "@/lib/db";
 import { isBillingReportClientExcluded } from "@/lib/billing-reports/config";
 import { buildGenericBillingReportFilters, getGenericBillingReportData } from "@/lib/billing-reports/generic";
+import { buildSonyPicturesReportFilters, getSonyPicturesReportData } from "@/lib/billing-reports/sony";
 import {
   buildAmazonReportExcel,
   buildAmazonReportFileName,
@@ -24,6 +25,9 @@ import {
   buildGenericBillingReportExcel,
   buildGenericBillingReportPdf,
   getGenericBillingReportFileName,
+  buildSonyPicturesReportExcel,
+  buildSonyPicturesReportPdf,
+  getSonyPicturesReportFileName,
 } from "@/lib/billing-reports/export";
 
 export async function GET(
@@ -67,6 +71,30 @@ export async function GET(
       headers: {
         "Content-Type": "application/vnd.ms-excel; charset=utf-8",
         "Content-Disposition": `attachment; filename="${buildWarnerDomesticReportFileName(data, "xls")}"`,
+      },
+    });
+  }
+
+  if (reportDefinition?.kind === "sony-movie") {
+    const filters = buildSonyPicturesReportFilters(searchParams);
+    const data = await getSonyPicturesReportData({ clientId, filters });
+    if (!data) redirect("/billing-reports");
+
+    if (format === "pdf") {
+      const pdf = buildSonyPicturesReportPdf(data);
+      return new Response(Buffer.from(pdf, "binary"), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${getSonyPicturesReportFileName(data, "pdf")}"`,
+        },
+      });
+    }
+
+    const excel = buildSonyPicturesReportExcel(data);
+    return new Response(excel, {
+      headers: {
+        "Content-Type": "application/vnd.ms-excel; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${getSonyPicturesReportFileName(data, "xls")}"`,
       },
     });
   }
