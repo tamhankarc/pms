@@ -607,7 +607,7 @@ export function buildWarnerDomesticReportExcel(
       : []),
     excelRow([]),
     excelRow(["Billing Head / Project", "Cost (USD)"]),
-    ...data.rows.map((row) => excelRow([row.label, row.cost], [1])),
+    ...data.rows.map((row) => excelRow([getDeliverableDisplayLabel(row), row.cost], [1])),
     excelRow([]),
     excelRow(["Total", data.totalCost], [1]),
   ];
@@ -629,7 +629,7 @@ function buildWarnerDomesticPdfPages(data: WarnerDomesticDeliverableData) {
     { header: "Cost", width: 170, align: "right" },
   ];
   const rows: PdfTableRow[] = data.rows.map((row) => [
-    row.label,
+    getDeliverableDisplayLabel(row),
     formatUsd(row.cost),
   ]);
   rows.push(["Total", formatUsd(data.totalCost)]);
@@ -730,6 +730,10 @@ export function buildWarnerDomesticReportFileName(
   extension: "xls" | "pdf",
 ) {
   return `${sanitizeFileSegment(data.client.name)}_${sanitizeFileSegment(data.reportTitle)}_${getExportTimestamp()}.${extension}`;
+}
+
+function getDeliverableDisplayLabel(row: WarnerDomesticDeliverableData["rows"][number]) {
+  return row.meta?.startsWith("Countries:") ? `${row.label} - ${row.meta}` : row.label;
 }
 
 export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
