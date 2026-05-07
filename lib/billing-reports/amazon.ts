@@ -424,6 +424,50 @@ function isCanadaCountry(country: { isoCode: string | null; name: string }) {
   return (country.isoCode ?? "").toUpperCase() === "CA" || country.name.trim().toLowerCase() === "canada";
 }
 
+async function getWarnerDeliverableEntryCountries(clientId: string) {
+  return db.timeEntry.findMany({
+    where: {
+      project: { clientId },
+      movieId: { not: null },
+      countryId: { not: null },
+    },
+    select: {
+      movieId: true,
+      country: { select: { name: true, isoCode: true } },
+    },
+  });
+}
+
+async function getWarnerIntlDeliverableEligibleMovieIds(clientId: string) {
+  const entries = await getWarnerDeliverableEntryCountries(clientId);
+
+  const eligibleMovieIds = new Set<string>();
+  for (const entry of entries) {
+    if (!entry.movieId || !entry.country) continue;
+    if (isUsCountry(entry.country) || isCanadaCountry(entry.country)) continue;
+    eligibleMovieIds.add(entry.movieId);
+  }
+
+  return Array.from(eligibleMovieIds);
+}
+
+async function getWarnerOtherDeliverableEligibleMovieIds(clientId: string) {
+  const entries = await getWarnerDeliverableEntryCountries(clientId);
+  const nonUsMovieIds = new Set<string>();
+  const canadaMovieIds = new Set<string>();
+
+  for (const entry of entries) {
+    if (!entry.movieId || !entry.country) continue;
+    if (!isUsCountry(entry.country)) nonUsMovieIds.add(entry.movieId);
+    if (isCanadaCountry(entry.country)) canadaMovieIds.add(entry.movieId);
+  }
+
+  return {
+    nonUsMovieIds: Array.from(nonUsMovieIds),
+    canadaMovieIds: Array.from(canadaMovieIds),
+  };
+}
+
 function getDeliverableReportTitle(reportType: "domestic-deliverable" | "intl-deliverable" | "other-deliverable") {
   if (reportType === "intl-deliverable") return "Intl Deliverable";
   if (reportType === "other-deliverable") return "Other Deliverable";
@@ -450,6 +494,9 @@ async function getWarnerDeliverableData({
   });
   if (!client) return null;
 
+  const intlEligibleMovieIds = isIntl ? await getWarnerIntlDeliverableEligibleMovieIds(clientId) : null;
+  const otherEligibleMovieIds = isOther ? await getWarnerOtherDeliverableEligibleMovieIds(clientId) : null;
+
   const movieOptions = await db.movie.findMany({
     where: {
       clientId,
@@ -459,19 +506,11 @@ async function getWarnerDeliverableData({
       ...(isDomestic
         ? { billingDomestic: true }
         : isIntl
-          ? { billingIntl: true }
+          ? { billingIntl: true, id: { in: intlEligibleMovieIds ?? [] } }
           : {
               OR: [
-                { billingOther: true },
-                {
-                  billingIntl: true,
-                  timeEntries: {
-                    some: {
-                      project: { clientId },
-                      country: { is: { OR: [{ isoCode: "CA" }, { name: "Canada" }] } },
-                    },
-                  },
-                },
+                { billingOther: true, id: { in: otherEligibleMovieIds?.nonUsMovieIds ?? [] } },
+                { billingIntl: true, id: { in: otherEligibleMovieIds?.canadaMovieIds ?? [] } },
               ],
             }),
     },
@@ -491,19 +530,11 @@ async function getWarnerDeliverableData({
           ...(isDomestic
             ? { billingDomestic: true }
             : isIntl
-              ? { billingIntl: true }
+              ? { billingIntl: true, AND: [{ id: { in: intlEligibleMovieIds ?? [] } }] }
               : {
               OR: [
-                { billingOther: true },
-                {
-                  billingIntl: true,
-                  timeEntries: {
-                    some: {
-                      project: { clientId },
-                      country: { is: { OR: [{ isoCode: "CA" }, { name: "Canada" }] } },
-                    },
-                  },
-                },
+                { billingOther: true, id: { in: otherEligibleMovieIds?.nonUsMovieIds ?? [] } },
+                { billingIntl: true, id: { in: otherEligibleMovieIds?.canadaMovieIds ?? [] } },
               ],
             }),
         },
