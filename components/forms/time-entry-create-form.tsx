@@ -19,6 +19,8 @@ type TimeEntryProjectOption = {
   hideMoviesInEntries: boolean;
   showAssetTypesInEntries: boolean;
   hideAssetTypesInEntries: boolean;
+  showNewslettersInEntries: boolean;
+  hideNewslettersInEntries: boolean;
   showLanguagesInEntries: boolean;
   assignedUserIds: string[];
 };
@@ -31,6 +33,7 @@ type TimeEntrySubProjectOption = {
   hideCountriesInEntries: boolean;
   hideMoviesInEntries: boolean;
   hideAssetTypesInEntries: boolean;
+  hideNewslettersInEntries: boolean;
 };
 
 type TimeEntryEmployeeOption = {
@@ -46,6 +49,12 @@ type MovieOption = {
 };
 
 type AssetTypeOption = {
+  id: string;
+  name: string;
+  clientId: string;
+};
+
+type NewsletterOption = {
   id: string;
   name: string;
   clientId: string;
@@ -73,6 +82,7 @@ export function TimeEntryCreateForm({
   countries,
   movies,
   assetTypes,
+  newsletters,
   languages,
   assignableEmployees = [],
   defaultEmployeeId,
@@ -83,6 +93,7 @@ export function TimeEntryCreateForm({
   countries: { id: string; name: string }[];
   movies: MovieOption[];
   assetTypes: AssetTypeOption[];
+  newsletters: NewsletterOption[];
   languages: LanguageOption[];
   assignableEmployees?: TimeEntryEmployeeOption[];
   defaultEmployeeId?: string;
@@ -179,6 +190,11 @@ export function TimeEntryCreateForm({
     [assetTypes, selectedClientId],
   );
 
+  const filteredNewsletters = useMemo(
+    () => newsletters.filter((newsletter) => newsletter.clientId === selectedClientId),
+    [newsletters, selectedClientId],
+  );
+
   const showEmployeeField = assignableEmployees.length > 1;
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const selectedSubProject = subProjects.find((subProject) => subProject.id === selectedSubProjectId);
@@ -196,6 +212,11 @@ export function TimeEntryCreateForm({
     selectedProject?.showAssetTypesInEntries &&
       !selectedProject?.hideAssetTypesInEntries &&
       !selectedSubProject?.hideAssetTypesInEntries,
+  );
+  const showNewsletterField = Boolean(
+    selectedProject?.showNewslettersInEntries &&
+      !selectedProject?.hideNewslettersInEntries &&
+      !selectedSubProject?.hideNewslettersInEntries,
   );
   const showLanguageField = Boolean(selectedProject?.showLanguagesInEntries);
   const countryRequired = showCountryField;
@@ -350,6 +371,24 @@ export function TimeEntryCreateForm({
           </div>
         ) : null}
 
+
+        {showNewsletterField ? (
+          <div>
+            <FormLabel htmlFor="newsletterId">Newsletter</FormLabel>
+            <SearchableCombobox
+              id="newsletterId"
+              name="newsletterId"
+              defaultValue=""
+              options={[
+                { value: "", label: "No specific newsletter" },
+                ...filteredNewsletters.map((newsletter) => ({ value: newsletter.id, label: newsletter.name })),
+              ]}
+              placeholder="No specific newsletter"
+              searchPlaceholder="Search newsletters..."
+              emptyLabel="No newsletters found."
+            />
+          </div>
+        ) : null}
         {showAssetTypeField ? (
           <div>
             <FormLabel htmlFor="assetTypeId">Asset Type</FormLabel>

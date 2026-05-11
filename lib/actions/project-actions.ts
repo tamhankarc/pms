@@ -14,11 +14,12 @@ const baseSchema = z.object({
   clientId: z.string().optional(),
   projectTypeId: z.string().optional().nullable(),
   name: z.string().min(2, "Project name is required."),
-  billingModel: z.enum(["HOURLY", "FIXED_FULL", "FIXED_MONTHLY", "FIXED_PER_COUNTRY"]),
+  billingModel: z.enum(["HOURLY", "FIXED_FULL", "FIXED_MONTHLY", "FIXED_PER_COUNTRY", "FIXED_COST"]),
   fixedContractHours: z.coerce.number().nonnegative().optional(),
   fixedMonthlyHours: z.coerce.number().nonnegative().optional(),
   additionalCharges: z.coerce.number().nonnegative("Additional Charges cannot be negative.").optional(),
   partialBillingCost: z.coerce.number().nonnegative("Partial Billing cost cannot be negative.").optional(),
+  projectCost: z.coerce.number().nonnegative("Project Cost cannot be negative.").optional(),
   perCountryCharges: z.coerce.number().nonnegative("Per Country Charges cannot be negative.").optional(),
   developerCount: z.coerce.number().int().nonnegative("Developer count cannot be negative.").optional(),
   perDeveloperCost: z.coerce.number().nonnegative("Per Developer Cost cannot be negative.").optional(),
@@ -27,6 +28,7 @@ const baseSchema = z.object({
   hideCountriesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   hideMoviesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   hideAssetTypesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  hideNewslettersInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   addToBilling: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
 
@@ -107,6 +109,7 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
       fixedMonthlyHours: formData.get("fixedMonthlyHours") || 0,
       additionalCharges: formData.get("additionalCharges") || 0,
       partialBillingCost: formData.get("partialBillingCost") || 0,
+      projectCost: formData.get("projectCost") || 0,
       perCountryCharges: formData.get("perCountryCharges") || 0,
       developerCount: formData.get("developerCount") || 0,
       perDeveloperCost: formData.get("perDeveloperCost") || 0,
@@ -115,6 +118,7 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
       hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
       hideMoviesInEntries: formData.get("hideMoviesInEntries") ?? undefined,
       hideAssetTypesInEntries: formData.get("hideAssetTypesInEntries") ?? undefined,
+      hideNewslettersInEntries: formData.get("hideNewslettersInEntries") ?? undefined,
       addToBilling: formData.get("addToBilling") ?? undefined,
     });
 
@@ -122,7 +126,7 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
       return { success: false, error: parsed.success ? "Client is required." : parsed.error.issues[0]?.message };
     }
 
-    const client = await db.client.findUnique({ where: { id: parsed.data.clientId }, select: { id: true, enableProjectTypes: true, showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true } });
+    const client = await db.client.findUnique({ where: { id: parsed.data.clientId }, select: { id: true, enableProjectTypes: true, showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true, showNewslettersInEntries: true } });
     if (!client) return { success: false, error: "Client not found." };
     if (client.enableProjectTypes && !parsed.data.projectTypeId) return { success: false, error: "Project type is required for the selected client." };
     if (!client.enableProjectTypes && parsed.data.projectTypeId) return { success: false, error: "Selected client does not use project types." };
@@ -140,6 +144,7 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
         fixedMonthlyHours: parsed.data.billingModel === "FIXED_MONTHLY" ? (parsed.data.fixedMonthlyHours ?? 0) : null,
         additionalCharges: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.additionalCharges ?? 0) : 0,
         partialBillingCost: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.partialBillingCost ?? 0) : 0,
+        projectCost: parsed.data.billingModel === "FIXED_COST" ? (parsed.data.projectCost ?? 0) : 0,
         perCountryCharges: parsed.data.billingModel === "FIXED_PER_COUNTRY" ? (parsed.data.perCountryCharges ?? 0) : 0,
         developerCount: 0,
         perDeveloperCost: 0,
@@ -150,6 +155,7 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
         hideCountriesInEntries: client.showCountriesInTimeEntries ? Boolean(parsed.data.hideCountriesInEntries) : false,
         hideMoviesInEntries: client.showMoviesInEntries ? Boolean(parsed.data.hideMoviesInEntries) : false,
         hideAssetTypesInEntries: client.showAssetTypesInEntries ? Boolean(parsed.data.hideAssetTypesInEntries) : false,
+        hideNewslettersInEntries: client.showNewslettersInEntries ? Boolean(parsed.data.hideNewslettersInEntries) : false,
         addToBilling: Boolean(parsed.data.addToBilling),
       },
     });
@@ -187,6 +193,7 @@ export async function updateProjectAction(projectId: string, _prevState: Project
       fixedMonthlyHours: formData.get("fixedMonthlyHours") || 0,
       additionalCharges: formData.get("additionalCharges") || 0,
       partialBillingCost: formData.get("partialBillingCost") || 0,
+      projectCost: formData.get("projectCost") || 0,
       perCountryCharges: formData.get("perCountryCharges") || 0,
       developerCount: formData.get("developerCount") || 0,
       perDeveloperCost: formData.get("perDeveloperCost") || 0,
@@ -195,12 +202,13 @@ export async function updateProjectAction(projectId: string, _prevState: Project
       hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
       hideMoviesInEntries: formData.get("hideMoviesInEntries") ?? undefined,
       hideAssetTypesInEntries: formData.get("hideAssetTypesInEntries") ?? undefined,
+      hideNewslettersInEntries: formData.get("hideNewslettersInEntries") ?? undefined,
       addToBilling: formData.get("addToBilling") ?? undefined,
     });
 
     if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message || "Invalid project payload." };
 
-    const client = await db.client.findUnique({ where: { id: existingProject.clientId }, select: { id: true, enableProjectTypes: true, showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true } });
+    const client = await db.client.findUnique({ where: { id: existingProject.clientId }, select: { id: true, enableProjectTypes: true, showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true, showNewslettersInEntries: true } });
     if (!client) return { success: false, error: "Client not found." };
     if (client.enableProjectTypes && !parsed.data.projectTypeId) return { success: false, error: "Project type is required for the selected client." };
     if (!client.enableProjectTypes && parsed.data.projectTypeId) return { success: false, error: "Selected client does not use project types." };
@@ -216,6 +224,7 @@ export async function updateProjectAction(projectId: string, _prevState: Project
         fixedMonthlyHours: parsed.data.billingModel === "FIXED_MONTHLY" ? (parsed.data.fixedMonthlyHours ?? 0) : null,
         additionalCharges: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.additionalCharges ?? 0) : 0,
         partialBillingCost: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.partialBillingCost ?? 0) : 0,
+        projectCost: parsed.data.billingModel === "FIXED_COST" ? (parsed.data.projectCost ?? 0) : 0,
         perCountryCharges: parsed.data.billingModel === "FIXED_PER_COUNTRY" ? (parsed.data.perCountryCharges ?? 0) : 0,
         developerCount: 0,
         perDeveloperCost: 0,
@@ -225,6 +234,7 @@ export async function updateProjectAction(projectId: string, _prevState: Project
         hideCountriesInEntries: client.showCountriesInTimeEntries ? Boolean(parsed.data.hideCountriesInEntries) : false,
         hideMoviesInEntries: client.showMoviesInEntries ? Boolean(parsed.data.hideMoviesInEntries) : false,
         hideAssetTypesInEntries: client.showAssetTypesInEntries ? Boolean(parsed.data.hideAssetTypesInEntries) : false,
+        hideNewslettersInEntries: client.showNewslettersInEntries ? Boolean(parsed.data.hideNewslettersInEntries) : false,
         addToBilling: Boolean(parsed.data.addToBilling),
       },
     });

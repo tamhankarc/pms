@@ -24,7 +24,7 @@ export type GenericBillingReportRow = {
 };
 
 export type GenericBillingReportBlock = {
-  key: "hourly" | "fixedFull" | "fixedMonthly" | "fixedPerCountry";
+  key: "hourly" | "fixedFull" | "fixedMonthly" | "fixedPerCountry" | "fixedCost";
   title: string;
   description: string;
   rows: GenericBillingReportRow[];
@@ -130,6 +130,7 @@ export async function getGenericBillingReportData({
           additionalCharges: true,
           partialBillingCost: true,
           perCountryCharges: true,
+          projectCost: true,
           developerCount: true,
           perDeveloperCost: true,
           contactPersons: {
@@ -261,6 +262,19 @@ export async function getGenericBillingReportData({
       } satisfies GenericBillingReportRow;
     }));
 
+  const fixedCostRows = sortRows(eligibleProjects
+    .filter((project) => project.billingModel === "FIXED_COST")
+    .map((project) => {
+      const developer = addDeveloperCost(Number(project.projectCost ?? 0), project, includeDeveloperCosts);
+      return {
+        projectId: project.id,
+        projectName: project.name,
+        contactPerson: getProjectContactPerson(project),
+        status: formatProjectStatus(project.status),
+        ...developer,
+      } satisfies GenericBillingReportRow;
+    }));
+
   let fixedPerCountryRows: GenericBillingReportRow[] = [];
   if (client.showCountriesInTimeEntries) {
     const fixedPerCountryProjectIds = eligibleProjects.filter((project) => project.billingModel === "FIXED_PER_COUNTRY").map((project) => project.id);
@@ -321,6 +335,12 @@ export async function getGenericBillingReportData({
       title: "Fixed - Monthly",
       description: "Costs are calculated from fixed monthly hours and the client hourly cost.",
       rows: fixedMonthlyRows,
+    }),
+    buildBlock({
+      key: "fixedCost",
+      title: "Fixed Cost",
+      description: "Costs are calculated from the fixed project cost.",
+      rows: fixedCostRows,
     }),
     ...(client.showCountriesInTimeEntries ? [buildBlock({
       key: "fixedPerCountry" as const,

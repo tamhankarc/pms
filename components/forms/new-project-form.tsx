@@ -12,6 +12,7 @@ type Client = {
   showCountriesInTimeEntries: boolean;
   showMoviesInEntries: boolean;
   showAssetTypesInEntries: boolean;
+  showNewslettersInEntries: boolean;
 };
 
 type ProjectType = {
@@ -25,7 +26,7 @@ type FilmikResourceType = {
   name: string;
 };
 
-type BillingModel = "HOURLY" | "FIXED_FULL" | "FIXED_MONTHLY" | "FIXED_PER_COUNTRY";
+type BillingModel = "HOURLY" | "FIXED_FULL" | "FIXED_MONTHLY" | "FIXED_PER_COUNTRY" | "FIXED_COST";
 type ProjectStatus = "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "ARCHIVED";
 
 const FILMIK_CLIENT_ID = "cmne6ed2o0000jo04t3363pqz";
@@ -48,6 +49,7 @@ export function NewProjectForm({
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(false);
   const [hideMoviesInEntries, setHideMoviesInEntries] = useState(false);
   const [hideAssetTypesInEntries, setHideAssetTypesInEntries] = useState(false);
+  const [hideNewslettersInEntries, setHideNewslettersInEntries] = useState(false);
   const [addToBilling, setAddToBilling] = useState(false);
   const [state, formAction, pending] = useActionState(createProjectAction, initialState);
 
@@ -69,6 +71,7 @@ export function NewProjectForm({
       {hideCountriesInEntries ? <input type="hidden" name="hideCountriesInEntries" value="on" /> : null}
       {hideMoviesInEntries ? <input type="hidden" name="hideMoviesInEntries" value="on" /> : null}
       {hideAssetTypesInEntries ? <input type="hidden" name="hideAssetTypesInEntries" value="on" /> : null}
+      {hideNewslettersInEntries ? <input type="hidden" name="hideNewslettersInEntries" value="on" /> : null}
       {addToBilling ? <input type="hidden" name="addToBilling" value="on" /> : null}
 
       <h2 className="section-title">Create project</h2>
@@ -102,6 +105,7 @@ export function NewProjectForm({
               setHideCountriesInEntries(false);
               setHideMoviesInEntries(false);
               setHideAssetTypesInEntries(false);
+              setHideNewslettersInEntries(false);
             }}
             options={clients.map((client) => ({ value: client.id, label: client.name }))}
             placeholder="Select client"
@@ -149,6 +153,7 @@ export function NewProjectForm({
               { value: "FIXED_FULL", label: "Fixed - Full Project" },
               { value: "FIXED_MONTHLY", label: "Fixed - Monthly" },
               { value: "FIXED_PER_COUNTRY", label: "Fixed Per Country" },
+              { value: "FIXED_COST", label: "Fixed Cost" },
             ]}
             placeholder="Select billing model"
             searchPlaceholder="Search billing models..."
@@ -213,6 +218,17 @@ export function NewProjectForm({
           </label>
         ) : null}
 
+
+        {selectedClient?.showNewslettersInEntries ? (
+          <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={hideNewslettersInEntries}
+              onChange={(event) => setHideNewslettersInEntries(event.target.checked)}
+            />
+            Hide newsletter dropdown in Time Entries and Estimates for this project
+          </label>
+        ) : null}
         <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
           <input type="checkbox" checked={addToBilling} onChange={(event) => setAddToBilling(event.target.checked)} />
           Add to Billing
@@ -240,6 +256,16 @@ export function NewProjectForm({
           </div>
         ) : null}
 
+
+        {billingModel === "FIXED_COST" ? (
+          <div className="md:col-span-2">
+            <FormLabel htmlFor="projectCost">Project Cost (USD)</FormLabel>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
+              <input id="projectCost" className="input currency-input" name="projectCost" type="number" min="0" step="0.01" defaultValue="0.00" />
+            </div>
+          </div>
+        ) : null}
         {isFilmikClient ? (
           <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <h3 className="text-sm font-semibold text-slate-900">Resources</h3>

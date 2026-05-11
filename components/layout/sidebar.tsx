@@ -21,6 +21,7 @@ import {
   Languages,
   ListChecks,
   Bell,
+  Mail,
   ChevronDown,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/auth";
@@ -48,6 +49,7 @@ const iconByMenuKey: Record<MenuKey, React.ComponentType<{ className?: string }>
   dashboard: LayoutDashboard,
   clients: Building2,
   movies: Clapperboard,
+  newsletters: Mail,
   "client-billing-heads": ReceiptText,
   "movie-billing-heads": ReceiptText,
   "asset-type": Box,
@@ -115,6 +117,7 @@ const fullItems: SidebarNavItem[] = getItemsByKeys([
   "dashboard",
   "clients",
   "movies",
+  "newsletters",
   "client-billing-heads",
   "movie-billing-heads",
   "asset-type",
@@ -139,6 +142,7 @@ const teamLeadItems: SidebarNavItem[] = getItemsByKeys([
   "dashboard",
   "clients",
   "movies",
+  "newsletters",
   "asset-type",
   "filmik-resource",
   "countries",
@@ -164,6 +168,7 @@ const operationsItems: SidebarNavItem[] = getItemsByKeys([
   "dashboard",
   "clients",
   "movies",
+  "newsletters",
   "asset-type",
   "filmik-resource",
   "countries",
@@ -179,7 +184,7 @@ const operationsItems: SidebarNavItem[] = getItemsByKeys([
 const accountsItems: SidebarNavItem[] = getItemsByKeys(["billing-reports"]);
 
 function isMasterDataHref(href: string) {
-  return ["/clients", "/movies", "/asset-type", "/filmik-resource", "/countries", "/languages", "/projects", "/sub-project", "/user-assignments", "/contact-persons"].includes(href);
+  return ["/clients", "/movies", "/newsletters", "/asset-type", "/filmik-resource", "/countries", "/languages", "/projects", "/sub-project", "/user-assignments", "/contact-persons"].includes(href);
 }
 
 function filterAccess(items: SidebarNavItem[], user: SessionUser) {

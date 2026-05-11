@@ -7,9 +7,9 @@ import {
 } from "@/lib/billing-reports/amazon";
 import type { GenericBillingReportData } from "@/lib/billing-reports/generic";
 import { getGenericBillingReportFileName } from "@/lib/billing-reports/generic";
-import type { SonyPicturesReportData } from "@/lib/billing-reports/sony";
+import type { SonyPicturesReportData, SonyNewsletterBillingData } from "@/lib/billing-reports/sony";
 import type { FilmikBillingReportData } from "@/lib/billing-reports/filmik";
-import { getSonyPicturesReportFileName } from "@/lib/billing-reports/sony";
+import { getSonyPicturesReportFileName, getSonyNewsletterBillingFileName } from "@/lib/billing-reports/sony";
 import { getFilmikBillingReportMonthLabel } from "@/lib/billing-reports/filmik";
 
 function escapeXml(value: string | number) {
@@ -39,6 +39,7 @@ function worksheet(name: string, rows: string[]) {
 }
 
 export function buildAmazonReportExcel(data: AmazonBillingReportData) {
+  const isUniversalLocalization = data.client.name === "Universal Pictures International" && data.reportType === "localization";
   const detailHeaders =
     data.reportType === "localization"
       ? [
@@ -46,7 +47,7 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
           "Title Name",
           "Asset Name",
           "Territory/Variant",
-          "Asset Type",
+          ...(isUniversalLocalization ? [] : ["Asset Type"]),
           "Cost (USD)",
           "Contact Person",
         ]
@@ -54,7 +55,7 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
           "Date",
           "Title Name",
           "Asset Name",
-          "Asset Type",
+          ...(isUniversalLocalization ? [] : ["Asset Type"]),
           "Cost (USD)",
           "Contact Person",
         ];
@@ -76,11 +77,11 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
               row.titleName,
               row.assetName,
               row.territoryVariant ?? "-",
-              row.assetType,
+              ...(isUniversalLocalization ? [] : [row.assetType]),
               row.cost,
               row.contactPerson,
             ],
-            [5],
+            isUniversalLocalization ? [4] : [5],
           )
         : excelRow(
             [
@@ -98,7 +99,7 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
 
   const summaryRows = [
     excelRow([`${data.reportTitle} Summary`]),
-    excelRow(["Asset Type", "Total Assets", "Total Cost (USD)"]),
+    excelRow([isUniversalLocalization ? "Description" : "Asset Type", "Total Assets", "Total Cost (USD)"]),
     ...data.summaryRows.map((row) =>
       excelRow([row.assetType, row.totalAssets, row.totalCost], [1, 2]),
     ),
@@ -370,19 +371,27 @@ function buildPdfDocument(pageStreams: string[]) {
   return pdf;
 }
 
-function buildDetailColumns(
-  reportType: AmazonBillingReportData["reportType"],
-): PdfTableColumn[] {
-  if (reportType === "localization") {
-    return [
-      { header: "Date", width: 64 },
-      { header: "Title Name", width: 128 },
-      { header: "Asset Name", width: 150 },
-      { header: "Territory / Variant", width: 92 },
-      { header: "Asset Type", width: 110 },
-      { header: "Cost", width: 66, align: "right" },
-      { header: "Contact Person", width: 228 },
-    ];
+function buildDetailColumns(data: AmazonBillingReportData): PdfTableColumn[] {
+  const isUniversalLocalization = data.client.name === "Universal Pictures International" && data.reportType === "localization";
+  if (data.reportType === "localization") {
+    return isUniversalLocalization
+      ? [
+          { header: "Date", width: 72 },
+          { header: "Title Name", width: 150 },
+          { header: "Asset Name", width: 170 },
+          { header: "Territory / Variant", width: 130 },
+          { header: "Cost", width: 76, align: "right" },
+          { header: "Contact Person", width: 238 },
+        ]
+      : [
+          { header: "Date", width: 64 },
+          { header: "Title Name", width: 128 },
+          { header: "Asset Name", width: 150 },
+          { header: "Territory / Variant", width: 92 },
+          { header: "Asset Type", width: 110 },
+          { header: "Cost", width: 66, align: "right" },
+          { header: "Contact Person", width: 228 },
+        ];
   }
 
   return [
@@ -396,30 +405,42 @@ function buildDetailColumns(
 }
 
 function buildDetailRows(data: AmazonBillingReportData): PdfTableRow[] {
-  return data.rows.map((row) =>
-    data.reportType === "localization"
-      ? [
-          row.date,
-          row.titleName,
-          row.assetName,
-          row.territoryVariant ?? "-",
-          row.assetType,
-          formatUsd(row.cost),
-          row.contactPerson,
-        ]
-      : [
-          row.date,
-          row.titleName,
-          row.assetName,
-          row.assetType,
-          formatUsd(row.cost),
-          row.contactPerson,
-        ],
-  );
+  const isUniversalLocalization = data.client.name === "Universal Pictures International" && data.reportType === "localization";
+  return data.rows.map((row) => {
+    if (data.reportType === "localization") {
+      return isUniversalLocalization
+        ? [
+            row.date,
+            row.titleName,
+            row.assetName,
+            row.territoryVariant ?? "-",
+            formatUsd(row.cost),
+            row.contactPerson,
+          ]
+        : [
+            row.date,
+            row.titleName,
+            row.assetName,
+            row.territoryVariant ?? "-",
+            row.assetType,
+            formatUsd(row.cost),
+            row.contactPerson,
+          ];
+    }
+
+    return [
+      row.date,
+      row.titleName,
+      row.assetName,
+      row.assetType,
+      formatUsd(row.cost),
+      row.contactPerson,
+    ];
+  });
 }
 
 function buildDetailPages(data: AmazonBillingReportData) {
-  const columns = buildDetailColumns(data.reportType);
+  const columns = buildDetailColumns(data);
   const rows = buildDetailRows(data);
   const pageStreams: string[] = [];
   const x = MARGIN_X;
@@ -487,16 +508,27 @@ function buildSummaryPages(
   data: AmazonBillingReportData,
   startingPageNumber: number,
 ) {
-  const columns: PdfTableColumn[] = [
-    { header: "Asset Type", width: 380 },
-    { header: "Total Assets", width: 130, align: "right" },
-    { header: "Total Cost", width: 150, align: "right" },
-  ];
-  const rows: PdfTableRow[] = data.summaryRows.map((row) => [
-    row.assetType,
-    row.totalAssets,
-    formatUsd(row.totalCost),
-  ]);
+  const isUniversalLocalization = data.client.name === "Universal Pictures International" && data.reportType === "localization";
+  const columns: PdfTableColumn[] = isUniversalLocalization
+    ? [
+        { header: "Total Assets", width: 180, align: "right" },
+        { header: "Total Cost", width: 180, align: "right" },
+      ]
+    : [
+        { header: "Asset Type", width: 380 },
+        { header: "Total Assets", width: 130, align: "right" },
+        { header: "Total Cost", width: 150, align: "right" },
+      ];
+  const rows: PdfTableRow[] = isUniversalLocalization
+    ? [[
+        data.summaryRows.reduce((sum, row) => sum + row.totalAssets, 0),
+        formatUsd(data.summaryRows.reduce((sum, row) => sum + row.totalCost, 0)),
+      ]]
+    : data.summaryRows.map((row) => [
+        row.assetType,
+        row.totalAssets,
+        formatUsd(row.totalCost),
+      ]);
   const pageStreams: string[] = [];
   const x = MARGIN_X;
   const startY = TOP_Y - 54;
@@ -504,7 +536,7 @@ function buildSummaryPages(
   const commands: string[] = [];
   commands.push(
     textCommand(
-      `${data.reportTitle} - Summary by Asset Type`,
+      isUniversalLocalization ? `${data.reportTitle} - Total Assets / Cost` : `${data.reportTitle} - Summary by Asset Type`,
       x,
       TOP_Y,
       13,
@@ -1566,3 +1598,60 @@ function buildFilmikBillingReportPdfPages(data: FilmikBillingReportData) {
 export function buildFilmikBillingReportPdf(data: FilmikBillingReportData) {
   return buildPdfDocument(buildFilmikBillingReportPdfPages(data));
 }
+
+
+export function buildSonyNewsletterBillingExcel(data: SonyNewsletterBillingData) {
+  const rows = [
+    excelRow([`${data.client.name} Newsletters Billing`]),
+    excelRow(["Client", data.client.name]),
+    excelRow(["Month", data.filters.month]),
+    excelRow(["Project", data.project?.name ?? "Newsletters"]),
+    excelRow([]),
+    excelRow(["Newsletter Type", "Count", "Cost (USD)"]),
+    ...data.rows.map((row) => excelRow([row.newsletterType, row.count, row.cost], [1, 2])),
+    excelRow([]),
+    excelRow(["Total", data.totalCount, data.totalCost], [1, 2]),
+  ];
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ ${worksheet("Newsletters", rows)}
+</Workbook>`;
+}
+
+function buildSonyNewsletterBillingPdfPages(data: SonyNewsletterBillingData) {
+  const columns: PdfTableColumn[] = [
+    { header: "Newsletter Type", width: 300 },
+    { header: "Count", width: 120, align: "right" },
+    { header: "Cost", width: 160, align: "right" },
+  ];
+  const rows: PdfTableRow[] = [
+    ...data.rows.map((row) => [row.newsletterType, row.count, formatUsd(row.cost)] as PdfTableRow),
+    ["Total", data.totalCount, formatUsd(data.totalCost)] as PdfTableRow,
+  ];
+  const commands: string[] = [];
+  commands.push(textCommand(`${data.client.name} Newsletters Billing`, MARGIN_X, TOP_Y, 15, true));
+  commands.push(textCommand(`Month: ${data.filters.month}`, MARGIN_X, TOP_Y - 24, 9));
+  commands.push(textCommand(`Project: ${data.project?.name ?? "Newsletters"}`, MARGIN_X, TOP_Y - 40, 9));
+  const x = MARGIN_X;
+  let y = TOP_Y - 76;
+  drawTableHeader(commands, columns, x, y);
+  y -= HEADER_HEIGHT;
+  rows.forEach((row) => {
+    if (row[0] === "Total") commands.push(fillRectCommand(x, y - SUMMARY_ROW_HEIGHT, tableWidth(columns), SUMMARY_ROW_HEIGHT, 0.9));
+    drawTableRow(commands, columns, row, x, y, SUMMARY_ROW_HEIGHT, 8);
+    y -= SUMMARY_ROW_HEIGHT;
+  });
+  commands.push(textCommand("Page 1", PAGE_WIDTH - 82, 18, 8));
+  return [commands.join("\n")];
+}
+
+export function buildSonyNewsletterBillingPdf(data: SonyNewsletterBillingData) {
+  return buildPdfDocument(buildSonyNewsletterBillingPdfPages(data));
+}
+
+export { getSonyNewsletterBillingFileName };

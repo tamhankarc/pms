@@ -18,7 +18,7 @@ type FilmikResourceType = {
   latestMonth: string;
 };
 
-type BillingModel = "HOURLY" | "FIXED_FULL" | "FIXED_MONTHLY" | "FIXED_PER_COUNTRY";
+type BillingModel = "HOURLY" | "FIXED_FULL" | "FIXED_MONTHLY" | "FIXED_PER_COUNTRY" | "FIXED_COST";
 type ProjectStatus = "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "ARCHIVED";
 const FILMIK_CLIENT_ID = "cmne6ed2o0000jo04t3363pqz";
 
@@ -33,6 +33,7 @@ export function ProjectEditForm({
   clientShowsCountriesInEntries,
   clientShowsMoviesInEntries,
   clientShowsAssetTypesInEntries,
+  clientShowsNewslettersInEntries,
   initialValues,
   filmikResourceTypes,
 }: {
@@ -44,6 +45,7 @@ export function ProjectEditForm({
   clientShowsCountriesInEntries: boolean;
   clientShowsMoviesInEntries: boolean;
   clientShowsAssetTypesInEntries: boolean;
+  clientShowsNewslettersInEntries: boolean;
   filmikResourceTypes: FilmikResourceType[];
   initialValues: {
     projectTypeId: string | null;
@@ -56,10 +58,12 @@ export function ProjectEditForm({
     hideCountriesInEntries: boolean;
     hideMoviesInEntries: boolean;
     hideAssetTypesInEntries: boolean;
+    hideNewslettersInEntries: boolean;
     addToBilling: boolean;
     additionalCharges: number | null;
     partialBillingCost: number | null;
     perCountryCharges: number | null;
+    projectCost: number | null;
     developerCount: number | null;
     perDeveloperCost: number | null;
   };
@@ -70,6 +74,7 @@ export function ProjectEditForm({
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(initialValues.hideCountriesInEntries);
   const [hideMoviesInEntries, setHideMoviesInEntries] = useState(initialValues.hideMoviesInEntries);
   const [hideAssetTypesInEntries, setHideAssetTypesInEntries] = useState(initialValues.hideAssetTypesInEntries);
+  const [hideNewslettersInEntries, setHideNewslettersInEntries] = useState(initialValues.hideNewslettersInEntries);
   const [addToBilling, setAddToBilling] = useState(initialValues.addToBilling);
   const isFilmikClient = clientId === FILMIK_CLIENT_ID;
   const currentMonth = new Date().toISOString().slice(0, 7);
@@ -84,6 +89,7 @@ export function ProjectEditForm({
       {hideCountriesInEntries ? <input type="hidden" name="hideCountriesInEntries" value="on" /> : null}
       {hideMoviesInEntries ? <input type="hidden" name="hideMoviesInEntries" value="on" /> : null}
       {hideAssetTypesInEntries ? <input type="hidden" name="hideAssetTypesInEntries" value="on" /> : null}
+      {hideNewslettersInEntries ? <input type="hidden" name="hideNewslettersInEntries" value="on" /> : null}
       {addToBilling ? <input type="hidden" name="addToBilling" value="on" /> : null}
 
       <h2 className="section-title">Edit project</h2>
@@ -147,6 +153,7 @@ export function ProjectEditForm({
               { value: "FIXED_FULL", label: "Fixed - Full Project" },
               { value: "FIXED_MONTHLY", label: "Fixed - Monthly" },
               { value: "FIXED_PER_COUNTRY", label: "Fixed Per Country" },
+              { value: "FIXED_COST", label: "Fixed Cost" },
             ]}
             placeholder="Select billing model"
             searchPlaceholder="Search billing models..."
@@ -211,6 +218,17 @@ export function ProjectEditForm({
           </label>
         ) : null}
 
+
+        {clientShowsNewslettersInEntries ? (
+          <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={hideNewslettersInEntries}
+              onChange={(event) => setHideNewslettersInEntries(event.target.checked)}
+            />
+            Hide newsletter dropdown in Time Entries and Estimates for this project
+          </label>
+        ) : null}
         <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
           <input type="checkbox" checked={addToBilling} onChange={(event) => setAddToBilling(event.target.checked)} />
           Add to Billing
@@ -238,6 +256,16 @@ export function ProjectEditForm({
           </div>
         ) : null}
 
+
+        {billingModel === "FIXED_COST" ? (
+          <div className="md:col-span-2">
+            <FormLabel htmlFor="projectCost">Project Cost (USD)</FormLabel>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
+              <input id="projectCost" className="input currency-input" name="projectCost" type="number" min="0" step="0.01" defaultValue={initialValues.projectCost ?? "0.00"} />
+            </div>
+          </div>
+        ) : null}
         {isFilmikClient ? (
           <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <h3 className="text-sm font-semibold text-slate-900">Resources</h3>

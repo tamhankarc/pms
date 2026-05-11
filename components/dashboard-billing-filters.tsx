@@ -22,6 +22,7 @@ const BILLING_MODEL_LABELS: Record<BillingModel, string> = {
   FIXED_FULL: "Fixed - Full Project",
   FIXED_MONTHLY: "Fixed - Monthly",
   FIXED_PER_COUNTRY: "Fixed Per Country",
+  FIXED_COST: "Fixed Cost",
 };
 
 export function DashboardBillingFilters({

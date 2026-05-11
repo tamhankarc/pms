@@ -16,6 +16,7 @@ type ClientFormProps = {
     showMoviesInEntries?: boolean;
     showAssetTypesInEntries?: boolean;
     showLanguagesInEntries?: boolean;
+    showNewslettersInEntries?: boolean;
     enableProjectTypes?: boolean;
     hourlyCost?: string | number;
   };
@@ -100,6 +101,15 @@ export function ClientForm({ mode, action, initialValues }: ClientFormProps) {
             defaultChecked={initialValues?.showAssetTypesInEntries ?? false}
           />
           Show Asset Type dropdown in Time Entries and Estimates (optional)
+        </label>
+
+        <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            name="showNewslettersInEntries"
+            defaultChecked={initialValues?.showNewslettersInEntries ?? false}
+          />
+          Show Newsletter dropdown in Time Entries and Estimates (optional)
         </label>
 
         <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">

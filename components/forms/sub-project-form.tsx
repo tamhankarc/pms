@@ -13,9 +13,11 @@ type ProjectOption = {
   clientShowsCountriesInEntries: boolean;
   clientShowsMoviesInEntries: boolean;
   clientShowsAssetTypesInEntries: boolean;
+  clientShowsNewslettersInEntries: boolean;
   hideCountriesInEntries: boolean;
   hideMoviesInEntries: boolean;
   hideAssetTypesInEntries: boolean;
+  hideNewslettersInEntries: boolean;
 };
 
 const initialState: SubProjectFormState = {};
@@ -39,6 +41,7 @@ export function SubProjectForm({
     hideCountriesInEntries?: boolean;
     hideMoviesInEntries?: boolean;
     hideAssetTypesInEntries?: boolean;
+    hideNewslettersInEntries?: boolean;
   };
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
@@ -52,6 +55,7 @@ export function SubProjectForm({
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(initialValues?.hideCountriesInEntries ?? false);
   const [hideMoviesInEntries, setHideMoviesInEntries] = useState(initialValues?.hideMoviesInEntries ?? false);
   const [hideAssetTypesInEntries, setHideAssetTypesInEntries] = useState(initialValues?.hideAssetTypesInEntries ?? false);
+  const [hideNewslettersInEntries, setHideNewslettersInEntries] = useState(initialValues?.hideNewslettersInEntries ?? false);
 
   const filteredProjects = useMemo(() => {
     if (!clientId) return projects;
@@ -72,9 +76,11 @@ export function SubProjectForm({
   const canOverrideCountries = Boolean(selectedProject?.clientShowsCountriesInEntries);
   const canOverrideMovies = Boolean(selectedProject?.clientShowsMoviesInEntries);
   const canOverrideAssetTypes = Boolean(selectedProject?.clientShowsAssetTypesInEntries);
+  const canOverrideNewsletters = Boolean(selectedProject?.clientShowsNewslettersInEntries);
   const projectAlreadyHidesCountries = Boolean(selectedProject?.hideCountriesInEntries);
   const projectAlreadyHidesMovies = Boolean(selectedProject?.hideMoviesInEntries);
   const projectAlreadyHidesAssetTypes = Boolean(selectedProject?.hideAssetTypesInEntries);
+  const projectAlreadyHidesNewsletters = Boolean(selectedProject?.hideNewslettersInEntries);
 
   useEffect(() => {
     if (!canOverrideCountries || projectAlreadyHidesCountries) {
@@ -94,12 +100,19 @@ export function SubProjectForm({
     }
   }, [canOverrideAssetTypes, projectAlreadyHidesAssetTypes]);
 
+  useEffect(() => {
+    if (!canOverrideNewsletters || projectAlreadyHidesNewsletters) {
+      setHideNewslettersInEntries(false);
+    }
+  }, [canOverrideNewsletters, projectAlreadyHidesNewsletters]);
+
   return (
     <form action={formAction} className="card p-6">
       {mode === "edit" && initialValues?.id ? <input type="hidden" name="id" value={initialValues.id} /> : null}
       {hideCountriesInEntries ? <input type="hidden" name="hideCountriesInEntries" value="on" /> : null}
       {hideMoviesInEntries ? <input type="hidden" name="hideMoviesInEntries" value="on" /> : null}
       {hideAssetTypesInEntries ? <input type="hidden" name="hideAssetTypesInEntries" value="on" /> : null}
+      {hideNewslettersInEntries ? <input type="hidden" name="hideNewslettersInEntries" value="on" /> : null}
 
       <h2 className="section-title">{mode === "create" ? "Create Sub Project" : "Edit Sub Project"}</h2>
       <p className="section-subtitle">
@@ -133,6 +146,7 @@ export function SubProjectForm({
               setHideCountriesInEntries(false);
               setHideMoviesInEntries(false);
               setHideAssetTypesInEntries(false);
+              setHideNewslettersInEntries(false);
             }}
             options={[{ value: "", label: "Select client" }, ...uniqueClients.map((client) => ({ value: client.id, label: client.name }))]}
             placeholder="Select client"
@@ -155,6 +169,7 @@ export function SubProjectForm({
               setHideCountriesInEntries(false);
               setHideMoviesInEntries(false);
               setHideAssetTypesInEntries(false);
+              setHideNewslettersInEntries(false);
 
               if (!value) {
                 return;
@@ -229,6 +244,23 @@ export function SubProjectForm({
           </>
         ) : null}
 
+
+        {canOverrideNewsletters ? (
+          <>
+            <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${projectAlreadyHidesNewsletters ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+              <input
+                type="checkbox"
+                checked={hideNewslettersInEntries}
+                onChange={(event) => setHideNewslettersInEntries(event.target.checked)}
+                disabled={projectAlreadyHidesNewsletters}
+              />
+              Hide newsletter dropdown in Time Entries and Estimates for this sub project
+            </label>
+            {projectAlreadyHidesNewsletters ? (
+              <p className="text-sm text-amber-700">Newsletters are already hidden for this project, so the sub-project override is not needed.</p>
+            ) : null}
+          </>
+        ) : null}
         <div>
           <FormLabel htmlFor="name" required>
             Sub Project name

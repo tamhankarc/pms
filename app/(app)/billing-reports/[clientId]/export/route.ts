@@ -14,7 +14,12 @@ import {
 import { db } from "@/lib/db";
 import { FILMIK_CLIENT_ID, isBillingReportClientExcluded } from "@/lib/billing-reports/config";
 import { buildGenericBillingReportFilters, getGenericBillingReportData } from "@/lib/billing-reports/generic";
-import { buildSonyPicturesReportFilters, getSonyPicturesReportData } from "@/lib/billing-reports/sony";
+import {
+  buildSonyNewsletterBillingFilters,
+  buildSonyPicturesReportFilters,
+  getSonyNewsletterBillingData,
+  getSonyPicturesReportData,
+} from "@/lib/billing-reports/sony";
 import { buildFilmikBillingReportFilters, getFilmikBillingReportData, getFilmikBillingReportFileName } from "@/lib/billing-reports/filmik";
 import {
   buildAmazonReportExcel,
@@ -28,9 +33,12 @@ import {
   getGenericBillingReportFileName,
   buildSonyPicturesReportExcel,
   buildSonyPicturesReportPdf,
+  buildSonyNewsletterBillingExcel,
+  buildSonyNewsletterBillingPdf,
   buildFilmikBillingReportExcel,
   buildFilmikBillingReportPdf,
   getSonyPicturesReportFileName,
+  getSonyNewsletterBillingFileName,
 } from "@/lib/billing-reports/export";
 
 export async function GET(
@@ -98,6 +106,30 @@ export async function GET(
       headers: {
         "Content-Type": "application/vnd.ms-excel; charset=utf-8",
         "Content-Disposition": `attachment; filename="${getSonyPicturesReportFileName(data, "xls")}"`,
+      },
+    });
+  }
+
+  if (reportDefinition?.kind === "sony-newsletters") {
+    const filters = buildSonyNewsletterBillingFilters(searchParams);
+    const data = await getSonyNewsletterBillingData({ clientId, filters });
+    if (!data) redirect("/billing-reports");
+
+    if (format === "pdf") {
+      const pdf = buildSonyNewsletterBillingPdf(data);
+      return new Response(Buffer.from(pdf, "binary"), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${getSonyNewsletterBillingFileName(data, "pdf")}"`,
+        },
+      });
+    }
+
+    const excel = buildSonyNewsletterBillingExcel(data);
+    return new Response(excel, {
+      headers: {
+        "Content-Type": "application/vnd.ms-excel; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${getSonyNewsletterBillingFileName(data, "xls")}"`,
       },
     });
   }

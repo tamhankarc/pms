@@ -50,9 +50,11 @@ export default async function SubProjectEditPage({
           clientShowsCountriesInEntries: project.client.showCountriesInTimeEntries,
           clientShowsMoviesInEntries: project.client.showMoviesInEntries,
           clientShowsAssetTypesInEntries: project.client.showAssetTypesInEntries,
+            clientShowsNewslettersInEntries: project.client.showNewslettersInEntries,
           hideCountriesInEntries: project.hideCountriesInEntries,
           hideMoviesInEntries: project.hideMoviesInEntries,
           hideAssetTypesInEntries: project.hideAssetTypesInEntries,
+            hideNewslettersInEntries: project.hideNewslettersInEntries,
         }))}
         action={updateSubProjectAction}
         initialValues={{
@@ -65,6 +67,7 @@ export default async function SubProjectEditPage({
           hideCountriesInEntries: subProject.hideCountriesInEntries,
           hideMoviesInEntries: subProject.hideMoviesInEntries,
           hideAssetTypesInEntries: subProject.hideAssetTypesInEntries,
+          hideNewslettersInEntries: subProject.hideNewslettersInEntries,
         }}
       />
     </div>

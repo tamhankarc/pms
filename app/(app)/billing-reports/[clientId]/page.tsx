@@ -22,9 +22,12 @@ import {
   type FilmikBillingReportData,
 } from "@/lib/billing-reports/filmik";
 import {
+  buildSonyNewsletterBillingFilters,
   buildSonyPicturesReportFilters,
   formatUsd as formatSonyUsd,
+  getSonyNewsletterBillingData,
   getSonyPicturesReportData,
+  type SonyNewsletterBillingData,
   type SonyPicturesReportData,
 } from "@/lib/billing-reports/sony";
 import {
@@ -209,6 +212,7 @@ function TimeEntryReportDetailsTable({
   data: NonNullable<Awaited<ReturnType<typeof getAmazonBillingReportData>>>;
 }) {
   const isLocalization = data.reportType === "localization";
+  const isUniversalLocalization = isLocalization && data.client.name === "Universal Pictures International";
   return (
     <div className="table-wrap">
       <table className="table-base">
@@ -220,7 +224,9 @@ function TimeEntryReportDetailsTable({
             {isLocalization ? (
               <th className="table-cell">Territory/Variant</th>
             ) : null}
-            <th className="table-cell">Asset Type</th>
+            {!isUniversalLocalization ? (
+              <th className="table-cell">Asset Type</th>
+            ) : null}
             <th className="table-cell">Cost</th>
             <th className="table-cell">Contact Person</th>
           </tr>
@@ -234,7 +240,9 @@ function TimeEntryReportDetailsTable({
               {isLocalization ? (
                 <td className="table-cell">{row.territoryVariant ?? "-"}</td>
               ) : null}
-              <td className="table-cell">{row.assetType}</td>
+              {!isUniversalLocalization ? (
+                <td className="table-cell">{row.assetType}</td>
+              ) : null}
               <td className="table-cell whitespace-nowrap font-medium text-slate-900">
                 {formatUsd(row.cost)}
               </td>
@@ -244,7 +252,7 @@ function TimeEntryReportDetailsTable({
           {data.rows.length === 0 ? (
             <tr>
               <td
-                colSpan={isLocalization ? 7 : 6}
+                colSpan={isUniversalLocalization ? 6 : isLocalization ? 7 : 6}
                 className="table-cell text-center text-sm text-slate-500"
               >
                 No records found for the selected filters.
@@ -270,6 +278,27 @@ function TimeEntryReportSummaryTable({
     (sum, row) => sum + row.totalCost,
     0,
   );
+  const isUniversalLocalization = data.client.name === "Universal Pictures International" && data.reportType === "localization";
+  if (isUniversalLocalization) {
+    return (
+      <div className="table-wrap">
+        <table className="table-base">
+          <thead className="table-head">
+            <tr>
+              <th className="table-cell">Total Assets</th>
+              <th className="table-cell">Total Cost</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            <tr>
+              <td className="table-cell font-medium text-slate-900">{totalAssets}</td>
+              <td className="table-cell font-medium text-slate-900">{formatUsd(totalCost)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    );
+  }
   return (
     <div className="table-wrap">
       <table className="table-base">
@@ -393,7 +422,7 @@ function TimeEntryReportsWorkspace({
       </div>
       <TimeEntryReportDetailsTable data={data} />
       <div>
-        <h2 className="section-title mb-3">Summary by Asset Type</h2>
+        <h2 className="section-title mb-3">{data.client.name === "Universal Pictures International" && data.reportType === "localization" ? "Total Assets / Cost" : "Summary by Asset Type"}</h2>
         <TimeEntryReportSummaryTable data={data} />
       </div>
     </div>
@@ -769,6 +798,107 @@ function SonyPicturesReportWorkspace({
         </div>
       ) : null}
       <SonyPicturesReportTable data={data} />
+    </div>
+  );
+}
+
+function SonyNewsletterBillingFilters({
+  clientId,
+  reportType,
+  data,
+}: {
+  clientId: string;
+  reportType: AmazonReportType;
+  data: SonyNewsletterBillingData;
+}) {
+  return (
+    <form method="get" action={`/billing-reports/${clientId}`} className="card p-5">
+      <input type="hidden" name="report" value={reportType} />
+      <div className="grid gap-4 md:grid-cols-[220px_auto_1fr] md:items-end">
+        <div>
+          <label className="label" htmlFor="month">Month</label>
+          <input id="month" name="month" type="month" className="input" defaultValue={data.filters.month} />
+        </div>
+        <button className="btn-primary" type="submit">Apply</button>
+        <p className="text-sm text-slate-500 md:text-right">Newsletter billing is calculated from Time Entries for the selected month.</p>
+      </div>
+    </form>
+  );
+}
+
+function SonyNewsletterExportButtons({ clientId, reportType, data }: { clientId: string; reportType: AmazonReportType; data: SonyNewsletterBillingData }) {
+  const query = buildQueryString({ report: reportType, month: data.filters.month });
+  return (
+    <div className="flex flex-wrap gap-3">
+      <Link className="btn-secondary" href={`/billing-reports/${clientId}/export?format=excel&${query}`}>Export Excel</Link>
+      <Link className="btn-secondary" href={`/billing-reports/${clientId}/export?format=pdf&${query}`}>Export PDF</Link>
+    </div>
+  );
+}
+
+function SonyNewsletterBillingTable({ data }: { data: SonyNewsletterBillingData }) {
+  return (
+    <div className="table-wrap">
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">Newsletter Type</th>
+            <th className="table-cell">Newsletter Count</th>
+            <th className="table-cell">Cost</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {!data.project ? (
+            <tr>
+              <td colSpan={3} className="table-cell text-center text-sm text-slate-500">Newsletter project was not found for this client.</td>
+            </tr>
+          ) : null}
+          {data.project && data.rows.length === 0 ? (
+            <tr>
+              <td colSpan={3} className="table-cell text-center text-sm text-slate-500">No newsletter Time Entries found for the selected month.</td>
+            </tr>
+          ) : null}
+          {data.rows.map((row) => (
+            <tr key={row.newsletterType}>
+              <td className="table-cell font-medium text-slate-900">{row.newsletterType}</td>
+              <td className="table-cell font-medium text-slate-900">{row.count}</td>
+              <td className="table-cell whitespace-nowrap font-medium text-slate-900">{formatSonyUsd(row.cost)}</td>
+            </tr>
+          ))}
+          {data.project ? (
+            <tr className="bg-slate-50">
+              <td className="table-cell font-semibold text-slate-900">Total</td>
+              <td className="table-cell font-semibold text-slate-900">{data.totalCount}</td>
+              <td className="table-cell whitespace-nowrap font-semibold text-slate-900">{formatSonyUsd(data.totalCost)}</td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SonyNewsletterBillingWorkspace({
+  clientId,
+  activeReport,
+  data,
+}: {
+  clientId: string;
+  activeReport: AmazonReportType;
+  data: SonyNewsletterBillingData;
+}) {
+  return (
+    <div className="space-y-6">
+      <ReportTabs clientId={clientId} activeReport={activeReport} clientName={data.client.name} />
+      <SonyNewsletterBillingFilters clientId={clientId} reportType={activeReport} data={data} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="section-title">{data.client.name} Newsletters Billing</h2>
+          <p className="section-subtitle">Month: {data.filters.month}</p>
+        </div>
+        <SonyNewsletterExportButtons clientId={clientId} reportType={activeReport} data={data} />
+      </div>
+      <SonyNewsletterBillingTable data={data} />
     </div>
   );
 }
@@ -1267,6 +1397,8 @@ export default async function ClientBillingReportPage({
   const genericFilters = buildGenericBillingReportFilters(resolvedSearchParams);
   const sonyPicturesFilters =
     buildSonyPicturesReportFilters(resolvedSearchParams);
+  const sonyNewsletterFilters =
+    buildSonyNewsletterBillingFilters(resolvedSearchParams);
   const filmikFilters = buildFilmikBillingReportFilters(resolvedSearchParams);
   const domesticFilters =
     buildWarnerDomesticDeliverableFilters(resolvedSearchParams);
@@ -1314,6 +1446,13 @@ export default async function ClientBillingReportPage({
           filters: sonyPicturesFilters,
         })
       : null;
+  const sonyNewsletterBillingData =
+    activeReportDefinition?.kind === "sony-newsletters"
+      ? await getSonyNewsletterBillingData({
+          clientId,
+          filters: sonyNewsletterFilters,
+        })
+      : null;
   const filmikBillingReportData =
     client.id === FILMIK_CLIENT_ID && activeReportDefinition?.kind === "generic-filmik"
       ? await getFilmikBillingReportData(filmikFilters)
@@ -1357,6 +1496,12 @@ export default async function ClientBillingReportPage({
           clientId={clientId}
           activeReport={activeReport}
           data={sonyPicturesReportData}
+        />
+      ) : sonyNewsletterBillingData ? (
+        <SonyNewsletterBillingWorkspace
+          clientId={clientId}
+          activeReport={activeReport}
+          data={sonyNewsletterBillingData}
         />
       ) : filmikBillingReportData ? (
         <FilmikBillingReportWorkspace

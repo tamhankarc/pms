@@ -59,6 +59,7 @@ function formatBillingModel(model: string) {
     FIXED_PER_COUNTRY: "Fixed Per Country",
     FIXED_MONTHLY: "Fixed Monthly",
     FIXED_FULL: "Fixed Full",
+    FIXED_COST: "Fixed Cost",
   };
   return labels[model] ?? model.replaceAll("_", " ");
 }
@@ -140,6 +141,7 @@ export async function getSonyPicturesReportData({
       clientId,
       isActive: true,
       timeEntries: { some: { movieId: selectedMovie.id } },
+      id: { not: SONY_NEWSLETTER_PROJECT_ID },
     },
     select: {
       id: true,
@@ -151,6 +153,7 @@ export async function getSonyPicturesReportData({
       additionalCharges: true,
       partialBillingCost: true,
       perCountryCharges: true,
+      projectCost: true,
       contactPersons: {
         orderBy: { name: "asc" },
         select: { name: true, email: true },
@@ -208,6 +211,8 @@ export async function getSonyPicturesReportData({
       cost = Number(project.fixedMonthlyHours ?? 0) * hourlyCost;
     } else if (project.billingModel === "FIXED_FULL") {
       cost = (Number(project.fixedContractHours ?? 0) * hourlyCost) + Number(project.additionalCharges ?? 0) - Number(project.partialBillingCost ?? 0);
+    } else if (project.billingModel === "FIXED_COST") {
+      cost = Number(project.projectCost ?? 0);
     }
 
     const contactPerson = movieContactPersons.length ? movieContactPersonLabel : buildContactPersonLabel(project.contactPersons);
@@ -246,3 +251,64 @@ export function getSonyPicturesReportFileName(data: SonyPicturesReportData, exte
 }
 
 export { formatUsd };
+
+export type SonyNewsletterBillingFilters = { month: string };
+export type SonyNewsletterBillingRow = { newsletterType: string; count: number; cost: number };
+export type SonyNewsletterBillingData = {
+  client: { id: string; name: string };
+  filters: SonyNewsletterBillingFilters;
+  project: { id: string; name: string; projectCost: number } | null;
+  rows: SonyNewsletterBillingRow[];
+  totalCount: number;
+  totalCost: number;
+};
+
+const SONY_NEWSLETTER_PROJECT_ID = "cmnijd30h0001l404y6i8tb2y";
+
+function defaultMonthValue() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export function buildSonyNewsletterBillingFilters(searchParams: URLSearchParams | Record<string, string | string[] | undefined>) {
+  const month = getParamValue(searchParams, "month") || defaultMonthValue();
+  return { month: /^\d{4}-\d{2}$/.test(month) ? month : defaultMonthValue() } satisfies SonyNewsletterBillingFilters;
+}
+
+function monthRange(month: string) {
+  const [year, monthNum] = month.split("-").map(Number);
+  return { start: new Date(Date.UTC(year, monthNum - 1, 1)), end: new Date(Date.UTC(year, monthNum, 1)) };
+}
+
+function formatNewsletterType(value: string | null) {
+  if (!value) return "Unspecified";
+  return value === "AFFIRM" ? "Affirm" : value;
+}
+
+export async function getSonyNewsletterBillingData({ clientId, filters }: { clientId: string; filters: SonyNewsletterBillingFilters }): Promise<SonyNewsletterBillingData | null> {
+  const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } });
+  if (!client) return null;
+  const project = await db.project.findFirst({ where: { id: SONY_NEWSLETTER_PROJECT_ID, clientId }, select: { id: true, name: true, projectCost: true } });
+  if (!project) return { client, filters, project: null, rows: [], totalCount: 0, totalCost: 0 };
+  const range = monthRange(filters.month);
+  const entries = await db.timeEntry.findMany({
+    where: { projectId: project.id, workDate: { gte: range.start, lt: range.end }, newsletterId: { not: null } },
+    select: { newsletter: { select: { id: true, newsletterType: true } } },
+  });
+  const byNewsletter = new Map<string, string>();
+  for (const entry of entries) {
+    if (!entry.newsletter) continue;
+    byNewsletter.set(entry.newsletter.id, formatNewsletterType(entry.newsletter.newsletterType));
+  }
+  const counts = new Map<string, number>();
+  for (const type of byNewsletter.values()) counts.set(type, (counts.get(type) ?? 0) + 1);
+  const unitCost = Number(project.projectCost ?? 0);
+  const rows = Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([newsletterType, count]) => ({ newsletterType, count, cost: count * unitCost }));
+  const totalCount = rows.reduce((sum, row) => sum + row.count, 0);
+  const totalCost = rows.reduce((sum, row) => sum + row.cost, 0);
+  return { client, filters, project: { id: project.id, name: project.name, projectCost: unitCost }, rows, totalCount, totalCost };
+}
+
+export function getSonyNewsletterBillingFileName(data: SonyNewsletterBillingData, extension: "xls" | "pdf") {
+  return `${sanitizeFileSegment(data.client.name)}_Newsletters_${data.filters.month}_Billing_Report_${getExportTimestamp()}.${extension}`;
+}

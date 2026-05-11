@@ -62,7 +62,7 @@ export function canFullyModerateProject(user: UserLike) { return canComprehensiv
 export function canManageUsers(user: UserLike) { return isAdmin(user) || isHR(user) || hasExtraMenuAccess(user, "users"); }
 export function canAssignTeamLeads(user: UserLike) { return isAdmin(user) || isManager(user) || isHR(user); }
 export function canManageMasterData(user: UserLike) {
-  return isAdmin(user) || isOperations(user) || hasAnyExtraMenuAccess(user, ["clients", "movies", "asset-type", "countries", "languages", "projects", "sub-project", "user-assignments", "contact-persons"]);
+  return isAdmin(user) || isOperations(user) || hasAnyExtraMenuAccess(user, ["clients", "movies", "newsletters", "asset-type", "countries", "languages", "projects", "sub-project", "user-assignments", "contact-persons"]);
 }
 export function canCreateOrEditProject(user: UserLike) { return isAdmin(user) || isOperations(user) || hasExtraMenuAccess(user, "projects"); }
 export function canCreateProjects(user: UserLike) { return canCreateOrEditProject(user); }
@@ -71,6 +71,7 @@ export function canManageCountries(user: UserLike) { return isAdmin(user) || isO
 export function canManageLanguages(user: UserLike) { return isAdmin(user) || isOperations(user) || hasExtraMenuAccess(user, "languages"); }
 export function canManageClients(user: UserLike) { return isAdmin(user) || isOperations(user) || hasExtraMenuAccess(user, "clients"); }
 export function canManageMovies(user: UserLike) { return isAdmin(user) || isOperations(user) || hasExtraMenuAccess(user, "movies"); }
+export function canManageNewsletters(user: UserLike) { return isAdmin(user) || isOperations(user) || hasExtraMenuAccess(user, "newsletters"); }
 export function canManageAssetTypes(user: UserLike) { return isAdmin(user) || isOperations(user) || hasExtraMenuAccess(user, "asset-type"); }
 export function canManageProjectTypes(user: UserLike) { return canManageClients(user); }
 export function canManageAssignments(user: UserLike) { return isAdmin(user) || isOperations(user) || hasExtraMenuAccess(user, "user-assignments"); }

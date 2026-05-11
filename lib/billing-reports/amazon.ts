@@ -7,7 +7,8 @@ export type AmazonReportType =
   | "wbhe-status"
   | "domestic-deliverable"
   | "intl-deliverable"
-  | "other-deliverable";
+  | "other-deliverable"
+  | "newsletters";
 
 export type AmazonBillingReportFilters = {
   fromDate: string;
@@ -62,7 +63,8 @@ export type WarnerDomesticDeliverableLine = {
 
 export type WarnerDomesticDeliverableData = {
   client: { id: string; name: string; hourlyCost: unknown };
-  reportType: "domestic-deliverable" | "intl-deliverable" | "other-deliverable";
+  reportType: "domestic-deliverable" | "intl-deliverable" | "other-deliverable"
+  | "newsletters";
   reportTitle: string;
   filters: WarnerDeliverableFilters;
   movieOptions: { id: string; title: string; status: string }[];
@@ -84,7 +86,8 @@ export type BillingReportDefinition = {
   title: string;
   projectName: string;
   includeLanguage: boolean;
-  kind?: "time-entry" | "deliverable" | "placeholder" | "generic-movie" | "generic-filmik" | "sony-movie";
+  includeCountry: boolean;
+  kind?: "time-entry" | "deliverable" | "placeholder" | "generic-movie" | "generic-filmik" | "sony-movie" | "sony-newsletters";
 };
 
 export const AMAZON_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
@@ -92,12 +95,14 @@ export const AMAZON_REPORTS: Partial<Record<AmazonReportType, BillingReportDefin
     title: "Amazon Social Assets",
     projectName: "AMZ Social QC",
     includeLanguage: false,
+    includeCountry: false,
     kind: "time-entry",
   },
   localization: {
     title: "Amazon Localization",
     projectName: "AMZ Social Localization",
     includeLanguage: true,
+    includeCountry: false,
     kind: "time-entry",
   },
 };
@@ -107,12 +112,14 @@ export const UNIVERSAL_REPORTS: Partial<Record<AmazonReportType, BillingReportDe
     title: "UNI Social Status",
     projectName: "UNI Social QC",
     includeLanguage: false,
+    includeCountry: false,
     kind: "time-entry",
   },
   localization: {
     title: "UNI Localization Status",
     projectName: "UNI Social Localization",
-    includeLanguage: true,
+    includeLanguage: false,
+    includeCountry: true,
     kind: "time-entry",
   },
 };
@@ -122,38 +129,43 @@ export const WARNER_REPORTS: Partial<Record<AmazonReportType, BillingReportDefin
     title: "WBHE Status",
     projectName: "WB Home Entertainment (Social)",
     includeLanguage: false,
+    includeCountry: false,
     kind: "time-entry",
   },
   "domestic-deliverable": {
     title: "Domestic Deliverable",
     projectName: "",
     includeLanguage: false,
+    includeCountry: false,
     kind: "deliverable",
   },
   "intl-deliverable": {
     title: "Intl Deliverable",
     projectName: "",
     includeLanguage: false,
+    includeCountry: false,
     kind: "deliverable",
   },
   "other-deliverable": {
     title: "Other Deliverable",
     projectName: "",
     includeLanguage: false,
+    includeCountry: false,
     kind: "deliverable",
   },
 };
 
 export const SONY_PICTURES_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
-  "social-assets": { title: "Sony Pictures Entertainment Billing", projectName: "", includeLanguage: false, kind: "sony-movie" },
+  "social-assets": { title: "Sony Pictures Entertainment Billing", projectName: "", includeLanguage: false, includeCountry: false, kind: "sony-movie" },
+  newsletters: { title: "Newsletters", projectName: "Newsletters", includeLanguage: false, includeCountry: false, kind: "sony-newsletters" },
 };
 
 export const SONY_PICTURES_CLASSICS_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
-  "social-assets": { title: "Sony Pictures Classics Billing", projectName: "", includeLanguage: false, kind: "generic-movie" },
+  "social-assets": { title: "Sony Pictures Classics Billing", projectName: "", includeLanguage: false, includeCountry: false, kind: "generic-movie" },
 };
 
 export const FILMIK_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
-  "social-assets": { title: "Filmik Billing", projectName: "", includeLanguage: false, kind: "generic-filmik" },
+  "social-assets": { title: "Filmik Billing", projectName: "", includeLanguage: false, includeCountry: false, kind: "generic-filmik" },
 };
 
 export function getBillingReportCatalogForClient(clientName: string, clientId?: string) {
@@ -285,6 +297,7 @@ export async function getAmazonBillingReportData({
     select: {
       id: true,
       name: true,
+      projectCost: true,
       contactPersons: {
         orderBy: { name: "asc" },
         select: { name: true, email: true },
@@ -346,6 +359,7 @@ export async function getAmazonBillingReportData({
       movie: { select: { title: true } },
       assetType: { select: { name: true, cost: true } },
       language: { select: { name: true, code: true } },
+      country: { select: { name: true, isoCode: true } },
     },
     orderBy: [{ workDate: "asc" }, { movie: { title: "asc" } }, { taskName: "asc" }],
   });
@@ -359,13 +373,15 @@ export async function getAmazonBillingReportData({
     : [];
   const contactPersons = movieContactPersons.length ? buildContactPersonLabel(movieContactPersons) : buildContactPersonLabel(project.contactPersons);
 
+  const isUniversalLocalization = client.name.trim().toLowerCase() === UNIVERSAL_CLIENT_NAME.toLowerCase() && reportType === "localization";
+
   const rows: AmazonBillingReportRow[] = entries.map((entry) => ({
     date: formatDisplayDate(entry.workDate),
     titleName: entry.movie?.title ?? "-",
     assetName: entry.taskName || "-",
-    territoryVariant: reportConfig.includeLanguage ? entry.language?.name ?? "-" : undefined,
-    assetType: entry.assetType?.name ?? "-",
-    cost: Number(entry.assetType?.cost ?? 0),
+    territoryVariant: isUniversalLocalization ? entry.country?.name ?? "-" : reportConfig.includeLanguage ? entry.language?.name ?? entry.country?.name ?? "-" : undefined,
+    assetType: isUniversalLocalization ? "Assets" : entry.assetType?.name ?? "-",
+    cost: isUniversalLocalization ? Number(project.projectCost ?? 0) : Number(entry.assetType?.cost ?? 0),
     contactPerson: contactPersons,
   }));
 
@@ -468,7 +484,7 @@ async function getWarnerOtherDeliverableEligibleMovieIds(clientId: string) {
   };
 }
 
-function getDeliverableReportTitle(reportType: "domestic-deliverable" | "intl-deliverable" | "other-deliverable") {
+function getDeliverableReportTitle(reportType: "domestic-deliverable" | "intl-deliverable" | "other-deliverable" | "newsletters") {
   if (reportType === "intl-deliverable") return "Intl Deliverable";
   if (reportType === "other-deliverable") return "Other Deliverable";
   return "Domestic Deliverable";
@@ -481,7 +497,8 @@ async function getWarnerDeliverableData({
 }: {
   clientId: string;
   filters: WarnerDeliverableFilters;
-  reportType: "domestic-deliverable" | "intl-deliverable" | "other-deliverable";
+  reportType: "domestic-deliverable" | "intl-deliverable" | "other-deliverable"
+  | "newsletters";
 }): Promise<WarnerDomesticDeliverableData | null> {
   const isDomestic = reportType === "domestic-deliverable";
   const isIntl = reportType === "intl-deliverable";

@@ -17,6 +17,7 @@ const schema = z.object({
   hideCountriesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   hideMoviesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   hideAssetTypesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  hideNewslettersInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
 
 
@@ -40,6 +41,7 @@ export async function createSubProjectAction(
       hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
       hideMoviesInEntries: formData.get("hideMoviesInEntries") ?? undefined,
       hideAssetTypesInEntries: formData.get("hideAssetTypesInEntries") ?? undefined,
+      hideNewslettersInEntries: formData.get("hideNewslettersInEntries") ?? undefined,
     });
 
     if (!parsed.success) {
@@ -53,7 +55,7 @@ export async function createSubProjectAction(
       where: { id: parsed.data.projectId },
       select: {
         id: true,
-        client: { select: { showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true } },
+        client: { select: { showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true, showNewslettersInEntries: true } },
       },
     });
 
@@ -75,6 +77,9 @@ export async function createSubProjectAction(
           : false,
         hideAssetTypesInEntries: project.client.showAssetTypesInEntries
           ? Boolean(parsed.data.hideAssetTypesInEntries)
+          : false,
+        hideNewslettersInEntries: project.client.showNewslettersInEntries
+          ? Boolean(parsed.data.hideNewslettersInEntries)
           : false,
       },
     });
@@ -110,6 +115,7 @@ export async function updateSubProjectAction(
       hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
       hideMoviesInEntries: formData.get("hideMoviesInEntries") ?? undefined,
       hideAssetTypesInEntries: formData.get("hideAssetTypesInEntries") ?? undefined,
+      hideNewslettersInEntries: formData.get("hideNewslettersInEntries") ?? undefined,
     });
 
     if (!parsed.success || !parsed.data.id) {
@@ -125,7 +131,7 @@ export async function updateSubProjectAction(
       where: { id: parsed.data.projectId },
       select: {
         id: true,
-        client: { select: { showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true } },
+        client: { select: { showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true, showNewslettersInEntries: true } },
       },
     });
 
@@ -148,6 +154,9 @@ export async function updateSubProjectAction(
           : false,
         hideAssetTypesInEntries: project.client.showAssetTypesInEntries
           ? Boolean(parsed.data.hideAssetTypesInEntries)
+          : false,
+        hideNewslettersInEntries: project.client.showNewslettersInEntries
+          ? Boolean(parsed.data.hideNewslettersInEntries)
           : false,
       },
     });

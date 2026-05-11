@@ -20,6 +20,8 @@ type EstimateProjectOption = {
   hideMoviesInEntries: boolean;
   showAssetTypesInEntries: boolean;
   hideAssetTypesInEntries: boolean;
+  showNewslettersInEntries: boolean;
+  hideNewslettersInEntries: boolean;
   showLanguagesInEntries: boolean;
   assignedUserIds: string[];
 };
@@ -32,6 +34,7 @@ type EstimateSubProjectOption = {
   hideCountriesInEntries: boolean;
   hideMoviesInEntries: boolean;
   hideAssetTypesInEntries: boolean;
+  hideNewslettersInEntries: boolean;
 };
 
 
@@ -42,6 +45,12 @@ type MovieOption = {
 };
 
 type AssetTypeOption = {
+  id: string;
+  name: string;
+  clientId: string;
+};
+
+type NewsletterOption = {
   id: string;
   name: string;
   clientId: string;
@@ -70,6 +79,7 @@ export function EstimateEditForm({
   countries,
   movies,
   assetTypes,
+  newsletters,
   languages,
   allowUnassignedSubProjects = false,
 }: {
@@ -84,6 +94,7 @@ export function EstimateEditForm({
     countryId: string | null;
     movieId: string | null;
     assetTypeId: string | null;
+    newsletterId: string | null;
     languageId: string | null;
     workDate: Date;
     estimatedMinutes: number;
@@ -94,6 +105,7 @@ export function EstimateEditForm({
   countries: { id: string; name: string }[];
   movies: MovieOption[];
   assetTypes: AssetTypeOption[];
+  newsletters: NewsletterOption[];
   languages: LanguageOption[];
   allowUnassignedSubProjects?: boolean;
 }) {
@@ -157,6 +169,11 @@ export function EstimateEditForm({
     [assetTypes, selectedClientId],
   );
 
+  const filteredNewsletters = useMemo(
+    () => newsletters.filter((newsletter) => newsletter.clientId === selectedClientId),
+    [newsletters, selectedClientId],
+  );
+
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const selectedSubProject = subProjects.find((subProject) => subProject.id === selectedSubProjectId);
   const showCountryField = Boolean(
@@ -173,6 +190,11 @@ export function EstimateEditForm({
     selectedProject?.showAssetTypesInEntries &&
       !selectedProject?.hideAssetTypesInEntries &&
       !selectedSubProject?.hideAssetTypesInEntries,
+  );
+  const showNewsletterField = Boolean(
+    selectedProject?.showNewslettersInEntries &&
+      !selectedProject?.hideNewslettersInEntries &&
+      !selectedSubProject?.hideNewslettersInEntries,
   );
   const showLanguageField = Boolean(selectedProject?.showLanguagesInEntries);
   const countryRequired = showCountryField;
@@ -309,6 +331,24 @@ export function EstimateEditForm({
           </div>
         ) : null}
 
+
+        {showNewsletterField ? (
+          <div>
+            <FormLabel htmlFor="newsletterId">Newsletter</FormLabel>
+            <SearchableCombobox
+              id="newsletterId"
+              name="newsletterId"
+              defaultValue={estimate.newsletterId ?? ""}
+              options={[
+                { value: "", label: "No specific newsletter" },
+                ...filteredNewsletters.map((newsletter) => ({ value: newsletter.id, label: newsletter.name })),
+              ]}
+              placeholder="No specific newsletter"
+              searchPlaceholder="Search newsletters..."
+              emptyLabel="No newsletters found."
+            />
+          </div>
+        ) : null}
         {showAssetTypeField ? (
           <div>
             <FormLabel htmlFor="assetTypeId">Asset Type</FormLabel>

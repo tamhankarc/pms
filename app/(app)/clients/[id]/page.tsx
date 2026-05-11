@@ -105,6 +105,7 @@ export default async function ClientEditPage({
             showMoviesInEntries: client.showMoviesInEntries,
             showAssetTypesInEntries: client.showAssetTypesInEntries,
             showLanguagesInEntries: client.showLanguagesInEntries,
+            showNewslettersInEntries: client.showNewslettersInEntries,
             enableProjectTypes: client.enableProjectTypes,
             hourlyCost: Number(client.hourlyCost ?? 0).toFixed(2),
           }}

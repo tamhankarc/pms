@@ -52,6 +52,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         clientShowsCountriesInEntries={project.client.showCountriesInTimeEntries}
         clientShowsMoviesInEntries={project.client.showMoviesInEntries}
         clientShowsAssetTypesInEntries={project.client.showAssetTypesInEntries}
+        clientShowsNewslettersInEntries={project.client.showNewslettersInEntries}
         filmikResourceTypes={filmikResourceTypes}
         initialValues={{
           projectTypeId: project.projectTypeId,
@@ -64,10 +65,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           hideCountriesInEntries: project.hideCountriesInEntries,
           hideMoviesInEntries: project.hideMoviesInEntries,
           hideAssetTypesInEntries: project.hideAssetTypesInEntries,
+          hideNewslettersInEntries: project.hideNewslettersInEntries,
           addToBilling: project.addToBilling,
           additionalCharges: Number(project.additionalCharges ?? 0),
           partialBillingCost: Number(project.partialBillingCost ?? 0),
           perCountryCharges: Number(project.perCountryCharges ?? 0),
+          projectCost: Number(project.projectCost ?? 0),
           developerCount: Number(project.developerCount ?? 0),
           perDeveloperCost: Number(project.perDeveloperCost ?? 0),
         }}

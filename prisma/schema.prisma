@@ -35,6 +35,7 @@ enum BillingModel {
   FIXED_FULL
   FIXED_MONTHLY
   FIXED_PER_COUNTRY
+  FIXED_COST
 }
 
 enum ProjectStatus {
@@ -59,6 +60,12 @@ enum TimeEntryStatus {
   APPROVED
   REJECTED
   REVISED
+}
+
+enum NewsletterType {
+  ISG
+  AFFIRM
+  HOME
 }
 
 enum MovieBillingHeadCompulsion {
@@ -183,12 +190,14 @@ model Client {
   showMoviesInEntries        Boolean  @default(false)
   showAssetTypesInEntries    Boolean  @default(false)
   showLanguagesInEntries     Boolean  @default(false)
+  showNewslettersInEntries   Boolean  @default(false)
   enableProjectTypes         Boolean  @default(false)
   hourlyCost                 Decimal  @default(0) @db.Decimal(12, 2)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
   movies                      Movie[]
+  newsletters                 Newsletter[]
   assetTypes                  AssetType[]
   projects                    Project[]
   projectTypes                ProjectType[]
@@ -266,6 +275,29 @@ model Movie {
 
   @@index([clientId, isActive])
   @@index([title])
+}
+
+
+model Newsletter {
+  id             String          @id @default(cuid())
+  clientId       String
+  projectId      String?
+  name           String
+  newsletterType NewsletterType?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  client      Client      @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  project     Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  estimates   Estimate[]
+  timeEntries TimeEntry[]
+
+  @@unique([clientId, name])
+  @@index([clientId, isActive])
+  @@index([projectId])
+  @@index([newsletterType])
+  @@index([name])
 }
 
 model MovieBillingHead {
@@ -415,6 +447,7 @@ model Project {
   fixedMonthlyHours       Decimal?      @db.Decimal(10, 2)
   additionalCharges       Decimal       @default(0) @db.Decimal(12, 2)
   partialBillingCost      Decimal       @default(0) @db.Decimal(12, 2)
+  projectCost             Decimal       @default(0) @db.Decimal(12, 2)
   perCountryCharges       Decimal       @default(0) @db.Decimal(12, 2)
   developerCount          Int           @default(0)
   perDeveloperCost        Decimal       @default(0) @db.Decimal(12, 2)
@@ -428,6 +461,7 @@ model Project {
   hideCountriesInEntries  Boolean       @default(false)
   hideMoviesInEntries     Boolean       @default(false)
   hideAssetTypesInEntries Boolean       @default(false)
+  hideNewslettersInEntries Boolean      @default(false)
   addToBilling            Boolean       @default(false)
 
   client      Client       @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -441,6 +475,7 @@ model Project {
   timeEntries    TimeEntry[]
   contactPersons ContactPerson[]
   filmikResourceCounts ProjectFilmikResourceCount[]
+  newsletters Newsletter[]
 
   @@index([clientId, isActive])
   @@index([projectTypeId])
@@ -461,6 +496,7 @@ model SubProject {
   hideCountriesInEntries  Boolean  @default(false)
   hideMoviesInEntries     Boolean  @default(false)
   hideAssetTypesInEntries Boolean  @default(false)
+  hideNewslettersInEntries Boolean @default(false)
 
   project     Project                @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   assignments SubProjectAssignment[]
@@ -522,6 +558,7 @@ model Estimate {
   movieId          String?
   assetTypeId      String?
   languageId       String?
+  newsletterId     String?
   workDate         DateTime
   estimatedMinutes Int
   notes            String?        @db.Text
@@ -535,6 +572,7 @@ model Estimate {
   country    Country?         @relation(fields: [countryId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   movie      Movie?           @relation(fields: [movieId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   assetType  AssetType?       @relation(fields: [assetTypeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  newsletter Newsletter?      @relation(fields: [newsletterId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   language   Language?        @relation(fields: [languageId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   reviews    EstimateReview[]
 
@@ -545,6 +583,7 @@ model Estimate {
   @@index([countryId])
   @@index([movieId])
   @@index([assetTypeId])
+  @@index([newsletterId])
   @@index([languageId])
 }
 
@@ -572,6 +611,7 @@ model TimeEntry {
   movieId      String?
   assetTypeId  String?
   languageId   String?
+  newsletterId String?
   workDate     DateTime
   taskName     String
   minutesSpent Int
@@ -587,6 +627,7 @@ model TimeEntry {
   country    Country?          @relation(fields: [countryId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   movie      Movie?            @relation(fields: [movieId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   assetType  AssetType?        @relation(fields: [assetTypeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  newsletter Newsletter?       @relation(fields: [newsletterId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   language   Language?         @relation(fields: [languageId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   reviews    TimeEntryReview[]
 
@@ -597,6 +638,7 @@ model TimeEntry {
   @@index([countryId])
   @@index([movieId])
   @@index([assetTypeId])
+  @@index([newsletterId])
   @@index([languageId])
 }
 
