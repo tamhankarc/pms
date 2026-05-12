@@ -34,11 +34,14 @@ export default async function EditMovieBillingHeadPage({
           compulsionType: head.compulsionType,
           domesticCompulsionType: head.domesticCompulsionType ?? head.compulsionType,
           intlCompulsionType: head.intlCompulsionType ?? head.compulsionType,
+          otherCompulsionType: head.otherCompulsionType ?? head.compulsionType,
           domesticActive: head.domesticActive,
           intlActive: head.intlActive,
+          otherActive: head.otherActive,
           costType: head.costType,
           domesticCost: Number(head.domesticCost).toFixed(2),
           intlCost: Number(head.intlCost).toFixed(2),
+          otherCost: Number(head.otherCost).toFixed(2),
           isActive: head.isActive,
         }}
       />

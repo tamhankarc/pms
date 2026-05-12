@@ -13,10 +13,11 @@ function formatMoney(value: unknown) {
   return `$${Number(value ?? 0).toFixed(2)}`;
 }
 
-function formatHeadCost(row: { country: { isoCode: string | null; name: string }; billingHead: { domesticCost: unknown; intlCost: unknown } }) {
+function formatHeadCost(row: { country: { isoCode: string | null; name: string }; billingHead: { domesticCost: unknown; intlCost: unknown; otherCost: unknown; otherActive?: boolean } }) {
   const iso = (row.country.isoCode ?? "").toUpperCase();
   const countryName = row.country.name.trim().toLowerCase();
   const isDomestic = iso === "US" || countryName === "united states" || countryName === "usa";
+  if (row.billingHead.otherActive) return formatMoney(row.billingHead.otherCost);
   return formatMoney(isDomestic ? row.billingHead.domesticCost : row.billingHead.intlCost);
 }
 
@@ -34,7 +35,7 @@ export default async function MovieBillingHeadsPage({
   const page = parsePageParam(params.page);
 
   const [clients, movies, rows] = await Promise.all([
-    db.client.findMany({ where: { isActive: true, movieBillingHeads: { some: { isActive: true, OR: [{ domesticActive: true, domesticCompulsionType: "FIXED_OPTIONAL" }, { intlActive: true, intlCompulsionType: "FIXED_OPTIONAL" }] } } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.client.findMany({ where: { isActive: true, movieBillingHeads: { some: { isActive: true, OR: [{ domesticActive: true, domesticCompulsionType: "FIXED_OPTIONAL" }, { intlActive: true, intlCompulsionType: "FIXED_OPTIONAL" }, { otherActive: true, otherCompulsionType: "FIXED_OPTIONAL" }] } } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.movie.findMany({ where: { isActive: true, status: "WORKING" }, orderBy: { title: "asc" }, select: { id: true, clientId: true, title: true } }),
     db.movieBillingHeadAssignment.findMany({
       where: {

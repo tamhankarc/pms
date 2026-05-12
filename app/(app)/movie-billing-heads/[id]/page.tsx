@@ -15,13 +15,13 @@ export default async function EditMovieBillingHeadPage({
   const { id } = await params;
   const [row, clients, countries, movies, billingHeads] = await Promise.all([
     db.movieBillingHeadAssignment.findUnique({ where: { id }, include: { movie: true, billingHead: true } }),
-    db.client.findMany({ where: { isActive: true, movieBillingHeads: { some: { isActive: true, OR: [{ domesticActive: true, domesticCompulsionType: "FIXED_OPTIONAL" }, { intlActive: true, intlCompulsionType: "FIXED_OPTIONAL" }] } } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.client.findMany({ where: { isActive: true, movieBillingHeads: { some: { isActive: true, OR: [{ domesticActive: true, domesticCompulsionType: "FIXED_OPTIONAL" }, { intlActive: true, intlCompulsionType: "FIXED_OPTIONAL" }, { otherActive: true, otherCompulsionType: "FIXED_OPTIONAL" }] } } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, isoCode: true } }),
     db.movie.findMany({ where: { isActive: true, status: "WORKING" }, orderBy: { title: "asc" }, select: { id: true, clientId: true, title: true, billingDomestic: true, billingIntl: true, billingOther: true } }),
     db.movieBillingHead.findMany({
-      where: { isActive: true, OR: [{ domesticActive: true, domesticCompulsionType: "FIXED_OPTIONAL" }, { intlActive: true, intlCompulsionType: "FIXED_OPTIONAL" }] },
+      where: { isActive: true, OR: [{ domesticActive: true, domesticCompulsionType: "FIXED_OPTIONAL" }, { intlActive: true, intlCompulsionType: "FIXED_OPTIONAL" }, { otherActive: true, otherCompulsionType: "FIXED_OPTIONAL" }] },
       orderBy: { name: "asc" },
-      select: { id: true, clientId: true, name: true, costType: true, domesticActive: true, intlActive: true, domesticCompulsionType: true, intlCompulsionType: true },
+      select: { id: true, clientId: true, name: true, costType: true, domesticActive: true, intlActive: true, otherActive: true, domesticCompulsionType: true, intlCompulsionType: true, otherCompulsionType: true },
     }),
   ]);
   if (!row) notFound();

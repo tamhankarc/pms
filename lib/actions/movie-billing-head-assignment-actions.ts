@@ -39,8 +39,10 @@ async function validateOptionalHeadForSelection(clientId: string, countryIds: st
         costType: true,
         domesticActive: true,
         intlActive: true,
+        otherActive: true,
         domesticCompulsionType: true,
         intlCompulsionType: true,
+        otherCompulsionType: true,
       },
     }),
   ]);
@@ -51,13 +53,17 @@ async function validateOptionalHeadForSelection(clientId: string, countryIds: st
 
   const domesticHeadValid = head.domesticActive && head.domesticCompulsionType === "FIXED_OPTIONAL";
   const intlHeadValid = head.intlActive && head.intlCompulsionType === "FIXED_OPTIONAL";
+  const otherHeadValid = head.otherActive && head.otherCompulsionType === "FIXED_OPTIONAL";
   const movieAllowsDomestic = movie.billingDomestic;
-  const movieAllowsIntl = movie.billingIntl || movie.billingOther;
+  const movieAllowsIntl = movie.billingIntl;
+  const movieAllowsOther = movie.billingOther;
 
   for (const country of countries) {
     const isDomestic = isUsCountry(country);
     if (isDomestic) {
       if (!movieAllowsDomestic || !domesticHeadValid) return { ok: false as const, error: "Selected billing head is not valid for Domestic / US billing." };
+    } else if (movieAllowsOther) {
+      if (!otherHeadValid) return { ok: false as const, error: "Selected billing head is not valid for Other billing for the selected movie/country." };
     } else if (!movieAllowsIntl || !intlHeadValid) {
       return { ok: false as const, error: "Selected billing head is not valid for INTL billing for the selected movie/country." };
     }

@@ -25,8 +25,10 @@ type BillingHead = {
   costType: "WHOLE_COST" | "PER_UNIT_COST";
   domesticActive: boolean;
   intlActive: boolean;
+  otherActive: boolean;
   domesticCompulsionType: "FIXED_COMPULSORY" | "FIXED_OPTIONAL";
   intlCompulsionType: "FIXED_COMPULSORY" | "FIXED_OPTIONAL";
+  otherCompulsionType: "FIXED_COMPULSORY" | "FIXED_OPTIONAL";
 };
 
 type InitialValues = {
@@ -53,6 +55,10 @@ function headDomesticOptional(head: BillingHead) {
 
 function headIntlOptional(head: BillingHead) {
   return head.intlActive && head.intlCompulsionType === "FIXED_OPTIONAL";
+}
+
+function headOtherOptional(head: BillingHead) {
+  return head.otherActive && head.otherCompulsionType === "FIXED_OPTIONAL";
 }
 
 export function MovieBillingHeadAssignmentForm({
@@ -91,14 +97,17 @@ export function MovieBillingHeadAssignmentForm({
   const selectedBillingHead = billingHeads.find((head) => head.id === billingHeadId);
   const selectedHeadDomestic = selectedBillingHead ? headDomesticOptional(selectedBillingHead) : false;
   const selectedHeadIntl = selectedBillingHead ? headIntlOptional(selectedBillingHead) : false;
+  const selectedHeadOther = selectedBillingHead ? headOtherOptional(selectedBillingHead) : false;
   const selectedMovieAllowsDomestic = Boolean(selectedMovie?.billingDomestic);
-  const selectedMovieAllowsIntl = Boolean(selectedMovie?.billingIntl || selectedMovie?.billingOther);
+  const selectedMovieAllowsIntl = Boolean(selectedMovie?.billingIntl);
+  const selectedMovieAllowsOther = Boolean(selectedMovie?.billingOther);
   const selectedHeadAvailableForBoth = selectedHeadDomestic && selectedHeadIntl && selectedMovieAllowsDomestic && selectedMovieAllowsIntl;
-  const selectedHeadDomesticOnly = selectedHeadDomestic && !selectedHeadIntl;
-  const selectedHeadIntlOnly = !selectedHeadDomestic && selectedHeadIntl;
-  const forceDomestic = Boolean(selectedBillingHead && selectedHeadDomestic && !selectedMovieAllowsIntl);
+  const selectedHeadDomesticOnly = selectedHeadDomestic && !selectedHeadIntl && !selectedHeadOther;
+  const selectedHeadIntlOnly = !selectedHeadDomestic && selectedHeadIntl && !selectedHeadOther;
+  const selectedHeadOtherOnly = !selectedHeadDomestic && !selectedHeadIntl && selectedHeadOther;
+  const forceDomestic = Boolean(selectedBillingHead && selectedHeadDomestic && !selectedMovieAllowsIntl && !selectedMovieAllowsOther);
   const showDomesticCheckbox = Boolean(selectedBillingHead && selectedHeadAvailableForBoth);
-  const countrySelectEnabled = Boolean(billingHeadId && selectedHeadIntl && !useDomestic && !forceDomestic);
+  const countrySelectEnabled = Boolean(billingHeadId && (selectedHeadIntl || selectedHeadOther) && !useDomestic && !forceDomestic);
   const effectiveCountryIds = forceDomestic || useDomestic || selectedHeadDomesticOnly ? (usCountry ? [usCountry.id] : []) : countryIds;
 
   const clientOptions = useMemo(() => clients.map((client) => ({ value: client.id, label: client.name })), [clients]);
@@ -119,8 +128,9 @@ export function MovieBillingHeadAssignmentForm({
       .filter((head) => {
         if (head.clientId !== clientId || !selectedMovie) return false;
         const domesticValid = selectedMovie.billingDomestic && headDomesticOptional(head);
-        const intlValid = (selectedMovie.billingIntl || selectedMovie.billingOther) && headIntlOptional(head);
-        return domesticValid || intlValid;
+        const intlValid = selectedMovie.billingIntl && headIntlOptional(head);
+        const otherValid = selectedMovie.billingOther && headOtherOptional(head);
+        return domesticValid || intlValid || otherValid;
       })
       .map((head) => ({ value: head.id, label: canEditCosts ? `${head.name} · ${head.costType === "PER_UNIT_COST" ? "Per-unit" : "Whole cost"}` : head.name })),
     [billingHeads, canEditCosts, clientId, selectedMovie],
@@ -145,7 +155,7 @@ export function MovieBillingHeadAssignmentForm({
     const nextHead = billingHeads.find((head) => head.id === value);
     setBillingHeadId(value);
     setCountryIds([]);
-    setUseDomestic(Boolean(nextHead && headDomesticOptional(nextHead) && !headIntlOptional(nextHead)));
+    setUseDomestic(Boolean(nextHead && headDomesticOptional(nextHead) && !headIntlOptional(nextHead) && !headOtherOptional(nextHead)));
   }
 
   return (
@@ -184,7 +194,7 @@ export function MovieBillingHeadAssignmentForm({
               </label>
               {!useDomestic ? <SearchableMultiSelect id="countryIds" value={countryIds} onValueChange={setCountryIds} options={countryOptions} placeholder="Select one or more countries" searchPlaceholder="Search countries..." emptyLabel="No countries found." disabled={!countrySelectEnabled} /> : <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">US country will be selected in background.</div>}
             </div>
-          ) : selectedHeadIntlOnly || selectedHeadIntl ? (
+          ) : selectedHeadIntlOnly || selectedHeadOtherOnly || selectedHeadIntl || selectedHeadOther ? (
             <SearchableMultiSelect id="countryIds" value={countryIds} onValueChange={setCountryIds} options={countryOptions} placeholder={billingHeadId ? "Select one or more countries" : "Select billing head first"} searchPlaceholder="Search countries..." emptyLabel="No countries found." disabled={!countrySelectEnabled} required />
           ) : (
             <SearchableMultiSelect id="countryIds" value={countryIds} onValueChange={setCountryIds} options={countryOptions} placeholder="Select billing head first" disabled />

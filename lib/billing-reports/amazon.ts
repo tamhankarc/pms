@@ -640,17 +640,26 @@ async function getWarnerDeliverableData({
     }
   }
 
-  const useIntlBilling = !isDomestic;
+  const billingRegion: "domestic" | "intl" | "other" = isDomestic ? "domestic" : isOther ? "other" : "intl";
+  // const useIntlBilling = billingRegion !== "domestic";
   const unitsByHeadId = getMovieBillingUnits(selectedMovie);
+
+  function getHeadCost(head: { domesticCost: unknown; intlCost: unknown; otherCost?: unknown }) {
+    if (billingRegion === "domestic") return head.domesticCost;
+    if (billingRegion === "other") return head.otherCost ?? 0;
+    return head.intlCost;
+  }
   const rows: WarnerDomesticDeliverableLine[] = [];
 
   const compulsoryHeads = await db.movieBillingHead.findMany({
     where: {
       clientId,
       isActive: true,
-      ...(useIntlBilling
-        ? { intlActive: true, intlCompulsionType: "FIXED_COMPULSORY" }
-        : { domesticActive: true, domesticCompulsionType: "FIXED_COMPULSORY" }),
+      ...(billingRegion === "domestic"
+        ? { domesticActive: true, domesticCompulsionType: "FIXED_COMPULSORY" }
+        : billingRegion === "other"
+          ? { otherActive: true, otherCompulsionType: "FIXED_COMPULSORY" }
+          : { intlActive: true, intlCompulsionType: "FIXED_COMPULSORY" }),
     },
     orderBy: { name: "asc" },
   });
@@ -669,7 +678,7 @@ async function getWarnerDeliverableData({
     const units = unitsByHeadId.get(head.id) ?? (head.costType === "PER_UNIT_COST" ? 0 : 1);
     rows.push({
       label: head.name,
-      cost: calculateBillingHeadCost(head.costType, useIntlBilling ? head.intlCost : head.domesticCost, units),
+      cost: calculateBillingHeadCost(head.costType, getHeadCost(head), units),
       group: "Fixed - Compulsory",
       meta: isIntl ? undefined : head.costType === "PER_UNIT_COST" ? `Per-unit × ${units}` : "Whole cost",
     });
@@ -692,9 +701,11 @@ async function getWarnerDeliverableData({
           : { countryId: selectedCountry?.id ?? "" }),
         billingHead: { is: {
           isActive: true,
-          ...(useIntlBilling
-            ? { intlActive: true, intlCompulsionType: "FIXED_OPTIONAL" as const }
-            : { domesticActive: true, domesticCompulsionType: "FIXED_OPTIONAL" as const }),
+          ...(billingRegion === "domestic"
+            ? { domesticActive: true, domesticCompulsionType: "FIXED_OPTIONAL" as const }
+            : billingRegion === "other"
+              ? { otherActive: true, otherCompulsionType: "FIXED_OPTIONAL" as const }
+              : { intlActive: true, intlCompulsionType: "FIXED_OPTIONAL" as const }),
         } },
       };
 
@@ -739,7 +750,7 @@ async function getWarnerDeliverableData({
       const units = Number(assignment.units ?? 0);
       rows.push({
         label: assignment.billingHead.name,
-        cost: calculateBillingHeadCost(assignment.billingHead.costType, useIntlBilling ? assignment.billingHead.intlCost : assignment.billingHead.domesticCost, units),
+        cost: calculateBillingHeadCost(assignment.billingHead.costType, getHeadCost(assignment.billingHead), units),
         group: "Fixed - Optional",
         meta: assignment.billingHead.costType === "PER_UNIT_COST" ? `Per-unit × ${units}` : "Whole cost",
       });
