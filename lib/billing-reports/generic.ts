@@ -44,6 +44,7 @@ export type GenericBillingReportData = {
   movieOptions: { id: string; title: string }[];
   selectedMovie: { id: string; title: string } | null;
   blocks: GenericBillingReportBlock[];
+  reportTitle: string;
 };
 
 function getParamValue(searchParams: URLSearchParams | Record<string, string | string[] | undefined>, key: string) {
@@ -170,6 +171,7 @@ export async function getGenericBillingReportData({
       movieOptions,
       selectedMovie: null,
       blocks: [],
+      reportTitle: client.name + " Billing"
     };
   }
 
@@ -363,6 +365,7 @@ export async function getGenericBillingReportData({
     movieOptions,
     selectedMovie,
     blocks: possibleBlocks.filter((block) => block.rows.length > 0),
+    reportTitle: client.name + " Billing"
   };
 }
 

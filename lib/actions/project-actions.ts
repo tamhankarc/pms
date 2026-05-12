@@ -67,6 +67,34 @@ function parseFilmikResourceRows(formData: FormData) {
   return rows;
 }
 
+
+function parseMonthlyAdditionalHourRows(formData: FormData) {
+  const rows: Array<{ month: Date; hours: number }> = [];
+  const months = formData.getAll("monthlyAdditionalHourMonth").map((value) => String(value || ""));
+  const hours = formData.getAll("monthlyAdditionalHourHours").map((value) => Number(value || 0));
+  months.forEach((monthValue, index) => {
+    const month = parseMonthStart(monthValue);
+    const hourValue = Math.max(0, Number(hours[index] || 0));
+    if (!month || hourValue <= 0) return;
+    rows.push({ month, hours: hourValue });
+  });
+  return rows;
+}
+
+async function saveMonthlyAdditionalHours(projectId: string, billingModel: string, formData: FormData) {
+  if (billingModel !== "FIXED_MONTHLY") {
+    await db.projectMonthlyAdditionalHours.deleteMany({ where: { projectId } });
+    return;
+  }
+  const rows = parseMonthlyAdditionalHourRows(formData);
+  await db.projectMonthlyAdditionalHours.deleteMany({ where: { projectId } });
+  for (const row of rows) {
+    await db.projectMonthlyAdditionalHours.create({
+      data: { projectId, month: row.month, hours: row.hours },
+    });
+  }
+}
+
 async function saveFilmikResourceCounts(projectId: string, clientId: string, formData: FormData) {
   if (clientId !== FILMIK_CLIENT_ID) return;
   const rows = parseFilmikResourceRows(formData);
@@ -132,6 +160,7 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
     if (!client.enableProjectTypes && parsed.data.projectTypeId) return { success: false, error: "Selected client does not use project types." };
     if (parsed.data.projectTypeId && !(await validateProjectType(client.id, parsed.data.projectTypeId))) return { success: false, error: "Selected project type is invalid for the chosen client." };
 
+    const isAdminUser = user.userType === "ADMIN";
     const projectCode = await generateProjectCode(client.id);
     const project = await db.project.create({
       data: {
@@ -140,12 +169,12 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
         name: parsed.data.name.trim(),
         code: projectCode,
         billingModel: parsed.data.billingModel,
-        fixedContractHours: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.fixedContractHours ?? 0) : null,
-        fixedMonthlyHours: parsed.data.billingModel === "FIXED_MONTHLY" ? (parsed.data.fixedMonthlyHours ?? 0) : null,
-        additionalCharges: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.additionalCharges ?? 0) : 0,
-        partialBillingCost: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.partialBillingCost ?? 0) : 0,
-        projectCost: parsed.data.billingModel === "FIXED_COST" ? (parsed.data.projectCost ?? 0) : 0,
-        perCountryCharges: parsed.data.billingModel === "FIXED_PER_COUNTRY" ? (parsed.data.perCountryCharges ?? 0) : 0,
+        fixedContractHours: parsed.data.billingModel === "FIXED_FULL" && isAdminUser ? (parsed.data.fixedContractHours ?? 0) : null,
+        fixedMonthlyHours: parsed.data.billingModel === "FIXED_MONTHLY" && isAdminUser ? (parsed.data.fixedMonthlyHours ?? 0) : null,
+        additionalCharges: parsed.data.billingModel === "FIXED_FULL" && isAdminUser ? (parsed.data.additionalCharges ?? 0) : 0,
+        partialBillingCost: parsed.data.billingModel === "FIXED_FULL" && isAdminUser ? (parsed.data.partialBillingCost ?? 0) : 0,
+        projectCost: parsed.data.billingModel === "FIXED_COST" && isAdminUser ? (parsed.data.projectCost ?? 0) : 0,
+        perCountryCharges: parsed.data.billingModel === "FIXED_PER_COUNTRY" && isAdminUser ? (parsed.data.perCountryCharges ?? 0) : 0,
         developerCount: 0,
         perDeveloperCost: 0,
         status: parsed.data.status,
@@ -160,6 +189,7 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
       },
     });
 
+    await saveMonthlyAdditionalHours(project.id, parsed.data.billingModel, formData);
     await saveFilmikResourceCounts(project.id, client.id, formData);
 
     revalidatePath("/projects");
@@ -182,7 +212,7 @@ const projectUpdateSchema = baseSchema.omit({ clientId: true });
 export async function updateProjectAction(projectId: string, _prevState: ProjectFormState, formData: FormData): Promise<ProjectFormState> {
   try {
     const user = await requireMasterDataActionUser();
-    const existingProject = await db.project.findUnique({ where: { id: projectId }, select: { id: true, clientId: true } });
+    const existingProject = await db.project.findUnique({ where: { id: projectId }, select: { id: true, clientId: true, fixedContractHours: true, fixedMonthlyHours: true, additionalCharges: true, partialBillingCost: true, projectCost: true, perCountryCharges: true } });
     if (!existingProject) return { success: false, error: "Project not found." };
 
     const parsed = projectUpdateSchema.safeParse({
@@ -214,18 +244,20 @@ export async function updateProjectAction(projectId: string, _prevState: Project
     if (!client.enableProjectTypes && parsed.data.projectTypeId) return { success: false, error: "Selected client does not use project types." };
     if (parsed.data.projectTypeId && !(await validateProjectType(client.id, parsed.data.projectTypeId))) return { success: false, error: "Selected project type is invalid for the chosen client." };
 
+    const isAdminUser = user.userType === "ADMIN";
+
     await db.project.update({
       where: { id: projectId },
       data: {
         projectTypeId: parsed.data.projectTypeId || null,
         name: parsed.data.name.trim(),
         billingModel: parsed.data.billingModel,
-        fixedContractHours: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.fixedContractHours ?? 0) : null,
-        fixedMonthlyHours: parsed.data.billingModel === "FIXED_MONTHLY" ? (parsed.data.fixedMonthlyHours ?? 0) : null,
-        additionalCharges: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.additionalCharges ?? 0) : 0,
-        partialBillingCost: parsed.data.billingModel === "FIXED_FULL" ? (parsed.data.partialBillingCost ?? 0) : 0,
-        projectCost: parsed.data.billingModel === "FIXED_COST" ? (parsed.data.projectCost ?? 0) : 0,
-        perCountryCharges: parsed.data.billingModel === "FIXED_PER_COUNTRY" ? (parsed.data.perCountryCharges ?? 0) : 0,
+        fixedContractHours: parsed.data.billingModel === "FIXED_FULL" ? (isAdminUser ? (parsed.data.fixedContractHours ?? 0) : existingProject.fixedContractHours) : null,
+        fixedMonthlyHours: parsed.data.billingModel === "FIXED_MONTHLY" ? (isAdminUser ? (parsed.data.fixedMonthlyHours ?? 0) : existingProject.fixedMonthlyHours) : null,
+        additionalCharges: parsed.data.billingModel === "FIXED_FULL" ? (isAdminUser ? (parsed.data.additionalCharges ?? 0) : existingProject.additionalCharges) : 0,
+        partialBillingCost: parsed.data.billingModel === "FIXED_FULL" ? (isAdminUser ? (parsed.data.partialBillingCost ?? 0) : existingProject.partialBillingCost) : 0,
+        projectCost: parsed.data.billingModel === "FIXED_COST" ? (isAdminUser ? (parsed.data.projectCost ?? 0) : existingProject.projectCost) : 0,
+        perCountryCharges: parsed.data.billingModel === "FIXED_PER_COUNTRY" ? (isAdminUser ? (parsed.data.perCountryCharges ?? 0) : existingProject.perCountryCharges) : 0,
         developerCount: 0,
         perDeveloperCost: 0,
         status: parsed.data.status,
@@ -239,6 +271,9 @@ export async function updateProjectAction(projectId: string, _prevState: Project
       },
     });
 
+    if (isAdminUser) {
+      await saveMonthlyAdditionalHours(projectId, parsed.data.billingModel, formData);
+    }
     await saveFilmikResourceCounts(projectId, client.id, formData);
 
     revalidatePath("/projects");

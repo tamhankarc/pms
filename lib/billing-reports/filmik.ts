@@ -29,6 +29,7 @@ export type FilmikBillingReportData = {
   projectRows: FilmikCombinedReportRow[];
   combinedRows: FilmikCombinedReportRow[];
   combinedTotalCost: number;
+  reportTitle: string;
 };
 
 export function buildFilmikBillingReportFilters(searchParams: URLSearchParams | Record<string, string | string[] | undefined>) {
@@ -160,6 +161,7 @@ export async function getFilmikBillingReportData(filters: FilmikBillingReportFil
     projectRows,
     combinedRows,
     combinedTotalCost,
+    reportTitle: "Filmik Billing"
   };
 }
 

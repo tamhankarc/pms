@@ -20,6 +20,8 @@ export type SonyPicturesReportChargeRow = {
 };
 
 export type SonyPicturesReportData = {
+  reportTitle: string;
+  showCountryList: boolean;
   client: {
     id: string;
     name: string;
@@ -76,9 +78,11 @@ function sortRows(rows: SonyPicturesReportProjectRow[]) {
 export async function getSonyPicturesReportData({
   clientId,
   filters,
+  variant = "main",
 }: {
   clientId: string;
   filters: SonyPicturesReportFilters;
+  variant?: "main" | "canada-other";
 }): Promise<SonyPicturesReportData | null> {
   const client = await db.client.findUnique({
     where: { id: clientId },
@@ -87,19 +91,42 @@ export async function getSonyPicturesReportData({
 
   if (!client) return null;
 
-  const movieOptions = await db.movie.findMany({
+  const rawMovieOptions = await db.movie.findMany({
     where: {
       clientId,
       isActive: true,
       status: { in: ["WORKING", "COMPLETED"] },
       timeEntries: { some: { project: { clientId } } },
     },
-    select: { id: true, title: true, status: true },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      billingDomestic: true,
+      billingIntl: true,
+      billingOther: true,
+      timeEntries: {
+        where: { project: { clientId } },
+        select: { country: { select: { isoCode: true, name: true } } },
+      },
+    },
     orderBy: { title: "asc" },
   });
 
+  const movieOptions = rawMovieOptions.filter((movie) => {
+    const countryCodes = new Set(movie.timeEntries.map((entry) => (entry.country?.isoCode || entry.country?.name || "").toUpperCase()).filter(Boolean));
+    const hasCanada = countryCodes.has("CA") || countryCodes.has("CANADA");
+    const hasNonCanada = Array.from(countryCodes).some((code) => code !== "CA" && code !== "CANADA");
+    if (variant === "canada-other") {
+      return movie.billingOther || (movie.billingIntl && hasCanada);
+    }
+    const canadaOnlyIntl = movie.billingIntl && !movie.billingDomestic && !movie.billingOther && hasCanada && !hasNonCanada;
+    return !canadaOnlyIntl;
+  });
+
   const selectedMovieId = filters.movieId || movieOptions[0]?.id || "";
-  const selectedMovie = selectedMovieId
+  const selectedMovieAllowed = movieOptions.some((movie) => movie.id === selectedMovieId);
+  const selectedMovie = selectedMovieId && selectedMovieAllowed
     ? await db.movie.findFirst({
         where: {
           id: selectedMovieId,
@@ -126,6 +153,8 @@ export async function getSonyPicturesReportData({
 
   if (!selectedMovie) {
     return {
+      reportTitle: variant === "canada-other" ? "SPE Canada & Other" : "SPE Billing",
+      showCountryList: variant === "canada-other",
       client: { id: client.id, name: client.name, hourlyCost: Number(client.hourlyCost ?? 0) },
       filters: { movieId: selectedMovieId },
       movieOptions: mappedMovieOptions,
@@ -222,7 +251,7 @@ export async function getSonyPicturesReportData({
       projectName: `${project.name}${project.status ? ` (${formatProjectStatus(project.status)})` : ""}`,
       contactPerson,
       billingModel: formatBillingModel(project.billingModel),
-      countryList: project.billingModel === "HOURLY" || project.billingModel === "FIXED_PER_COUNTRY" ? countries.join(", ") : "",
+      countryList: variant === "canada-other" ? countries.join(", ") : "",
       cost,
     } satisfies SonyPicturesReportProjectRow;
   }));
@@ -235,6 +264,8 @@ export async function getSonyPicturesReportData({
   const totalCost = projectRows.reduce((sum, row) => sum + row.cost, 0) + chargeRows.reduce((sum, row) => sum + row.cost, 0);
 
   return {
+    reportTitle: variant === "canada-other" ? "SPE Canada & Other" : "SPE Billing",
+    showCountryList: variant === "canada-other",
     client: { id: client.id, name: client.name, hourlyCost },
     filters: { movieId: selectedMovie.id },
     movieOptions: mappedMovieOptions,

@@ -46,6 +46,7 @@ export function isTeamLead(user: UserLike) { return getUserType(user) === "TEAM_
 export function isEmployee(user: UserLike) { return getUserType(user) === "EMPLOYEE"; }
 export function isReportViewer(user: UserLike) { return getUserType(user) === "REPORT_VIEWER"; }
 export function isAccounts(user: UserLike) { return getUserType(user) === "ACCOUNTS"; }
+export function canViewCostData(user: UserLike) { return isAdmin(user); }
 export function canViewBillingReports(user: UserLike) { return isAdmin(user) || isAccounts(user); }
 export function isHR(user: UserLike) { return getUserType(user) === "HR"; }
 export function isOperations(user: UserLike) { return getUserType(user) === "OPERATIONS"; }

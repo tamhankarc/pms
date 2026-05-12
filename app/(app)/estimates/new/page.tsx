@@ -45,13 +45,13 @@ export default async function NewEstimatePage() {
         : Promise.resolve([]),
       isManager(user) && !isRoleScopedManager(user)
         ? db.user.findMany({
-            where: { isActive: true, userType: "EMPLOYEE" },
+            where: { isActive: true, userType: { in: ["MANAGER", "TEAM_LEAD", "EMPLOYEE"] } },
             select: { id: true, fullName: true, userType: true },
             orderBy: { fullName: "asc" },
           })
         : canFullyModerateProject(user)
           ? db.user.findMany({
-              where: { isActive: true, userType: "EMPLOYEE" },
+              where: { isActive: true, userType: { in: ["MANAGER", "TEAM_LEAD", "EMPLOYEE"] } },
               select: { id: true, fullName: true, userType: true },
               orderBy: { fullName: "asc" },
             })

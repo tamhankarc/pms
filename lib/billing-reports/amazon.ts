@@ -156,7 +156,8 @@ export const WARNER_REPORTS: Partial<Record<AmazonReportType, BillingReportDefin
 };
 
 export const SONY_PICTURES_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
-  "social-assets": { title: "Sony Pictures Entertainment Billing", projectName: "", includeLanguage: false, includeCountry: false, kind: "sony-movie" },
+  "social-assets": { title: "SPE Billing", projectName: "", includeLanguage: false, includeCountry: false, kind: "sony-movie" },
+  localization: { title: "SPE Canada & Other", projectName: "", includeLanguage: false, includeCountry: false, kind: "sony-movie" },
   newsletters: { title: "Newsletters", projectName: "Newsletters", includeLanguage: false, includeCountry: false, kind: "sony-newsletters" },
 };
 
@@ -646,12 +647,11 @@ async function getWarnerDeliverableData({
 
   for (const head of compulsoryHeads) {
     if (isIntl && head.name.trim().toLowerCase() === "ticketing") {
-      const countryLabels = countryOptions.map((country) => country.isoCode ? `${country.name} (${country.isoCode})` : country.name);
       rows.push({
         label: head.name,
-        cost: countryLabels.length * Number(head.intlCost ?? 0),
+        cost: Number(head.intlCost ?? 0),
         group: "Fixed - Compulsory",
-        meta: countryLabels.length ? `Countries: ${countryLabels.join(", ")}` : "Countries: -",
+        meta: undefined,
       });
       continue;
     }

@@ -1,4 +1,4 @@
-import { canManageAssetTypes } from "@/lib/permissions";
+import { canManageAssetTypes, canViewCostData } from "@/lib/permissions";
 import { requireUser } from "@/lib/auth";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -20,7 +20,7 @@ export default async function FilmikResourceEditPage({ params }: { params: Promi
     <div className="space-y-6">
       <PageHeader title={`Edit Filmik Resource · ${resource.name}`} description="Update Filmik resource type and per-resource monthly cost." actions={<Link href="/filmik-resource" className="btn-secondary">Back to Filmik Resources</Link>} />
       <div className="max-w-3xl">
-        <FilmikResourceForm action={updateFilmikResourceAction} title={`Edit Filmik Resource: ${resource.name}`} submitLabel="Save changes" initialValues={{ id: resource.id, name: resource.name, cost: resource.cost.toString(), isActive: resource.isActive }} />
+        <FilmikResourceForm action={updateFilmikResourceAction} title={`Edit Filmik Resource: ${resource.name}`} submitLabel="Save changes" initialValues={{ id: resource.id, name: resource.name, cost: resource.cost.toString(), isActive: resource.isActive }} canEditCosts={canViewCostData(currentUser)} />
       </div>
     </div>
   );

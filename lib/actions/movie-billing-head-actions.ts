@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
-import { canManageClientBillingHeads } from "@/lib/permissions";
+import { canManageClientBillingHeads, canViewCostData } from "@/lib/permissions";
 
 export type MovieBillingHeadFormState = { success?: boolean; error?: string };
 
@@ -33,7 +33,7 @@ async function requireCanManageClientBillingHeads() {
 }
 export async function createMovieBillingHeadAction(_prevState: MovieBillingHeadFormState, formData: FormData): Promise<MovieBillingHeadFormState> {
   try {
-    await requireCanManageClientBillingHeads();
+    const user = await requireCanManageClientBillingHeads();
     const domesticActive = formData.get("domesticActive") ?? "off";
     const intlActive = formData.get("intlActive") ?? "off";
     const domesticCompulsionType = formData.get("domesticCompulsionType") ?? formData.get("compulsionType") ?? "FIXED_COMPULSORY";
@@ -63,8 +63,8 @@ export async function createMovieBillingHeadAction(_prevState: MovieBillingHeadF
         domesticActive: parsed.data.domesticActive,
         intlActive: parsed.data.intlActive,
         costType: parsed.data.costType,
-        domesticCost: parsed.data.domesticActive ? parsed.data.domesticCost : 0,
-        intlCost: parsed.data.intlActive ? parsed.data.intlCost : 0,
+        domesticCost: parsed.data.domesticActive && canViewCostData(user) ? parsed.data.domesticCost : 0,
+        intlCost: parsed.data.intlActive && canViewCostData(user) ? parsed.data.intlCost : 0,
         isActive: Boolean(parsed.data.isActive),
       },
     });
@@ -79,7 +79,7 @@ export async function createMovieBillingHeadAction(_prevState: MovieBillingHeadF
 
 export async function updateMovieBillingHeadAction(_prevState: MovieBillingHeadFormState, formData: FormData): Promise<MovieBillingHeadFormState> {
   try {
-    await requireCanManageClientBillingHeads();
+    const user = await requireCanManageClientBillingHeads();
     const domesticActive = formData.get("domesticActive") ?? "off";
     const intlActive = formData.get("intlActive") ?? "off";
     const domesticCompulsionType = formData.get("domesticCompulsionType") ?? formData.get("compulsionType") ?? "FIXED_COMPULSORY";
@@ -99,6 +99,8 @@ export async function updateMovieBillingHeadAction(_prevState: MovieBillingHeadF
       isActive: formData.get("isActive") ?? undefined,
     });
     if (!parsed.success || !parsed.data.id) return { success: false, error: parsed.success ? "Billing head is required." : parsed.error.issues[0]?.message };
+    const existingHead = await db.movieBillingHead.findUnique({ where: { id: parsed.data.id }, select: { domesticCost: true, intlCost: true, costType: true } });
+    if (!existingHead) return { success: false, error: "Billing head not found." };
     if (!parsed.data.domesticActive && !parsed.data.intlActive) return { success: false, error: "Activate Domestic, INTL, or both for this billing head." };
     await db.movieBillingHead.update({
       where: { id: parsed.data.id },
@@ -110,9 +112,9 @@ export async function updateMovieBillingHeadAction(_prevState: MovieBillingHeadF
         intlCompulsionType: parsed.data.intlCompulsionType,
         domesticActive: parsed.data.domesticActive,
         intlActive: parsed.data.intlActive,
-        costType: parsed.data.costType,
-        domesticCost: parsed.data.domesticActive ? parsed.data.domesticCost : 0,
-        intlCost: parsed.data.intlActive ? parsed.data.intlCost : 0,
+        costType: canViewCostData(user) ? parsed.data.costType : existingHead.costType,
+        domesticCost: parsed.data.domesticActive ? (canViewCostData(user) ? parsed.data.domesticCost : existingHead.domesticCost) : 0,
+        intlCost: parsed.data.intlActive ? (canViewCostData(user) ? parsed.data.intlCost : existingHead.intlCost) : 0,
         isActive: Boolean(parsed.data.isActive),
       },
     });

@@ -19,7 +19,7 @@ const movieStatusOptions = [
   { value: "COMPLETED_BILLED", label: "Completed & Billed" },
 ];
 
-export function MovieForm({ clients, countries = [], billingHeads = [], action, initialValues, submitLabel, title }: {
+export function MovieForm({ clients, countries = [], billingHeads = [], action, initialValues, submitLabel, title, canEditCosts = false }: {
   clients: Client[];
   countries?: Country[];
   billingHeads?: BillingHead[];
@@ -27,6 +27,7 @@ export function MovieForm({ clients, countries = [], billingHeads = [], action, 
   initialValues?: { id?: string; clientId: string; title: string; description: string | null; status?: MovieStatus; isActive: boolean; billingDomestic?: boolean; billingIntl?: boolean; billingOther?: boolean; otherCountryIds?: string[]; billingUnits?: Record<string, number>; sonyTicketingBannerCost?: number | null; sonyEmailTicketingBannerCost?: number | null };
   submitLabel: string;
   title: string;
+  canEditCosts?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [selectedClientId, setSelectedClientId] = useState(initialValues?.clientId ?? "");
@@ -37,8 +38,8 @@ export function MovieForm({ clients, countries = [], billingHeads = [], action, 
   const [otherCountryIds, setOtherCountryIds] = useState<string[]>(initialValues?.otherCountryIds ?? []);
   const clientOptions = useMemo(() => clients.map((client) => ({ value: client.id, label: client.name })), [clients]);
   const countryOptions = useMemo(() => countries.map((country) => ({ value: country.id, label: country.name })), [countries]);
-  const showSonyCosts = selectedClientId === SONY_CLIENT_ID;
-  const perUnitHeads = useMemo(() => billingHeads.filter((head) => head.clientId === selectedClientId && head.costType === "PER_UNIT_COST"), [billingHeads, selectedClientId]);
+  const showSonyCosts = canEditCosts && selectedClientId === SONY_CLIENT_ID;
+  const perUnitHeads = useMemo(() => billingHeads.filter((head) => canEditCosts && head.clientId === selectedClientId && head.costType === "PER_UNIT_COST"), [billingHeads, canEditCosts, selectedClientId]);
   const domesticOrIntlSelected = billingDomestic || billingIntl;
   const otherSelected = billingOther;
 

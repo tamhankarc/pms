@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
-import { canManageMovies } from "@/lib/permissions";
+import { canManageMovies, canViewCostData } from "@/lib/permissions";
 import { generateMovieCode } from "@/lib/project-code";
 
 export type MovieFormState = {
@@ -39,7 +39,7 @@ export async function createMovieAction(
   formData: FormData,
 ): Promise<MovieFormState> {
   try {
-    await requireCanManageMovies();
+    const user = await requireCanManageMovies();
 
     const parsed = movieSchema.safeParse({
       clientId: formData.get("clientId"),
@@ -80,8 +80,8 @@ export async function createMovieAction(
         billingIntl: Boolean(parsed.data.billingIntl),
         billingOther: Boolean(parsed.data.billingOther),
         otherCountryIds: parsed.data.billingOther ? JSON.stringify(parsed.data.otherCountryIds ?? []) : null,
-        sonyTicketingBannerCost: parsed.data.sonyTicketingBannerCost ?? 0,
-        sonyEmailTicketingBannerCost: parsed.data.sonyEmailTicketingBannerCost ?? 0,
+        sonyTicketingBannerCost: canViewCostData(user) ? (parsed.data.sonyTicketingBannerCost ?? 0) : 0,
+        sonyEmailTicketingBannerCost: canViewCostData(user) ? (parsed.data.sonyEmailTicketingBannerCost ?? 0) : 0,
         billingUnitsJson: JSON.stringify(
           Object.fromEntries(
             Array.from(formData.entries())
@@ -119,7 +119,7 @@ export async function updateMovieAction(
   formData: FormData,
 ): Promise<MovieFormState> {
   try {
-    await requireCanManageMovies();
+    const user = await requireCanManageMovies();
 
     const parsed = movieSchema.safeParse({
       id: formData.get("id"),
@@ -145,7 +145,7 @@ export async function updateMovieAction(
 
     const existingMovie = await db.movie.findUnique({
       where: { id: parsed.data.id },
-      select: { code: true },
+      select: { code: true, sonyTicketingBannerCost: true, sonyEmailTicketingBannerCost: true, billingUnitsJson: true },
     });
 
     if (!existingMovie) {
@@ -171,9 +171,9 @@ export async function updateMovieAction(
         billingIntl: Boolean(parsed.data.billingIntl),
         billingOther: Boolean(parsed.data.billingOther),
         otherCountryIds: parsed.data.billingOther ? JSON.stringify(parsed.data.otherCountryIds ?? []) : null,
-        sonyTicketingBannerCost: parsed.data.sonyTicketingBannerCost ?? 0,
-        sonyEmailTicketingBannerCost: parsed.data.sonyEmailTicketingBannerCost ?? 0,
-        billingUnitsJson: JSON.stringify(
+        sonyTicketingBannerCost: canViewCostData(user) ? (parsed.data.sonyTicketingBannerCost ?? 0) : existingMovie.sonyTicketingBannerCost,
+        sonyEmailTicketingBannerCost: canViewCostData(user) ? (parsed.data.sonyEmailTicketingBannerCost ?? 0) : existingMovie.sonyEmailTicketingBannerCost,
+        billingUnitsJson: canViewCostData(user) ? JSON.stringify(
           Object.fromEntries(
             Array.from(formData.entries())
               .filter(([key]) => key.startsWith("billingHeadUnit_"))
@@ -183,7 +183,7 @@ export async function updateMovieAction(
               ])
               .filter(([, value]) => Number.isFinite(value) && value > 0)
           )
-        ),
+        ) : existingMovie.billingUnitsJson,
         isActive: Boolean(parsed.data.isActive),
       },
     });

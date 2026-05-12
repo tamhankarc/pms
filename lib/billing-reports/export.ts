@@ -11,6 +11,8 @@ import type { SonyPicturesReportData, SonyNewsletterBillingData } from "@/lib/bi
 import type { FilmikBillingReportData } from "@/lib/billing-reports/filmik";
 import { getSonyPicturesReportFileName, getSonyNewsletterBillingFileName } from "@/lib/billing-reports/sony";
 import { getFilmikBillingReportMonthLabel } from "@/lib/billing-reports/filmik";
+import type { RoyalBillingData } from "@/lib/billing-reports/royal";
+import { getRoyalBillingReportFileName } from "@/lib/billing-reports/royal";
 
 function escapeXml(value: string | number) {
   return String(value)
@@ -968,7 +970,7 @@ function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
     (block) => block.showDeveloperCost,
   );
   summaryCommands.push(
-    textCommand(`${data.client.name} Billing`, MARGIN_X, TOP_Y, 15, true),
+    textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true),
   );
   summaryCommands.push(
     textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true),
@@ -1199,7 +1201,7 @@ function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
       const startY = pageNumberForBlock === 1 ? TOP_Y - 104 : TOP_Y - 38;
       if (pageNumberForBlock === 1) {
         commands.push(
-          textCommand(`${data.client.name} Billing`, MARGIN_X, TOP_Y, 15, true),
+          textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true),
         );
         commands.push(
           textCommand(
@@ -1231,7 +1233,7 @@ function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
       } else {
         commands.push(
           textCommand(
-            `${data.client.name} Billing continued`,
+            `${data.reportTitle} continued`,
             MARGIN_X,
             TOP_Y,
             13,
@@ -1287,27 +1289,17 @@ export { getGenericBillingReportFileName };
 
 export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
   const rows = [
-    excelRow([`${data.client.name} Billing`]),
+    excelRow([data.reportTitle]),
     excelRow(["Client", data.client.name]),
     excelRow(["Movie", data.selectedMovie?.title ?? "-"]),
     excelRow([]),
-    excelRow([
-      "Project",
-      "Country List",
-      "Contact Person",
-      "Billing Model",
-      "Cost (USD)",
-    ]),
+    excelRow(data.showCountryList ? ["Project", "Country List", "Contact Person", "Billing Model", "Cost (USD)"] : ["Project", "Contact Person", "Billing Model", "Cost (USD)"]),
     ...data.projectRows.map((row) =>
       excelRow(
-        [
-          row.projectName,
-          row.countryList || "-",
-          row.contactPerson,
-          row.billingModel,
-          row.cost,
-        ],
-        [4],
+        data.showCountryList
+          ? [row.projectName, row.countryList || "-", row.contactPerson, row.billingModel, row.cost]
+          : [row.projectName, row.contactPerson, row.billingModel, row.cost],
+        data.showCountryList ? [4] : [3],
       ),
     ),
     ...(data.chargeRows.length
@@ -1315,12 +1307,12 @@ export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
           excelRow([]),
           excelRow(["Movie Charges"]),
           ...data.chargeRows.map((row) =>
-            excelRow([row.label, "-", "-", "Movie Charge", row.cost], [4]),
+            excelRow(data.showCountryList ? [row.label, "-", "-", "Movie Charge", row.cost] : [row.label, "-", "Movie Charge", row.cost], data.showCountryList ? [4] : [3]),
           ),
         ]
       : []),
     excelRow([]),
-    excelRow(["Total", "", "", "", data.totalCost], [4]),
+    excelRow(data.showCountryList ? ["Total", "", "", "", data.totalCost] : ["Total", "", "", data.totalCost], data.showCountryList ? [4] : [3]),
   ];
 
   return `<?xml version="1.0"?>
@@ -1379,7 +1371,7 @@ function buildSonyPicturesReportPdfPages(data: SonyPicturesReportData) {
   if (!data.selectedMovie) {
     const commands: string[] = [];
     commands.push(
-      textCommand(`${data.client.name} Billing`, MARGIN_X, TOP_Y, 15, true),
+      textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true),
     );
     commands.push(
       textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true),
@@ -1407,7 +1399,7 @@ function buildSonyPicturesReportPdfPages(data: SonyPicturesReportData) {
 
     if (isFirstPage) {
       commands.push(
-        textCommand(`${data.client.name} Billing`, MARGIN_X, TOP_Y, 15, true),
+        textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true),
       );
       commands.push(
         textCommand(
@@ -1437,7 +1429,7 @@ function buildSonyPicturesReportPdfPages(data: SonyPicturesReportData) {
     } else {
       commands.push(
         textCommand(
-          `${data.client.name} Billing continued`,
+          `${data.reportTitle} continued`,
           MARGIN_X,
           TOP_Y,
           13,
@@ -1482,7 +1474,7 @@ export { getSonyPicturesReportFileName };
 
 export function buildFilmikBillingReportExcel(data: FilmikBillingReportData) {
   const resourceRows = [
-    excelRow([`${data.client.name} Billing`]),
+    excelRow([`${data.client.name} Resource Cost`]),
     excelRow(["Client", data.client.name]),
     excelRow(["Month", getFilmikBillingReportMonthLabel(data)]),
     excelRow([]),
@@ -1527,7 +1519,7 @@ function buildFilmikBillingReportPdfPages(data: FilmikBillingReportData) {
   const monthLabel = getFilmikBillingReportMonthLabel(data);
 
   const resourceCommands: string[] = [];
-  resourceCommands.push(textCommand(`${data.client.name} Billing`, MARGIN_X, TOP_Y, 15, true));
+  resourceCommands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
   resourceCommands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
   resourceCommands.push(textCommand(`Month: ${monthLabel}`, MARGIN_X, TOP_Y - 38, 9));
   resourceCommands.push(textCommand("Resource Cost", MARGIN_X, TOP_Y - 62, 12, true));
@@ -1572,11 +1564,11 @@ function buildFilmikBillingReportPdfPages(data: FilmikBillingReportData) {
     const first = pageNo === 2;
     const startY = first ? TOP_Y - 88 : TOP_Y - 38;
     if (first) {
-      commands.push(textCommand(`${data.client.name} Billing`, MARGIN_X, TOP_Y, 15, true));
+      commands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
       commands.push(textCommand(`Month: ${monthLabel}`, MARGIN_X, TOP_Y - 22, 9));
       commands.push(textCommand("Project + Resource Cost", MARGIN_X, TOP_Y - 54, 12, true));
     } else {
-      commands.push(textCommand(`${data.client.name} Billing continued`, MARGIN_X, TOP_Y, 13, true));
+      commands.push(textCommand(`${data.reportTitle} continued`, MARGIN_X, TOP_Y, 13, true));
     }
     drawTableHeader(commands, combinedColumns, MARGIN_X, startY);
     let y = startY - HEADER_HEIGHT;
@@ -1655,3 +1647,78 @@ export function buildSonyNewsletterBillingPdf(data: SonyNewsletterBillingData) {
 }
 
 export { getSonyNewsletterBillingFileName };
+
+
+export function buildRoyalBillingReportExcel(data: RoyalBillingData) {
+  const rows = [
+    excelRow([`${data.client.name} Billing`]),
+    excelRow(["Month", data.filters.month]),
+    excelRow([]),
+    excelRow(["Project", "Contact Person", "Billing Model", "Project Hours", "Fixed Monthly Hours", "Additional Hours", "Project Cost (USD)", "Excess Hours", "Excess Cost (USD)", "Total Cost (USD)"]),
+    ...data.rows.map((row) => excelRow([
+      row.projectName,
+      row.contactPerson,
+      row.billingModel,
+      row.projectHours,
+      row.fixedMonthlyHours ?? "-",
+      row.additionalHours ?? "-",
+      row.projectCost ?? "-",
+      row.excessHours > 0 ? row.excessHours : "-",
+      row.excessHours > 0 ? row.excessCost : "-",
+      row.totalCost,
+    ], [3,4,5,6,7,8,9])),
+    excelRow(["Total", "", "", "", "", "", data.totals.projectCost, data.totals.excessHours, data.totals.excessCost, data.totals.totalCost], [6,7,8,9]),
+  ];
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ ${worksheet("Royal Billing", rows)}
+</Workbook>`;
+}
+
+export function buildRoyalBillingReportPdf(data: RoyalBillingData) {
+  const columns: PdfTableColumn[] = [
+    { header: "Project", width: 150 },
+    { header: "Contact Person", width: 150 },
+    { header: "Billing Model", width: 78 },
+    { header: "Hours", width: 55, align: "right" },
+    { header: "Addl Hrs", width: 55, align: "right" },
+    { header: "Project Cost", width: 80, align: "right" },
+    { header: "Excess Hrs", width: 58, align: "right" },
+    { header: "Excess Cost", width: 80, align: "right" },
+    { header: "Total", width: 80, align: "right" },
+  ];
+  const rows: PdfTableRow[] = [
+    ...data.rows.map((row) => [
+      row.projectName,
+      row.contactPerson,
+      row.billingModel,
+      row.projectHours.toFixed(2),
+      row.additionalHours == null ? "-" : row.additionalHours.toFixed(2),
+      row.projectCost == null ? "-" : formatUsd(row.projectCost),
+      row.excessHours > 0 ? row.excessHours.toFixed(2) : "-",
+      row.excessHours > 0 ? formatUsd(row.excessCost) : "-",
+      formatUsd(row.totalCost),
+    ] as PdfTableRow),
+    ["Total", "", "", "", "", formatUsd(data.totals.projectCost), data.totals.excessHours.toFixed(2), formatUsd(data.totals.excessCost), formatUsd(data.totals.totalCost)] as PdfTableRow,
+  ];
+  const pageStreams: string[] = [];
+  const commands: string[] = [
+    textCommand(`${data.client.name} Billing`, MARGIN_X, TOP_Y, 16, true),
+    textCommand(`Month: ${data.filters.month}`, MARGIN_X, TOP_Y - 18, 9),
+  ];
+  drawTableHeader(commands, columns, MARGIN_X, TOP_Y - 52);
+  let y = TOP_Y - 52 - HEADER_HEIGHT;
+  rows.forEach((row) => {
+    drawTableRow(commands, columns, row, MARGIN_X, y, 34, 6.5);
+    y -= 34;
+  });
+  pageStreams.push(commands.join("\n"));
+  return buildPdfDocument(pageStreams);
+}
+
+export { getRoyalBillingReportFileName };

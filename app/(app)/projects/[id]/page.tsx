@@ -11,7 +11,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   if (!canSeeAllProjects(currentUser)) redirect("/dashboard");
 
   const { id } = await params;
-  const project = await db.project.findUnique({ where: { id }, include: { client: true } });
+  const project = await db.project.findUnique({ where: { id }, include: { client: true, monthlyAdditionalHours: { orderBy: { month: "asc" } } } });
   if (!project) notFound();
 
   const [projectTypes, filmikResourceTypesRaw] = await Promise.all([
@@ -54,6 +54,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         clientShowsAssetTypesInEntries={project.client.showAssetTypesInEntries}
         clientShowsNewslettersInEntries={project.client.showNewslettersInEntries}
         filmikResourceTypes={filmikResourceTypes}
+        monthlyAdditionalHours={project.monthlyAdditionalHours.map((row) => ({ month: row.month.toISOString().slice(0, 7), hours: Number(row.hours ?? 0) }))}
+        isAdmin={currentUser.userType === "ADMIN"}
         initialValues={{
           projectTypeId: project.projectTypeId,
           name: project.name,

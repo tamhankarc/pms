@@ -1,4 +1,4 @@
-import { canManageAssetTypes } from "@/lib/permissions";
+import { canManageAssetTypes, canViewCostData } from "@/lib/permissions";
 import { requireUser } from "@/lib/auth";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -15,5 +15,5 @@ export default async function AssetTypeEditPage({
   const { id } = await params;
   const [clients, assetType] = await Promise.all([db.client.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }), db.assetType.findUnique({ where: { id }, include: { client: true } })]);
   if (!assetType) notFound();
-  return <div className="space-y-6"><PageHeader title={`Edit Asset Type · ${assetType.name}`} description="Update asset type details, cost, and client association." actions={<Link href="/asset-type" className="btn-secondary">Back to Asset Types</Link>} /><div className="max-w-3xl"><AssetTypeForm clients={clients} action={updateAssetTypeAction} title={`Edit Asset Type: ${assetType.name}`} submitLabel="Save changes" initialValues={{ id: assetType.id, clientId: assetType.clientId, name: assetType.name, description: assetType.description, cost: assetType.cost.toString(), isActive: assetType.isActive }} /></div></div>;
+  return <div className="space-y-6"><PageHeader title={`Edit Asset Type · ${assetType.name}`} description="Update asset type details, cost, and client association." actions={<Link href="/asset-type" className="btn-secondary">Back to Asset Types</Link>} /><div className="max-w-3xl"><AssetTypeForm clients={clients} action={updateAssetTypeAction} title={`Edit Asset Type: ${assetType.name}`} submitLabel="Save changes" initialValues={{ id: assetType.id, clientId: assetType.clientId, name: assetType.name, description: assetType.description, cost: assetType.cost.toString(), isActive: assetType.isActive }} canEditCosts={canViewCostData(currentUser)} /></div></div>;
 }

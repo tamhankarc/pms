@@ -1,4 +1,4 @@
-import { canManageClients } from "@/lib/permissions";
+import { canManageClients, canViewCostData } from "@/lib/permissions";
 import { requireUser } from "@/lib/auth";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -97,6 +97,7 @@ export default async function ClientEditPage({
         <ClientForm
           mode="edit"
           action={updateClientAction}
+          canEditCosts={canViewCostData(currentUser)}
           initialValues={{
             id: client.id,
             name: client.name,

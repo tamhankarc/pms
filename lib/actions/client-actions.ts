@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
-import { canManageClients } from "@/lib/permissions";
+import { canManageClients, canViewCostData } from "@/lib/permissions";
 import { generateClientCode } from "@/lib/project-code";
 
 export type ClientFormState = {
@@ -36,7 +36,7 @@ export async function createClientAction(
   formData: FormData,
 ): Promise<ClientFormState> {
   try {
-    await requireCanManageClients();
+    const user = await requireCanManageClients();
 
     const parsed = clientSchema.safeParse({
       name: String(formData.get("name") ?? ""),
@@ -69,7 +69,7 @@ export async function createClientAction(
         showLanguagesInEntries: Boolean(parsed.data.showLanguagesInEntries),
         showNewslettersInEntries: Boolean(parsed.data.showNewslettersInEntries),
         enableProjectTypes: Boolean(parsed.data.enableProjectTypes),
-        hourlyCost: parsed.data.hourlyCost ?? 0,
+        hourlyCost: canViewCostData(user) ? (parsed.data.hourlyCost ?? 0) : 0,
         isActive: Boolean(parsed.data.isActive),
       },
     });
@@ -97,7 +97,7 @@ export async function updateClientAction(
   formData: FormData,
 ): Promise<ClientFormState> {
   try {
-    await requireCanManageClients();
+    const user = await requireCanManageClients();
 
     const parsed = clientSchema.safeParse({
       id: String(formData.get("id") ?? ""),
@@ -121,7 +121,7 @@ export async function updateClientAction(
 
     const existingClient = await db.client.findUnique({
       where: { id: parsed.data.id },
-      select: { code: true },
+      select: { code: true, hourlyCost: true },
     });
 
     if (!existingClient) {
@@ -141,7 +141,7 @@ export async function updateClientAction(
         showLanguagesInEntries: Boolean(parsed.data.showLanguagesInEntries),
         showNewslettersInEntries: Boolean(parsed.data.showNewslettersInEntries),
         enableProjectTypes: Boolean(parsed.data.enableProjectTypes),
-        hourlyCost: parsed.data.hourlyCost ?? 0,
+        hourlyCost: canViewCostData(user) ? (parsed.data.hourlyCost ?? 0) : existingClient.hourlyCost,
         isActive: Boolean(parsed.data.isActive),
       },
     });

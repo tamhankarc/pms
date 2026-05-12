@@ -20,7 +20,7 @@ const costTypeOptions = [
   { value: "PER_UNIT_COST", label: "Per-unit cost" },
 ];
 
-export function MovieBillingHeadForm({ clients, action, initialValues, submitLabel, title }: {
+export function MovieBillingHeadForm({ clients, action, initialValues, submitLabel, title, canEditCosts = false }: {
   clients: Client[];
   action: (state: MovieBillingHeadFormState, formData: FormData) => Promise<MovieBillingHeadFormState>;
   initialValues?: {
@@ -39,6 +39,7 @@ export function MovieBillingHeadForm({ clients, action, initialValues, submitLab
   };
   submitLabel: string;
   title: string;
+  canEditCosts?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [clientId, setClientId] = useState(initialValues?.clientId ?? "");
@@ -60,19 +61,19 @@ export function MovieBillingHeadForm({ clients, action, initialValues, submitLab
       <input type="hidden" name="compulsionType" value={domesticCompulsionType} />
       <input type="hidden" name="costType" value={costType} />
       <h2 className="section-title">{title}</h2>
-      <p className="section-subtitle">Fields marked <span className="text-red-600">*</span> are required. Costs are in USD.</p>
+      <p className="section-subtitle">Fields marked <span className="text-red-600">*</span> are required.</p>
       {state?.error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</div> : null}
       {state?.success ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Billing head saved successfully.</div> : null}
       <div className="mt-5 grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2"><FormLabel htmlFor="clientId" required>Client</FormLabel><SearchableCombobox id="clientId" value={clientId} onValueChange={setClientId} options={clientOptions} placeholder="Select client" searchPlaceholder="Search clients..." emptyLabel="No client found." required /></div>
         <div className="md:col-span-2"><FormLabel htmlFor="name" required>Billing head name</FormLabel><input id="name" name="name" className="input" defaultValue={initialValues?.name ?? ""} required /></div>
-        <div className="md:col-span-2"><FormLabel htmlFor="costType" required>Cost type</FormLabel><SearchableCombobox id="costType" value={costType} onValueChange={(v) => setCostType(v as CostType)} options={costTypeOptions} placeholder="Select cost type" searchPlaceholder="Search cost types..." emptyLabel="No cost type found." required /></div>
+        {canEditCosts ? <div className="md:col-span-2"><FormLabel htmlFor="costType" required>Cost type</FormLabel><SearchableCombobox id="costType" value={costType} onValueChange={(v) => setCostType(v as CostType)} options={costTypeOptions} placeholder="Select cost type" searchPlaceholder="Search cost types..." emptyLabel="No cost type found." required /></div> : null}
 
         <div className={`rounded-2xl border p-4 ${domesticActive ? "border-slate-200 bg-slate-50" : "border-slate-200 bg-slate-100 text-slate-400"}`}>
           <div className="flex items-start justify-between gap-4">
             <div>
               <h3 className="text-sm font-semibold text-slate-900">Domestic billing</h3>
-              <p className="mt-1 text-xs text-slate-500">Head type and cost used for US country billing.</p>
+              <p className="mt-1 text-xs text-slate-500">Head type used for US country billing.</p>
             </div>
             <label className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700">
               <input type="checkbox" checked={domesticActive} onChange={(e) => setDomesticActive(e.target.checked)} /> Active
@@ -80,7 +81,7 @@ export function MovieBillingHeadForm({ clients, action, initialValues, submitLab
           </div>
           <fieldset disabled={!domesticActive} className="mt-4 space-y-4 disabled:cursor-not-allowed disabled:opacity-60">
             <div><FormLabel htmlFor="domesticCompulsionType" required={domesticActive}>Head type - Domestic</FormLabel><SearchableCombobox id="domesticCompulsionType" value={domesticCompulsionType} onValueChange={(v) => setDomesticCompulsionType(v as CompulsionType)} options={headTypeOptions} placeholder="Select domestic type" searchPlaceholder="Search types..." emptyLabel="No type found." disabled={!domesticActive} required={domesticActive} /></div>
-            <div><FormLabel htmlFor="domesticCost" required={domesticActive}>Domestic cost (USD)</FormLabel><div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span><input id="domesticCost" name="domesticCost" type="number" min="0" step="0.01" className="input currency-input" defaultValue={initialValues?.domesticCost ?? "0.00"} disabled={!domesticActive} required={domesticActive} /></div></div>
+            {canEditCosts ? <div><FormLabel htmlFor="domesticCost" required={domesticActive}>Domestic cost (USD)</FormLabel><div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span><input id="domesticCost" name="domesticCost" type="number" min="0" step="0.01" className="input currency-input" defaultValue={initialValues?.domesticCost ?? "0.00"} disabled={!domesticActive} required={domesticActive} /></div></div> : null}
           </fieldset>
         </div>
 
@@ -88,7 +89,7 @@ export function MovieBillingHeadForm({ clients, action, initialValues, submitLab
           <div className="flex items-start justify-between gap-4">
             <div>
               <h3 className="text-sm font-semibold text-slate-900">INTL billing</h3>
-              <p className="mt-1 text-xs text-slate-500">Head type and cost used for all non-US country billing.</p>
+              <p className="mt-1 text-xs text-slate-500">Head type used for all non-US country billing.</p>
             </div>
             <label className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700">
               <input type="checkbox" checked={intlActive} onChange={(e) => setIntlActive(e.target.checked)} /> Active
@@ -96,7 +97,7 @@ export function MovieBillingHeadForm({ clients, action, initialValues, submitLab
           </div>
           <fieldset disabled={!intlActive} className="mt-4 space-y-4 disabled:cursor-not-allowed disabled:opacity-60">
             <div><FormLabel htmlFor="intlCompulsionType" required={intlActive}>Head type - INTL</FormLabel><SearchableCombobox id="intlCompulsionType" value={intlCompulsionType} onValueChange={(v) => setIntlCompulsionType(v as CompulsionType)} options={headTypeOptions} placeholder="Select INTL type" searchPlaceholder="Search types..." emptyLabel="No type found." disabled={!intlActive} required={intlActive} /></div>
-            <div><FormLabel htmlFor="intlCost" required={intlActive}>INTL cost (USD)</FormLabel><div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span><input id="intlCost" name="intlCost" type="number" min="0" step="0.01" className="input currency-input" defaultValue={initialValues?.intlCost ?? "0.00"} disabled={!intlActive} required={intlActive} /></div></div>
+            {canEditCosts ? <div><FormLabel htmlFor="intlCost" required={intlActive}>INTL cost (USD)</FormLabel><div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span><input id="intlCost" name="intlCost" type="number" min="0" step="0.01" className="input currency-input" defaultValue={initialValues?.intlCost ?? "0.00"} disabled={!intlActive} required={intlActive} /></div></div> : null}
           </fieldset>
         </div>
 

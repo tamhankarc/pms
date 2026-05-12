@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
-import { canManageAssetTypes } from "@/lib/permissions";
+import { canManageAssetTypes, canViewCostData } from "@/lib/permissions";
 import { FILMIK_CLIENT_ID } from "@/lib/billing-reports/config";
 
 export type FilmikResourceFormState = { success?: boolean; error?: string };
@@ -24,7 +24,7 @@ async function requireCanManageFilmikResources() {
 
 export async function createFilmikResourceAction(_prevState: FilmikResourceFormState, formData: FormData): Promise<FilmikResourceFormState> {
   try {
-    await requireCanManageFilmikResources();
+    const user = await requireCanManageFilmikResources();
     const parsed = filmikResourceSchema.safeParse({
       name: formData.get("name"),
       cost: formData.get("cost") ?? "0",
@@ -36,7 +36,7 @@ export async function createFilmikResourceAction(_prevState: FilmikResourceFormS
       data: {
         clientId: FILMIK_CLIENT_ID,
         name: parsed.data.name.trim(),
-        cost: parsed.data.cost,
+        cost: canViewCostData(user) ? parsed.data.cost : 0,
         isActive: Boolean(parsed.data.isActive),
       },
     });
@@ -52,7 +52,7 @@ export async function createFilmikResourceAction(_prevState: FilmikResourceFormS
 
 export async function updateFilmikResourceAction(_prevState: FilmikResourceFormState, formData: FormData): Promise<FilmikResourceFormState> {
   try {
-    await requireCanManageFilmikResources();
+    const user = await requireCanManageFilmikResources();
     const parsed = filmikResourceSchema.safeParse({
       id: formData.get("id"),
       name: formData.get("name"),
@@ -68,7 +68,7 @@ export async function updateFilmikResourceAction(_prevState: FilmikResourceFormS
       where: { id: parsed.data.id },
       data: {
         name: parsed.data.name.trim(),
-        cost: parsed.data.cost,
+        cost: canViewCostData(user) ? parsed.data.cost : existing.cost,
         isActive: Boolean(parsed.data.isActive),
       },
     });

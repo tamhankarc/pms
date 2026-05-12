@@ -1,4 +1,4 @@
-import { canManageMovieBillingHeads } from "@/lib/permissions";
+import { canManageMovieBillingHeads, canViewCostData } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
@@ -25,6 +25,7 @@ export default async function MovieBillingHeadsPage({
   const currentUser = await requireUser();
   if (!canManageMovieBillingHeads(currentUser)) redirect("/dashboard");
 
+  const canSeeCosts = canViewCostData(currentUser);
   const params = (await searchParams) ?? {};
   const q = params.q?.trim() ?? "";
   const clientId = params.clientId ?? "all";
@@ -58,7 +59,7 @@ export default async function MovieBillingHeadsPage({
       </div>
       <div className="table-wrap">
         <table className="table-base">
-          <thead className="table-head"><tr><th className="table-cell">Client</th><th className="table-cell">Country</th><th className="table-cell">Movie</th><th className="table-cell">Billing Head</th><th className="table-cell">Cost Type</th><th className="table-cell">Cost</th><th className="table-cell">Units</th><th className="table-cell">Status</th><th className="table-cell">Action</th></tr></thead>
+          <thead className="table-head"><tr><th className="table-cell">Client</th><th className="table-cell">Country</th><th className="table-cell">Movie</th><th className="table-cell">Billing Head</th>{canSeeCosts ? <th className="table-cell">Cost Type</th> : null}{canSeeCosts ? <th className="table-cell">Cost</th> : null}{canSeeCosts ? <th className="table-cell">Units</th> : null}<th className="table-cell">Status</th><th className="table-cell">Action</th></tr></thead>
           <tbody className="divide-y divide-slate-100">
             {items.map((row) => (
               <tr key={row.id}>
@@ -66,14 +67,14 @@ export default async function MovieBillingHeadsPage({
                 <td className="table-cell">{row.country.name}</td>
                 <td className="table-cell"><div className="font-medium text-slate-900">{row.movie.title}</div></td>
                 <td className="table-cell">{row.billingHead.name}</td>
-                <td className="table-cell">{row.billingHead.costType === "PER_UNIT_COST" ? "Per-unit cost" : "Whole cost"}</td>
-                <td className="table-cell">{formatHeadCost(row)}</td>
-                <td className="table-cell">{row.billingHead.costType === "PER_UNIT_COST" ? Number(row.units ?? 0) : "—"}</td>
+                {canSeeCosts ? <td className="table-cell">{row.billingHead.costType === "PER_UNIT_COST" ? "Per-unit cost" : "Whole cost"}</td> : null}
+                {canSeeCosts ? <td className="table-cell">{formatHeadCost(row)}</td> : null}
+                {canSeeCosts ? <td className="table-cell">{row.billingHead.costType === "PER_UNIT_COST" ? Number(row.units ?? 0) : "—"}</td> : null}
                 <td className="table-cell"><span className={row.isActive ? "badge-emerald" : "badge-slate"}>{row.isActive ? "Active" : "Inactive"}</span></td>
                 <td className="table-cell"><div className="flex gap-2"><Link href={`/movie-billing-heads/${row.id}`} className="btn-secondary text-xs">Edit</Link><form action={toggleMovieBillingHeadAssignmentStatusAction}><input type="hidden" name="id" value={row.id} /><button className="btn-secondary text-xs">{row.isActive ? "Deactivate" : "Activate"}</button></form></div></td>
               </tr>
             ))}
-            {rows.length === 0 ? <tr><td colSpan={9} className="table-cell text-center text-sm text-slate-500">No movie billing heads found.</td></tr> : null}
+            {rows.length === 0 ? <tr><td colSpan={canSeeCosts ? 9 : 6} className="table-cell text-center text-sm text-slate-500">No movie billing heads found.</td></tr> : null}
           </tbody>
         </table>
         <PaginationControls basePath="/movie-billing-heads" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, clientId, movieId, status }} />

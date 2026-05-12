@@ -1,4 +1,4 @@
-import { canManageClients } from "@/lib/permissions";
+import { canManageClients, canViewCostData } from "@/lib/permissions";
 import { requireUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -18,7 +18,7 @@ export default async function NewClientPage() {
         description="Create a client and configure optional dropdowns for downstream Time Entries and Estimates. Client code is generated automatically."
         actions={<Link href="/clients" className="btn-secondary">Back to clients</Link>}
       />
-      <div className="max-w-3xl"><ClientForm mode="create" action={createClientAction} /></div>
+      <div className="max-w-3xl"><ClientForm mode="create" action={createClientAction} canEditCosts={canViewCostData(currentUser)} /></div>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { canManageMovies } from "@/lib/permissions";
+import { canManageMovies, canViewCostData } from "@/lib/permissions";
 import { requireUser } from "@/lib/auth";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -55,6 +55,7 @@ export default async function MovieEditPage({
           action={updateMovieAction}
           title={`Edit movie: ${movie.title}`}
           submitLabel="Save changes"
+          canEditCosts={canViewCostData(currentUser)}
           initialValues={{
             id: movie.id,
             clientId: movie.clientId,

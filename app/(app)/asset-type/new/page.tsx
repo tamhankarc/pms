@@ -1,4 +1,4 @@
-import { canManageAssetTypes } from "@/lib/permissions";
+import { canManageAssetTypes, canViewCostData } from "@/lib/permissions";
 import { requireUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -13,5 +13,5 @@ export default async function NewAssetTypePage() {
 
 
   const clients = await db.client.findMany({ where: { isActive: true }, orderBy: { name: "asc" } });
-  return <div className="space-y-6"><PageHeader title="Create Asset Type" description="Create a client-specific asset type for Time Entries and Estimates." actions={<Link href="/asset-type" className="btn-secondary">Back to Asset Types</Link>} /><div className="max-w-3xl"><AssetTypeForm clients={clients} action={createAssetTypeAction} title="Create Asset Type" submitLabel="Create Asset Type" /></div></div>;
+  return <div className="space-y-6"><PageHeader title="Create Asset Type" description="Create a client-specific asset type for Time Entries and Estimates." actions={<Link href="/asset-type" className="btn-secondary">Back to Asset Types</Link>} /><div className="max-w-3xl"><AssetTypeForm clients={clients} action={createAssetTypeAction} title="Create Asset Type" submitLabel="Create Asset Type" canEditCosts={canViewCostData(currentUser)} /></div></div>;
 }

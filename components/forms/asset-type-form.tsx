@@ -8,12 +8,13 @@ import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 const initialState: AssetTypeFormState = {};
 type Client = { id: string; name: string };
 
-export function AssetTypeForm({ clients, action, initialValues, submitLabel, title }: {
+export function AssetTypeForm({ clients, action, initialValues, submitLabel, title, canEditCosts = false }: {
   clients: Client[];
   action: (state: AssetTypeFormState, formData: FormData) => Promise<AssetTypeFormState>;
   initialValues?: { id?: string; clientId: string; name: string; description: string | null; cost: string | number; isActive: boolean; };
   submitLabel: string;
   title: string;
+  canEditCosts?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [selectedClientId, setSelectedClientId] = useState(initialValues?.clientId ?? "");
@@ -36,13 +37,15 @@ export function AssetTypeForm({ clients, action, initialValues, submitLabel, tit
           <FormLabel htmlFor="name" required>Asset Type name</FormLabel>
           <input id="name" name="name" className="input" defaultValue={initialValues?.name ?? ""} required />
         </div>
-        <div>
-          <FormLabel htmlFor="cost" required>Cost (US dollar)</FormLabel>
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
-            <input id="cost" name="cost" type="number" min="0" step="0.01" className="input currency-input" defaultValue={initialValues?.cost ?? "0.00"} required />
+        {canEditCosts ? (
+          <div>
+            <FormLabel htmlFor="cost" required>Cost (US dollar)</FormLabel>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
+              <input id="cost" name="cost" type="number" min="0" step="0.01" className="input currency-input" defaultValue={initialValues?.cost ?? "0.00"} required />
+            </div>
           </div>
-        </div>
+        ) : null}
         <div>
           <FormLabel htmlFor="description">Description</FormLabel>
           <textarea id="description" name="description" className="input min-h-28" defaultValue={initialValues?.description ?? ""} />

@@ -64,6 +64,7 @@ export function MovieBillingHeadAssignmentForm({
   initialValues,
   submitLabel,
   title,
+  canEditCosts = false,
 }: {
   clients: Client[];
   countries: Country[];
@@ -73,6 +74,7 @@ export function MovieBillingHeadAssignmentForm({
   initialValues?: InitialValues;
   submitLabel: string;
   title: string;
+  canEditCosts?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [clientId, setClientId] = useState(initialValues?.clientId ?? "");
@@ -120,8 +122,8 @@ export function MovieBillingHeadAssignmentForm({
         const intlValid = (selectedMovie.billingIntl || selectedMovie.billingOther) && headIntlOptional(head);
         return domesticValid || intlValid;
       })
-      .map((head) => ({ value: head.id, label: `${head.name} · ${head.costType === "PER_UNIT_COST" ? "Per-unit" : "Whole cost"}` })),
-    [billingHeads, clientId, selectedMovie],
+      .map((head) => ({ value: head.id, label: canEditCosts ? `${head.name} · ${head.costType === "PER_UNIT_COST" ? "Per-unit" : "Whole cost"}` : head.name })),
+    [billingHeads, canEditCosts, clientId, selectedMovie],
   );
 
   function handleClientChange(value: string) {
@@ -188,7 +190,7 @@ export function MovieBillingHeadAssignmentForm({
             <SearchableMultiSelect id="countryIds" value={countryIds} onValueChange={setCountryIds} options={countryOptions} placeholder="Select billing head first" disabled />
           )}
         </div>
-        {selectedBillingHead?.costType === "PER_UNIT_COST" ? (
+        {canEditCosts && selectedBillingHead?.costType === "PER_UNIT_COST" ? (
           <div className="md:col-span-2">
             <FormLabel htmlFor="units">Number of units</FormLabel>
             <input id="units" name="units" type="number" min="0" step="1" className="input" defaultValue={initialValues?.units ?? ""} />

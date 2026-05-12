@@ -37,10 +37,12 @@ export function NewProjectForm({
   clients,
   projectTypes,
   filmikResourceTypes,
+  isAdmin = false,
 }: {
   clients: Client[];
   projectTypes: ProjectType[];
   filmikResourceTypes: FilmikResourceType[];
+  isAdmin?: boolean;
 }) {
   const [billingModel, setBillingModel] = useState<BillingModel>("HOURLY");
   const [clientId, setClientId] = useState("");
@@ -51,6 +53,7 @@ export function NewProjectForm({
   const [hideAssetTypesInEntries, setHideAssetTypesInEntries] = useState(false);
   const [hideNewslettersInEntries, setHideNewslettersInEntries] = useState(false);
   const [addToBilling, setAddToBilling] = useState(false);
+  const [monthlyAdditionalRows, setMonthlyAdditionalRows] = useState([{ month: new Date().toISOString().slice(0, 7), hours: "" }]);
   const [state, formAction, pending] = useActionState(createProjectAction, initialState);
 
   const selectedClient = clients.find((client) => client.id === clientId);
@@ -234,7 +237,7 @@ export function NewProjectForm({
           Add to Billing
         </label>
 
-        {billingModel === "FIXED_FULL" ? (
+        {isAdmin && billingModel === "FIXED_FULL" ? (
           <div className="md:col-span-2">
             <FormLabel htmlFor="additionalCharges">Additional Charges (USD)</FormLabel>
             <div className="relative">
@@ -246,7 +249,7 @@ export function NewProjectForm({
 
 
 
-        {billingModel === "FIXED_FULL" ? (
+        {isAdmin && billingModel === "FIXED_FULL" ? (
           <div className="md:col-span-2">
             <FormLabel htmlFor="partialBillingCost">Partial Billing cost (USD)</FormLabel>
             <div className="relative">
@@ -257,7 +260,7 @@ export function NewProjectForm({
         ) : null}
 
 
-        {billingModel === "FIXED_COST" ? (
+        {isAdmin && billingModel === "FIXED_COST" ? (
           <div className="md:col-span-2">
             <FormLabel htmlFor="projectCost">Project Cost (USD)</FormLabel>
             <div className="relative">
@@ -294,7 +297,7 @@ export function NewProjectForm({
           </div>
         ) : null}
 
-        {billingModel === "FIXED_PER_COUNTRY" ? (
+        {isAdmin && billingModel === "FIXED_PER_COUNTRY" ? (
           <div className="md:col-span-2">
             <FormLabel htmlFor="perCountryCharges">Per Country Charges (USD)</FormLabel>
             <div className="relative">
@@ -304,7 +307,7 @@ export function NewProjectForm({
           </div>
         ) : null}
 
-        {billingModel === "FIXED_FULL" ? (
+        {isAdmin && billingModel === "FIXED_FULL" ? (
           <div className="md:col-span-2">
             <FormLabel htmlFor="fixedContractHours" required>
               Fixed contract hours
@@ -313,12 +316,36 @@ export function NewProjectForm({
           </div>
         ) : null}
 
-        {billingModel === "FIXED_MONTHLY" ? (
+        {isAdmin && billingModel === "FIXED_MONTHLY" ? (
           <div className="md:col-span-2">
             <FormLabel htmlFor="fixedMonthlyHours" required>
               Fixed monthly hours
             </FormLabel>
             <input id="fixedMonthlyHours" className="input" name="fixedMonthlyHours" type="number" min="0" step="0.25" required />
+          </div>
+        ) : null}
+
+
+        {isAdmin && billingModel === "FIXED_MONTHLY" ? (
+          <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <h3 className="text-sm font-semibold text-slate-900">Monthly Additional Hours</h3>
+            <p className="mt-1 text-xs text-slate-500">Add extra fixed monthly hours for specific months. Leave blank if no extra hours apply.</p>
+            <div className="mt-4 space-y-3">
+              {monthlyAdditionalRows.map((row, index) => (
+                <div key={index} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[180px_1fr_auto] md:items-end">
+                  <div>
+                    <FormLabel htmlFor={`monthlyAdditionalHourMonth_${index}`}>Month</FormLabel>
+                    <input id={`monthlyAdditionalHourMonth_${index}`} className="input" name="monthlyAdditionalHourMonth" type="month" value={row.month} onChange={(event) => setMonthlyAdditionalRows((rows) => rows.map((item, itemIndex) => itemIndex === index ? { ...item, month: event.target.value } : item))} />
+                  </div>
+                  <div>
+                    <FormLabel htmlFor={`monthlyAdditionalHourHours_${index}`}>Additional hours</FormLabel>
+                    <input id={`monthlyAdditionalHourHours_${index}`} className="input" name="monthlyAdditionalHourHours" type="number" min="0" step="0.25" value={row.hours} onChange={(event) => setMonthlyAdditionalRows((rows) => rows.map((item, itemIndex) => itemIndex === index ? { ...item, hours: event.target.value } : item))} />
+                  </div>
+                  <button type="button" className="btn-secondary" onClick={() => setMonthlyAdditionalRows((rows) => rows.filter((_, itemIndex) => itemIndex !== index))} disabled={monthlyAdditionalRows.length === 1}>Remove</button>
+                </div>
+              ))}
+            </div>
+            <button type="button" className="btn-secondary mt-3" onClick={() => setMonthlyAdditionalRows((rows) => [...rows, { month: currentMonth, hours: "" }])}>Add month</button>
           </div>
         ) : null}
 

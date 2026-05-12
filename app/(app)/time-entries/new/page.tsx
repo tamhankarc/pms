@@ -51,7 +51,7 @@ export default async function NewTimeEntryPage() {
           })
         : canFullyModerateProject(user)
           ? db.user.findMany({
-              where: { isActive: true, userType: "EMPLOYEE" },
+              where: { isActive: true, userType: { in: ["MANAGER", "TEAM_LEAD", "EMPLOYEE"] } },
               select: { id: true, fullName: true, userType: true },
               orderBy: { fullName: "asc" },
             })

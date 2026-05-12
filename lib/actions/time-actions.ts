@@ -46,6 +46,47 @@ function isFutureWorkDate(workDate: string) {
   return workDate > getTodayInIndiaDateString();
 }
 
+function getWorkDateBounds(workDate: string) {
+  return {
+    start: new Date(`${workDate}T00:00:00.000`),
+    end: new Date(`${workDate}T23:59:59.999`),
+  };
+}
+
+async function validateDailyTimeLimit({
+  employeeId,
+  workDate,
+  minutesSpent,
+  excludeEntryId,
+}: {
+  employeeId: string;
+  workDate: string;
+  minutesSpent: number;
+  excludeEntryId?: string;
+}) {
+  const employee = await db.user.findUnique({
+    where: { id: employeeId },
+    select: { userType: true },
+  });
+  if (!employee || !["MANAGER", "TEAM_LEAD", "EMPLOYEE"].includes(employee.userType)) return { valid: true as const };
+
+  const bounds = getWorkDateBounds(workDate);
+  const existing = await db.timeEntry.aggregate({
+    where: {
+      employeeId,
+      workDate: { gte: bounds.start, lte: bounds.end },
+      ...(excludeEntryId ? { id: { not: excludeEntryId } } : {}),
+    },
+    _sum: { minutesSpent: true },
+  });
+
+  const total = Number(existing._sum.minutesSpent ?? 0) + Number(minutesSpent || 0);
+  if (total > 900) {
+    return { valid: false as const, error: `Total time entries for this employee on this date cannot exceed 900 minutes (15 hours). Current total would be ${total} minutes.` };
+  }
+  return { valid: true as const };
+}
+
 async function getProjectForClient(projectId: string, clientId: string) {
   return db.project.findFirst({
     where: { id: projectId, clientId, isActive: true, status: "ACTIVE" },
@@ -118,7 +159,7 @@ async function canActForEmployee(
       select: { id: true, userType: true, isActive: true },
     });
 
-    return Boolean(employee && employee.isActive && employee.userType === "EMPLOYEE");
+    return Boolean(employee && employee.isActive && (user.userType === "ADMIN" ? ["MANAGER", "TEAM_LEAD", "EMPLOYEE"].includes(employee.userType) : employee.userType === "EMPLOYEE"));
   }
 
   if (user.userType === "TEAM_LEAD") {
@@ -441,6 +482,11 @@ export async function createTimeEntryAction(
       return { success: false, error: subProjectCheck.error };
     }
 
+    const dailyLimitCheck = await validateDailyTimeLimit({ employeeId, workDate: parsed.data.workDate, minutesSpent: parsed.data.minutesSpent });
+    if (!dailyLimitCheck.valid) {
+      return { success: false, error: dailyLimitCheck.error };
+    }
+
     const createdEntry = await db.timeEntry.create({
       data: {
         employeeId,
@@ -579,6 +625,11 @@ export async function updateTimeEntryAction(
     });
     if (!subProjectCheck.valid) {
       return { success: false, error: subProjectCheck.error };
+    }
+
+    const dailyLimitCheck = await validateDailyTimeLimit({ employeeId: entry.employeeId, workDate: parsed.data.workDate, minutesSpent: parsed.data.minutesSpent, excludeEntryId: entry.id });
+    if (!dailyLimitCheck.valid) {
+      return { success: false, error: dailyLimitCheck.error };
     }
 
     const existingEntry = await db.timeEntry.findUnique({ where: { id: entry.id } });

@@ -119,7 +119,10 @@ export async function middleware(request: NextRequest) {
   const authed = Boolean(session);
 
   if (!authed && !isPublic) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    const loginUrl = new URL("/login", request.url);
+    const returnTo = `${pathname}${request.nextUrl.search}`;
+    loginUrl.searchParams.set("returnTo", returnTo);
+    return NextResponse.redirect(loginUrl);
   }
 
   if (authed && (pathname === "/" || pathname === "/login" || pathname === "/unsupported-device")) {

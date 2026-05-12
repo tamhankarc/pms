@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
-import { canManageMovieBillingHeads } from "@/lib/permissions";
+import { canManageMovieBillingHeads, canViewCostData } from "@/lib/permissions";
 
 export type MovieBillingHeadAssignmentFormState = { success?: boolean; error?: string };
 
@@ -72,9 +72,18 @@ async function requireCanManageMovieBillingHeads() {
   return user;
 }
 
-async function saveAssignments(data: z.infer<typeof schema>, replaceExisting: boolean) {
+async function saveAssignments(data: z.infer<typeof schema>, replaceExisting: boolean, canEditCosts: boolean) {
   const valid = await validateOptionalHeadForSelection(data.clientId, data.countryIds, data.movieId, data.billingHeadId);
   if (!valid.ok) return { success: false as const, error: valid.error };
+
+  const existingUnitsByCountry = new Map<string, number>();
+  if (replaceExisting && !canEditCosts && valid.costType === "PER_UNIT_COST") {
+    const existingRows = await db.movieBillingHeadAssignment.findMany({
+      where: { clientId: data.clientId, movieId: data.movieId, billingHeadId: data.billingHeadId },
+      select: { countryId: true, units: true },
+    });
+    for (const row of existingRows) existingUnitsByCountry.set(row.countryId, Number(row.units ?? 0));
+  }
 
   if (replaceExisting) {
     await db.movieBillingHeadAssignment.deleteMany({
@@ -83,6 +92,12 @@ async function saveAssignments(data: z.infer<typeof schema>, replaceExisting: bo
   }
 
   for (const countryId of data.countryIds) {
+    const nextUnits = valid.costType === "PER_UNIT_COST"
+      ? canEditCosts
+        ? data.units ?? 0
+        : existingUnitsByCountry.get(countryId) ?? 0
+      : null;
+
     await db.movieBillingHeadAssignment.upsert({
       where: { countryId_movieId_billingHeadId: { countryId, movieId: data.movieId, billingHeadId: data.billingHeadId } },
       create: {
@@ -90,12 +105,12 @@ async function saveAssignments(data: z.infer<typeof schema>, replaceExisting: bo
         countryId,
         movieId: data.movieId,
         billingHeadId: data.billingHeadId,
-        units: valid.costType === "PER_UNIT_COST" ? data.units ?? 0 : null,
+        units: nextUnits,
         isActive: data.isActive,
       },
       update: {
         clientId: data.clientId,
-        units: valid.costType === "PER_UNIT_COST" ? data.units ?? 0 : null,
+        units: nextUnits,
         isActive: data.isActive,
       },
     });
@@ -106,7 +121,7 @@ async function saveAssignments(data: z.infer<typeof schema>, replaceExisting: bo
 
 export async function createMovieBillingHeadAssignmentAction(_prevState: MovieBillingHeadAssignmentFormState, formData: FormData): Promise<MovieBillingHeadAssignmentFormState> {
   try {
-    await requireCanManageMovieBillingHeads();
+    const user = await requireCanManageMovieBillingHeads();
     const parsed = schema.safeParse({
       clientId: formData.get("clientId"),
       movieId: formData.get("movieId"),
@@ -117,7 +132,7 @@ export async function createMovieBillingHeadAssignmentAction(_prevState: MovieBi
     });
     if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message || "Invalid movie billing head payload." };
 
-    const saved = await saveAssignments(parsed.data, false);
+    const saved = await saveAssignments(parsed.data, false, canViewCostData(user));
     if (!saved.success) return { success: false, error: saved.error };
 
     revalidatePath("/movie-billing-heads");
@@ -129,7 +144,7 @@ export async function createMovieBillingHeadAssignmentAction(_prevState: MovieBi
 
 export async function updateMovieBillingHeadAssignmentAction(_prevState: MovieBillingHeadAssignmentFormState, formData: FormData): Promise<MovieBillingHeadAssignmentFormState> {
   try {
-    await requireCanManageMovieBillingHeads();
+    const user = await requireCanManageMovieBillingHeads();
     const parsed = schema.safeParse({
       id: formData.get("id"),
       clientId: formData.get("clientId"),
@@ -141,7 +156,7 @@ export async function updateMovieBillingHeadAssignmentAction(_prevState: MovieBi
     });
     if (!parsed.success || !parsed.data.id) return { success: false, error: parsed.success ? "Movie billing head is required." : parsed.error.issues[0]?.message };
 
-    const saved = await saveAssignments(parsed.data, true);
+    const saved = await saveAssignments(parsed.data, true, canViewCostData(user));
     if (!saved.success) return { success: false, error: saved.error };
 
     revalidatePath("/movie-billing-heads");

@@ -21,6 +21,7 @@ import {
   getFilmikBillingReportMonthLabel,
   type FilmikBillingReportData,
 } from "@/lib/billing-reports/filmik";
+import { buildRoyalBillingFilters, getRoyalBillingReportData, formatUsd as formatRoyalUsd, type RoyalBillingData, ROYAL_CARIBBEAN_CLIENT_NAME } from "@/lib/billing-reports/royal";
 import {
   buildSonyNewsletterBillingFilters,
   buildSonyPicturesReportFilters,
@@ -700,7 +701,7 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
                 <div className="font-medium text-slate-900">
                   {row.projectName}
                 </div>
-                {row.countryList ? (
+                {data.showCountryList && row.countryList ? (
                   <div className="mt-1 text-xs text-slate-500">
                     Countries: {row.countryList}
                   </div>
@@ -781,7 +782,7 @@ function SonyPicturesReportWorkspace({
       />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="section-title">{data.client.name} Billing</h2>
+          <h2 className="section-title">{data.reportTitle}</h2>
         </div>
         <SonyPicturesExportButtons
           clientId={clientId}
@@ -1014,7 +1015,7 @@ function FilmikBillingReportWorkspace({
       <FilmikBillingReportFilters clientId={clientId} reportType={activeReport} data={data} />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="section-title">{data.client.name} Billing</h2>
+          <h2 className="section-title">{data.reportTitle}</h2>
           <p className="section-subtitle">Month: {getFilmikBillingReportMonthLabel(data)}</p>
         </div>
         <FilmikExportButtons clientId={clientId} reportType={activeReport} data={data} />
@@ -1027,6 +1028,91 @@ function FilmikBillingReportWorkspace({
         <h3 className="mb-3 text-base font-semibold text-slate-900">Project + Resource Cost</h3>
         <FilmikCombinedCostBlock data={data} />
       </div>
+    </div>
+  );
+}
+
+
+function RoyalBillingReportFilters({ clientId, data }: { clientId: string; data: RoyalBillingData }) {
+  return (
+    <form method="get" action={`/billing-reports/${clientId}`} className="card p-5">
+      <div className="grid gap-4 md:grid-cols-[220px_auto_1fr] md:items-end">
+        <div>
+          <label className="label" htmlFor="month">Month</label>
+          <input id="month" name="month" type="month" className="input" defaultValue={data.filters.month} />
+        </div>
+        <button className="btn-primary" type="submit">Apply</button>
+        <p className="text-sm text-slate-500 md:text-right">Fixed monthly excess hours are calculated for the selected month.</p>
+      </div>
+    </form>
+  );
+}
+
+function RoyalExportButtons({ clientId, data }: { clientId: string; data: RoyalBillingData }) {
+  const query = buildQueryString({ month: data.filters.month });
+  return (
+    <div className="flex flex-wrap gap-3">
+      <Link className="btn-secondary" href={`/billing-reports/${clientId}/export?format=excel&${query}`}>Export Excel</Link>
+      <Link className="btn-secondary" href={`/billing-reports/${clientId}/export?format=pdf&${query}`}>Export PDF</Link>
+    </div>
+  );
+}
+
+function RoyalBillingReportTable({ data }: { data: RoyalBillingData }) {
+  return (
+    <div className="table-wrap">
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">Project</th>
+            <th className="table-cell">Contact Person</th>
+            <th className="table-cell">Billing Model</th>
+            <th className="table-cell">Project Hours</th>
+            <th className="table-cell">Fixed Monthly Hours</th>
+            <th className="table-cell">Additional Hours</th>
+            <th className="table-cell">Project Cost</th>
+            <th className="table-cell">Excess Hours</th>
+            <th className="table-cell">Excess Cost</th>
+            <th className="table-cell">Total Cost</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {data.rows.map((row) => (
+            <tr key={row.projectId}>
+              <td className="table-cell font-medium text-slate-900">{row.projectName}</td>
+              <td className="table-cell">{row.contactPerson}</td>
+              <td className="table-cell"><span className="badge-blue">{row.billingModel}</span></td>
+              <td className="table-cell font-medium text-slate-900">{row.projectHours.toFixed(2)}</td>
+              <td className="table-cell">{row.fixedMonthlyHours == null ? "-" : row.fixedMonthlyHours.toFixed(2)}</td>
+              <td className="table-cell">{row.additionalHours == null ? "-" : row.additionalHours.toFixed(2)}</td>
+              <td className="table-cell whitespace-nowrap font-medium text-slate-900">{row.projectCost == null ? "-" : formatRoyalUsd(row.projectCost)}</td>
+              <td className="table-cell">{row.excessHours > 0 ? row.excessHours.toFixed(2) : "-"}</td>
+              <td className="table-cell whitespace-nowrap font-medium text-slate-900">{row.excessHours > 0 ? formatRoyalUsd(row.excessCost) : "-"}</td>
+              <td className="table-cell whitespace-nowrap font-medium text-slate-900">{formatRoyalUsd(row.totalCost)}</td>
+            </tr>
+          ))}
+          <tr className="bg-slate-50">
+            <td className="table-cell font-semibold text-slate-900" colSpan={6}>Total</td>
+            <td className="table-cell whitespace-nowrap font-semibold text-slate-900">{formatRoyalUsd(data.totals.projectCost)}</td>
+            <td className="table-cell font-semibold text-slate-900">{data.totals.excessHours.toFixed(2)}</td>
+            <td className="table-cell whitespace-nowrap font-semibold text-slate-900">{formatRoyalUsd(data.totals.excessCost)}</td>
+            <td className="table-cell whitespace-nowrap font-semibold text-slate-900">{formatRoyalUsd(data.totals.totalCost)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RoyalBillingReportWorkspace({ clientId, data }: { clientId: string; data: RoyalBillingData }) {
+  return (
+    <div className="space-y-6">
+      <RoyalBillingReportFilters clientId={clientId} data={data} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div><h2 className="section-title">{data.client.name} Billing</h2><p className="section-subtitle">Month: {data.filters.month}</p></div>
+        <RoyalExportButtons clientId={clientId} data={data} />
+      </div>
+      <RoyalBillingReportTable data={data} />
     </div>
   );
 }
@@ -1304,7 +1390,7 @@ function GenericBillingReportWorkspace({
       />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="section-title">{data.client.name} Billing</h2>
+          <h2 className="section-title">{data.reportTitle}</h2>
         </div>
         <GenericExportButtons
           clientId={clientId}
@@ -1400,6 +1486,7 @@ export default async function ClientBillingReportPage({
   const sonyNewsletterFilters =
     buildSonyNewsletterBillingFilters(resolvedSearchParams);
   const filmikFilters = buildFilmikBillingReportFilters(resolvedSearchParams);
+  const royalFilters = buildRoyalBillingFilters(resolvedSearchParams);
   const domesticFilters =
     buildWarnerDomesticDeliverableFilters(resolvedSearchParams);
   const reportCatalog = getBillingReportCatalogForClient(
@@ -1444,6 +1531,7 @@ export default async function ClientBillingReportPage({
       ? await getSonyPicturesReportData({
           clientId,
           filters: sonyPicturesFilters,
+          variant: activeReport === "localization" ? "canada-other" : "main",
         })
       : null;
   const sonyNewsletterBillingData =
@@ -1457,6 +1545,9 @@ export default async function ClientBillingReportPage({
     client.id === FILMIK_CLIENT_ID && activeReportDefinition?.kind === "generic-filmik"
       ? await getFilmikBillingReportData(filmikFilters)
       : null;
+  const royalBillingReportData = client.name.trim().toLowerCase() === ROYAL_CARIBBEAN_CLIENT_NAME.toLowerCase()
+    ? await getRoyalBillingReportData({ clientId, filters: royalFilters })
+    : null;
   const genericBillingOptions =
     activeReportDefinition?.kind === "generic-movie"
       ? { movieSpecific: true }
@@ -1503,6 +1594,8 @@ export default async function ClientBillingReportPage({
           activeReport={activeReport}
           data={sonyNewsletterBillingData}
         />
+      ) : royalBillingReportData ? (
+        <RoyalBillingReportWorkspace clientId={clientId} data={royalBillingReportData} />
       ) : filmikBillingReportData ? (
         <FilmikBillingReportWorkspace
           clientId={clientId}

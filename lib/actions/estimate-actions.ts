@@ -268,7 +268,7 @@ async function canActForEstimateEmployee(
       select: { id: true, userType: true, isActive: true },
     });
 
-    return Boolean(employee && employee.isActive && employee.userType === "EMPLOYEE");
+    return Boolean(employee && employee.isActive && (user.userType === "ADMIN" ? ["MANAGER", "TEAM_LEAD", "EMPLOYEE"].includes(employee.userType) : employee.userType === "EMPLOYEE"));
   }
 
   if (user.userType === "TEAM_LEAD") {

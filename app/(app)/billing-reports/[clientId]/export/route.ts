@@ -21,6 +21,7 @@ import {
   getSonyPicturesReportData,
 } from "@/lib/billing-reports/sony";
 import { buildFilmikBillingReportFilters, getFilmikBillingReportData, getFilmikBillingReportFileName } from "@/lib/billing-reports/filmik";
+import { buildRoyalBillingFilters, getRoyalBillingReportData, getRoyalBillingReportFileName, ROYAL_CARIBBEAN_CLIENT_NAME } from "@/lib/billing-reports/royal";
 import {
   buildAmazonReportExcel,
   buildAmazonReportFileName,
@@ -39,6 +40,8 @@ import {
   buildFilmikBillingReportPdf,
   getSonyPicturesReportFileName,
   getSonyNewsletterBillingFileName,
+  buildRoyalBillingReportExcel,
+  buildRoyalBillingReportPdf,
 } from "@/lib/billing-reports/export";
 
 export async function GET(
@@ -57,6 +60,31 @@ export async function GET(
   const reportType = normalizeAmazonReportType(searchParams.get("report"), client.name);
   const reportDefinition = getBillingReportCatalogForClient(client.name, client.id)?.[reportType];
   const format = searchParams.get("format") === "pdf" ? "pdf" : "excel";
+
+
+  if (client.name.trim().toLowerCase() === ROYAL_CARIBBEAN_CLIENT_NAME.toLowerCase()) {
+    const filters = buildRoyalBillingFilters(searchParams);
+    const data = await getRoyalBillingReportData({ clientId, filters });
+    if (!data) redirect("/billing-reports");
+
+    if (format === "pdf") {
+      const pdf = buildRoyalBillingReportPdf(data);
+      return new Response(Buffer.from(pdf, "binary"), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${getRoyalBillingReportFileName(data, "pdf")}"`,
+        },
+      });
+    }
+
+    const excel = buildRoyalBillingReportExcel(data);
+    return new Response(excel, {
+      headers: {
+        "Content-Type": "application/vnd.ms-excel; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${getRoyalBillingReportFileName(data, "xls")}"`,
+      },
+    });
+  }
 
   if (reportDefinition?.kind === "deliverable") {
     const filters = buildWarnerDomesticDeliverableFilters(searchParams);
@@ -88,7 +116,7 @@ export async function GET(
 
   if (reportDefinition?.kind === "sony-movie") {
     const filters = buildSonyPicturesReportFilters(searchParams);
-    const data = await getSonyPicturesReportData({ clientId, filters });
+    const data = await getSonyPicturesReportData({ clientId, filters, variant: reportType === "localization" ? "canada-other" : "main" });
     if (!data) redirect("/billing-reports");
 
     if (format === "pdf") {

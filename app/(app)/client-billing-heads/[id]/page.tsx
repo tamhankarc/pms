@@ -1,4 +1,4 @@
-import { canManageClientBillingHeads } from "@/lib/permissions";
+import { canManageClientBillingHeads, canViewCostData } from "@/lib/permissions";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
@@ -26,6 +26,7 @@ export default async function EditMovieBillingHeadPage({
         action={updateMovieBillingHeadAction}
         title="Edit billing head"
         submitLabel="Save changes"
+        canEditCosts={canViewCostData(currentUser)}
         initialValues={{
           id: head.id,
           clientId: head.clientId,

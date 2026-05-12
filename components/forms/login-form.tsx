@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { loginAction } from "@/lib/actions/auth-actions";
 
-export function LoginForm() {
+export function LoginForm({ returnTo = "" }: { returnTo?: string }) {
   const [state, action, pending] = useActionState(loginAction, undefined);
   const [geoState, setGeoState] = useState<"idle" | "loading" | "ready" | "blocked" | "unsupported">("idle");
   const [geoError, setGeoError] = useState("");
@@ -66,6 +66,7 @@ export function LoginForm() {
     <form action={action} className="card w-full max-w-md p-8">
       <input type="hidden" name="latitude" value={coords.latitude} />
       <input type="hidden" name="longitude" value={coords.longitude} />
+      <input type="hidden" name="returnTo" value={returnTo} />
 
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.25em] text-brand-700">Internal EMS</p>
