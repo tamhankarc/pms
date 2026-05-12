@@ -27,7 +27,9 @@ const OPERATIONS_ALLOWED_PATHS = [
   "/dashboard",
   "/clients",
   "/movies",
+  "/newsletters",
   "/asset-type",
+  "/filmik-resource",
   "/countries",
   "/languages",
   "/projects",
@@ -41,7 +43,9 @@ const OPERATIONS_ALLOWED_PATHS = [
 const MASTER_DATA_PATHS = [
   "/clients",
   "/movies",
+  "/newsletters",
   "/asset-type",
+  "/filmik-resource",
   "/countries",
   "/languages",
   "/projects",
@@ -72,9 +76,11 @@ function isAllowed(pathname: string, allowedPaths: string[]) {
 const MENU_ROUTE_PREFIXES: Record<string, string> = {
   clients: "/clients",
   movies: "/movies",
+  newsletters: "/newsletters",
   "client-billing-heads": "/client-billing-heads",
   "movie-billing-heads": "/movie-billing-heads",
   "asset-type": "/asset-type",
+  "filmik-resource": "/filmik-resource",
   countries: "/countries",
   languages: "/languages",
   projects: "/projects",
@@ -94,10 +100,6 @@ const MENU_ROUTE_PREFIXES: Record<string, string> = {
   "billing-reports": "/billing-reports",
   "change-password": "/change-password",
 };
-
-function isManagedMenuPath(pathname: string) {
-  return Object.values(MENU_ROUTE_PREFIXES).some((path) => pathname === path || pathname.startsWith(`${path}/`));
-}
 
 function hasExtraMenuRouteAccess(pathname: string, extraMenuKeys?: string[]) {
   if (!extraMenuKeys?.length) return false;
@@ -129,6 +131,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(session?.userType === "ACCOUNTS" ? "/billing-reports" : "/dashboard", request.url));
   }
 
+  if (isPublic) {
+    return NextResponse.next();
+  }
+
+  const hasExtraAccess = hasExtraMenuRouteAccess(pathname, session?.extraMenuKeys);
+
   if (session?.userType === "ACCOUNTS" && (pathname === "/dashboard" || pathname.startsWith("/dashboard/") || pathname === "/reports" || pathname.startsWith("/reports/"))) {
     return NextResponse.redirect(new URL("/billing-reports", request.url));
   }
@@ -140,44 +148,41 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (isManagedMenuPath(pathname)) {
-    return NextResponse.next();
-  }
-
-  if (session?.userType === "EMPLOYEE" && !isAllowed(pathname, EMPLOYEE_ALLOWED_PATHS)) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
-  if (session?.userType === "ACCOUNTS" && !isAllowed(pathname, ACCOUNTS_ALLOWED_PATHS)) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
-  if (session?.userType === "HR" && !isAllowed(pathname, HR_ALLOWED_PATHS)) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
-  if (session?.userType === "OPERATIONS" && !isAllowed(pathname, OPERATIONS_ALLOWED_PATHS)) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
-  if (isAllowed(pathname, MASTER_DATA_PATHS) && session?.userType !== "ADMIN" && session?.userType !== "OPERATIONS") {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
-  if (session?.userType === "TEAM_LEAD") {
-    const blocked = TEAM_LEAD_BLOCKED_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
-    if (blocked) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
-  }
-
   if (
     pathname === "/client-billing-heads" ||
     pathname.startsWith("/client-billing-heads/") ||
     pathname === "/movie-billing-heads" ||
     pathname.startsWith("/movie-billing-heads/")
   ) {
-    if (session?.userType !== "ADMIN") {
+    if (session?.userType !== "ADMIN" && !hasExtraAccess) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+    return NextResponse.next();
+  }
+
+  if (session?.userType === "EMPLOYEE" && !hasExtraAccess && !isAllowed(pathname, EMPLOYEE_ALLOWED_PATHS)) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  if (session?.userType === "ACCOUNTS" && !hasExtraAccess && !isAllowed(pathname, ACCOUNTS_ALLOWED_PATHS)) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  if (session?.userType === "HR" && !hasExtraAccess && !isAllowed(pathname, HR_ALLOWED_PATHS)) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  if (session?.userType === "OPERATIONS" && !hasExtraAccess && !isAllowed(pathname, OPERATIONS_ALLOWED_PATHS)) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  if (isAllowed(pathname, MASTER_DATA_PATHS) && session?.userType !== "ADMIN" && session?.userType !== "OPERATIONS" && !hasExtraAccess) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  if (session?.userType === "TEAM_LEAD" && !hasExtraAccess) {
+    const blocked = TEAM_LEAD_BLOCKED_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+    if (blocked) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   }

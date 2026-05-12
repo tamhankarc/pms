@@ -120,6 +120,11 @@ export async function getSonyPicturesReportData({
     if (variant === "canada-other") {
       return movie.billingOther || (movie.billingIntl && hasCanada);
     }
+
+    if (!movie.billingDomestic && !movie.billingIntl) {
+      return false;
+    }
+
     const canadaOnlyIntl = movie.billingIntl && !movie.billingDomestic && !movie.billingOther && hasCanada && !hasNonCanada;
     return !canadaOnlyIntl;
   });

@@ -45,9 +45,21 @@ export default async function NewTimeEntryPage() {
         : Promise.resolve([]),
       isManager(user) && !isRoleScopedManager(user)
         ? db.user.findMany({
-            where: { isActive: true },
+            where: {
+              isActive: true,
+              OR: [
+                { userType: { in: ["EMPLOYEE", "TEAM_LEAD"] } },
+                {
+                  userType: "MANAGER",
+                  OR: [
+                    { functionalRole: { not: "PROJECT_MANAGER" } },
+                    { functionalRole: null },
+                  ],
+                },
+              ],
+            },
             select: { id: true, fullName: true, userType: true },
-            orderBy: { fullName: "asc" },
+            orderBy: [{ userType: "asc" }, { fullName: "asc" }],
           })
         : canFullyModerateProject(user)
           ? db.user.findMany({

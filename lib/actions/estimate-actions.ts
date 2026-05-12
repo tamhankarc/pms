@@ -366,7 +366,7 @@ export async function createEstimateAction(
   try {
     const user = await requireUserForAction();
 
-    if (!["EMPLOYEE", "TEAM_LEAD"].includes(user.userType) && !isRoleScopedManager(user)) {
+    if (!["ADMIN", "EMPLOYEE", "TEAM_LEAD"].includes(user.userType) && !isRoleScopedManager(user)) {
       return { success: false, error: "You are not allowed to submit estimates." };
     }
 
