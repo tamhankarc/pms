@@ -20,6 +20,7 @@ const baseSchema = z.object({
   additionalCharges: z.coerce.number().nonnegative("Additional Charges cannot be negative.").optional(),
   partialBillingCost: z.coerce.number().nonnegative("Partial Billing cost cannot be negative.").optional(),
   projectCost: z.coerce.number().nonnegative("Project Cost cannot be negative.").optional(),
+  projectCostOtherMovieBillingRegion: z.coerce.number().nonnegative("Project Cost - Other Movie Billing Region cannot be negative.").optional(),
   perCountryCharges: z.coerce.number().nonnegative("Per Country Charges cannot be negative.").optional(),
   developerCount: z.coerce.number().int().nonnegative("Developer count cannot be negative.").optional(),
   perDeveloperCost: z.coerce.number().nonnegative("Per Developer Cost cannot be negative.").optional(),
@@ -46,6 +47,7 @@ async function validateProjectType(clientId: string, projectTypeId?: string | nu
 }
 
 const FILMIK_CLIENT_ID = "cmne6ed2o0000jo04t3363pqz";
+const SONY_PICTURES_CLIENT_ID = "cmn66d3q40002l104n6wvefvl";
 
 function parseMonthStart(value: string) {
   if (!/^\d{4}-\d{2}$/.test(value)) return null;
@@ -138,6 +140,7 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
       additionalCharges: formData.get("additionalCharges") || 0,
       partialBillingCost: formData.get("partialBillingCost") || 0,
       projectCost: formData.get("projectCost") || 0,
+      projectCostOtherMovieBillingRegion: formData.get("projectCostOtherMovieBillingRegion") || 0,
       perCountryCharges: formData.get("perCountryCharges") || 0,
       developerCount: formData.get("developerCount") || 0,
       perDeveloperCost: formData.get("perDeveloperCost") || 0,
@@ -174,6 +177,7 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
         additionalCharges: parsed.data.billingModel === "FIXED_FULL" && isAdminUser ? (parsed.data.additionalCharges ?? 0) : 0,
         partialBillingCost: parsed.data.billingModel === "FIXED_FULL" && isAdminUser ? (parsed.data.partialBillingCost ?? 0) : 0,
         projectCost: parsed.data.billingModel === "FIXED_COST" && isAdminUser ? (parsed.data.projectCost ?? 0) : 0,
+        projectCostOtherMovieBillingRegion: client.id === SONY_PICTURES_CLIENT_ID && isAdminUser ? (parsed.data.projectCostOtherMovieBillingRegion ?? 0) : 0,
         perCountryCharges: parsed.data.billingModel === "FIXED_PER_COUNTRY" && isAdminUser ? (parsed.data.perCountryCharges ?? 0) : 0,
         developerCount: 0,
         perDeveloperCost: 0,
@@ -212,7 +216,7 @@ const projectUpdateSchema = baseSchema.omit({ clientId: true });
 export async function updateProjectAction(projectId: string, _prevState: ProjectFormState, formData: FormData): Promise<ProjectFormState> {
   try {
     const user = await requireMasterDataActionUser();
-    const existingProject = await db.project.findUnique({ where: { id: projectId }, select: { id: true, clientId: true, fixedContractHours: true, fixedMonthlyHours: true, additionalCharges: true, partialBillingCost: true, projectCost: true, perCountryCharges: true } });
+    const existingProject = await db.project.findUnique({ where: { id: projectId }, select: { id: true, clientId: true, fixedContractHours: true, fixedMonthlyHours: true, additionalCharges: true, partialBillingCost: true, projectCost: true, projectCostOtherMovieBillingRegion: true, perCountryCharges: true } });
     if (!existingProject) return { success: false, error: "Project not found." };
 
     const parsed = projectUpdateSchema.safeParse({
@@ -224,6 +228,7 @@ export async function updateProjectAction(projectId: string, _prevState: Project
       additionalCharges: formData.get("additionalCharges") || 0,
       partialBillingCost: formData.get("partialBillingCost") || 0,
       projectCost: formData.get("projectCost") || 0,
+      projectCostOtherMovieBillingRegion: formData.get("projectCostOtherMovieBillingRegion") || 0,
       perCountryCharges: formData.get("perCountryCharges") || 0,
       developerCount: formData.get("developerCount") || 0,
       perDeveloperCost: formData.get("perDeveloperCost") || 0,
@@ -257,6 +262,7 @@ export async function updateProjectAction(projectId: string, _prevState: Project
         additionalCharges: parsed.data.billingModel === "FIXED_FULL" ? (isAdminUser ? (parsed.data.additionalCharges ?? 0) : existingProject.additionalCharges) : 0,
         partialBillingCost: parsed.data.billingModel === "FIXED_FULL" ? (isAdminUser ? (parsed.data.partialBillingCost ?? 0) : existingProject.partialBillingCost) : 0,
         projectCost: parsed.data.billingModel === "FIXED_COST" ? (isAdminUser ? (parsed.data.projectCost ?? 0) : existingProject.projectCost) : 0,
+        projectCostOtherMovieBillingRegion: client.id === SONY_PICTURES_CLIENT_ID ? (isAdminUser ? (parsed.data.projectCostOtherMovieBillingRegion ?? 0) : existingProject.projectCostOtherMovieBillingRegion) : 0,
         perCountryCharges: parsed.data.billingModel === "FIXED_PER_COUNTRY" ? (isAdminUser ? (parsed.data.perCountryCharges ?? 0) : existingProject.perCountryCharges) : 0,
         developerCount: 0,
         perDeveloperCost: 0,

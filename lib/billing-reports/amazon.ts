@@ -8,6 +8,8 @@ export type AmazonReportType =
   | "domestic-deliverable"
   | "intl-deliverable"
   | "other-deliverable"
+  | "spe-main"
+  | "canada-other"
   | "newsletters";
 
 export type AmazonBillingReportFilters = {
@@ -156,8 +158,8 @@ export const WARNER_REPORTS: Partial<Record<AmazonReportType, BillingReportDefin
 };
 
 export const SONY_PICTURES_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
-  "social-assets": { title: "SPE Billing", projectName: "", includeLanguage: false, includeCountry: false, kind: "sony-movie" },
-  localization: { title: "SPE Canada & Other", projectName: "", includeLanguage: false, includeCountry: false, kind: "sony-movie" },
+  "spe-main": { title: "SPE Billing", projectName: "", includeLanguage: false, includeCountry: false, kind: "sony-movie" },
+  "canada-other": { title: "SPE Canada & Other", projectName: "", includeLanguage: false, includeCountry: false, kind: "sony-movie" },
   newsletters: { title: "Newsletters", projectName: "Newsletters", includeLanguage: false, includeCountry: false, kind: "sony-newsletters" },
 };
 

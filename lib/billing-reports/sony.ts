@@ -188,6 +188,7 @@ export async function getSonyPicturesReportData({
       partialBillingCost: true,
       perCountryCharges: true,
       projectCost: true,
+      projectCostOtherMovieBillingRegion: true,
       contactPersons: {
         orderBy: { name: "asc" },
         select: { name: true, email: true },
@@ -246,7 +247,9 @@ export async function getSonyPicturesReportData({
     } else if (project.billingModel === "FIXED_FULL") {
       cost = (Number(project.fixedContractHours ?? 0) * hourlyCost) + Number(project.additionalCharges ?? 0) - Number(project.partialBillingCost ?? 0);
     } else if (project.billingModel === "FIXED_COST") {
-      cost = Number(project.projectCost ?? 0);
+      cost = variant === "canada-other"
+        ? Number(project.projectCostOtherMovieBillingRegion ?? 0)
+        : Number(project.projectCost ?? 0);
     }
 
     const contactPerson = movieContactPersons.length ? movieContactPersonLabel : buildContactPersonLabel(project.contactPersons);

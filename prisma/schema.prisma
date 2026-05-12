@@ -448,6 +448,7 @@ model Project {
   additionalCharges       Decimal       @default(0) @db.Decimal(12, 2)
   partialBillingCost      Decimal       @default(0) @db.Decimal(12, 2)
   projectCost             Decimal       @default(0) @db.Decimal(12, 2)
+  projectCostOtherMovieBillingRegion Decimal @default(0) @db.Decimal(12, 2)
   perCountryCharges       Decimal       @default(0) @db.Decimal(12, 2)
   developerCount          Int           @default(0)
   perDeveloperCost        Decimal       @default(0) @db.Decimal(12, 2)

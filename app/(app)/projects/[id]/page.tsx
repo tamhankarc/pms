@@ -73,6 +73,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           partialBillingCost: Number(project.partialBillingCost ?? 0),
           perCountryCharges: Number(project.perCountryCharges ?? 0),
           projectCost: Number(project.projectCost ?? 0),
+          projectCostOtherMovieBillingRegion: Number(project.projectCostOtherMovieBillingRegion ?? 0),
           developerCount: Number(project.developerCount ?? 0),
           perDeveloperCost: Number(project.perDeveloperCost ?? 0),
         }}

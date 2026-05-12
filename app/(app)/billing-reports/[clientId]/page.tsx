@@ -1531,7 +1531,7 @@ export default async function ClientBillingReportPage({
       ? await getSonyPicturesReportData({
           clientId,
           filters: sonyPicturesFilters,
-          variant: activeReport === "localization" ? "canada-other" : "main",
+          variant: activeReport === "canada-other" ? "canada-other" : "main",
         })
       : null;
   const sonyNewsletterBillingData =

@@ -79,6 +79,12 @@ export function SearchableCombobox({
     setQuery("");
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isControlled) {
+      setInternalValue(defaultValue);
+    }
+  }, [defaultValue, isControlled]);
+
   const selectedOption = useMemo(
     () => options.find((option) => option.value === selectedValue),
     [options, selectedValue],

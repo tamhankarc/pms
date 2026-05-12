@@ -30,6 +30,7 @@ type BillingModel = "HOURLY" | "FIXED_FULL" | "FIXED_MONTHLY" | "FIXED_PER_COUNT
 type ProjectStatus = "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "ARCHIVED";
 
 const FILMIK_CLIENT_ID = "cmne6ed2o0000jo04t3363pqz";
+const SONY_PICTURES_CLIENT_ID = "cmn66d3q40002l104n6wvefvl";
 
 const initialState: ProjectFormState = {};
 
@@ -58,6 +59,7 @@ export function NewProjectForm({
 
   const selectedClient = clients.find((client) => client.id === clientId);
   const isFilmikClient = clientId === FILMIK_CLIENT_ID;
+  const isSonyPicturesClient = clientId === SONY_PICTURES_CLIENT_ID;
   const currentMonth = new Date().toISOString().slice(0, 7);
 
   const filteredProjectTypes = useMemo(
@@ -266,6 +268,17 @@ export function NewProjectForm({
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
               <input id="projectCost" className="input currency-input" name="projectCost" type="number" min="0" step="0.01" defaultValue="0.00" />
+            </div>
+          </div>
+        ) : null}
+
+
+        {isAdmin && isSonyPicturesClient ? (
+          <div className="md:col-span-2">
+            <FormLabel htmlFor="projectCostOtherMovieBillingRegion">Project Cost - Other Movie Billing Region (USD)</FormLabel>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
+              <input id="projectCostOtherMovieBillingRegion" className="input currency-input" name="projectCostOtherMovieBillingRegion" type="number" min="0" step="0.01" defaultValue="0.00" />
             </div>
           </div>
         ) : null}

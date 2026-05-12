@@ -21,6 +21,7 @@ type FilmikResourceType = {
 type BillingModel = "HOURLY" | "FIXED_FULL" | "FIXED_MONTHLY" | "FIXED_PER_COUNTRY" | "FIXED_COST";
 type ProjectStatus = "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "ARCHIVED";
 const FILMIK_CLIENT_ID = "cmne6ed2o0000jo04t3363pqz";
+const SONY_PICTURES_CLIENT_ID = "cmn66d3q40002l104n6wvefvl";
 
 const initialState: ProjectFormState = {};
 
@@ -67,6 +68,7 @@ export function ProjectEditForm({
     partialBillingCost: number | null;
     perCountryCharges: number | null;
     projectCost: number | null;
+    projectCostOtherMovieBillingRegion: number | null;
     developerCount: number | null;
     perDeveloperCost: number | null;
   };
@@ -81,6 +83,7 @@ export function ProjectEditForm({
   const [hideNewslettersInEntries, setHideNewslettersInEntries] = useState(initialValues.hideNewslettersInEntries);
   const [addToBilling, setAddToBilling] = useState(initialValues.addToBilling);
   const isFilmikClient = clientId === FILMIK_CLIENT_ID;
+  const isSonyPicturesClient = clientId === SONY_PICTURES_CLIENT_ID;
   const currentMonth = new Date().toISOString().slice(0, 7);
   const [monthlyAdditionalRows, setMonthlyAdditionalRows] = useState(monthlyAdditionalHours.length ? monthlyAdditionalHours.map((row) => ({ month: row.month, hours: String(row.hours) })) : [{ month: currentMonth, hours: "" }]);
   const boundAction = updateProjectAction.bind(null, projectId);
@@ -268,6 +271,17 @@ export function ProjectEditForm({
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
               <input id="projectCost" className="input currency-input" name="projectCost" type="number" min="0" step="0.01" defaultValue={initialValues.projectCost ?? "0.00"} />
+            </div>
+          </div>
+        ) : null}
+
+
+        {isAdmin && isSonyPicturesClient ? (
+          <div className="md:col-span-2">
+            <FormLabel htmlFor="projectCostOtherMovieBillingRegion">Project Cost - Other Movie Billing Region (USD)</FormLabel>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
+              <input id="projectCostOtherMovieBillingRegion" className="input currency-input" name="projectCostOtherMovieBillingRegion" type="number" min="0" step="0.01" defaultValue={initialValues.projectCostOtherMovieBillingRegion ?? "0.00"} />
             </div>
           </div>
         ) : null}
