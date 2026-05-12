@@ -1478,6 +1478,7 @@ export default async function ClientBillingReportPage({
       ? resolvedSearchParams.report[0]
       : resolvedSearchParams.report,
     client.name,
+    client.id,
   );
   const filters = buildAmazonBillingReportFilters(resolvedSearchParams);
   const genericFilters = buildGenericBillingReportFilters(resolvedSearchParams);

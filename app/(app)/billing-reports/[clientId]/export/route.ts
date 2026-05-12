@@ -57,7 +57,7 @@ export async function GET(
   if (!client || isBillingReportClientExcluded(client.id)) redirect("/billing-reports");
 
   const { searchParams } = new URL(request.url);
-  const reportType = normalizeAmazonReportType(searchParams.get("report"), client.name);
+  const reportType = normalizeAmazonReportType(searchParams.get("report"), client.name, client.id);
   const reportDefinition = getBillingReportCatalogForClient(client.name, client.id)?.[reportType];
   const format = searchParams.get("format") === "pdf" ? "pdf" : "excel";
 
@@ -116,7 +116,7 @@ export async function GET(
 
   if (reportDefinition?.kind === "sony-movie") {
     const filters = buildSonyPicturesReportFilters(searchParams);
-    const data = await getSonyPicturesReportData({ clientId, filters, variant: reportType === "localization" ? "canada-other" : "main" });
+    const data = await getSonyPicturesReportData({ clientId, filters, variant: reportType === "canada-other" ? "canada-other" : "main" });
     if (!data) redirect("/billing-reports");
 
     if (format === "pdf") {

@@ -190,9 +190,17 @@ export function isWarnerBillingReportClient(clientName: string) {
   return clientName.trim().toLowerCase() === WARNER_CLIENT_NAME.toLowerCase();
 }
 
-export function normalizeAmazonReportType(value: string | null | undefined, clientName?: string): AmazonReportType {
-  const allowed = getBillingReportCatalogForClient(clientName ?? "") ?? AMAZON_REPORTS;
+export function normalizeAmazonReportType(
+  value: string | null | undefined,
+  clientName?: string,
+  clientId?: string,
+): AmazonReportType {
+  const allowed = getBillingReportCatalogForClient(clientName ?? "", clientId) ?? AMAZON_REPORTS;
   if (value && Object.prototype.hasOwnProperty.call(allowed, value)) return value as AmazonReportType;
+
+  const firstConfiguredReport = Object.keys(allowed)[0] as AmazonReportType | undefined;
+  if (firstConfiguredReport) return firstConfiguredReport;
+
   return isWarnerBillingReportClient(clientName ?? "") ? "wbhe-status" : "social-assets";
 }
 
