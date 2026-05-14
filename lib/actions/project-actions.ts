@@ -29,6 +29,7 @@ const baseSchema = z.object({
   hideCountriesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   hideMoviesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   hideAssetTypesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  hideAssetNamesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   hideNewslettersInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   addToBilling: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
@@ -149,6 +150,7 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
       hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
       hideMoviesInEntries: formData.get("hideMoviesInEntries") ?? undefined,
       hideAssetTypesInEntries: formData.get("hideAssetTypesInEntries") ?? undefined,
+      hideAssetNamesInEntries: formData.get("hideAssetNamesInEntries") ?? undefined,
       hideNewslettersInEntries: formData.get("hideNewslettersInEntries") ?? undefined,
       addToBilling: formData.get("addToBilling") ?? undefined,
     });
@@ -157,7 +159,7 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
       return { success: false, error: parsed.success ? "Client is required." : parsed.error.issues[0]?.message };
     }
 
-    const client = await db.client.findUnique({ where: { id: parsed.data.clientId }, select: { id: true, enableProjectTypes: true, showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true, showNewslettersInEntries: true } });
+    const client = await db.client.findUnique({ where: { id: parsed.data.clientId }, select: { id: true, enableProjectTypes: true, showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true, showAssetNamesInEntries: true, showNewslettersInEntries: true } });
     if (!client) return { success: false, error: "Client not found." };
     if (client.enableProjectTypes && !parsed.data.projectTypeId) return { success: false, error: "Project type is required for the selected client." };
     if (!client.enableProjectTypes && parsed.data.projectTypeId) return { success: false, error: "Selected client does not use project types." };
@@ -188,6 +190,7 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
         hideCountriesInEntries: client.showCountriesInTimeEntries ? Boolean(parsed.data.hideCountriesInEntries) : false,
         hideMoviesInEntries: client.showMoviesInEntries ? Boolean(parsed.data.hideMoviesInEntries) : false,
         hideAssetTypesInEntries: client.showAssetTypesInEntries ? Boolean(parsed.data.hideAssetTypesInEntries) : false,
+        hideAssetNamesInEntries: client.showAssetNamesInEntries ? Boolean(parsed.data.hideAssetNamesInEntries) : false,
         hideNewslettersInEntries: client.showNewslettersInEntries ? Boolean(parsed.data.hideNewslettersInEntries) : false,
         addToBilling: Boolean(parsed.data.addToBilling),
       },
@@ -237,13 +240,14 @@ export async function updateProjectAction(projectId: string, _prevState: Project
       hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
       hideMoviesInEntries: formData.get("hideMoviesInEntries") ?? undefined,
       hideAssetTypesInEntries: formData.get("hideAssetTypesInEntries") ?? undefined,
+      hideAssetNamesInEntries: formData.get("hideAssetNamesInEntries") ?? undefined,
       hideNewslettersInEntries: formData.get("hideNewslettersInEntries") ?? undefined,
       addToBilling: formData.get("addToBilling") ?? undefined,
     });
 
     if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message || "Invalid project payload." };
 
-    const client = await db.client.findUnique({ where: { id: existingProject.clientId }, select: { id: true, enableProjectTypes: true, showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true, showNewslettersInEntries: true } });
+    const client = await db.client.findUnique({ where: { id: existingProject.clientId }, select: { id: true, enableProjectTypes: true, showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true, showAssetNamesInEntries: true, showNewslettersInEntries: true } });
     if (!client) return { success: false, error: "Client not found." };
     if (client.enableProjectTypes && !parsed.data.projectTypeId) return { success: false, error: "Project type is required for the selected client." };
     if (!client.enableProjectTypes && parsed.data.projectTypeId) return { success: false, error: "Selected client does not use project types." };
@@ -272,6 +276,7 @@ export async function updateProjectAction(projectId: string, _prevState: Project
         hideCountriesInEntries: client.showCountriesInTimeEntries ? Boolean(parsed.data.hideCountriesInEntries) : false,
         hideMoviesInEntries: client.showMoviesInEntries ? Boolean(parsed.data.hideMoviesInEntries) : false,
         hideAssetTypesInEntries: client.showAssetTypesInEntries ? Boolean(parsed.data.hideAssetTypesInEntries) : false,
+        hideAssetNamesInEntries: client.showAssetNamesInEntries ? Boolean(parsed.data.hideAssetNamesInEntries) : false,
         hideNewslettersInEntries: client.showNewslettersInEntries ? Boolean(parsed.data.hideNewslettersInEntries) : false,
         addToBilling: Boolean(parsed.data.addToBilling),
       },

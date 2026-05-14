@@ -16,7 +16,7 @@ export default async function EditTimeEntryPage({
   const user = await requireUser();
   if (!canAccessMenuItem(user, "time-entries")) redirect("/dashboard");
 
-  const [entry, countries, movies, assetTypes, newsletters, languages, projects, allSubProjects] = await Promise.all([
+  const [entry, countries, movies, assetTypes, assetNames, newsletters, languages, projects, allSubProjects] = await Promise.all([
     db.timeEntry.findUnique({
       where: { id },
       include: {
@@ -34,6 +34,10 @@ export default async function EditTimeEntryPage({
       orderBy: { title: "asc" },
     }),
     db.assetType.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+    }),
+    db.assetName.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
     }),
@@ -117,6 +121,7 @@ export default async function EditTimeEntryPage({
             countryId: entry.countryId,
             movieId: entry.movieId,
             assetTypeId: entry.assetTypeId,
+            assetNameId: entry.assetNameId,
             newsletterId: entry.newsletterId,
             languageId: entry.languageId,
             workDate: entry.workDate,
@@ -128,6 +133,7 @@ export default async function EditTimeEntryPage({
           countries={countries.map((country) => ({ id: country.id, name: country.name }))}
           movies={movies.map((movie) => ({ id: movie.id, title: movie.title, clientId: movie.clientId }))}
           assetTypes={assetTypes.map((assetType) => ({ id: assetType.id, name: assetType.name, clientId: assetType.clientId }))}
+          assetNames={assetNames.map((assetName) => ({ id: assetName.id, name: assetName.name, clientId: assetName.clientId }))}
           newsletters={newsletters.map((newsletter) => ({ id: newsletter.id, name: newsletter.name, clientId: newsletter.clientId }))}
           languages={languages.map((language) => ({
             id: language.id,
@@ -145,6 +151,8 @@ export default async function EditTimeEntryPage({
             hideMoviesInEntries: project.hideMoviesInEntries,
             showAssetTypesInEntries: project.client.showAssetTypesInEntries,
             hideAssetTypesInEntries: project.hideAssetTypesInEntries,
+            showAssetNamesInEntries: project.client.showAssetNamesInEntries,
+            hideAssetNamesInEntries: project.hideAssetNamesInEntries,
             showNewslettersInEntries: project.client.showNewslettersInEntries,
             hideNewslettersInEntries: project.hideNewslettersInEntries,
             showLanguagesInEntries: project.client.showLanguagesInEntries,
@@ -158,6 +166,7 @@ export default async function EditTimeEntryPage({
             hideCountriesInEntries: subProject.hideCountriesInEntries,
             hideMoviesInEntries: subProject.hideMoviesInEntries,
             hideAssetTypesInEntries: subProject.hideAssetTypesInEntries,
+            hideAssetNamesInEntries: subProject.hideAssetNamesInEntries,
             hideNewslettersInEntries: subProject.hideNewslettersInEntries,
           }))}
           allowUnassignedSubProjects

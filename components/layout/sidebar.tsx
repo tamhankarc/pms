@@ -53,6 +53,7 @@ const iconByMenuKey: Record<MenuKey, React.ComponentType<{ className?: string }>
   "client-billing-heads": ReceiptText,
   "movie-billing-heads": ReceiptText,
   "asset-type": Box,
+  "asset-names": Box,
   "filmik-resource": Box,
   countries: Globe2,
   languages: Languages,
@@ -121,6 +122,7 @@ const fullItems: SidebarNavItem[] = getItemsByKeys([
   "client-billing-heads",
   "movie-billing-heads",
   "asset-type",
+  "asset-names",
   "filmik-resource",
   "countries",
   "languages",
@@ -144,6 +146,7 @@ const teamLeadItems: SidebarNavItem[] = getItemsByKeys([
   "movies",
   "newsletters",
   "asset-type",
+  "asset-names",
   "filmik-resource",
   "countries",
   "languages",
@@ -170,6 +173,7 @@ const operationsItems: SidebarNavItem[] = getItemsByKeys([
   "movies",
   "newsletters",
   "asset-type",
+  "asset-names",
   "filmik-resource",
   "countries",
   "languages",
@@ -184,7 +188,7 @@ const operationsItems: SidebarNavItem[] = getItemsByKeys([
 const accountsItems: SidebarNavItem[] = getItemsByKeys(["billing-reports"]);
 
 function isMasterDataHref(href: string) {
-  return ["/clients", "/movies", "/newsletters", "/asset-type", "/filmik-resource", "/countries", "/languages", "/projects", "/sub-project", "/user-assignments", "/contact-persons"].includes(href);
+  return ["/clients", "/movies", "/newsletters", "/asset-type", "/asset-names", "/filmik-resource", "/countries", "/languages", "/projects", "/sub-project", "/user-assignments", "/contact-persons"].includes(href);
 }
 
 function filterAccess(items: SidebarNavItem[], user: SessionUser) {

@@ -20,6 +20,7 @@ const timeSchema = z.object({
   countryId: z.string().optional(),
   movieId: z.string().optional(),
   assetTypeId: z.string().optional(),
+  assetNameId: z.string().optional(),
   newsletterId: z.string().optional(),
   languageId: z.string().optional(),
   workDate: z.string().min(1),
@@ -90,7 +91,7 @@ async function validateDailyTimeLimit({
 async function getProjectForClient(projectId: string, clientId: string) {
   return db.project.findFirst({
     where: { id: projectId, clientId, isActive: true, status: "ACTIVE" },
-    include: { client: true, subProjects: { select: { id: true, hideCountriesInEntries: true, hideMoviesInEntries: true, hideAssetTypesInEntries: true, hideNewslettersInEntries: true } } },
+    include: { client: true, subProjects: { select: { id: true, hideCountriesInEntries: true, hideMoviesInEntries: true, hideAssetTypesInEntries: true, hideAssetNamesInEntries: true, hideNewslettersInEntries: true } } },
   });
 }
 
@@ -283,6 +284,7 @@ async function validateClientFieldRequirements(
     countryId,
     movieId,
     assetTypeId,
+    assetNameId,
     newsletterId,
     languageId,
     clientId,
@@ -291,6 +293,7 @@ async function validateClientFieldRequirements(
     countryId?: string;
     movieId?: string;
     assetTypeId?: string;
+    assetNameId?: string;
     newsletterId?: string;
     languageId?: string;
     clientId: string;
@@ -299,7 +302,7 @@ async function validateClientFieldRequirements(
 ) {
   const project = await db.project.findUnique({
     where: { id: projectId },
-    include: { client: true, subProjects: { select: { id: true, hideCountriesInEntries: true, hideMoviesInEntries: true, hideAssetTypesInEntries: true, hideNewslettersInEntries: true } } },
+    include: { client: true, subProjects: { select: { id: true, hideCountriesInEntries: true, hideMoviesInEntries: true, hideAssetTypesInEntries: true, hideAssetNamesInEntries: true, hideNewslettersInEntries: true } } },
   });
 
   if (!project) {
@@ -327,6 +330,10 @@ async function validateClientFieldRequirements(
     project.client.showAssetTypesInEntries &&
     !project.hideAssetTypesInEntries &&
     !subProject?.hideAssetTypesInEntries;
+  const assetNameEnabled =
+    project.client.showAssetNamesInEntries &&
+    !project.hideAssetNamesInEntries &&
+    !subProject?.hideAssetNamesInEntries;
   const newsletterEnabled =
     project.client.showNewslettersInEntries &&
     !project.hideNewslettersInEntries &&
@@ -350,6 +357,10 @@ async function validateClientFieldRequirements(
 
   if (!assetTypeEnabled && assetTypeId) {
     return { valid: false as const, error: "Asset Type is not enabled for the selected project/sub-project." };
+  }
+
+  if (!assetNameEnabled && assetNameId) {
+    return { valid: false as const, error: "Asset Name is not enabled for the selected project/sub-project." };
   }
 
   if (!newsletterEnabled && newsletterId) {
@@ -383,6 +394,17 @@ async function validateClientFieldRequirements(
 
     if (!newsletter) {
       return { valid: false as const, error: "Selected newsletter does not belong to the selected client." };
+    }
+  }
+
+  if (assetNameId) {
+    const assetName = await db.assetName.findFirst({
+      where: { id: assetNameId, clientId: project.clientId, isActive: true },
+      select: { id: true },
+    });
+
+    if (!assetName) {
+      return { valid: false as const, error: "Selected asset name does not belong to the selected client." };
     }
   }
 
@@ -429,6 +451,7 @@ export async function createTimeEntryAction(
       countryId: formData.get("countryId") || undefined,
       movieId: formData.get("movieId") || undefined,
       assetTypeId: formData.get("assetTypeId") || undefined,
+      assetNameId: formData.get("assetNameId") || undefined,
       newsletterId: formData.get("newsletterId") || undefined,
       languageId: formData.get("languageId") || undefined,
       workDate: formData.get("workDate"),
@@ -474,6 +497,7 @@ export async function createTimeEntryAction(
       countryId: parsed.data.countryId,
       movieId: parsed.data.movieId,
       assetTypeId: parsed.data.assetTypeId,
+      assetNameId: parsed.data.assetNameId,
       newsletterId: parsed.data.newsletterId,
       languageId: parsed.data.languageId,
       subProjectId: parsed.data.subProjectId,
@@ -509,6 +533,7 @@ export async function createTimeEntryAction(
         countryId: parsed.data.countryId || null,
         movieId: parsed.data.movieId || null,
         assetTypeId: parsed.data.assetTypeId || null,
+        assetNameId: parsed.data.assetNameId || null,
         newsletterId: parsed.data.newsletterId || null,
         languageId: parsed.data.languageId || null,
         workDate: new Date(parsed.data.workDate),
@@ -555,6 +580,7 @@ export async function updateTimeEntryAction(
       countryId: formData.get("countryId") || undefined,
       movieId: formData.get("movieId") || undefined,
       assetTypeId: formData.get("assetTypeId") || undefined,
+      assetNameId: formData.get("assetNameId") || undefined,
       newsletterId: formData.get("newsletterId") || undefined,
       languageId: formData.get("languageId") || undefined,
       workDate: formData.get("workDate"),
@@ -619,6 +645,7 @@ export async function updateTimeEntryAction(
       countryId: parsed.data.countryId,
       movieId: parsed.data.movieId,
       assetTypeId: parsed.data.assetTypeId,
+      assetNameId: parsed.data.assetNameId,
       newsletterId: parsed.data.newsletterId,
       languageId: parsed.data.languageId,
       subProjectId: parsed.data.subProjectId,
@@ -656,6 +683,7 @@ export async function updateTimeEntryAction(
         countryId: parsed.data.countryId || null,
         movieId: parsed.data.movieId || null,
         assetTypeId: parsed.data.assetTypeId || null,
+        assetNameId: parsed.data.assetNameId || null,
         newsletterId: parsed.data.newsletterId || null,
         languageId: parsed.data.languageId || null,
         workDate: new Date(parsed.data.workDate),

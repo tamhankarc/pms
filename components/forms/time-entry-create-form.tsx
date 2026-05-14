@@ -19,6 +19,8 @@ type TimeEntryProjectOption = {
   hideMoviesInEntries: boolean;
   showAssetTypesInEntries: boolean;
   hideAssetTypesInEntries: boolean;
+  showAssetNamesInEntries: boolean;
+  hideAssetNamesInEntries: boolean;
   showNewslettersInEntries: boolean;
   hideNewslettersInEntries: boolean;
   showLanguagesInEntries: boolean;
@@ -33,6 +35,7 @@ type TimeEntrySubProjectOption = {
   hideCountriesInEntries: boolean;
   hideMoviesInEntries: boolean;
   hideAssetTypesInEntries: boolean;
+  hideAssetNamesInEntries: boolean;
   hideNewslettersInEntries: boolean;
 };
 
@@ -49,6 +52,12 @@ type MovieOption = {
 };
 
 type AssetTypeOption = {
+  id: string;
+  name: string;
+  clientId: string;
+};
+
+type AssetNameOption = {
   id: string;
   name: string;
   clientId: string;
@@ -82,6 +91,7 @@ export function TimeEntryCreateForm({
   countries,
   movies,
   assetTypes,
+  assetNames,
   newsletters,
   languages,
   assignableEmployees = [],
@@ -93,6 +103,7 @@ export function TimeEntryCreateForm({
   countries: { id: string; name: string }[];
   movies: MovieOption[];
   assetTypes: AssetTypeOption[];
+  assetNames: AssetNameOption[];
   newsletters: NewsletterOption[];
   languages: LanguageOption[];
   assignableEmployees?: TimeEntryEmployeeOption[];
@@ -190,6 +201,11 @@ export function TimeEntryCreateForm({
     [assetTypes, selectedClientId],
   );
 
+  const filteredAssetNames = useMemo(
+    () => assetNames.filter((assetName) => assetName.clientId === selectedClientId),
+    [assetNames, selectedClientId],
+  );
+
   const filteredNewsletters = useMemo(
     () => newsletters.filter((newsletter) => newsletter.clientId === selectedClientId),
     [newsletters, selectedClientId],
@@ -212,6 +228,11 @@ export function TimeEntryCreateForm({
     selectedProject?.showAssetTypesInEntries &&
       !selectedProject?.hideAssetTypesInEntries &&
       !selectedSubProject?.hideAssetTypesInEntries,
+  );
+  const showAssetNameField = Boolean(
+    selectedProject?.showAssetNamesInEntries &&
+      !selectedProject?.hideAssetNamesInEntries &&
+      !selectedSubProject?.hideAssetNamesInEntries,
   );
   const showNewsletterField = Boolean(
     selectedProject?.showNewslettersInEntries &&
@@ -389,6 +410,25 @@ export function TimeEntryCreateForm({
             />
           </div>
         ) : null}
+
+        {showAssetNameField ? (
+          <div>
+            <FormLabel htmlFor="assetNameId">Asset Name</FormLabel>
+            <SearchableCombobox
+              id="assetNameId"
+              name="assetNameId"
+              defaultValue=""
+              options={[
+                { value: "", label: "No specific asset name" },
+                ...filteredAssetNames.map((assetName) => ({ value: assetName.id, label: assetName.name })),
+              ]}
+              placeholder="No specific asset name"
+              searchPlaceholder="Search asset names..."
+              emptyLabel="No asset names found."
+            />
+          </div>
+        ) : null}
+
         {showAssetTypeField ? (
           <div>
             <FormLabel htmlFor="assetTypeId">Asset Type</FormLabel>

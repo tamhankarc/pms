@@ -34,6 +34,7 @@ export function ProjectEditForm({
   clientShowsCountriesInEntries,
   clientShowsMoviesInEntries,
   clientShowsAssetTypesInEntries,
+  clientShowsAssetNamesInEntries,
   clientShowsNewslettersInEntries,
   initialValues,
   filmikResourceTypes,
@@ -48,6 +49,7 @@ export function ProjectEditForm({
   clientShowsCountriesInEntries: boolean;
   clientShowsMoviesInEntries: boolean;
   clientShowsAssetTypesInEntries: boolean;
+  clientShowsAssetNamesInEntries: boolean;
   clientShowsNewslettersInEntries: boolean;
   filmikResourceTypes: FilmikResourceType[];
   monthlyAdditionalHours?: { month: string; hours: number }[];
@@ -62,6 +64,7 @@ export function ProjectEditForm({
     hideCountriesInEntries: boolean;
     hideMoviesInEntries: boolean;
     hideAssetTypesInEntries: boolean;
+    hideAssetNamesInEntries: boolean;
     hideNewslettersInEntries: boolean;
     addToBilling: boolean;
     additionalCharges: number | null;
@@ -80,6 +83,7 @@ export function ProjectEditForm({
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(initialValues.hideCountriesInEntries);
   const [hideMoviesInEntries, setHideMoviesInEntries] = useState(initialValues.hideMoviesInEntries);
   const [hideAssetTypesInEntries, setHideAssetTypesInEntries] = useState(initialValues.hideAssetTypesInEntries);
+  const [hideAssetNamesInEntries, setHideAssetNamesInEntries] = useState(initialValues.hideAssetNamesInEntries);
   const [hideNewslettersInEntries, setHideNewslettersInEntries] = useState(initialValues.hideNewslettersInEntries);
   const [addToBilling, setAddToBilling] = useState(initialValues.addToBilling);
   const isFilmikClient = clientId === FILMIK_CLIENT_ID;
@@ -97,6 +101,7 @@ export function ProjectEditForm({
       {hideCountriesInEntries ? <input type="hidden" name="hideCountriesInEntries" value="on" /> : null}
       {hideMoviesInEntries ? <input type="hidden" name="hideMoviesInEntries" value="on" /> : null}
       {hideAssetTypesInEntries ? <input type="hidden" name="hideAssetTypesInEntries" value="on" /> : null}
+      {hideAssetNamesInEntries ? <input type="hidden" name="hideAssetNamesInEntries" value="on" /> : null}
       {hideNewslettersInEntries ? <input type="hidden" name="hideNewslettersInEntries" value="on" /> : null}
       {addToBilling ? <input type="hidden" name="addToBilling" value="on" /> : null}
 
@@ -223,6 +228,17 @@ export function ProjectEditForm({
               onChange={(event) => setHideAssetTypesInEntries(event.target.checked)}
             />
             Hide asset type dropdown in Time Entries and Estimates for this project
+          </label>
+        ) : null}
+
+        {clientShowsAssetNamesInEntries ? (
+          <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={hideAssetNamesInEntries}
+              onChange={(event) => setHideAssetNamesInEntries(event.target.checked)}
+            />
+            Hide asset name dropdown in Time Entries and Estimates for this project
           </label>
         ) : null}
 

@@ -12,6 +12,7 @@ type Client = {
   showCountriesInTimeEntries: boolean;
   showMoviesInEntries: boolean;
   showAssetTypesInEntries: boolean;
+  showAssetNamesInEntries: boolean;
   showNewslettersInEntries: boolean;
 };
 
@@ -52,6 +53,7 @@ export function NewProjectForm({
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(false);
   const [hideMoviesInEntries, setHideMoviesInEntries] = useState(false);
   const [hideAssetTypesInEntries, setHideAssetTypesInEntries] = useState(false);
+  const [hideAssetNamesInEntries, setHideAssetNamesInEntries] = useState(false);
   const [hideNewslettersInEntries, setHideNewslettersInEntries] = useState(false);
   const [addToBilling, setAddToBilling] = useState(false);
   const [monthlyAdditionalRows, setMonthlyAdditionalRows] = useState([{ month: new Date().toISOString().slice(0, 7), hours: "" }]);
@@ -76,6 +78,7 @@ export function NewProjectForm({
       {hideCountriesInEntries ? <input type="hidden" name="hideCountriesInEntries" value="on" /> : null}
       {hideMoviesInEntries ? <input type="hidden" name="hideMoviesInEntries" value="on" /> : null}
       {hideAssetTypesInEntries ? <input type="hidden" name="hideAssetTypesInEntries" value="on" /> : null}
+      {hideAssetNamesInEntries ? <input type="hidden" name="hideAssetNamesInEntries" value="on" /> : null}
       {hideNewslettersInEntries ? <input type="hidden" name="hideNewslettersInEntries" value="on" /> : null}
       {addToBilling ? <input type="hidden" name="addToBilling" value="on" /> : null}
 
@@ -110,6 +113,7 @@ export function NewProjectForm({
               setHideCountriesInEntries(false);
               setHideMoviesInEntries(false);
               setHideAssetTypesInEntries(false);
+              setHideAssetNamesInEntries(false);
               setHideNewslettersInEntries(false);
             }}
             options={clients.map((client) => ({ value: client.id, label: client.name }))}
@@ -220,6 +224,17 @@ export function NewProjectForm({
               onChange={(event) => setHideAssetTypesInEntries(event.target.checked)}
             />
             Hide asset type dropdown in Time Entries and Estimates for this project
+          </label>
+        ) : null}
+
+        {selectedClient?.showAssetNamesInEntries ? (
+          <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={hideAssetNamesInEntries}
+              onChange={(event) => setHideAssetNamesInEntries(event.target.checked)}
+            />
+            Hide asset name dropdown in Time Entries and Estimates for this project
           </label>
         ) : null}
 

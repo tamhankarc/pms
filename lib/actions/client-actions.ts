@@ -18,6 +18,7 @@ const clientSchema = z.object({
   showCountriesInTimeEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   showMoviesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   showAssetTypesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  showAssetNamesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   showLanguagesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   showNewslettersInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   enableProjectTypes: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
@@ -43,6 +44,7 @@ export async function createClientAction(
       showCountriesInTimeEntries: formData.get("showCountriesInTimeEntries") ?? undefined,
       showMoviesInEntries: formData.get("showMoviesInEntries") ?? undefined,
       showAssetTypesInEntries: formData.get("showAssetTypesInEntries") ?? undefined,
+      showAssetNamesInEntries: formData.get("showAssetNamesInEntries") ?? undefined,
       showLanguagesInEntries: formData.get("showLanguagesInEntries") ?? undefined,
       showNewslettersInEntries: formData.get("showNewslettersInEntries") ?? undefined,
       enableProjectTypes: formData.get("enableProjectTypes") ?? undefined,
@@ -66,6 +68,7 @@ export async function createClientAction(
         showCountriesInTimeEntries: Boolean(parsed.data.showCountriesInTimeEntries),
         showMoviesInEntries: Boolean(parsed.data.showMoviesInEntries),
         showAssetTypesInEntries: Boolean(parsed.data.showAssetTypesInEntries),
+        showAssetNamesInEntries: Boolean(parsed.data.showAssetNamesInEntries),
         showLanguagesInEntries: Boolean(parsed.data.showLanguagesInEntries),
         showNewslettersInEntries: Boolean(parsed.data.showNewslettersInEntries),
         enableProjectTypes: Boolean(parsed.data.enableProjectTypes),
@@ -79,6 +82,7 @@ export async function createClientAction(
     revalidatePath("/projects/new");
     revalidatePath("/movies");
     revalidatePath("/asset-type");
+    revalidatePath("/asset-names");
     revalidatePath("/time-entries");
     revalidatePath("/estimates");
     revalidatePath("/sub-project");
@@ -105,6 +109,7 @@ export async function updateClientAction(
       showCountriesInTimeEntries: formData.get("showCountriesInTimeEntries") ?? undefined,
       showMoviesInEntries: formData.get("showMoviesInEntries") ?? undefined,
       showAssetTypesInEntries: formData.get("showAssetTypesInEntries") ?? undefined,
+      showAssetNamesInEntries: formData.get("showAssetNamesInEntries") ?? undefined,
       showLanguagesInEntries: formData.get("showLanguagesInEntries") ?? undefined,
       showNewslettersInEntries: formData.get("showNewslettersInEntries") ?? undefined,
       enableProjectTypes: formData.get("enableProjectTypes") ?? undefined,
@@ -138,6 +143,7 @@ export async function updateClientAction(
         showCountriesInTimeEntries: Boolean(parsed.data.showCountriesInTimeEntries),
         showMoviesInEntries: Boolean(parsed.data.showMoviesInEntries),
         showAssetTypesInEntries: Boolean(parsed.data.showAssetTypesInEntries),
+        showAssetNamesInEntries: Boolean(parsed.data.showAssetNamesInEntries),
         showLanguagesInEntries: Boolean(parsed.data.showLanguagesInEntries),
         showNewslettersInEntries: Boolean(parsed.data.showNewslettersInEntries),
         enableProjectTypes: Boolean(parsed.data.enableProjectTypes),
@@ -153,6 +159,7 @@ export async function updateClientAction(
     revalidatePath("/projects/new");
     revalidatePath("/movies");
     revalidatePath("/asset-type");
+    revalidatePath("/asset-names");
     revalidatePath("/time-entries");
     revalidatePath("/estimates");
     revalidatePath("/sub-project");

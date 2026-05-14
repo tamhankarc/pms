@@ -11,12 +11,13 @@ export default async function NewEstimatePage() {
   const user = await requireUser();
   if (!canAccessMenuItem(user, "estimates")) redirect("/dashboard");
 
-  const [projects, countries, movies, assetTypes, newsletters, languages, supervisorAssignments, roleScopedUsers, allActiveEmployees, allSubProjects] =
+  const [projects, countries, movies, assetTypes, assetNames, newsletters, languages, supervisorAssignments, roleScopedUsers, allActiveEmployees, allSubProjects] =
     await Promise.all([
       getVisibleProjects(user, { allowedStatuses: ["ACTIVE", "ON_HOLD"] }).then((projects) => projects.filter((project) => project.billingModel === "FIXED_FULL")),
       db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
       db.movie.findMany({ where: { isActive: true }, orderBy: { title: "asc" } }),
       db.assetType.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+      db.assetName.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
       db.newsletter.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
       db.language.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
       user.userType === "TEAM_LEAD"
@@ -131,6 +132,8 @@ export default async function NewEstimatePage() {
             hideMoviesInEntries: project.hideMoviesInEntries,
             showAssetTypesInEntries: project.client.showAssetTypesInEntries,
             hideAssetTypesInEntries: project.hideAssetTypesInEntries,
+            showAssetNamesInEntries: project.client.showAssetNamesInEntries,
+            hideAssetNamesInEntries: project.hideAssetNamesInEntries,
             showNewslettersInEntries: project.client.showNewslettersInEntries,
             hideNewslettersInEntries: project.hideNewslettersInEntries,
             showLanguagesInEntries: project.client.showLanguagesInEntries,
@@ -144,11 +147,13 @@ export default async function NewEstimatePage() {
             hideCountriesInEntries: subProject.hideCountriesInEntries,
             hideMoviesInEntries: subProject.hideMoviesInEntries,
             hideAssetTypesInEntries: subProject.hideAssetTypesInEntries,
+            hideAssetNamesInEntries: subProject.hideAssetNamesInEntries,
             hideNewslettersInEntries: subProject.hideNewslettersInEntries,
           }))}
           countries={countries.map((country) => ({ id: country.id, name: country.name }))}
           movies={movies.map((movie) => ({ id: movie.id, title: movie.title, clientId: movie.clientId }))}
           assetTypes={assetTypes.map((assetType) => ({ id: assetType.id, name: assetType.name, clientId: assetType.clientId }))}
+          assetNames={assetNames.map((assetName) => ({ id: assetName.id, name: assetName.name, clientId: assetName.clientId }))}
           newsletters={newsletters.map((newsletter) => ({ id: newsletter.id, name: newsletter.name, clientId: newsletter.clientId }))}
           languages={languages.map((language) => ({
             id: language.id,

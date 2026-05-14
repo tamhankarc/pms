@@ -16,6 +16,7 @@ type ClientFormProps = {
     showCountriesInTimeEntries?: boolean;
     showMoviesInEntries?: boolean;
     showAssetTypesInEntries?: boolean;
+    showAssetNamesInEntries?: boolean;
     showLanguagesInEntries?: boolean;
     showNewslettersInEntries?: boolean;
     enableProjectTypes?: boolean;
@@ -104,6 +105,15 @@ export function ClientForm({ mode, action, initialValues, canEditCosts = false }
             defaultChecked={initialValues?.showAssetTypesInEntries ?? false}
           />
           Show Asset Type dropdown in Time Entries and Estimates (optional)
+        </label>
+
+        <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            name="showAssetNamesInEntries"
+            defaultChecked={initialValues?.showAssetNamesInEntries ?? false}
+          />
+          Show Asset Name dropdown in Time Entries and Estimates (optional)
         </label>
 
         <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">

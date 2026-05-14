@@ -52,6 +52,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         clientShowsCountriesInEntries={project.client.showCountriesInTimeEntries}
         clientShowsMoviesInEntries={project.client.showMoviesInEntries}
         clientShowsAssetTypesInEntries={project.client.showAssetTypesInEntries}
+        clientShowsAssetNamesInEntries={project.client.showAssetNamesInEntries}
         clientShowsNewslettersInEntries={project.client.showNewslettersInEntries}
         filmikResourceTypes={filmikResourceTypes}
         monthlyAdditionalHours={project.monthlyAdditionalHours.map((row) => ({ month: row.month.toISOString().slice(0, 7), hours: Number(row.hours ?? 0) }))}
@@ -67,6 +68,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           hideCountriesInEntries: project.hideCountriesInEntries,
           hideMoviesInEntries: project.hideMoviesInEntries,
           hideAssetTypesInEntries: project.hideAssetTypesInEntries,
+          hideAssetNamesInEntries: project.hideAssetNamesInEntries,
           hideNewslettersInEntries: project.hideNewslettersInEntries,
           addToBilling: project.addToBilling,
           additionalCharges: Number(project.additionalCharges ?? 0),

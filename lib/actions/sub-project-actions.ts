@@ -17,6 +17,7 @@ const schema = z.object({
   hideCountriesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   hideMoviesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   hideAssetTypesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  hideAssetNamesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   hideNewslettersInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
 
@@ -41,6 +42,7 @@ export async function createSubProjectAction(
       hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
       hideMoviesInEntries: formData.get("hideMoviesInEntries") ?? undefined,
       hideAssetTypesInEntries: formData.get("hideAssetTypesInEntries") ?? undefined,
+      hideAssetNamesInEntries: formData.get("hideAssetNamesInEntries") ?? undefined,
       hideNewslettersInEntries: formData.get("hideNewslettersInEntries") ?? undefined,
     });
 
@@ -55,7 +57,7 @@ export async function createSubProjectAction(
       where: { id: parsed.data.projectId },
       select: {
         id: true,
-        client: { select: { showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true, showNewslettersInEntries: true } },
+        client: { select: { showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true, showAssetNamesInEntries: true, showNewslettersInEntries: true } },
       },
     });
 
@@ -77,6 +79,9 @@ export async function createSubProjectAction(
           : false,
         hideAssetTypesInEntries: project.client.showAssetTypesInEntries
           ? Boolean(parsed.data.hideAssetTypesInEntries)
+          : false,
+        hideAssetNamesInEntries: project.client.showAssetNamesInEntries
+          ? Boolean(parsed.data.hideAssetNamesInEntries)
           : false,
         hideNewslettersInEntries: project.client.showNewslettersInEntries
           ? Boolean(parsed.data.hideNewslettersInEntries)
@@ -115,6 +120,7 @@ export async function updateSubProjectAction(
       hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
       hideMoviesInEntries: formData.get("hideMoviesInEntries") ?? undefined,
       hideAssetTypesInEntries: formData.get("hideAssetTypesInEntries") ?? undefined,
+      hideAssetNamesInEntries: formData.get("hideAssetNamesInEntries") ?? undefined,
       hideNewslettersInEntries: formData.get("hideNewslettersInEntries") ?? undefined,
     });
 
@@ -131,7 +137,7 @@ export async function updateSubProjectAction(
       where: { id: parsed.data.projectId },
       select: {
         id: true,
-        client: { select: { showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true, showNewslettersInEntries: true } },
+        client: { select: { showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true, showAssetNamesInEntries: true, showNewslettersInEntries: true } },
       },
     });
 
@@ -154,6 +160,9 @@ export async function updateSubProjectAction(
           : false,
         hideAssetTypesInEntries: project.client.showAssetTypesInEntries
           ? Boolean(parsed.data.hideAssetTypesInEntries)
+          : false,
+        hideAssetNamesInEntries: project.client.showAssetNamesInEntries
+          ? Boolean(parsed.data.hideAssetNamesInEntries)
           : false,
         hideNewslettersInEntries: project.client.showNewslettersInEntries
           ? Boolean(parsed.data.hideNewslettersInEntries)

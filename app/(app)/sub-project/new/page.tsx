@@ -47,10 +47,12 @@ export default async function NewSubProjectPage({
             clientShowsCountriesInEntries: project.client.showCountriesInTimeEntries,
             clientShowsMoviesInEntries: project.client.showMoviesInEntries,
             clientShowsAssetTypesInEntries: project.client.showAssetTypesInEntries,
+            clientShowsAssetNamesInEntries: project.client.showAssetNamesInEntries,
             clientShowsNewslettersInEntries: project.client.showNewslettersInEntries,
             hideCountriesInEntries: project.hideCountriesInEntries,
             hideMoviesInEntries: project.hideMoviesInEntries,
             hideAssetTypesInEntries: project.hideAssetTypesInEntries,
+            hideAssetNamesInEntries: project.hideAssetNamesInEntries,
             hideNewslettersInEntries: project.hideNewslettersInEntries,
           }))}
           action={createSubProjectAction}
