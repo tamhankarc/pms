@@ -12,6 +12,7 @@ const UNIVERSAL_PICTURES_CLIENT_ID = "cmnh2xr1s0004l204ia5u5zj3";
 
 const schema = z.object({
   id: z.string().optional(),
+  movieId: z.string().min(1, "Movie is required."),
   name: z.string().trim().min(2, "Asset name is required."),
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
@@ -22,12 +23,32 @@ async function requireCanManageAssetNames() {
   return user;
 }
 
+async function ensureUniversalMovie(movieId: string) {
+  const movie = await db.movie.findFirst({
+    where: { id: movieId, clientId: UNIVERSAL_PICTURES_CLIENT_ID, isActive: true },
+    select: { id: true },
+  });
+  if (!movie) throw new Error("Selected movie does not belong to Universal Pictures International.");
+}
+
 export async function createAssetNameAction(_prevState: AssetNameFormState, formData: FormData): Promise<AssetNameFormState> {
   try {
     await requireCanManageAssetNames();
-    const parsed = schema.safeParse({ name: formData.get("name"), isActive: formData.get("isActive") ?? "on" });
+    const parsed = schema.safeParse({
+      movieId: formData.get("movieId"),
+      name: formData.get("name"),
+      isActive: formData.get("isActive") ?? "on",
+    });
     if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message || "Invalid asset name payload." };
-    await db.assetName.create({ data: { clientId: UNIVERSAL_PICTURES_CLIENT_ID, name: parsed.data.name.trim(), isActive: Boolean(parsed.data.isActive) } });
+    await ensureUniversalMovie(parsed.data.movieId);
+    await db.assetName.create({
+      data: {
+        clientId: UNIVERSAL_PICTURES_CLIENT_ID,
+        movieId: parsed.data.movieId,
+        name: parsed.data.name.trim(),
+        isActive: Boolean(parsed.data.isActive),
+      },
+    });
     revalidatePath("/asset-names");
     revalidatePath("/time-entries");
     revalidatePath("/estimates");
@@ -40,11 +61,20 @@ export async function createAssetNameAction(_prevState: AssetNameFormState, form
 export async function updateAssetNameAction(_prevState: AssetNameFormState, formData: FormData): Promise<AssetNameFormState> {
   try {
     await requireCanManageAssetNames();
-    const parsed = schema.safeParse({ id: formData.get("id"), name: formData.get("name"), isActive: formData.get("isActive") ?? undefined });
+    const parsed = schema.safeParse({
+      id: formData.get("id"),
+      movieId: formData.get("movieId"),
+      name: formData.get("name"),
+      isActive: formData.get("isActive") ?? undefined,
+    });
     if (!parsed.success || !parsed.data.id) return { success: false, error: parsed.success ? "Asset name is required." : parsed.error.issues[0]?.message };
     const existing = await db.assetName.findFirst({ where: { id: parsed.data.id, clientId: UNIVERSAL_PICTURES_CLIENT_ID }, select: { id: true } });
     if (!existing) return { success: false, error: "Asset name not found." };
-    await db.assetName.update({ where: { id: parsed.data.id }, data: { name: parsed.data.name.trim(), isActive: Boolean(parsed.data.isActive) } });
+    await ensureUniversalMovie(parsed.data.movieId);
+    await db.assetName.update({
+      where: { id: parsed.data.id },
+      data: { movieId: parsed.data.movieId, name: parsed.data.name.trim(), isActive: Boolean(parsed.data.isActive) },
+    });
     revalidatePath("/asset-names");
     revalidatePath(`/asset-names/${parsed.data.id}`);
     revalidatePath("/time-entries");

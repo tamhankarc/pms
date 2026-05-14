@@ -153,7 +153,7 @@ export default async function NewEstimatePage() {
           countries={countries.map((country) => ({ id: country.id, name: country.name }))}
           movies={movies.map((movie) => ({ id: movie.id, title: movie.title, clientId: movie.clientId }))}
           assetTypes={assetTypes.map((assetType) => ({ id: assetType.id, name: assetType.name, clientId: assetType.clientId }))}
-          assetNames={assetNames.map((assetName) => ({ id: assetName.id, name: assetName.name, clientId: assetName.clientId }))}
+          assetNames={assetNames.map((assetName) => ({ id: assetName.id, name: assetName.name, clientId: assetName.clientId, movieId: assetName.movieId }))}
           newsletters={newsletters.map((newsletter) => ({ id: newsletter.id, name: newsletter.name, clientId: newsletter.clientId }))}
           languages={languages.map((language) => ({
             id: language.id,

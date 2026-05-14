@@ -61,6 +61,7 @@ type AssetNameOption = {
   id: string;
   name: string;
   clientId: string;
+  movieId: string;
 };
 
 type NewsletterOption = {
@@ -139,6 +140,7 @@ export function EstimateCreateForm({
     defaultEmployeeId ?? assignableEmployees[0]?.id ?? currentUserId,
   );
   const [selectedSubProjectId, setSelectedSubProjectId] = useState("");
+  const [selectedMovieId, setSelectedMovieId] = useState("");
 
   const selectedEmployee =
     assignableEmployees.find((employee) => employee.id === selectedEmployeeId) ??
@@ -195,6 +197,7 @@ export function EstimateCreateForm({
     if (nextProjectId !== selectedProjectId) {
       setSelectedProjectId(nextProjectId);
       setSelectedSubProjectId("");
+      setSelectedMovieId("");
     }
   }, [filteredProjects, selectedProjectId]);
 
@@ -209,8 +212,8 @@ export function EstimateCreateForm({
   );
 
   const filteredAssetNames = useMemo(
-    () => assetNames.filter((assetName) => assetName.clientId === selectedClientId),
-    [assetNames, selectedClientId],
+    () => assetNames.filter((assetName) => assetName.clientId === selectedClientId && assetName.movieId === selectedMovieId),
+    [assetNames, selectedClientId, selectedMovieId],
   );
 
   const filteredNewsletters = useMemo(
@@ -304,6 +307,7 @@ export function EstimateCreateForm({
               setSelectedClientId(nextValue);
               setSelectedProjectId(nextProjectId);
               setSelectedSubProjectId("");
+              setSelectedMovieId("");
             }}
             options={clientOptions.map((client) => ({
               value: client.id,
@@ -327,6 +331,7 @@ export function EstimateCreateForm({
             onValueChange={(nextValue) => {
               setSelectedProjectId(nextValue);
               setSelectedSubProjectId("");
+              setSelectedMovieId("");
             }}
             options={filteredProjects.map((project) => ({
               value: project.id,
@@ -387,7 +392,8 @@ export function EstimateCreateForm({
             <SearchableCombobox
               id="movieId"
               name="movieId"
-              defaultValue=""
+              value={selectedMovieId}
+              onValueChange={setSelectedMovieId}
               options={[
                 { value: "", label: "No specific movie" },
                 ...filteredMovies.map((movie) => ({ value: movie.id, label: movie.title })),
@@ -422,16 +428,18 @@ export function EstimateCreateForm({
           <div>
             <FormLabel htmlFor="assetNameId">Asset Name</FormLabel>
             <SearchableCombobox
+              key={selectedMovieId || "no-movie"}
               id="assetNameId"
               name="assetNameId"
               defaultValue=""
               options={[
-                { value: "", label: "No specific asset name" },
+                { value: "", label: selectedMovieId ? "No specific asset name" : "Select movie first" },
                 ...filteredAssetNames.map((assetName) => ({ value: assetName.id, label: assetName.name })),
               ]}
-              placeholder="No specific asset name"
+              placeholder={selectedMovieId ? "No specific asset name" : "Select movie first"}
               searchPlaceholder="Search asset names..."
-              emptyLabel="No asset names found."
+              emptyLabel={selectedMovieId ? "No asset names found for selected movie." : "Select a movie first."}
+              disabled={!selectedMovieId}
             />
           </div>
         ) : null}

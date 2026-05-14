@@ -274,6 +274,7 @@ model Movie {
   timeEntries                 TimeEntry[]
   contactPersons              ContactPerson[]
   movieBillingHeadAssignments MovieBillingHeadAssignment[]
+  assetNames                  AssetName[]
 
   @@index([clientId, isActive])
   @@index([title])
@@ -283,17 +284,20 @@ model Movie {
 model AssetName {
   id        String   @id @default(cuid())
   clientId  String
+  movieId   String
   name      String
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   client      Client      @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  movie       Movie       @relation(fields: [movieId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   estimates   Estimate[]
   timeEntries TimeEntry[]
 
-  @@unique([clientId, name])
+  @@unique([movieId, name])
   @@index([clientId, isActive])
+  @@index([movieId, isActive])
   @@index([name])
 }
 

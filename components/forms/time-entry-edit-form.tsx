@@ -56,6 +56,7 @@ type AssetNameOption = {
   id: string;
   name: string;
   clientId: string;
+  movieId: string;
 };
 
 type NewsletterOption = {
@@ -141,6 +142,7 @@ export function TimeEntryEditForm({
   const [selectedClientId, setSelectedClientId] = useState(entry.clientId);
   const [selectedProjectId, setSelectedProjectId] = useState(entry.projectId);
   const [selectedSubProjectId, setSelectedSubProjectId] = useState(entry.subProjectId ?? "");
+  const [selectedMovieId, setSelectedMovieId] = useState(entry.movieId ?? "");
 
   const filteredProjects = useMemo(
     () => projects.filter((project) => project.clientId === selectedClientId),
@@ -183,8 +185,8 @@ export function TimeEntryEditForm({
   );
 
   const filteredAssetNames = useMemo(
-    () => assetNames.filter((assetName) => assetName.clientId === selectedClientId),
-    [assetNames, selectedClientId],
+    () => assetNames.filter((assetName) => assetName.clientId === selectedClientId && assetName.movieId === selectedMovieId),
+    [assetNames, selectedClientId, selectedMovieId],
   );
 
   const filteredNewsletters = useMemo(
@@ -259,6 +261,7 @@ export function TimeEntryEditForm({
               setSelectedClientId(nextValue);
               setSelectedProjectId(nextProjectId);
               setSelectedSubProjectId("");
+              setSelectedMovieId("");
             }}
             options={clientOptions.map((client) => ({
               value: client.id,
@@ -282,6 +285,7 @@ export function TimeEntryEditForm({
             onValueChange={(nextValue) => {
               setSelectedProjectId(nextValue);
               setSelectedSubProjectId("");
+              setSelectedMovieId("");
             }}
             options={filteredProjects.map((project) => ({
               value: project.id,
@@ -342,7 +346,8 @@ export function TimeEntryEditForm({
             <SearchableCombobox
               id="movieId"
               name="movieId"
-              defaultValue={entry.movieId ?? ""}
+              value={selectedMovieId}
+              onValueChange={setSelectedMovieId}
               options={[
                 { value: "", label: "No specific movie" },
                 ...filteredMovies.map((movie) => ({ value: movie.id, label: movie.title })),
@@ -377,16 +382,18 @@ export function TimeEntryEditForm({
           <div>
             <FormLabel htmlFor="assetNameId">Asset Name</FormLabel>
             <SearchableCombobox
+              key={selectedMovieId || "no-movie"}
               id="assetNameId"
               name="assetNameId"
-              defaultValue={entry.assetNameId ?? ""}
+              defaultValue={selectedMovieId === entry.movieId ? entry.assetNameId ?? "" : ""}
               options={[
-                { value: "", label: "No specific asset name" },
+                { value: "", label: selectedMovieId ? "No specific asset name" : "Select movie first" },
                 ...filteredAssetNames.map((assetName) => ({ value: assetName.id, label: assetName.name })),
               ]}
-              placeholder="No specific asset name"
+              placeholder={selectedMovieId ? "No specific asset name" : "Select movie first"}
               searchPlaceholder="Search asset names..."
-              emptyLabel="No asset names found."
+              emptyLabel={selectedMovieId ? "No asset names found for selected movie." : "Select a movie first."}
+              disabled={!selectedMovieId}
             />
           </div>
         ) : null}

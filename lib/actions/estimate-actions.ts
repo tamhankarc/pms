@@ -221,13 +221,17 @@ async function validateClientFieldRequirements(
   }
 
   if (assetNameId) {
+    if (!movieId) {
+      return { valid: false as const, error: "Select a movie before selecting an asset name." };
+    }
+
     const assetName = await db.assetName.findFirst({
-      where: { id: assetNameId, clientId: project.clientId, isActive: true },
+      where: { id: assetNameId, clientId: project.clientId, movieId, isActive: true },
       select: { id: true },
     });
 
     if (!assetName) {
-      return { valid: false as const, error: "Selected asset name does not belong to the selected client." };
+      return { valid: false as const, error: "Selected asset name does not belong to the selected movie." };
     }
   }
 

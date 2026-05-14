@@ -2,13 +2,20 @@
 
 import { useActionState } from "react";
 import { FormLabel } from "@/components/ui/form-label";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import type { AssetNameFormState } from "@/lib/actions/asset-name-actions";
 
 const initialState: AssetNameFormState = {};
 
-export function AssetNameForm({ action, initialValues, title, submitLabel }: {
+type MovieOption = {
+  id: string;
+  title: string;
+};
+
+export function AssetNameForm({ action, initialValues, movies, title, submitLabel }: {
   action: (state: AssetNameFormState, formData: FormData) => Promise<AssetNameFormState>;
-  initialValues?: { id?: string; name: string; isActive: boolean };
+  initialValues?: { id?: string; movieId: string; name: string; isActive: boolean };
+  movies: MovieOption[];
   title: string;
   submitLabel: string;
 }) {
@@ -21,6 +28,19 @@ export function AssetNameForm({ action, initialValues, title, submitLabel }: {
       {state?.error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</div> : null}
       {state?.success ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Asset name saved successfully.</div> : null}
       <div className="mt-5 space-y-4">
+        <div>
+          <FormLabel htmlFor="movieId" required>Movie</FormLabel>
+          <SearchableCombobox
+            id="movieId"
+            name="movieId"
+            defaultValue={initialValues?.movieId ?? ""}
+            options={movies.map((movie) => ({ value: movie.id, label: movie.title }))}
+            placeholder="Select movie"
+            searchPlaceholder="Search movies..."
+            emptyLabel="No movies found."
+            required
+          />
+        </div>
         <div>
           <FormLabel htmlFor="name" required>Asset name</FormLabel>
           <input id="name" name="name" className="input" defaultValue={initialValues?.name ?? ""} required />
