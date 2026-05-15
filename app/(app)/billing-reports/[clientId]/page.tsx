@@ -484,12 +484,14 @@ function UniversalBillingSummaryFilters({ clientId, data }: { clientId: string; 
   return (
     <form method="get" action={`/billing-reports/${clientId}`} className="card p-5">
       <input type="hidden" name="report" value="billing-summary" />
-      <div className="grid gap-4 md:grid-cols-[220px_auto] md:items-end">
+      <div className="grid gap-4 md:grid-cols-[220px_max-content] md:items-end">
         <div>
           <label className="label" htmlFor="month">Month</label>
           <input id="month" name="month" type="month" className="input" defaultValue={month} />
         </div>
-        <button className="btn-primary" type="submit">Apply</button>
+        <button className="btn-primary w-full md:w-auto md:px-8" type="submit">
+          Apply
+        </button>
       </div>
     </form>
   );
