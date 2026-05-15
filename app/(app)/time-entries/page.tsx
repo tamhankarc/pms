@@ -113,6 +113,7 @@ export default async function TimeEntriesPage({
       subProject: true,
       movie: true,
       language: true,
+      assetName: true,
     },
     orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
   });
@@ -215,18 +216,24 @@ export default async function TimeEntriesPage({
                     <div className="text-[11px] xl:text-xs text-slate-500 break-words">
                       {entry.subProject?.name ?? "No Sub Project"}
                     </div>
-                    <div className="text-[11px] xl:text-xs text-slate-500 break-words">{entry.taskName}</div>
+                    {entry.assetName ? (
+                      <div className="text-[11px] xl:text-xs text-slate-500 break-words">
+                        {entry.assetName.name}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] xl:text-xs text-slate-500 break-words">{entry.taskName}</div>
+                    )}
                     <div className="text-[11px] xl:text-xs text-slate-500 break-words">
                       {entry.countryId ? countryMap.get(entry.countryId) ?? "—" : "No specific country"}
                     </div>
                     <div className="text-[11px] xl:text-xs text-slate-500 break-words">
                       {entry.movie?.title ?? "No specific movie"}
                     </div>
-                    <div className="text-[11px] xl:text-xs text-slate-500 break-words">
-                      {entry.language
-                        ? `${entry.language.name} (${entry.language.code})`
-                        : "No specific language"}
-                    </div>
+                    {entry.language && (
+                      <div className="text-[11px] xl:text-xs text-slate-500 break-words">
+                        {entry.language.name} ({entry.language.code})
+                      </div>
+                    )}
                   </td>
 
                   <td className="table-cell align-top min-w-[100px] xl:min-w-[110px] whitespace-nowrap text-[13px] xl:text-sm">
