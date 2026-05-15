@@ -69,7 +69,7 @@ export function WarnerDeliverableFiltersClient({
       <input type="hidden" name="report" value={reportType} />
       <div className={hasCountryFilter ? "grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end" : "grid gap-4 md:grid-cols-[1fr_auto] md:items-end"}>
         <div>
-          <label className="label" htmlFor="movieId">Movie</label>
+          <label className="label" htmlFor="movieId">Title</label>
           <SearchableCombobox
             id="movieId"
             name="movieId"

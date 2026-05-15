@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { PaginationControls } from "@/components/ui/pagination-controls";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { canManageAssetNames } from "@/lib/permissions";
@@ -42,12 +43,15 @@ export default async function AssetNamesPage({ searchParams }: { searchParams?: 
     <div className="mb-6 card p-4">
       <form className="grid gap-3 md:grid-cols-[1fr_260px_180px_auto]" method="get">
         <input className="input" name="q" defaultValue={q} placeholder="Search by asset name" />
-        <select className="input" name="movieId" defaultValue={effectiveMovieId}>
-          <option value="all">All movies</option>
-          {movies.map((movie) => (
-            <option key={movie.id} value={movie.id}>{movie.title}</option>
-          ))}
-        </select>
+        <SearchableCombobox
+          id="movieId"
+          name="movieId"
+          defaultValue={effectiveMovieId}
+          options={[{ value: "all", label: "All movies" }, ...movies.map((movie) => ({ value: movie.id, label: movie.title }))]}
+          placeholder="Select movie"
+          searchPlaceholder="Search movies..."
+          emptyLabel="No movie found."
+        />
         <select className="input" name="status" defaultValue={status}><option value="all">All statuses</option><option value="active">Active only</option><option value="inactive">Inactive only</option></select>
         <button className="btn-secondary" type="submit">Apply</button>
       </form>
