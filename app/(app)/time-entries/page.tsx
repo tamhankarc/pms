@@ -26,7 +26,7 @@ function buildToBoundary(value: string) {
 export default async function TimeEntriesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ clientId?: string; projectId?: string; fromDate?: string; toDate?: string; page?: string }>;
+  searchParams?: Promise<{ clientId?: string; projectId?: string; fromDate?: string; toDate?: string; userId?: string; page?: string }>;
 }) {
   const user = await requireUser();
   if (!canAccessMenuItem(user, "time-entries")) redirect("/dashboard");
@@ -35,9 +35,10 @@ export default async function TimeEntriesPage({
   const selectedProjectId = params.projectId ?? "all";
   const selectedFromDate = normalizeDateInput(params.fromDate);
   const selectedToDate = normalizeDateInput(params.toDate);
+  const selectedUserId = user.userType === "ADMIN" ? params.userId ?? "all" : "all";
   const page = parsePageParam(params.page);
 
-  const [projects, countries, supervisorAssignments] = await Promise.all([
+  const [projects, countries, supervisorAssignments, adminUserOptions] = await Promise.all([
     getVisibleProjects(user, { allowedStatuses: ["ACTIVE"] }),
     db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
@@ -48,6 +49,13 @@ export default async function TimeEntriesPage({
               select: { id: true, fullName: true, functionalRole: true, userType: true, isActive: true },
             },
           },
+        })
+      : Promise.resolve([]),
+    user.userType === "ADMIN"
+      ? db.user.findMany({
+          where: { isActive: true, userType: { in: ["MANAGER", "TEAM_LEAD", "EMPLOYEE"] } },
+          select: { id: true, fullName: true, employeeCode: true, userType: true },
+          orderBy: { fullName: "asc" },
         })
       : Promise.resolve([]),
   ]);
@@ -63,6 +71,9 @@ export default async function TimeEntriesPage({
   const scopedEmployeeIds = supervisorAssignments
     .filter((row) => row.employee.functionalRole === user.functionalRole)
     .map((row) => row.employeeId);
+
+  const validAdminUserIds = new Set(adminUserOptions.map((option) => option.id));
+  const effectiveUserId = selectedUserId !== "all" && validAdminUserIds.has(selectedUserId) ? selectedUserId : "all";
 
   const fromBoundary = buildFromBoundary(selectedFromDate);
   const toBoundary = buildToBoundary(selectedToDate);
@@ -106,6 +117,7 @@ export default async function TimeEntriesPage({
               project: { is: { isActive: true, status: "ACTIVE" } },
               OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
               ...(hasWorkDateFilter ? { workDate: workDateFilter } : {}),
+              ...(user.userType === "ADMIN" && effectiveUserId !== "all" ? { employeeId: effectiveUserId } : {}),
             },
     include: {
       employee: true,
@@ -164,6 +176,11 @@ export default async function TimeEntriesPage({
             id: project.id,
             name: project.name,
             clientId: project.clientId,
+          }))}
+          selectedUserId={effectiveUserId}
+          userOptions={adminUserOptions.map((option) => ({
+            id: option.id,
+            name: `${option.fullName}${option.employeeCode ? ` (${option.employeeCode})` : ""} · ${option.userType.replaceAll("_", " ")}`,
           }))}
         />
       </div>
@@ -295,6 +312,7 @@ export default async function TimeEntriesPage({
             projectId: selectedProjectId,
             fromDate: selectedFromDate || undefined,
             toDate: selectedToDate || undefined,
+            userId: effectiveUserId !== "all" ? effectiveUserId : undefined,
           }}
         />
       </div>

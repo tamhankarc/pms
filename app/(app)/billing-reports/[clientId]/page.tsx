@@ -440,10 +440,10 @@ function WarnerDeliverableFilters({
   const hasCountryFilter = data.reportType === "other-deliverable";
   const movieEmptyLabel =
     data.reportType === "domestic-deliverable"
-      ? "No active Working/Completed Domestic movies found."
+      ? "No active Working/Completed Domestic titles found."
       : data.reportType === "intl-deliverable"
-        ? "No active Working/Completed INTL movies found."
-        : "No active Working/Completed Other/Canada movies found.";
+        ? "No active Working/Completed INTL titles found."
+        : "No active Working/Completed Other/Canada titles found.";
 
   return (
     <WarnerDeliverableFiltersClient
@@ -491,7 +491,7 @@ function WarnerDomesticTable({
                 colSpan={2}
                 className="table-cell text-center text-sm text-slate-500"
               >
-                Select an active movie to view deliverables.
+                Select an active title to view deliverables.
               </td>
             </tr>
           ) : null}
@@ -503,7 +503,7 @@ function WarnerDomesticTable({
                 colSpan={2}
                 className="table-cell text-center text-sm text-slate-500"
               >
-                Select a country with time entries for the selected movie to
+                Select a country with time entries for the selected title to
                 view deliverables.
               </td>
             </tr>
@@ -554,10 +554,10 @@ function WarnerDeliverableWorkspace({
   const subtitle = requiresCountry
     ? data.selectedMovie && data.selectedCountry
       ? `Deliverable billing for ${data.selectedMovie.title} / ${data.selectedCountry.name}.`
-      : "Select a movie and country to view deliverable billing."
+      : "Select a title and country to view deliverable billing."
     : data.selectedMovie
       ? `Deliverable billing for ${data.selectedMovie.title}.`
-      : "Select a movie to view deliverable billing.";
+      : "Select a title to view deliverable billing.";
   return (
     <div className="space-y-6">
       <ReportTabs
@@ -604,7 +604,7 @@ function SonyPicturesReportFilters({
       <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
         <div>
           <label className="label" htmlFor="movieId">
-            Movie
+            Title
           </label>
           <SearchableCombobox
             id="movieId"
@@ -614,9 +614,9 @@ function SonyPicturesReportFilters({
               value: movie.id,
               label: movie.title,
             }))}
-            placeholder="Select movie"
-            searchPlaceholder="Search movies..."
-            emptyLabel="No active Working/Completed movies with time entries found."
+            placeholder="Select title"
+            searchPlaceholder="Search titles..."
+            emptyLabel="No active Working/Completed titles with time entries found."
           />
         </div>
         <button className="btn-primary" type="submit">
@@ -624,7 +624,7 @@ function SonyPicturesReportFilters({
         </button>
       </div>
       <p className="mt-3 text-sm text-slate-500">
-        Only active Working/Completed movies with one or more Time Entries are
+        Only active Working/Completed titles with one or more Time Entries are
         listed.
       </p>
     </form>
@@ -681,7 +681,7 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
                 colSpan={4}
                 className="table-cell text-center text-sm text-slate-500"
               >
-                Select a movie to view billing records.
+                Select a title to view billing records.
               </td>
             </tr>
           ) : null}
@@ -691,7 +691,7 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
                 colSpan={4}
                 className="table-cell text-center text-sm text-slate-500"
               >
-                No projects have Time Entries for the selected movie.
+                No projects have Time Entries for the selected title.
               </td>
             </tr>
           ) : null}
@@ -722,7 +722,7 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
                 colSpan={4}
                 className="table-cell text-xs font-semibold uppercase tracking-[0.2em] text-slate-600"
               >
-                Movie Charges
+                Title Charges
               </td>
             </tr>
           ) : null}
@@ -733,7 +733,7 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
               </td>
               <td className="table-cell">-</td>
               <td className="table-cell">
-                <span className="badge-blue">Movie Charge</span>
+                <span className="badge-blue">Title Charge</span>
               </td>
               <td className="table-cell whitespace-nowrap font-medium text-slate-900">
                 {formatSonyUsd(row.cost)}
@@ -792,7 +792,7 @@ function SonyPicturesReportWorkspace({
       </div>
       {data.selectedMovie ? (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-          Movie:{" "}
+          Title:{" "}
           <span className="font-semibold text-slate-900">
             {data.selectedMovie.title}
           </span>
@@ -1197,7 +1197,7 @@ function GenericBillingReportFilters({
         {data.movieSpecific ? (
           <div>
             <label className="label" htmlFor="movieId">
-              Movie
+              Title
             </label>
             <SearchableCombobox
               id="movieId"
@@ -1207,9 +1207,9 @@ function GenericBillingReportFilters({
                 value: movie.id,
                 label: movie.title,
               }))}
-              placeholder="Select movie"
-              searchPlaceholder="Search movies..."
-              emptyLabel="No movies found."
+              placeholder="Select title"
+              searchPlaceholder="Search titles..."
+              emptyLabel="No titles found."
             />
           </div>
         ) : null}
@@ -1225,7 +1225,7 @@ function GenericBillingReportFilters({
       {data.movieSpecific ? (
         <p className="mt-3 text-sm text-slate-500">
           Date range is used for Hourly project costs. Report rows are limited
-          to projects with time entries for the selected movie.
+          to projects with time entries for the selected title.
         </p>
       ) : null}
     </form>
@@ -1400,7 +1400,7 @@ function GenericBillingReportWorkspace({
       </div>
       {data.selectedMovie ? (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-          Movie:{" "}
+          Title:{" "}
           <span className="font-semibold text-slate-900">
             {data.selectedMovie.title}
           </span>

@@ -49,7 +49,7 @@ export default async function BillingReportsPage() {
             <tr>
               <th className="table-cell">Client</th>
               <th className="table-cell">Projects</th>
-              <th className="table-cell">Movies</th>
+              <th className="table-cell">Titles</th>
               <th className="table-cell">Status</th>
               <th className="table-cell">Action</th>
             </tr>

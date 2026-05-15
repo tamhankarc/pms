@@ -15,6 +15,11 @@ type ProjectOption = {
   clientId: string;
 };
 
+type UserOption = {
+  id: string;
+  name: string;
+};
+
 type Props = {
   basePath: string;
   selectedFromDate: string;
@@ -23,6 +28,8 @@ type Props = {
   selectedProjectId: string;
   clientOptions: ClientOption[];
   projectOptions: ProjectOption[];
+  selectedUserId?: string;
+  userOptions?: UserOption[];
 };
 
 export function ListReportFilters({
@@ -33,6 +40,8 @@ export function ListReportFilters({
   selectedProjectId,
   clientOptions,
   projectOptions,
+  selectedUserId = "all",
+  userOptions = [],
 }: Props) {
   const [clientId, setClientId] = useState(selectedClientId);
   const [projectId, setProjectId] = useState(selectedProjectId);
@@ -123,6 +132,26 @@ export function ListReportFilters({
           emptyLabel="No projects found."
         />
       </div>
+
+      {userOptions.length ? (
+        <div className="w-full min-w-0 sm:w-[260px] lg:w-[300px]">
+          <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor={`${basePath}-userId`}>
+            User
+          </label>
+          <SearchableCombobox
+            id={`${basePath}-userId`}
+            name="userId"
+            defaultValue={selectedUserId}
+            options={[
+              { value: "all", label: "All users" },
+              ...userOptions.map((option) => ({ value: option.id, label: option.name })),
+            ]}
+            placeholder="All users"
+            searchPlaceholder="Search users..."
+            emptyLabel="No users found."
+          />
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-3">
         <button className="btn-secondary" type="submit">

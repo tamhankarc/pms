@@ -637,7 +637,7 @@ export function buildWarnerDomesticReportExcel(
   const detailRows = [
     excelRow([data.reportTitle]),
     excelRow(["Client", data.client.name]),
-    excelRow(["Movie", data.selectedMovie?.title ?? "-"]),
+    excelRow(["Title", data.selectedMovie?.title ?? "-"]),
     ...(data.reportType === "other-deliverable"
       ? [excelRow(["Country", data.selectedCountry?.name ?? "-"])]
       : []),
@@ -699,7 +699,7 @@ function buildWarnerDomesticPdfPages(data: WarnerDomesticDeliverableData) {
       );
       commands.push(
         textCommand(
-          `Movie: ${data.selectedMovie?.title ?? "-"}`,
+          `Title: ${data.selectedMovie?.title ?? "-"}`,
           MARGIN_X,
           TOP_Y - 38,
           9,
@@ -806,7 +806,7 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
     const rows = [
       excelRow(["Client", data.client.name]),
       ...(data.selectedMovie
-        ? [excelRow(["Movie", data.selectedMovie.title])]
+        ? [excelRow(["Title", data.selectedMovie.title])]
         : []),
       ...(block.key === "hourly"
         ? [
@@ -878,7 +878,7 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
     excelRow([`${data.client.name} Billing`]),
     excelRow(["Client", data.client.name]),
     ...(data.selectedMovie
-      ? [excelRow(["Movie", data.selectedMovie.title])]
+      ? [excelRow(["Title", data.selectedMovie.title])]
       : []),
     excelRow([
       "Hourly Date Range",
@@ -978,7 +978,7 @@ function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
   if (data.selectedMovie)
     summaryCommands.push(
       textCommand(
-        `Movie: ${data.selectedMovie.title}`,
+        `Title: ${data.selectedMovie.title}`,
         MARGIN_X,
         TOP_Y - 38,
         9,
@@ -1215,7 +1215,7 @@ function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
         if (data.selectedMovie)
           commands.push(
             textCommand(
-              `Movie: ${data.selectedMovie.title}`,
+              `Title: ${data.selectedMovie.title}`,
               MARGIN_X,
               TOP_Y - 38,
               9,
@@ -1291,7 +1291,7 @@ export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
   const rows = [
     excelRow([data.reportTitle]),
     excelRow(["Client", data.client.name]),
-    excelRow(["Movie", data.selectedMovie?.title ?? "-"]),
+    excelRow(["Title", data.selectedMovie?.title ?? "-"]),
     excelRow([]),
     excelRow(data.showCountryList ? ["Project", "Country List", "Contact Person", "Billing Model", "Cost (USD)"] : ["Project", "Contact Person", "Billing Model", "Cost (USD)"]),
     ...data.projectRows.map((row) =>
@@ -1305,9 +1305,9 @@ export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
     ...(data.chargeRows.length
       ? [
           excelRow([]),
-          excelRow(["Movie Charges"]),
+          excelRow(["Title Charges"]),
           ...data.chargeRows.map((row) =>
-            excelRow(data.showCountryList ? [row.label, "-", "-", "Movie Charge", row.cost] : [row.label, "-", "Movie Charge", row.cost], data.showCountryList ? [4] : [3]),
+            excelRow(data.showCountryList ? [row.label, "-", "-", "Title Charge", row.cost] : [row.label, "-", "Title Charge", row.cost], data.showCountryList ? [4] : [3]),
           ),
         ]
       : []),
@@ -1346,7 +1346,7 @@ function buildSonyPicturesReportPdfPages(data: SonyPicturesReportData) {
         ] as PdfTableRow,
     ),
     ...(data.chargeRows.length
-      ? [["Movie Charges", "", "", "", ""] as PdfTableRow]
+      ? [["Title Charges", "", "", "", ""] as PdfTableRow]
       : []),
     ...data.chargeRows.map(
       (row) =>
@@ -1354,7 +1354,7 @@ function buildSonyPicturesReportPdfPages(data: SonyPicturesReportData) {
           row.label,
           "-",
           "-",
-          "Movie Charge",
+          "Title Charge",
           formatUsd(row.cost),
         ] as PdfTableRow,
     ),
@@ -1378,7 +1378,7 @@ function buildSonyPicturesReportPdfPages(data: SonyPicturesReportData) {
     );
     commands.push(
       textCommand(
-        "Select a movie to view billing records.",
+        "Select a title to view billing records.",
         MARGIN_X,
         TOP_Y - 48,
         9,
@@ -1412,7 +1412,7 @@ function buildSonyPicturesReportPdfPages(data: SonyPicturesReportData) {
       );
       commands.push(
         textCommand(
-          `Movie: ${data.selectedMovie.title}`,
+          `Title: ${data.selectedMovie.title}`,
           MARGIN_X,
           TOP_Y - 38,
           9,
@@ -1441,7 +1441,7 @@ function buildSonyPicturesReportPdfPages(data: SonyPicturesReportData) {
     drawTableHeader(commands, columns, x, currentStartY);
     let y = currentStartY - HEADER_HEIGHT;
     rows.slice(rowIndex, rowIndex + maxRows).forEach((row) => {
-      if (row[0] === "Movie Charges" || row[0] === "Total")
+      if (row[0] === "Title Charges" || row[0] === "Total")
         commands.push(
           fillRectCommand(
             x,
