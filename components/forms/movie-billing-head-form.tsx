@@ -55,22 +55,14 @@ export function MovieBillingHeadForm({ clients, action, initialValues, submitLab
   const [otherCompulsionType, setOtherCompulsionType] = useState<CompulsionType>(initialValues?.otherCompulsionType ?? "FIXED_COMPULSORY");
   const [costType, setCostType] = useState<CostType>(initialValues?.costType ?? "WHOLE_COST");
   const clientOptions = useMemo(() => clients.map((client) => ({ value: client.id, label: client.name })), [clients]);
-  const domesticIntlSelected = domesticActive || intlActive;
-
   function toggleDomestic(checked: boolean) {
     setDomesticActive(checked);
-    if (checked) setOtherActive(false);
   }
   function toggleIntl(checked: boolean) {
     setIntlActive(checked);
-    if (checked) setOtherActive(false);
   }
   function toggleOther(checked: boolean) {
     setOtherActive(checked);
-    if (checked) {
-      setDomesticActive(false);
-      setIntlActive(false);
-    }
   }
 
   return (
@@ -83,7 +75,7 @@ export function MovieBillingHeadForm({ clients, action, initialValues, submitLab
       <input type="hidden" name="domesticCompulsionType" value={domesticCompulsionType} />
       <input type="hidden" name="intlCompulsionType" value={intlCompulsionType} />
       <input type="hidden" name="otherCompulsionType" value={otherCompulsionType} />
-      <input type="hidden" name="compulsionType" value={otherActive ? otherCompulsionType : domesticCompulsionType} />
+      <input type="hidden" name="compulsionType" value={domesticActive ? domesticCompulsionType : intlActive ? intlCompulsionType : otherCompulsionType} />
       <input type="hidden" name="costType" value={costType} />
       <h2 className="section-title">{title}</h2>
       <p className="section-subtitle">Fields marked <span className="text-red-600">*</span> are required.</p>
@@ -97,7 +89,7 @@ export function MovieBillingHeadForm({ clients, action, initialValues, submitLab
         <div className={`rounded-2xl border p-4 ${domesticActive ? "border-slate-200 bg-slate-50" : "border-slate-200 bg-slate-100 text-slate-400"}`}>
           <div className="flex items-start justify-between gap-4">
             <div><h3 className="text-sm font-semibold text-slate-900">Domestic billing</h3><p className="mt-1 text-xs text-slate-500">Head type used for US country billing.</p></div>
-            <label className={`flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium ${otherActive ? "cursor-not-allowed text-slate-400 opacity-60" : "text-slate-700"}`}><input type="checkbox" checked={domesticActive} disabled={otherActive} onChange={(e) => toggleDomestic(e.target.checked)} /> Active</label>
+            <label className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700"><input type="checkbox" checked={domesticActive} onChange={(e) => toggleDomestic(e.target.checked)} /> Active</label>
           </div>
           <fieldset disabled={!domesticActive} className="mt-4 space-y-4 disabled:cursor-not-allowed disabled:opacity-60">
             <div><FormLabel htmlFor="domesticCompulsionType" required={domesticActive}>Head type - Domestic</FormLabel><SearchableCombobox id="domesticCompulsionType" value={domesticCompulsionType} onValueChange={(v) => setDomesticCompulsionType(v as CompulsionType)} options={headTypeOptions} placeholder="Select domestic type" searchPlaceholder="Search types..." emptyLabel="No type found." disabled={!domesticActive} required={domesticActive} /></div>
@@ -108,7 +100,7 @@ export function MovieBillingHeadForm({ clients, action, initialValues, submitLab
         <div className={`rounded-2xl border p-4 ${intlActive ? "border-slate-200 bg-slate-50" : "border-slate-200 bg-slate-100 text-slate-400"}`}>
           <div className="flex items-start justify-between gap-4">
             <div><h3 className="text-sm font-semibold text-slate-900">INTL billing</h3><p className="mt-1 text-xs text-slate-500">Head type used for all non-US country billing.</p></div>
-            <label className={`flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium ${otherActive ? "cursor-not-allowed text-slate-400 opacity-60" : "text-slate-700"}`}><input type="checkbox" checked={intlActive} disabled={otherActive} onChange={(e) => toggleIntl(e.target.checked)} /> Active</label>
+            <label className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700"><input type="checkbox" checked={intlActive} onChange={(e) => toggleIntl(e.target.checked)} /> Active</label>
           </div>
           <fieldset disabled={!intlActive} className="mt-4 space-y-4 disabled:cursor-not-allowed disabled:opacity-60">
             <div><FormLabel htmlFor="intlCompulsionType" required={intlActive}>Head type - INTL</FormLabel><SearchableCombobox id="intlCompulsionType" value={intlCompulsionType} onValueChange={(v) => setIntlCompulsionType(v as CompulsionType)} options={headTypeOptions} placeholder="Select INTL type" searchPlaceholder="Search types..." emptyLabel="No type found." disabled={!intlActive} required={intlActive} /></div>
@@ -118,8 +110,8 @@ export function MovieBillingHeadForm({ clients, action, initialValues, submitLab
 
         <div className={`md:col-span-2 rounded-2xl border p-4 ${otherActive ? "border-slate-200 bg-slate-50" : "border-slate-200 bg-slate-100 text-slate-400"}`}>
           <div className="flex items-start justify-between gap-4">
-            <div><h3 className="text-sm font-semibold text-slate-900">Other billing</h3><p className="mt-1 text-xs text-slate-500">Use this for movies marked with Other billing region. This cannot be combined with Domestic or INTL on the same billing head.</p></div>
-            <label className={`flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium ${domesticIntlSelected ? "cursor-not-allowed text-slate-400 opacity-60" : "text-slate-700"}`}><input type="checkbox" checked={otherActive} disabled={domesticIntlSelected} onChange={(e) => toggleOther(e.target.checked)} /> Active</label>
+            <div><h3 className="text-sm font-semibold text-slate-900">Other billing</h3><p className="mt-1 text-xs text-slate-500">Use this for movies marked with Other billing region. This can be active independently of Domestic or INTL billing.</p></div>
+            <label className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700"><input type="checkbox" checked={otherActive} onChange={(e) => toggleOther(e.target.checked)} /> Active</label>
           </div>
           <fieldset disabled={!otherActive} className="mt-4 grid gap-4 md:grid-cols-2 disabled:cursor-not-allowed disabled:opacity-60">
             <div><FormLabel htmlFor="otherCompulsionType" required={otherActive}>Head type - Other</FormLabel><SearchableCombobox id="otherCompulsionType" value={otherCompulsionType} onValueChange={(v) => setOtherCompulsionType(v as CompulsionType)} options={headTypeOptions} placeholder="Select other type" searchPlaceholder="Search types..." emptyLabel="No type found." disabled={!otherActive} required={otherActive} /></div>

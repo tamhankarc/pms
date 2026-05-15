@@ -63,12 +63,11 @@ export async function createMovieBillingHeadAction(_prevState: MovieBillingHeadF
     });
     if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message || "Invalid billing head payload." };
     if (!parsed.data.domesticActive && !parsed.data.intlActive && !parsed.data.otherActive) return { success: false, error: "Activate Domestic, INTL, or Other for this billing head." };
-    if (parsed.data.otherActive && (parsed.data.domesticActive || parsed.data.intlActive)) return { success: false, error: "Other billing cannot be combined with Domestic or INTL for the same billing head." };
     await db.movieBillingHead.create({
       data: {
         clientId: parsed.data.clientId,
         name: parsed.data.name,
-        compulsionType: parsed.data.otherActive ? parsed.data.otherCompulsionType : parsed.data.domesticCompulsionType,
+        compulsionType: parsed.data.domesticActive ? parsed.data.domesticCompulsionType : parsed.data.intlActive ? parsed.data.intlCompulsionType : parsed.data.otherCompulsionType,
         domesticCompulsionType: parsed.data.domesticCompulsionType,
         intlCompulsionType: parsed.data.intlCompulsionType,
         otherCompulsionType: parsed.data.otherCompulsionType,
@@ -123,13 +122,12 @@ export async function updateMovieBillingHeadAction(_prevState: MovieBillingHeadF
     const existingHead = await db.movieBillingHead.findUnique({ where: { id: parsed.data.id }, select: { domesticCost: true, intlCost: true, intlCanadaCost: true, otherCost: true, costType: true } });
     if (!existingHead) return { success: false, error: "Billing head not found." };
     if (!parsed.data.domesticActive && !parsed.data.intlActive && !parsed.data.otherActive) return { success: false, error: "Activate Domestic, INTL, or Other for this billing head." };
-    if (parsed.data.otherActive && (parsed.data.domesticActive || parsed.data.intlActive)) return { success: false, error: "Other billing cannot be combined with Domestic or INTL for the same billing head." };
     await db.movieBillingHead.update({
       where: { id: parsed.data.id },
       data: {
         clientId: parsed.data.clientId,
         name: parsed.data.name,
-        compulsionType: parsed.data.otherActive ? parsed.data.otherCompulsionType : parsed.data.domesticCompulsionType,
+        compulsionType: parsed.data.domesticActive ? parsed.data.domesticCompulsionType : parsed.data.intlActive ? parsed.data.intlCompulsionType : parsed.data.otherCompulsionType,
         domesticCompulsionType: parsed.data.domesticCompulsionType,
         intlCompulsionType: parsed.data.intlCompulsionType,
         otherCompulsionType: parsed.data.otherCompulsionType,
