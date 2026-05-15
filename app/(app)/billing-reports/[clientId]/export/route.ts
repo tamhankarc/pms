@@ -9,6 +9,7 @@ import {
   getWarnerDomesticDeliverableData,
   getWarnerIntlDeliverableData,
   getWarnerOtherDeliverableData,
+  getUniversalBillingSummaryData,
   normalizeAmazonReportType,
 } from "@/lib/billing-reports/amazon";
 import { db } from "@/lib/db";
@@ -26,6 +27,8 @@ import {
   buildAmazonReportExcel,
   buildAmazonReportFileName,
   buildAmazonReportPdf,
+  buildUniversalBillingSummaryExcel,
+  buildUniversalBillingSummaryPdf,
   buildWarnerDomesticReportExcel,
   buildWarnerDomesticReportFileName,
   buildWarnerDomesticReportPdf,
@@ -86,6 +89,30 @@ export async function GET(
     });
   }
 
+
+  if (reportDefinition?.kind === "time-entry-summary") {
+    const filters = buildAmazonBillingReportFilters(searchParams);
+    const data = await getUniversalBillingSummaryData({ clientId, filters });
+    if (!data) redirect("/billing-reports");
+
+    if (format === "pdf") {
+      const pdf = buildUniversalBillingSummaryPdf(data);
+      return new Response(Buffer.from(pdf, "binary"), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${buildAmazonReportFileName({ ...data, projectName: "", movieOptions: [], assetTypeOptions: [], rows: [], summaryRows: [], contactPersons: "-" }, "pdf")}"`,
+        },
+      });
+    }
+
+    const excel = buildUniversalBillingSummaryExcel(data);
+    return new Response(excel, {
+      headers: {
+        "Content-Type": "application/vnd.ms-excel; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${buildAmazonReportFileName({ ...data, projectName: "", movieOptions: [], assetTypeOptions: [], rows: [], summaryRows: [], contactPersons: "-" }, "xls")}"`,
+      },
+    });
+  }
   if (reportDefinition?.kind === "deliverable") {
     const filters = buildWarnerDomesticDeliverableFilters(searchParams);
     const data = reportType === "intl-deliverable"

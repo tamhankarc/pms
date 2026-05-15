@@ -40,10 +40,12 @@ import {
   getWarnerDomesticDeliverableData,
   getWarnerIntlDeliverableData,
   getWarnerOtherDeliverableData,
+  getUniversalBillingSummaryData,
   isWarnerBillingReportClient,
   normalizeAmazonReportType,
   type AmazonReportType,
   type WarnerDomesticDeliverableData,
+  type UniversalBillingSummaryData,
 } from "@/lib/billing-reports/amazon";
 
 function buildQueryString(values: Record<string, string>) {
@@ -89,6 +91,7 @@ function ExportButtons({
     movieId?: string;
     assetTypeId?: string;
     countryId?: string;
+    month?: string;
   };
 }) {
   const query = buildQueryString({
@@ -98,6 +101,7 @@ function ExportButtons({
     movieId: filters.movieId ?? "",
     assetTypeId: filters.assetTypeId ?? "",
     countryId: filters.countryId ?? "",
+    month: filters.month ?? "",
   });
 
   return (
@@ -207,63 +211,106 @@ function TimeEntryReportFilters({
   );
 }
 
+function getUniversalReportTotals(rows: NonNullable<Awaited<ReturnType<typeof getAmazonBillingReportData>>>["rows"]) {
+  return {
+    assets: new Set(rows.map((row) => row.assetName).filter((value) => value && value !== "-")).size,
+    countries: new Set(rows.map((row) => row.territoryVariant ?? "").filter((value) => value && value !== "-")).size,
+  };
+}
+
 function TimeEntryReportDetailsTable({
   data,
 }: {
   data: NonNullable<Awaited<ReturnType<typeof getAmazonBillingReportData>>>;
 }) {
   const isLocalization = data.reportType === "localization";
-  const isUniversalLocalization = isLocalization && data.client.name === "Universal Pictures International";
-  return (
-    <div className="table-wrap">
-      <table className="table-base">
-        <thead className="table-head">
-          <tr>
-            <th className="table-cell">Date</th>
-            <th className="table-cell">Title Name</th>
-            <th className="table-cell">Asset Name</th>
-            {isLocalization ? (
-              <th className="table-cell">Territory/Variant</th>
-            ) : null}
-            {!isUniversalLocalization ? (
-              <th className="table-cell">Asset Type</th>
-            ) : null}
-            <th className="table-cell">Cost</th>
-            <th className="table-cell">Contact Person</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {data.rows.map((row, index) => (
-            <tr key={`${row.date}-${row.titleName}-${row.assetName}-${index}`}>
-              <td className="table-cell whitespace-nowrap">{row.date}</td>
-              <td className="table-cell">{row.titleName}</td>
-              <td className="table-cell">{row.assetName}</td>
-              {isLocalization ? (
-                <td className="table-cell">{row.territoryVariant ?? "-"}</td>
-              ) : null}
-              {!isUniversalLocalization ? (
-                <td className="table-cell">{row.assetType}</td>
-              ) : null}
-              <td className="table-cell whitespace-nowrap font-medium text-slate-900">
-                {formatUsd(row.cost)}
-              </td>
-              <td className="table-cell">{row.contactPerson}</td>
-            </tr>
-          ))}
-          {data.rows.length === 0 ? (
+  const isUniversal = data.client.name === "Universal Pictures International";
+  const isUniversalSocial = isUniversal && data.reportType === "social-assets";
+  const isUniversalLocalization = isUniversal && isLocalization;
+  const showCost = !isUniversal;
+  const renderTable = (rows: typeof data.rows, keyPrefix: string) => {
+    const totals = getUniversalReportTotals(rows);
+    const colSpan = isUniversalLocalization ? 5 : isLocalization ? 7 : isUniversalSocial ? 5 : 6;
+    return (
+      <div className="table-wrap">
+        <table className="table-base">
+          <thead className="table-head">
             <tr>
-              <td
-                colSpan={isUniversalLocalization ? 6 : isLocalization ? 7 : 6}
-                className="table-cell text-center text-sm text-slate-500"
-              >
-                No records found for the selected filters.
-              </td>
+              <th className="table-cell">Date</th>
+              <th className="table-cell">Title Name</th>
+              <th className="table-cell">Asset Name</th>
+              {isLocalization ? <th className="table-cell">Territory/Variant</th> : null}
+              {!isUniversalLocalization ? <th className="table-cell">Asset Type</th> : null}
+              {showCost ? <th className="table-cell">Cost</th> : null}
+              <th className="table-cell">Contact Person</th>
             </tr>
-          ) : null}
-        </tbody>
-      </table>
-    </div>
-  );
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((row, index) => (
+              <tr key={`${keyPrefix}-${row.date}-${row.titleName}-${row.assetName}-${index}`}>
+                <td className="table-cell whitespace-nowrap">{row.date}</td>
+                <td className="table-cell">{row.titleName}</td>
+                <td className="table-cell">{row.assetName}</td>
+                {isLocalization ? <td className="table-cell">{row.territoryVariant ?? "-"}</td> : null}
+                {!isUniversalLocalization ? <td className="table-cell">{row.assetType}</td> : null}
+                {showCost ? (
+                  <td className="table-cell whitespace-nowrap font-medium text-slate-900">{formatUsd(row.cost)}</td>
+                ) : null}
+                <td className="table-cell">{row.contactPerson}</td>
+              </tr>
+            ))}
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={colSpan} className="table-cell text-center text-sm text-slate-500">
+                  No records found for the selected filters.
+                </td>
+              </tr>
+            ) : null}
+            {isUniversalSocial && rows.length > 0 ? (
+              <tr className="bg-slate-100">
+                <td colSpan={4} className="table-cell font-semibold text-slate-900">Total Assets</td>
+                <td className="table-cell font-semibold text-slate-900">{totals.assets}</td>
+              </tr>
+            ) : null}
+            {isUniversalLocalization && rows.length > 0 ? (
+              <>
+                <tr className="bg-slate-100">
+                  <td colSpan={4} className="table-cell font-semibold text-slate-900">Total Assets</td>
+                  <td className="table-cell font-semibold text-slate-900">{totals.assets}</td>
+                </tr>
+                <tr className="bg-slate-100">
+                  <td colSpan={4} className="table-cell font-semibold text-slate-900">Total Countries/Territories</td>
+                  <td className="table-cell font-semibold text-slate-900">{totals.countries}</td>
+                </tr>
+              </>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  if (isUniversalLocalization && data.filters.movieId === "all") {
+    const grouped = new Map<string, typeof data.rows>();
+    for (const row of data.rows) {
+      const titleRows = grouped.get(row.titleName) ?? [];
+      titleRows.push(row);
+      grouped.set(row.titleName, titleRows);
+    }
+    return (
+      <div className="space-y-6">
+        {Array.from(grouped.entries()).map(([titleName, rows]) => (
+          <div key={titleName} className="space-y-3">
+            <h3 className="text-base font-semibold text-slate-900">{titleName}</h3>
+            {renderTable(rows, titleName)}
+          </div>
+        ))}
+        {data.rows.length === 0 ? renderTable([], "empty") : null}
+      </div>
+    );
+  }
+
+  return renderTable(data.rows, "all");
 }
 
 function TimeEntryReportSummaryTable({
@@ -422,10 +469,86 @@ function TimeEntryReportsWorkspace({
         />
       </div>
       <TimeEntryReportDetailsTable data={data} />
-      <div>
-        <h2 className="section-title mb-3">{data.client.name === "Universal Pictures International" && data.reportType === "localization" ? "Total Assets / Cost" : "Summary by Asset Type"}</h2>
-        <TimeEntryReportSummaryTable data={data} />
+      {data.client.name !== "Universal Pictures International" ? (
+        <div>
+          <h2 className="section-title mb-3">Summary by Asset Type</h2>
+          <TimeEntryReportSummaryTable data={data} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function UniversalBillingSummaryFilters({ clientId, data }: { clientId: string; data: UniversalBillingSummaryData }) {
+  const month = data.filters.fromDate.slice(0, 7);
+  return (
+    <form method="get" action={`/billing-reports/${clientId}`} className="card p-5">
+      <input type="hidden" name="report" value="billing-summary" />
+      <div className="grid gap-4 md:grid-cols-[220px_auto] md:items-end">
+        <div>
+          <label className="label" htmlFor="month">Month</label>
+          <input id="month" name="month" type="month" className="input" defaultValue={month} />
+        </div>
+        <button className="btn-primary" type="submit">Apply</button>
       </div>
+    </form>
+  );
+}
+
+function UniversalBillingSummaryTable({ data }: { data: UniversalBillingSummaryData }) {
+  const totalAssets = data.rows.reduce((sum, row) => sum + row.totalAssets, 0);
+  const totalCountries = data.rows.reduce((sum, row) => sum + row.totalCountries, 0);
+  return (
+    <div className="table-wrap">
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">Title Name</th>
+            <th className="table-cell">Total Assets</th>
+            <th className="table-cell">Total Countries/Territories</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {data.rows.map((row) => (
+            <tr key={row.titleName}>
+              <td className="table-cell font-medium text-slate-900">{row.titleName}</td>
+              <td className="table-cell">{row.totalAssets}</td>
+              <td className="table-cell">{row.totalCountries}</td>
+            </tr>
+          ))}
+          {data.rows.length === 0 ? (
+            <tr><td colSpan={3} className="table-cell text-center text-sm text-slate-500">No records found for the selected month.</td></tr>
+          ) : (
+            <tr className="bg-slate-100">
+              <td className="table-cell font-semibold text-slate-900">Total</td>
+              <td className="table-cell font-semibold text-slate-900">{totalAssets}</td>
+              <td className="table-cell font-semibold text-slate-900">{totalCountries}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function UniversalBillingSummaryWorkspace({ clientId, activeReport, data }: { clientId: string; activeReport: AmazonReportType; data: UniversalBillingSummaryData }) {
+  return (
+    <div className="space-y-6">
+      <ReportTabs clientId={clientId} activeReport={activeReport} clientName={data.client.name} />
+      {!data.projectFound ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
+          Project <span className="font-semibold">UNI Social Localization</span> was not found for this client.
+        </div>
+      ) : null}
+      <UniversalBillingSummaryFilters clientId={clientId} data={data} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="section-title">{data.reportTitle}</h2>
+          <p className="section-subtitle">Unique assets and countries/territories by title for the selected month.</p>
+        </div>
+        <ExportButtons clientId={clientId} reportType={activeReport} filters={{ month: data.filters.fromDate.slice(0, 7) }} />
+      </div>
+      <UniversalBillingSummaryTable data={data} />
     </div>
   );
 }
@@ -1503,6 +1626,10 @@ export default async function ClientBillingReportPage({
           filters,
         })
       : null;
+  const universalBillingSummaryData =
+    activeReportDefinition?.kind === "time-entry-summary"
+      ? await getUniversalBillingSummaryData({ clientId, filters })
+      : null;
   const domesticDeliverableData =
     isWarnerBillingReportClient(client.name) &&
     activeReport === "domestic-deliverable"
@@ -1582,6 +1709,12 @@ export default async function ClientBillingReportPage({
           clientId={clientId}
           activeReport={activeReport}
           data={timeEntryReportData}
+        />
+      ) : universalBillingSummaryData ? (
+        <UniversalBillingSummaryWorkspace
+          clientId={clientId}
+          activeReport={activeReport}
+          data={universalBillingSummaryData}
         />
       ) : sonyPicturesReportData ? (
         <SonyPicturesReportWorkspace

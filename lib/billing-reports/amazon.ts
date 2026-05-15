@@ -10,7 +10,8 @@ export type AmazonReportType =
   | "other-deliverable"
   | "spe-main"
   | "canada-other"
-  | "newsletters";
+  | "newsletters"
+  | "billing-summary";
 
 export type AmazonBillingReportFilters = {
   fromDate: string;
@@ -89,7 +90,7 @@ export type BillingReportDefinition = {
   projectName: string;
   includeLanguage: boolean;
   includeCountry: boolean;
-  kind?: "time-entry" | "deliverable" | "placeholder" | "generic-movie" | "generic-filmik" | "sony-movie" | "sony-newsletters";
+  kind?: "time-entry" | "time-entry-summary" | "deliverable" | "placeholder" | "generic-movie" | "generic-filmik" | "sony-movie" | "sony-newsletters";
 };
 
 export const AMAZON_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
@@ -111,18 +112,25 @@ export const AMAZON_REPORTS: Partial<Record<AmazonReportType, BillingReportDefin
 
 export const UNIVERSAL_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
   "social-assets": {
-    title: "UNI Social Status",
+    title: "Social QA",
     projectName: "UNI Social QC",
     includeLanguage: false,
     includeCountry: false,
     kind: "time-entry",
   },
   localization: {
-    title: "UNI Localization Status",
+    title: "Localization",
     projectName: "UNI Social Localization",
     includeLanguage: false,
     includeCountry: true,
     kind: "time-entry",
+  },
+  "billing-summary": {
+    title: "Billing Summary",
+    projectName: "UNI Social Localization",
+    includeLanguage: false,
+    includeCountry: true,
+    kind: "time-entry-summary",
   },
 };
 
@@ -248,9 +256,12 @@ export function buildAmazonBillingReportFilters(searchParams: URLSearchParams | 
     return Array.isArray(value) ? value[0] : value;
   };
 
+  const monthValue = getValue("month");
+  const monthRange = monthValue ? getMonthRangeFromDateInput(monthValue) : null;
+
   return {
-    fromDate: normalizeDateInput(getValue("fromDate"), defaults.fromDate),
-    toDate: normalizeDateInput(getValue("toDate"), defaults.toDate),
+    fromDate: monthRange?.fromDate ?? normalizeDateInput(getValue("fromDate"), defaults.fromDate),
+    toDate: monthRange?.toDate ?? normalizeDateInput(getValue("toDate"), defaults.toDate),
     movieId: getValue("movieId") || "all",
     assetTypeId: getValue("assetTypeId") || "all",
   } satisfies AmazonBillingReportFilters;
@@ -298,7 +309,7 @@ export async function getAmazonBillingReportData({
   if (!reportCatalog) return null;
 
   const reportConfig = reportCatalog[reportType];
-  if (!reportConfig || reportConfig.kind !== "time-entry") return null;
+  if (!reportConfig || (reportConfig.kind !== "time-entry" && reportConfig.kind !== "time-entry-summary")) return null;
 
   const project = await db.project.findFirst({
     where: {
@@ -371,6 +382,7 @@ export async function getAmazonBillingReportData({
       assetType: { select: { name: true, cost: true } },
       language: { select: { name: true, code: true } },
       country: { select: { name: true, isoCode: true } },
+      assetName: { select: { name: true } },
     },
     orderBy: [{ workDate: "asc" }, { movie: { title: "asc" } }, { taskName: "asc" }],
   });
@@ -389,7 +401,7 @@ export async function getAmazonBillingReportData({
   const rows: AmazonBillingReportRow[] = entries.map((entry) => ({
     date: formatDisplayDate(entry.workDate),
     titleName: entry.movie?.title ?? "-",
-    assetName: entry.taskName || "-",
+    assetName: entry.assetName?.name || "-",
     territoryVariant: isUniversalLocalization ? entry.country?.name ?? "-" : reportConfig.includeLanguage ? entry.language?.name ?? entry.country?.name ?? "-" : undefined,
     assetType: isUniversalLocalization ? "Assets" : entry.assetType?.name ?? "-",
     cost: isUniversalLocalization ? Number(project.projectCost ?? 0) : Number(entry.assetType?.cost ?? 0),
@@ -421,6 +433,97 @@ export async function getAmazonBillingReportData({
     contactPersons,
     projectFound: true,
   };
+}
+
+export type UniversalBillingSummaryRow = {
+  titleName: string;
+  totalAssets: number;
+  totalCountries: number;
+};
+
+export type UniversalBillingSummaryData = {
+  client: { id: string; name: string };
+  reportType: "billing-summary";
+  reportTitle: string;
+  filters: AmazonBillingReportFilters;
+  rows: UniversalBillingSummaryRow[];
+  projectFound: boolean;
+};
+
+export function getMonthRangeFromDateInput(monthValue: string | null | undefined) {
+  const now = new Date();
+  const fallback = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const safeMonth = monthValue && /^\d{4}-\d{2}$/.test(monthValue) ? monthValue : fallback;
+  const [yearText, monthText] = safeMonth.split("-");
+  const year = Number(yearText);
+  const monthIndex = Number(monthText) - 1;
+  return {
+    month: safeMonth,
+    fromDate: toDateInputValue(new Date(year, monthIndex, 1)),
+    toDate: toDateInputValue(new Date(year, monthIndex + 1, 0)),
+  };
+}
+
+export async function getUniversalBillingSummaryData({
+  clientId,
+  filters,
+}: {
+  clientId: string;
+  filters: AmazonBillingReportFilters;
+}): Promise<UniversalBillingSummaryData | null> {
+  const client = await db.client.findUnique({
+    where: { id: clientId },
+    select: { id: true, name: true },
+  });
+  if (!client) return null;
+
+  const reportConfig = UNIVERSAL_REPORTS["billing-summary"];
+  if (!reportConfig) return null;
+
+  const project = await db.project.findFirst({
+    where: { clientId, name: reportConfig.projectName },
+    select: { id: true },
+  });
+
+  if (!project) {
+    return { client, reportType: "billing-summary", reportTitle: reportConfig.title, filters, rows: [], projectFound: false };
+  }
+
+  const fromBoundary = new Date(`${filters.fromDate}T00:00:00`);
+  const toBoundary = new Date(`${filters.toDate}T23:59:59.999`);
+
+  const entries = await db.timeEntry.findMany({
+    where: {
+      projectId: project.id,
+      workDate: { gte: fromBoundary, lte: toBoundary },
+      movieId: { not: null },
+    },
+    select: {
+      movie: { select: { title: true } },
+      assetName: { select: { name: true } },
+      taskName: true,
+      country: { select: { name: true } },
+    },
+    orderBy: [{ movie: { title: "asc" } }, { workDate: "asc" }],
+  });
+
+  const map = new Map<string, { assets: Set<string>; countries: Set<string> }>();
+  for (const entry of entries) {
+    const titleName = entry.movie?.title ?? "-";
+    const current = map.get(titleName) ?? { assets: new Set<string>(), countries: new Set<string>() };
+    const asset = entry.assetName?.name ?? entry.taskName ?? "";
+    if (asset.trim()) current.assets.add(asset.trim());
+    if (entry.country?.name) current.countries.add(entry.country.name);
+    map.set(titleName, current);
+  }
+
+  const rows = Array.from(map.entries()).map(([titleName, value]) => ({
+    titleName,
+    totalAssets: value.assets.size,
+    totalCountries: value.countries.size,
+  }));
+
+  return { client, reportType: "billing-summary", reportTitle: reportConfig.title, filters, rows, projectFound: true };
 }
 
 function getMovieBillingUnits(movie: { billingUnitsJson: string | null }) {
@@ -461,6 +564,7 @@ async function getWarnerDeliverableEntryCountries(clientId: string) {
     select: {
       movieId: true,
       country: { select: { name: true, isoCode: true } },
+      assetName: { select: { name: true } },
     },
   });
 }

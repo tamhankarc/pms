@@ -1,5 +1,6 @@
 import {
   type AmazonBillingReportData,
+  type UniversalBillingSummaryData,
   type WarnerDomesticDeliverableData,
   formatUsd,
   getExportTimestamp,
@@ -41,7 +42,10 @@ function worksheet(name: string, rows: string[]) {
 }
 
 export function buildAmazonReportExcel(data: AmazonBillingReportData) {
-  const isUniversalLocalization = data.client.name === "Universal Pictures International" && data.reportType === "localization";
+  const isUniversal = data.client.name === "Universal Pictures International";
+  const isUniversalSocial = isUniversal && data.reportType === "social-assets";
+  const isUniversalLocalization = isUniversal && data.reportType === "localization";
+  const showCost = !isUniversal;
   const detailHeaders =
     data.reportType === "localization"
       ? [
@@ -50,62 +54,81 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
           "Asset Name",
           "Territory/Variant",
           ...(isUniversalLocalization ? [] : ["Asset Type"]),
-          "Cost (USD)",
+          ...(showCost ? ["Cost (USD)"] : []),
           "Contact Person",
         ]
       : [
           "Date",
           "Title Name",
           "Asset Name",
-          ...(isUniversalLocalization ? [] : ["Asset Type"]),
-          "Cost (USD)",
+          "Asset Type",
+          ...(showCost ? ["Cost (USD)"] : []),
           "Contact Person",
         ];
+
+  const uniqueAssetCount = (rows: typeof data.rows) => new Set(rows.map((row) => row.assetName).filter((value) => value && value !== "-")).size;
+  const uniqueCountryCount = (rows: typeof data.rows) => new Set(rows.map((row) => row.territoryVariant ?? "").filter((value) => value && value !== "-")).size;
+
+  const rowToExcel = (row: (typeof data.rows)[number]) => {
+    if (data.reportType === "localization") {
+      const values = [
+        row.date,
+        row.titleName,
+        row.assetName,
+        row.territoryVariant ?? "-",
+        ...(isUniversalLocalization ? [] : [row.assetType]),
+        ...(showCost ? [row.cost] : []),
+        row.contactPerson,
+      ];
+      return excelRow(values, showCost ? [values.length - 2] : []);
+    }
+    const values = [
+      row.date,
+      row.titleName,
+      row.assetName,
+      row.assetType,
+      ...(showCost ? [row.cost] : []),
+      row.contactPerson,
+    ];
+    return excelRow(values, showCost ? [values.length - 2] : []);
+  };
 
   const detailRows = [
     excelRow([data.reportTitle]),
     excelRow(["Client", data.client.name]),
-    excelRow([
-      "Date Range",
-      `${data.filters.fromDate} to ${data.filters.toDate}`,
-    ]),
+    excelRow(["Date Range", `${data.filters.fromDate} to ${data.filters.toDate}`]),
     excelRow([]),
-    excelRow(detailHeaders),
-    ...data.rows.map((row) =>
-      data.reportType === "localization"
-        ? excelRow(
-            [
-              row.date,
-              row.titleName,
-              row.assetName,
-              row.territoryVariant ?? "-",
-              ...(isUniversalLocalization ? [] : [row.assetType]),
-              row.cost,
-              row.contactPerson,
-            ],
-            isUniversalLocalization ? [4] : [5],
-          )
-        : excelRow(
-            [
-              row.date,
-              row.titleName,
-              row.assetName,
-              row.assetType,
-              row.cost,
-              row.contactPerson,
-            ],
-            [4],
-          ),
-    ),
   ];
 
-  const summaryRows = [
-    excelRow([`${data.reportTitle} Summary`]),
-    excelRow([isUniversalLocalization ? "Description" : "Asset Type", "Total Assets", "Total Cost (USD)"]),
-    ...data.summaryRows.map((row) =>
-      excelRow([row.assetType, row.totalAssets, row.totalCost], [1, 2]),
-    ),
-  ];
+  if (isUniversalLocalization && data.filters.movieId === "all") {
+    const grouped = new Map<string, typeof data.rows>();
+    data.rows.forEach((row) => {
+      const rows = grouped.get(row.titleName) ?? [];
+      rows.push(row);
+      grouped.set(row.titleName, rows);
+    });
+    for (const [titleName, rows] of grouped.entries()) {
+      detailRows.push(excelRow([titleName]), excelRow(detailHeaders), ...rows.map(rowToExcel));
+      detailRows.push(excelRow(["Total Assets", uniqueAssetCount(rows)], [1]));
+      detailRows.push(excelRow(["Total Countries/Territories", uniqueCountryCount(rows)], [1]));
+      detailRows.push(excelRow([]));
+    }
+  } else {
+    detailRows.push(excelRow(detailHeaders), ...data.rows.map(rowToExcel));
+    if (isUniversalSocial) detailRows.push(excelRow(["Total Assets", uniqueAssetCount(data.rows)], [1]));
+    if (isUniversalLocalization) {
+      detailRows.push(excelRow(["Total Assets", uniqueAssetCount(data.rows)], [1]));
+      detailRows.push(excelRow(["Total Countries/Territories", uniqueCountryCount(data.rows)], [1]));
+    }
+  }
+
+  const summaryRows = !isUniversal
+    ? [
+        excelRow([`${data.reportTitle} Summary`]),
+        excelRow(["Asset Type", "Total Assets", "Total Cost (USD)"]),
+        ...data.summaryRows.map((row) => excelRow([row.assetType, row.totalAssets, row.totalCost], [1, 2])),
+      ]
+    : [];
 
   return `<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
@@ -115,7 +138,30 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
  xmlns:html="http://www.w3.org/TR/REC-html40">
  ${worksheet("Details", detailRows)}
- ${worksheet("Summary", summaryRows)}
+ ${summaryRows.length ? worksheet("Summary", summaryRows) : ""}
+</Workbook>`;
+}
+
+export function buildUniversalBillingSummaryExcel(data: UniversalBillingSummaryData) {
+  const totalAssets = data.rows.reduce((sum, row) => sum + row.totalAssets, 0);
+  const totalCountries = data.rows.reduce((sum, row) => sum + row.totalCountries, 0);
+  const rows = [
+    excelRow([data.reportTitle]),
+    excelRow(["Client", data.client.name]),
+    excelRow(["Month", data.filters.fromDate.slice(0, 7)]),
+    excelRow([]),
+    excelRow(["Title Name", "Total Assets", "Total Countries/Territories"]),
+    ...data.rows.map((row) => excelRow([row.titleName, row.totalAssets, row.totalCountries], [1, 2])),
+    excelRow(["Total", totalAssets, totalCountries], [1, 2]),
+  ];
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ ${worksheet("Billing Summary", rows)}
 </Workbook>`;
 }
 
@@ -129,8 +175,8 @@ function escapePdfText(value: string | number) {
 function sanitizePdfText(value: string | number) {
   return String(value)
     .replace(/[\r\n\t]+/g, " ")
-    .replace(/[â¹]/g, "Rs.")
-    .replace(/[ââ]/g, "-")
+    .replace(/[Ã¢ÂÂ¹]/g, "Rs.")
+    .replace(/[Ã¢ÂÂÃ¢ÂÂ]/g, "-")
     .trim();
 }
 
@@ -374,16 +420,17 @@ function buildPdfDocument(pageStreams: string[]) {
 }
 
 function buildDetailColumns(data: AmazonBillingReportData): PdfTableColumn[] {
-  const isUniversalLocalization = data.client.name === "Universal Pictures International" && data.reportType === "localization";
+  const isUniversal = data.client.name === "Universal Pictures International";
+  const isUniversalLocalization = isUniversal && data.reportType === "localization";
+  const isUniversalSocial = isUniversal && data.reportType === "social-assets";
   if (data.reportType === "localization") {
     return isUniversalLocalization
       ? [
           { header: "Date", width: 72 },
           { header: "Title Name", width: 150 },
-          { header: "Asset Name", width: 170 },
-          { header: "Territory / Variant", width: 130 },
-          { header: "Cost", width: 76, align: "right" },
-          { header: "Contact Person", width: 238 },
+          { header: "Asset Name", width: 180 },
+          { header: "Territory / Variant", width: 150 },
+          { header: "Contact Person", width: 270 },
         ]
       : [
           { header: "Date", width: 64 },
@@ -396,48 +443,38 @@ function buildDetailColumns(data: AmazonBillingReportData): PdfTableColumn[] {
         ];
   }
 
-  return [
-    { header: "Date", width: 68 },
-    { header: "Title Name", width: 150 },
-    { header: "Asset Name", width: 190 },
-    { header: "Asset Type", width: 130 },
-    { header: "Cost", width: 72, align: "right" },
-    { header: "Contact Person", width: 228 },
-  ];
+  return isUniversalSocial
+    ? [
+        { header: "Date", width: 70 },
+        { header: "Title Name", width: 160 },
+        { header: "Asset Name", width: 210 },
+        { header: "Asset Type", width: 140 },
+        { header: "Contact Person", width: 240 },
+      ]
+    : [
+        { header: "Date", width: 68 },
+        { header: "Title Name", width: 150 },
+        { header: "Asset Name", width: 190 },
+        { header: "Asset Type", width: 130 },
+        { header: "Cost", width: 72, align: "right" },
+        { header: "Contact Person", width: 228 },
+      ];
 }
 
 function buildDetailRows(data: AmazonBillingReportData): PdfTableRow[] {
-  const isUniversalLocalization = data.client.name === "Universal Pictures International" && data.reportType === "localization";
+  const isUniversal = data.client.name === "Universal Pictures International";
+  const isUniversalLocalization = isUniversal && data.reportType === "localization";
+  const isUniversalSocial = isUniversal && data.reportType === "social-assets";
   return data.rows.map((row) => {
     if (data.reportType === "localization") {
       return isUniversalLocalization
-        ? [
-            row.date,
-            row.titleName,
-            row.assetName,
-            row.territoryVariant ?? "-",
-            formatUsd(row.cost),
-            row.contactPerson,
-          ]
-        : [
-            row.date,
-            row.titleName,
-            row.assetName,
-            row.territoryVariant ?? "-",
-            row.assetType,
-            formatUsd(row.cost),
-            row.contactPerson,
-          ];
+        ? [row.date, row.titleName, row.assetName, row.territoryVariant ?? "-", row.contactPerson]
+        : [row.date, row.titleName, row.assetName, row.territoryVariant ?? "-", row.assetType, formatUsd(row.cost), row.contactPerson];
     }
 
-    return [
-      row.date,
-      row.titleName,
-      row.assetName,
-      row.assetType,
-      formatUsd(row.cost),
-      row.contactPerson,
-    ];
+    return isUniversalSocial
+      ? [row.date, row.titleName, row.assetName, row.assetType, row.contactPerson]
+      : [row.date, row.titleName, row.assetName, row.assetType, formatUsd(row.cost), row.contactPerson];
   });
 }
 
@@ -538,7 +575,7 @@ function buildSummaryPages(
   const commands: string[] = [];
   commands.push(
     textCommand(
-      isUniversalLocalization ? `${data.reportTitle} - Total Assets / Cost` : `${data.reportTitle} - Summary by Asset Type`,
+      `${data.reportTitle} - Summary by Asset Type`,
       x,
       TOP_Y,
       13,
@@ -620,8 +657,31 @@ function buildSummaryPages(
 
 export function buildAmazonReportPdf(data: AmazonBillingReportData) {
   const detailPages = buildDetailPages(data);
+  if (data.client.name === "Universal Pictures International") return buildPdfDocument(detailPages);
   const summaryPages = buildSummaryPages(data, detailPages.length + 1);
   return buildPdfDocument([...detailPages, ...summaryPages]);
+}
+
+export function buildUniversalBillingSummaryPdf(data: UniversalBillingSummaryData) {
+  const columns: PdfTableColumn[] = [
+    { header: "Title Name", width: 420 },
+    { header: "Total Assets", width: 150, align: "right" },
+    { header: "Total Countries / Territories", width: 220, align: "right" },
+  ];
+  const rows: PdfTableRow[] = data.rows.map((row) => [row.titleName, row.totalAssets, row.totalCountries]);
+  rows.push(["Total", data.rows.reduce((sum, row) => sum + row.totalAssets, 0), data.rows.reduce((sum, row) => sum + row.totalCountries, 0)]);
+  const commands: string[] = [];
+  commands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
+  commands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
+  commands.push(textCommand(`Month: ${data.filters.fromDate.slice(0, 7)}`, MARGIN_X, TOP_Y - 38, 9));
+  const startY = TOP_Y - 72;
+  drawTableHeader(commands, columns, MARGIN_X, startY);
+  let currentY = startY - HEADER_HEIGHT;
+  rows.slice(0, 13).forEach((row) => {
+    drawTableRow(commands, columns, row, MARGIN_X, currentY, SUMMARY_ROW_HEIGHT, 8);
+    currentY -= SUMMARY_ROW_HEIGHT;
+  });
+  return buildPdfDocument([commands.join("\n")]);
 }
 
 export function buildAmazonReportFileName(
