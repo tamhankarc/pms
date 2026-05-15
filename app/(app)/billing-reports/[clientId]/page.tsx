@@ -539,7 +539,7 @@ function UniversalBillingSummaryWorkspace({ clientId, activeReport, data }: { cl
       <ReportTabs clientId={clientId} activeReport={activeReport} clientName={data.client.name} />
       {!data.projectFound ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
-          Project <span className="font-semibold">UNI Social Localization</span> was not found for this client.
+          Projects <span className="font-semibold">UNI Social QC</span> and <span className="font-semibold">UNI Social Localization</span> were not found for this client.
         </div>
       ) : null}
       <UniversalBillingSummaryFilters clientId={clientId} data={data} />

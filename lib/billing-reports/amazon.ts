@@ -85,6 +85,9 @@ export const SONY_PICTURES_CLIENT_NAME = "Sony Pictures Entertainment";
 export const SONY_PICTURES_CLASSICS_CLIENT_NAME = "Sony Pictures Classics";
 export const FILMIK_CLIENT_NAME = "Filmik";
 
+const UNIVERSAL_SOCIAL_QC_PROJECT_ID = "cmnh2yn940001l504enjioq52";
+const UNIVERSAL_SOCIAL_LOCALIZATION_PROJECT_ID = "cmnh2z3ao0003l504jbrpa6ic";
+
 export type BillingReportDefinition = {
   title: string;
   projectName: string;
@@ -480,12 +483,22 @@ export async function getUniversalBillingSummaryData({
   const reportConfig = UNIVERSAL_REPORTS["billing-summary"];
   if (!reportConfig) return null;
 
-  const project = await db.project.findFirst({
-    where: { clientId, name: reportConfig.projectName },
+  const summaryProjects = await db.project.findMany({
+    where: {
+      clientId,
+      id: {
+        in: [
+          UNIVERSAL_SOCIAL_QC_PROJECT_ID,
+          UNIVERSAL_SOCIAL_LOCALIZATION_PROJECT_ID,
+        ],
+      },
+    },
     select: { id: true },
   });
 
-  if (!project) {
+  const summaryProjectIds = summaryProjects.map((project) => project.id);
+
+  if (!summaryProjectIds.length) {
     return { client, reportType: "billing-summary", reportTitle: reportConfig.title, filters, rows: [], projectFound: false };
   }
 
@@ -494,7 +507,7 @@ export async function getUniversalBillingSummaryData({
 
   const entries = await db.timeEntry.findMany({
     where: {
-      projectId: project.id,
+      projectId: { in: summaryProjectIds },
       workDate: { gte: fromBoundary, lte: toBoundary },
       movieId: { not: null },
     },
