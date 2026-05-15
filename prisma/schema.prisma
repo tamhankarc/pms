@@ -337,6 +337,7 @@ model MovieBillingHead {
   costType               MovieBillingHeadCostType   @default(WHOLE_COST)
   domesticCost           Decimal                    @default(0) @db.Decimal(12, 2)
   intlCost               Decimal                    @default(0) @db.Decimal(12, 2)
+  intlCanadaCost         Decimal                    @default(0) @db.Decimal(12, 2)
   otherCost              Decimal                    @default(0) @db.Decimal(12, 2)
   isActive               Boolean                    @default(true)
   createdAt              DateTime                   @default(now())

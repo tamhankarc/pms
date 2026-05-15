@@ -14,7 +14,30 @@ function formatHeadType(type: string) {
 }
 
 function formatActiveCost(isActive: boolean, value: unknown) {
-  return isActive ? `$${Number(value).toFixed(2)}` : "";
+  return isActive ? `$${Number(value).toFixed(2)}` : "—";
+}
+
+function BillingRegionInfo({
+  isActive,
+  headType,
+  cost,
+  canadaCost,
+  canSeeCosts,
+}: {
+  isActive: boolean;
+  headType: string;
+  cost: unknown;
+  canadaCost?: unknown;
+  canSeeCosts: boolean;
+}) {
+  return (
+    <div className="space-y-1 text-xs leading-5 text-slate-600">
+      <div><span className="font-semibold text-slate-700">Status:</span> {isActive ? "Active" : "Inactive"}</div>
+      <div><span className="font-semibold text-slate-700">Head Type:</span> {isActive ? formatHeadType(headType) : "—"}</div>
+      {canSeeCosts ? <div><span className="font-semibold text-slate-700">Head Cost:</span> {formatActiveCost(isActive, cost)}</div> : null}
+      {canSeeCosts && canadaCost !== undefined ? <div><span className="font-semibold text-slate-700">Canada Cost:</span> {formatActiveCost(isActive, canadaCost)}</div> : null}
+    </div>
+  );
 }
 
 export default async function MovieBillingHeadsPage({
@@ -53,15 +76,9 @@ export default async function MovieBillingHeadsPage({
               <th className="table-cell">Billing Head</th>
               <th className="table-cell">Client</th>
               {canSeeCosts ? <th className="table-cell">Cost Type</th> : null}
-              <th className="table-cell">Domestic</th>
-              <th className="table-cell">Domestic Head Type</th>
-              {canSeeCosts ? <th className="table-cell">Domestic Cost</th> : null}
-              <th className="table-cell">INTL</th>
-              <th className="table-cell">INTL Head Type</th>
-              {canSeeCosts ? <th className="table-cell">INTL Cost</th> : null}
-              <th className="table-cell">Other</th>
-              <th className="table-cell">Other Head Type</th>
-              {canSeeCosts ? <th className="table-cell">Other Cost</th> : null}
+              <th className="table-cell">Domestic Billing</th>
+              <th className="table-cell">INTL Billing</th>
+              <th className="table-cell">Other Billing</th>
               <th className="table-cell">Status</th>
               <th className="table-cell">Action</th>
             </tr>
@@ -72,20 +89,14 @@ export default async function MovieBillingHeadsPage({
                 <td className="table-cell"><div className="font-medium text-slate-900">{head.name}</div></td>
                 <td className="table-cell">{head.client.name}</td>
                 {canSeeCosts ? <td className="table-cell">{head.costType === "WHOLE_COST" ? "Whole cost" : "Per-unit cost"}</td> : null}
-                <td className="table-cell"><span className={head.domesticActive ? "badge-emerald" : "badge-slate"}>{head.domesticActive ? "Active" : "Inactive"}</span></td>
-                <td className="table-cell">{head.domesticActive ? formatHeadType(head.domesticCompulsionType ?? head.compulsionType) : "—"}</td>
-                {canSeeCosts ? <td className="table-cell">{formatActiveCost(head.domesticActive, head.domesticCost)}</td> : null}
-                <td className="table-cell"><span className={head.intlActive ? "badge-emerald" : "badge-slate"}>{head.intlActive ? "Active" : "Inactive"}</span></td>
-                <td className="table-cell">{head.intlActive ? formatHeadType(head.intlCompulsionType ?? head.compulsionType) : "—"}</td>
-                {canSeeCosts ? <td className="table-cell">{formatActiveCost(head.intlActive, head.intlCost)}</td> : null}
-                <td className="table-cell"><span className={head.otherActive ? "badge-emerald" : "badge-slate"}>{head.otherActive ? "Active" : "Inactive"}</span></td>
-                <td className="table-cell">{head.otherActive ? formatHeadType(head.otherCompulsionType ?? head.compulsionType) : "—"}</td>
-                {canSeeCosts ? <td className="table-cell">{formatActiveCost(head.otherActive, head.otherCost)}</td> : null}
+                <td className="table-cell"><BillingRegionInfo isActive={head.domesticActive} headType={head.domesticCompulsionType ?? head.compulsionType} cost={head.domesticCost} canSeeCosts={canSeeCosts} /></td>
+                <td className="table-cell"><BillingRegionInfo isActive={head.intlActive} headType={head.intlCompulsionType ?? head.compulsionType} cost={head.intlCost} canadaCost={head.intlCanadaCost} canSeeCosts={canSeeCosts} /></td>
+                <td className="table-cell"><BillingRegionInfo isActive={head.otherActive} headType={head.otherCompulsionType ?? head.compulsionType} cost={head.otherCost} canSeeCosts={canSeeCosts} /></td>
                 <td className="table-cell"><span className={head.isActive ? "badge-emerald" : "badge-slate"}>{head.isActive ? "Active" : "Inactive"}</span></td>
                 <td className="table-cell"><div className="flex gap-2"><Link href={`/client-billing-heads/${head.id}`} className="btn-secondary text-xs">Edit</Link><form action={toggleMovieBillingHeadStatusAction}><input type="hidden" name="id" value={head.id} /><button className="btn-secondary text-xs">{head.isActive ? "Deactivate" : "Activate"}</button></form></div></td>
               </tr>
             ))}
-            {heads.length === 0 ? <tr><td colSpan={canSeeCosts ? 14 : 10} className="table-cell text-center text-sm text-slate-500">No billing heads found.</td></tr> : null}
+            {heads.length === 0 ? <tr><td colSpan={canSeeCosts ? 8 : 7} className="table-cell text-center text-sm text-slate-500">No billing heads found.</td></tr> : null}
           </tbody>
         </table>
         <PaginationControls basePath="/client-billing-heads" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, clientId, status }} />

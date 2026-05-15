@@ -18,13 +18,12 @@ export default async function MovieEditPage({
 
   const { id } = await params;
 
-  const [clients, countries, billingHeads, movie] = await Promise.all([
+  const [clients, countries, movie] = await Promise.all([
     db.client.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
     }),
     db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    db.movieBillingHead.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, clientId: true, costType: true } }),
     db.movie.findUnique({
       where: { id },
       include: {
@@ -51,7 +50,6 @@ export default async function MovieEditPage({
         <MovieForm
           clients={clients}
           countries={countries}
-          billingHeads={billingHeads}
           action={updateMovieAction}
           title={`Edit movie: ${movie.title}`}
           submitLabel="Save changes"

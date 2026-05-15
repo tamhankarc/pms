@@ -641,12 +641,20 @@ async function getWarnerDeliverableData({
   }
 
   const billingRegion: "domestic" | "intl" | "other" = isDomestic ? "domestic" : isOther ? "other" : "intl";
-  // const useIntlBilling = billingRegion !== "domestic";
+  const useIntlCanadaBilling = Boolean(
+    isOther
+    && selectedCountry
+    && isCanadaCountry(selectedCountry)
+    && selectedMovie.billingIntl
+    && !selectedMovie.billingOther,
+  );
+  const billingHeadRegion: "domestic" | "intl" | "intl-canada" | "other" = useIntlCanadaBilling ? "intl-canada" : billingRegion;
   const unitsByHeadId = getMovieBillingUnits(selectedMovie);
 
-  function getHeadCost(head: { domesticCost: unknown; intlCost: unknown; otherCost?: unknown }) {
-    if (billingRegion === "domestic") return head.domesticCost;
-    if (billingRegion === "other") return head.otherCost ?? 0;
+  function getHeadCost(head: { domesticCost: unknown; intlCost: unknown; intlCanadaCost?: unknown; otherCost?: unknown }) {
+    if (billingHeadRegion === "domestic") return head.domesticCost;
+    if (billingHeadRegion === "other") return head.otherCost ?? 0;
+    if (billingHeadRegion === "intl-canada") return head.intlCanadaCost ?? head.intlCost;
     return head.intlCost;
   }
   const rows: WarnerDomesticDeliverableLine[] = [];
@@ -655,9 +663,9 @@ async function getWarnerDeliverableData({
     where: {
       clientId,
       isActive: true,
-      ...(billingRegion === "domestic"
+      ...(billingHeadRegion === "domestic"
         ? { domesticActive: true, domesticCompulsionType: "FIXED_COMPULSORY" }
-        : billingRegion === "other"
+        : billingHeadRegion === "other"
           ? { otherActive: true, otherCompulsionType: "FIXED_COMPULSORY" }
           : { intlActive: true, intlCompulsionType: "FIXED_COMPULSORY" }),
     },
@@ -701,9 +709,9 @@ async function getWarnerDeliverableData({
           : { countryId: selectedCountry?.id ?? "" }),
         billingHead: { is: {
           isActive: true,
-          ...(billingRegion === "domestic"
+          ...(billingHeadRegion === "domestic"
             ? { domesticActive: true, domesticCompulsionType: "FIXED_OPTIONAL" as const }
-            : billingRegion === "other"
+            : billingHeadRegion === "other"
               ? { otherActive: true, otherCompulsionType: "FIXED_OPTIONAL" as const }
               : { intlActive: true, intlCompulsionType: "FIXED_OPTIONAL" as const }),
         } },

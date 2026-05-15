@@ -37,6 +37,7 @@ export function MovieBillingHeadForm({ clients, action, initialValues, submitLab
     costType: CostType;
     domesticCost: string | number;
     intlCost: string | number;
+    intlCanadaCost?: string | number;
     otherCost?: string | number;
     isActive: boolean;
   };
@@ -111,7 +112,7 @@ export function MovieBillingHeadForm({ clients, action, initialValues, submitLab
           </div>
           <fieldset disabled={!intlActive} className="mt-4 space-y-4 disabled:cursor-not-allowed disabled:opacity-60">
             <div><FormLabel htmlFor="intlCompulsionType" required={intlActive}>Head type - INTL</FormLabel><SearchableCombobox id="intlCompulsionType" value={intlCompulsionType} onValueChange={(v) => setIntlCompulsionType(v as CompulsionType)} options={headTypeOptions} placeholder="Select INTL type" searchPlaceholder="Search types..." emptyLabel="No type found." disabled={!intlActive} required={intlActive} /></div>
-            {canEditCosts ? <div><FormLabel htmlFor="intlCost" required={intlActive}>INTL cost (USD)</FormLabel><div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span><input id="intlCost" name="intlCost" type="number" min="0" step="0.01" className="input currency-input" defaultValue={initialValues?.intlCost ?? "0.00"} disabled={!intlActive} required={intlActive} /></div></div> : null}
+            {canEditCosts ? <div className="grid gap-4 md:grid-cols-2"><div><FormLabel htmlFor="intlCost" required={intlActive}>INTL cost (USD)</FormLabel><div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span><input id="intlCost" name="intlCost" type="number" min="0" step="0.01" className="input currency-input" defaultValue={initialValues?.intlCost ?? "0.00"} disabled={!intlActive} required={intlActive} /></div></div><div><FormLabel htmlFor="intlCanadaCost">Canada Cost (USD)</FormLabel><div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span><input id="intlCanadaCost" name="intlCanadaCost" type="number" min="0" step="0.01" className="input currency-input" defaultValue={initialValues?.intlCanadaCost ?? "0.00"} disabled={!intlActive} /></div></div></div> : null}
           </fieldset>
         </div>
 

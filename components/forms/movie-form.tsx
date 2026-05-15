@@ -19,7 +19,7 @@ const movieStatusOptions = [
   { value: "COMPLETED_BILLED", label: "Completed & Billed" },
 ];
 
-export function MovieForm({ clients, countries = [], billingHeads = [], action, initialValues, submitLabel, title, canEditCosts = false }: {
+export function MovieForm({ clients, countries = [], action, initialValues, submitLabel, title, canEditCosts = false }: {
   clients: Client[];
   countries?: Country[];
   billingHeads?: BillingHead[];
@@ -39,7 +39,6 @@ export function MovieForm({ clients, countries = [], billingHeads = [], action, 
   const clientOptions = useMemo(() => clients.map((client) => ({ value: client.id, label: client.name })), [clients]);
   const countryOptions = useMemo(() => countries.map((country) => ({ value: country.id, label: country.name })), [countries]);
   const showSonyCosts = canEditCosts && selectedClientId === SONY_CLIENT_ID;
-  const perUnitHeads = useMemo(() => billingHeads.filter((head) => canEditCosts && head.clientId === selectedClientId && head.costType === "PER_UNIT_COST"), [billingHeads, canEditCosts, selectedClientId]);
   const domesticOrIntlSelected = billingDomestic || billingIntl;
   const otherSelected = billingOther;
 
@@ -70,7 +69,7 @@ export function MovieForm({ clients, countries = [], billingHeads = [], action, 
           {billingOther ? <div className="mt-4"><SearchableMultiSelect id="otherCountryIds" options={countryOptions} value={otherCountryIds} onValueChange={setOtherCountryIds} placeholder="Select one or more countries" searchPlaceholder="Search countries..." emptyLabel="No country found." /></div> : null}
           <p className="mt-2 text-xs text-slate-500">Domestic/INTL and Other are mutually exclusive for billing reports.</p>
         </div>
-        {perUnitHeads.length > 0 ? <div className="rounded-xl border border-slate-200 bg-white p-4"><h3 className="text-sm font-semibold text-slate-900">Per-unit billing head units</h3><p className="mt-1 text-xs text-slate-500">Optional number of units for per-unit cost billing heads.</p><div className="mt-3 grid gap-3 md:grid-cols-2">{perUnitHeads.map((head) => (<div key={head.id}><FormLabel htmlFor={`billingHeadUnit_${head.id}`}>{head.name} units</FormLabel><input id={`billingHeadUnit_${head.id}`} name={`billingHeadUnit_${head.id}`} type="number" min="0" step="1" className="input" defaultValue={initialValues?.billingUnits?.[head.id] ?? ""} /></div>))}</div></div> : null}
+
 
         {showSonyCosts ? (
           <div className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">

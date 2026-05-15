@@ -41,6 +41,7 @@ export default async function EditMovieBillingHeadPage({
           costType: head.costType,
           domesticCost: Number(head.domesticCost).toFixed(2),
           intlCost: Number(head.intlCost).toFixed(2),
+          intlCanadaCost: Number(head.intlCanadaCost).toFixed(2),
           otherCost: Number(head.otherCost).toFixed(2),
           isActive: head.isActive,
         }}

@@ -24,6 +24,7 @@ const schema = z.object({
   costType: z.enum(["WHOLE_COST", "PER_UNIT_COST"]),
   domesticCost: z.coerce.number().min(0, "Domestic cost cannot be negative."),
   intlCost: z.coerce.number().min(0, "INTL cost cannot be negative."),
+  intlCanadaCost: z.coerce.number().min(0, "Canada cost cannot be negative."),
   otherCost: z.coerce.number().min(0, "Other cost cannot be negative."),
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
@@ -56,6 +57,7 @@ export async function createMovieBillingHeadAction(_prevState: MovieBillingHeadF
       costType: formData.get("costType"),
       domesticCost: formData.get("domesticCost") ?? "0",
       intlCost: formData.get("intlCost") ?? "0",
+      intlCanadaCost: formData.get("intlCanadaCost") ?? "0",
       otherCost: formData.get("otherCost") ?? "0",
       isActive: formData.get("isActive") ?? "on",
     });
@@ -76,6 +78,7 @@ export async function createMovieBillingHeadAction(_prevState: MovieBillingHeadF
         costType: parsed.data.costType,
         domesticCost: parsed.data.domesticActive && canViewCostData(user) ? parsed.data.domesticCost : 0,
         intlCost: parsed.data.intlActive && canViewCostData(user) ? parsed.data.intlCost : 0,
+        intlCanadaCost: parsed.data.intlActive && canViewCostData(user) ? parsed.data.intlCanadaCost : 0,
         otherCost: parsed.data.otherActive && canViewCostData(user) ? parsed.data.otherCost : 0,
         isActive: Boolean(parsed.data.isActive),
       },
@@ -112,11 +115,12 @@ export async function updateMovieBillingHeadAction(_prevState: MovieBillingHeadF
       costType: formData.get("costType"),
       domesticCost: formData.get("domesticCost") ?? "0",
       intlCost: formData.get("intlCost") ?? "0",
+      intlCanadaCost: formData.get("intlCanadaCost") ?? "0",
       otherCost: formData.get("otherCost") ?? "0",
       isActive: formData.get("isActive") ?? undefined,
     });
     if (!parsed.success || !parsed.data.id) return { success: false, error: parsed.success ? "Billing head is required." : parsed.error.issues[0]?.message };
-    const existingHead = await db.movieBillingHead.findUnique({ where: { id: parsed.data.id }, select: { domesticCost: true, intlCost: true, otherCost: true, costType: true } });
+    const existingHead = await db.movieBillingHead.findUnique({ where: { id: parsed.data.id }, select: { domesticCost: true, intlCost: true, intlCanadaCost: true, otherCost: true, costType: true } });
     if (!existingHead) return { success: false, error: "Billing head not found." };
     if (!parsed.data.domesticActive && !parsed.data.intlActive && !parsed.data.otherActive) return { success: false, error: "Activate Domestic, INTL, or Other for this billing head." };
     if (parsed.data.otherActive && (parsed.data.domesticActive || parsed.data.intlActive)) return { success: false, error: "Other billing cannot be combined with Domestic or INTL for the same billing head." };
@@ -135,6 +139,7 @@ export async function updateMovieBillingHeadAction(_prevState: MovieBillingHeadF
         costType: canViewCostData(user) ? parsed.data.costType : existingHead.costType,
         domesticCost: parsed.data.domesticActive ? (canViewCostData(user) ? parsed.data.domesticCost : existingHead.domesticCost) : 0,
         intlCost: parsed.data.intlActive ? (canViewCostData(user) ? parsed.data.intlCost : existingHead.intlCost) : 0,
+        intlCanadaCost: parsed.data.intlActive ? (canViewCostData(user) ? parsed.data.intlCanadaCost : existingHead.intlCanadaCost) : 0,
         otherCost: parsed.data.otherActive ? (canViewCostData(user) ? parsed.data.otherCost : existingHead.otherCost) : 0,
         isActive: Boolean(parsed.data.isActive),
       },
