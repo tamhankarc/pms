@@ -53,12 +53,12 @@ export type AmazonBillingReportData = {
   projectName: string;
   filters: AmazonBillingReportFilters;
   movieOptions: { id: string; title: string; status?: string }[];
-  assetTypeOptions: { id: string; name: string }[];
+  assetTypeOptions: { id: string; name: string; movieIds?: string[] }[];
   rows: AmazonBillingReportRow[];
   summaryRows: AmazonBillingReportSummaryRow[];
   titleSummaryRows: UniversalTitleSummaryRow[];
   completedTitleSummaryRows: UniversalTitleSummaryRow[];
-  countryOptions: { id: string; name: string }[];
+  countryOptions: { id: string; name: string; movieIds?: string[] }[];
   contactPersons: string;
   projectFound: boolean;
 };
@@ -376,9 +376,9 @@ export async function getAmazonBillingReportData({
     where: {
       projectId: project.id,
       movie: { status: { in: ["WORKING", "COMPLETED"] } },
-      ...(filters.movieId !== "all" ? { movieId: filters.movieId } : {}),
     },
     select: {
+      movieId: true,
       movie: { select: { id: true, title: true, status: true } },
       assetType: { select: { id: true, name: true } },
       assetName: { select: { id: true, name: true } },
@@ -388,35 +388,60 @@ export async function getAmazonBillingReportData({
   });
 
   const movieOptionMap = new Map<string, { id: string; title: string }>();
-  const assetTypeOptionMap = new Map<string, { id: string; name: string }>();
-  const countryOptionMap = new Map<string, { id: string; name: string }>();
+  const assetTypeOptionMap = new Map<string, { id: string; name: string; movieIds: Set<string> }>();
+  const countryOptionMap = new Map<string, { id: string; name: string; movieIds: Set<string> }>();
 
   for (const entry of projectEntriesForOptions) {
     if (entry.movie && entry.movie.status !== "COMPLETED_BILLED") {
       movieOptionMap.set(entry.movie.id, { id: entry.movie.id, title: entry.movie.title });
     }
-    if (entry.assetName && client.name.trim().toLowerCase() === UNIVERSAL_CLIENT_NAME.toLowerCase()) {
-      assetTypeOptionMap.set(entry.assetName.id, { id: entry.assetName.id, name: entry.assetName.name });
+
+    const movieId = entry.movieId ?? entry.movie?.id ?? "";
+    if (entry.assetName && isUniversalClientForOptions) {
+      const current = assetTypeOptionMap.get(entry.assetName.id) ?? { id: entry.assetName.id, name: entry.assetName.name, movieIds: new Set<string>() };
+      if (movieId) current.movieIds.add(movieId);
+      assetTypeOptionMap.set(entry.assetName.id, current);
     } else if (entry.assetType) {
-      assetTypeOptionMap.set(entry.assetType.id, { id: entry.assetType.id, name: entry.assetType.name });
+      const current = assetTypeOptionMap.get(entry.assetType.id) ?? { id: entry.assetType.id, name: entry.assetType.name, movieIds: new Set<string>() };
+      if (movieId) current.movieIds.add(movieId);
+      assetTypeOptionMap.set(entry.assetType.id, current);
     }
     if (entry.country) {
-      countryOptionMap.set(entry.country.id, { id: entry.country.id, name: entry.country.name });
+      const current = countryOptionMap.get(entry.country.id) ?? { id: entry.country.id, name: entry.country.name, movieIds: new Set<string>() };
+      if (movieId) current.movieIds.add(movieId);
+      countryOptionMap.set(entry.country.id, current);
     }
   }
 
+  const optionMatchesSelectedMovie = (movieIds: Set<string>) => filters.movieId === "all" || movieIds.has(filters.movieId);
+
   const effectiveFilters = { ...filters };
-  if (isUniversalClientForOptions && effectiveFilters.assetNameId !== "all" && !assetTypeOptionMap.has(effectiveFilters.assetNameId)) {
-    effectiveFilters.assetNameId = "all";
+  if (isUniversalClientForOptions && effectiveFilters.assetNameId !== "all") {
+    const selectedAssetName = assetTypeOptionMap.get(effectiveFilters.assetNameId);
+    if (!selectedAssetName || !optionMatchesSelectedMovie(selectedAssetName.movieIds)) {
+      effectiveFilters.assetNameId = "all";
+    }
+  } else if (!isUniversalClientForOptions && effectiveFilters.assetTypeId !== "all") {
+    const selectedAssetType = assetTypeOptionMap.get(effectiveFilters.assetTypeId);
+    if (!selectedAssetType || !optionMatchesSelectedMovie(selectedAssetType.movieIds)) {
+      effectiveFilters.assetTypeId = "all";
+    }
   }
-  if (effectiveFilters.countryId !== "all" && !countryOptionMap.has(effectiveFilters.countryId)) {
-    effectiveFilters.countryId = "all";
+  if (effectiveFilters.countryId !== "all") {
+    const selectedCountry = countryOptionMap.get(effectiveFilters.countryId);
+    if (!selectedCountry || !optionMatchesSelectedMovie(selectedCountry.movieIds)) {
+      effectiveFilters.countryId = "all";
+    }
   }
   filters = effectiveFilters;
 
   const movieOptions = Array.from(movieOptionMap.values()).sort((a, b) => a.title.localeCompare(b.title));
-  const assetTypeOptions = Array.from(assetTypeOptionMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-  const countryOptions = Array.from(countryOptionMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  const assetTypeOptions = Array.from(assetTypeOptionMap.values())
+    .map((option) => ({ id: option.id, name: option.name, movieIds: Array.from(option.movieIds) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const countryOptions = Array.from(countryOptionMap.values())
+    .map((option) => ({ id: option.id, name: option.name, movieIds: Array.from(option.movieIds) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const fromBoundary = filters.fromDate ? new Date(`${filters.fromDate}T00:00:00`) : null;
   const toBoundary = filters.toDate ? new Date(`${filters.toDate}T23:59:59.999`) : null;

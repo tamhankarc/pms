@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { WarnerDeliverableFiltersClient } from "@/components/billing-reports/warner-deliverable-filters";
+import { UniversalTimeEntryFilters } from "@/components/billing-reports/universal-time-entry-filters";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canViewBillingReports } from "@/lib/permissions";
@@ -176,6 +177,12 @@ function TimeEntryReportFilters({
   reportType: AmazonReportType;
   data: NonNullable<Awaited<ReturnType<typeof getAmazonBillingReportData>>>;
 }) {
+  const isUniversal = data.client.name === "Universal Pictures International";
+
+  if (isUniversal) {
+    return <UniversalTimeEntryFilters clientId={clientId} reportType={reportType} data={data} />;
+  }
+
   return (
     <form
       method="get"
@@ -183,7 +190,7 @@ function TimeEntryReportFilters({
       className="card p-5"
     >
       <input type="hidden" name="report" value={reportType} />
-      <div className={data.client.name === "Universal Pictures International" && reportType === "localization" ? "grid gap-4 md:grid-cols-[150px_150px_1fr_1fr_1fr_auto] md:items-end" : "grid gap-4 md:grid-cols-[160px_160px_1fr_1fr_auto] md:items-end"}>
+      <div className="grid gap-4 md:grid-cols-[160px_160px_1fr_1fr_auto] md:items-end">
         <div>
           <label className="label" htmlFor="fromDate">
             Date from
@@ -229,42 +236,25 @@ function TimeEntryReportFilters({
           />
         </div>
         <div>
-          <label className="label" htmlFor={data.client.name === "Universal Pictures International" ? "assetNameId" : "assetTypeId"}>
-            {data.client.name === "Universal Pictures International" ? "Asset Name" : "Asset Type"}
+          <label className="label" htmlFor="assetTypeId">
+            Asset Type
           </label>
           <SearchableCombobox
-            id={data.client.name === "Universal Pictures International" ? "assetNameId" : "assetTypeId"}
-            name={data.client.name === "Universal Pictures International" ? "assetNameId" : "assetTypeId"}
-            defaultValue={data.client.name === "Universal Pictures International" ? data.filters.assetNameId : data.filters.assetTypeId}
+            id="assetTypeId"
+            name="assetTypeId"
+            defaultValue={data.filters.assetTypeId}
             options={[
-              { value: "all", label: data.client.name === "Universal Pictures International" ? "All asset names" : "All asset types" },
+              { value: "all", label: "All asset types" },
               ...data.assetTypeOptions.map((assetType) => ({
                 value: assetType.id,
                 label: assetType.name,
               })),
             ]}
-            placeholder={data.client.name === "Universal Pictures International" ? "All asset names" : "All asset types"}
-            searchPlaceholder={data.client.name === "Universal Pictures International" ? "Search asset names..." : "Search asset types..."}
-            emptyLabel={data.client.name === "Universal Pictures International" ? "No asset names found." : "No asset types found."}
+            placeholder="All asset types"
+            searchPlaceholder="Search asset types..."
+            emptyLabel="No asset types found."
           />
         </div>
-        {data.client.name === "Universal Pictures International" && reportType === "localization" ? (
-          <div>
-            <label className="label" htmlFor="countryId">Territory/Variant</label>
-            <SearchableCombobox
-              id="countryId"
-              name="countryId"
-              defaultValue={data.filters.countryId}
-              options={[
-                { value: "all", label: "All territories/variants" },
-                ...data.countryOptions.map((country) => ({ value: country.id, label: country.name })),
-              ]}
-              placeholder="All territories/variants"
-              searchPlaceholder="Search territories/variants..."
-              emptyLabel="No territories/variants found."
-            />
-          </div>
-        ) : null}
         <button className="btn-primary" type="submit">
           Apply
         </button>
