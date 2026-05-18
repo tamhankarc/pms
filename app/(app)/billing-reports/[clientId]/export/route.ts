@@ -13,7 +13,7 @@ import {
   normalizeAmazonReportType,
 } from "@/lib/billing-reports/amazon";
 import { db } from "@/lib/db";
-import { FILMIK_CLIENT_ID, isBillingReportClientExcluded } from "@/lib/billing-reports/config";
+import { FILMIK_CLIENT_ID, SONY_PICTURES_CLASSICS_CLIENT_ID, isBillingReportClientExcluded } from "@/lib/billing-reports/config";
 import { buildGenericBillingReportFilters, getGenericBillingReportData } from "@/lib/billing-reports/generic";
 import {
   buildSonyNewsletterBillingFilters,
@@ -100,7 +100,7 @@ export async function GET(
       return new Response(Buffer.from(pdf, "binary"), {
         headers: {
           "Content-Type": "application/pdf",
-          "Content-Disposition": `attachment; filename="${buildAmazonReportFileName({ ...data, projectName: "", movieOptions: [], assetTypeOptions: [], rows: [], summaryRows: [], contactPersons: "-" }, "pdf")}"`,
+          "Content-Disposition": `attachment; filename="${buildAmazonReportFileName({ ...data, projectName: "", movieOptions: [], assetTypeOptions: [], rows: [], summaryRows: [], titleSummaryRows: [], completedTitleSummaryRows: [], countryOptions: [], contactPersons: "-" }, "pdf")}"`,
         },
       });
     }
@@ -109,7 +109,7 @@ export async function GET(
     return new Response(excel, {
       headers: {
         "Content-Type": "application/vnd.ms-excel; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${buildAmazonReportFileName({ ...data, projectName: "", movieOptions: [], assetTypeOptions: [], rows: [], summaryRows: [], contactPersons: "-" }, "xls")}"`,
+        "Content-Disposition": `attachment; filename="${buildAmazonReportFileName({ ...data, projectName: "", movieOptions: [], assetTypeOptions: [], rows: [], summaryRows: [], titleSummaryRows: [], completedTitleSummaryRows: [], countryOptions: [], contactPersons: "-" }, "xls")}"`,
       },
     });
   }
@@ -213,12 +213,21 @@ export async function GET(
     });
   }
 
+  const isSonyPicturesClassicsReport = client.id === SONY_PICTURES_CLASSICS_CLIENT_ID;
   const genericOptions = reportDefinition?.kind === "generic-movie"
-    ? { movieSpecific: true }
+    ? { movieSpecific: true, openDateRange: isSonyPicturesClassicsReport }
     : undefined;
 
   if (!reportDefinition || genericOptions) {
-    const filters = buildGenericBillingReportFilters(searchParams);
+    const genericFilters = buildGenericBillingReportFilters(searchParams);
+    const filters = isSonyPicturesClassicsReport
+      ? {
+          ...genericFilters,
+          fromDate: searchParams.get("fromDate") ?? "",
+          toDate: searchParams.get("toDate") ?? "",
+          movieId: searchParams.get("movieId") ?? "all",
+        }
+      : genericFilters;
     const data = await getGenericBillingReportData({ clientId, filters, options: genericOptions });
     if (!data) redirect("/billing-reports");
 

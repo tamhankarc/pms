@@ -22,6 +22,16 @@ export default async function MovieEditPage({
     db.client.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        showCountriesInTimeEntries: true,
+        showMoviesInEntries: true,
+        showAssetTypesInEntries: true,
+        showAssetNamesInEntries: true,
+        showLanguagesInEntries: true,
+        showNewslettersInEntries: true,
+      },
     }),
     db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.movie.findUnique({

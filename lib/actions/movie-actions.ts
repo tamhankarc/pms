@@ -8,6 +8,12 @@ import { requireUserForAction } from "@/lib/auth";
 import { canManageMovies, canViewCostData } from "@/lib/permissions";
 import { generateMovieCode } from "@/lib/project-code";
 
+const WARNER_CLIENT_ID = "cmn66av4j0001l104077m5vxz";
+const SONY_PICTURES_CLIENT_ID = "cmn66d3q40002l104n6wvefvl";
+function canConfigureMovieBillingRegion(clientId: string) {
+  return clientId === WARNER_CLIENT_ID || clientId === SONY_PICTURES_CLIENT_ID;
+}
+
 export type MovieFormState = {
   success?: boolean;
   error?: string;
@@ -62,9 +68,14 @@ export async function createMovieAction(
       };
     }
 
-    if ((parsed.data.billingDomestic || parsed.data.billingIntl) && parsed.data.billingOther) return { success: false, error: "Domestic/INTL and Other cannot be selected together." };
-    if (!parsed.data.billingDomestic && !parsed.data.billingIntl && !parsed.data.billingOther) return { success: false, error: "Select at least one movie billing region." };
-    if (parsed.data.billingOther && !(parsed.data.otherCountryIds?.length)) return { success: false, error: "Select one or more countries for Other billing region." };
+    const billingDomestic = canConfigureMovieBillingRegion(parsed.data.clientId) ? Boolean(parsed.data.billingDomestic) : true;
+    const billingIntl = canConfigureMovieBillingRegion(parsed.data.clientId) ? Boolean(parsed.data.billingIntl) : false;
+    const billingOther = canConfigureMovieBillingRegion(parsed.data.clientId) ? Boolean(parsed.data.billingOther) : false;
+    const otherCountryIds = billingOther ? (parsed.data.otherCountryIds ?? []) : [];
+
+    if ((billingDomestic || billingIntl) && billingOther) return { success: false, error: "Domestic/INTL and Other cannot be selected together." };
+    if (!billingDomestic && !billingIntl && !billingOther) return { success: false, error: "Select at least one movie billing region." };
+    if (billingOther && !otherCountryIds.length) return { success: false, error: "Select one or more countries for Other billing region." };
 
     const generatedCode = await generateMovieCode(parsed.data.clientId, parsed.data.title);
 
@@ -75,11 +86,11 @@ export async function createMovieAction(
         code: generatedCode,
         description: parsed.data.description?.trim() || null,
         status: parsed.data.status,
-        billingRegion: parsed.data.billingOther ? "OTHER" : parsed.data.billingIntl && !parsed.data.billingDomestic ? "INTL" : "DOMESTIC",
-        billingDomestic: Boolean(parsed.data.billingDomestic),
-        billingIntl: Boolean(parsed.data.billingIntl),
-        billingOther: Boolean(parsed.data.billingOther),
-        otherCountryIds: parsed.data.billingOther ? JSON.stringify(parsed.data.otherCountryIds ?? []) : null,
+        billingRegion: billingOther ? "OTHER" : billingIntl && !billingDomestic ? "INTL" : "DOMESTIC",
+        billingDomestic,
+        billingIntl,
+        billingOther,
+        otherCountryIds: billingOther ? JSON.stringify(otherCountryIds) : null,
         sonyTicketingBannerCost: canViewCostData(user) ? (parsed.data.sonyTicketingBannerCost ?? 0) : 0,
         sonyEmailTicketingBannerCost: canViewCostData(user) ? (parsed.data.sonyEmailTicketingBannerCost ?? 0) : 0,
         billingUnitsJson: JSON.stringify(
@@ -152,9 +163,14 @@ export async function updateMovieAction(
       return { success: false, error: "Movie not found." };
     }
 
-    if ((parsed.data.billingDomestic || parsed.data.billingIntl) && parsed.data.billingOther) return { success: false, error: "Domestic/INTL and Other cannot be selected together." };
-    if (!parsed.data.billingDomestic && !parsed.data.billingIntl && !parsed.data.billingOther) return { success: false, error: "Select at least one movie billing region." };
-    if (parsed.data.billingOther && !(parsed.data.otherCountryIds?.length)) return { success: false, error: "Select one or more countries for Other billing region." };
+    const billingDomestic = canConfigureMovieBillingRegion(parsed.data.clientId) ? Boolean(parsed.data.billingDomestic) : true;
+    const billingIntl = canConfigureMovieBillingRegion(parsed.data.clientId) ? Boolean(parsed.data.billingIntl) : false;
+    const billingOther = canConfigureMovieBillingRegion(parsed.data.clientId) ? Boolean(parsed.data.billingOther) : false;
+    const otherCountryIds = billingOther ? (parsed.data.otherCountryIds ?? []) : [];
+
+    if ((billingDomestic || billingIntl) && billingOther) return { success: false, error: "Domestic/INTL and Other cannot be selected together." };
+    if (!billingDomestic && !billingIntl && !billingOther) return { success: false, error: "Select at least one movie billing region." };
+    if (billingOther && !otherCountryIds.length) return { success: false, error: "Select one or more countries for Other billing region." };
 
     const code = existingMovie.code?.trim() || (await generateMovieCode(parsed.data.clientId, parsed.data.title));
 
@@ -166,11 +182,11 @@ export async function updateMovieAction(
         code,
         description: parsed.data.description?.trim() || null,
         status: parsed.data.status,
-        billingRegion: parsed.data.billingOther ? "OTHER" : parsed.data.billingIntl && !parsed.data.billingDomestic ? "INTL" : "DOMESTIC",
-        billingDomestic: Boolean(parsed.data.billingDomestic),
-        billingIntl: Boolean(parsed.data.billingIntl),
-        billingOther: Boolean(parsed.data.billingOther),
-        otherCountryIds: parsed.data.billingOther ? JSON.stringify(parsed.data.otherCountryIds ?? []) : null,
+        billingRegion: billingOther ? "OTHER" : billingIntl && !billingDomestic ? "INTL" : "DOMESTIC",
+        billingDomestic,
+        billingIntl,
+        billingOther,
+        otherCountryIds: billingOther ? JSON.stringify(otherCountryIds) : null,
         sonyTicketingBannerCost: canViewCostData(user) ? (parsed.data.sonyTicketingBannerCost ?? 0) : existingMovie.sonyTicketingBannerCost,
         sonyEmailTicketingBannerCost: canViewCostData(user) ? (parsed.data.sonyEmailTicketingBannerCost ?? 0) : existingMovie.sonyEmailTicketingBannerCost,
         billingUnitsJson: canViewCostData(user) ? JSON.stringify(
@@ -219,4 +235,29 @@ export async function toggleMovieStatusAction(formData: FormData) {
   revalidatePath("/movies");
   revalidatePath(`/movies/${movieId}`);
   revalidatePath("/projects/new");
+}
+
+
+export async function completeMovieBillingAction(formData: FormData) {
+  await requireCanManageMovies();
+
+  const movieId = String(formData.get("movieId") || "");
+  const billingDateValue = String(formData.get("billingDate") || "");
+  const returnTo = String(formData.get("returnTo") || "/billing-reports");
+
+  if (!movieId) throw new Error("Title is required.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(billingDateValue)) throw new Error("Billing date is required.");
+
+  await db.movie.update({
+    where: { id: movieId },
+    data: {
+      status: "COMPLETED_BILLED",
+      billingDate: new Date(`${billingDateValue}T00:00:00`),
+    },
+  });
+
+  revalidatePath("/movies");
+  revalidatePath(`/movies/${movieId}`);
+  revalidatePath("/billing-reports");
+  redirect(returnTo.startsWith("/") ? returnTo : "/billing-reports");
 }

@@ -10,6 +10,7 @@ export type GenericBillingReportFilters = {
 export type GenericBillingReportOptions = {
   movieSpecific?: boolean;
   includeDeveloperCosts?: boolean;
+  openDateRange?: boolean;
 };
 
 export type GenericBillingReportRow = {
@@ -31,6 +32,12 @@ export type GenericBillingReportBlock = {
   showDeveloperCost: boolean;
 };
 
+export type GenericBillingReportTitleBlock = {
+  movie: { id: string; title: string };
+  blocks: GenericBillingReportBlock[];
+  totalCost: number;
+};
+
 export type GenericBillingReportData = {
   client: {
     id: string;
@@ -44,6 +51,7 @@ export type GenericBillingReportData = {
   movieOptions: { id: string; title: string }[];
   selectedMovie: { id: string; title: string } | null;
   blocks: GenericBillingReportBlock[];
+  titleBlocks?: GenericBillingReportTitleBlock[];
   reportTitle: string;
 };
 
@@ -111,6 +119,7 @@ export async function getGenericBillingReportData({
 }): Promise<GenericBillingReportData | null> {
   const movieSpecific = Boolean(options.movieSpecific);
   const includeDeveloperCosts = Boolean(options.includeDeveloperCosts);
+  const openDateRange = Boolean(options.openDateRange);
 
   const client = await db.client.findUnique({
     where: { id: clientId },
@@ -148,14 +157,56 @@ export async function getGenericBillingReportData({
 
   const movieOptions = movieSpecific
     ? await db.movie.findMany({
-        where: { clientId, isActive: true, timeEntries: { some: { project: { clientId } } } },
+        where: {
+          clientId,
+          isActive: true,
+          status: { in: ["WORKING", "COMPLETED"] },
+          timeEntries: { some: { project: { clientId } } },
+        },
         select: { id: true, title: true },
         orderBy: { title: "asc" },
       })
     : [];
 
-  const selectedMovieId = movieSpecific ? (filters.movieId || movieOptions[0]?.id || "") : "";
-  const selectedMovie = selectedMovieId ? movieOptions.find((movie) => movie.id === selectedMovieId) ?? null : null;
+  const selectedMovieId = movieSpecific ? (filters.movieId || "all") : "";
+  const selectedMovie = selectedMovieId && selectedMovieId !== "all" ? movieOptions.find((movie) => movie.id === selectedMovieId) ?? null : null;
+
+  if (movieSpecific && selectedMovieId === "all") {
+    const titleBlocks: GenericBillingReportTitleBlock[] = [];
+    for (const movie of movieOptions) {
+      const titleData = await getGenericBillingReportData({
+        clientId,
+        filters: { ...filters, movieId: movie.id },
+        options: { ...options, openDateRange },
+      });
+      if (!titleData || !titleData.blocks.length) continue;
+      titleBlocks.push({
+        movie,
+        blocks: titleData.blocks,
+        totalCost: titleData.blocks.reduce(
+          (sum, block) => sum + block.rows.reduce((blockSum, row) => blockSum + row.cost, 0),
+          0,
+        ),
+      });
+    }
+
+    return {
+      client: {
+        id: client.id,
+        name: client.name,
+        hourlyCost: Number(client.hourlyCost ?? 0),
+        showCountriesInTimeEntries: client.showCountriesInTimeEntries,
+      },
+      filters: { ...filters, movieId: "all", fromDate: openDateRange ? filters.fromDate : filters.fromDate, toDate: openDateRange ? filters.toDate : filters.toDate },
+      movieSpecific,
+      includeDeveloperCosts,
+      movieOptions,
+      selectedMovie: null,
+      blocks: [],
+      titleBlocks,
+      reportTitle: client.name + " Billing"
+    };
+  }
 
   if (movieSpecific && !selectedMovie) {
     return {
@@ -171,11 +222,12 @@ export async function getGenericBillingReportData({
       movieOptions,
       selectedMovie: null,
       blocks: [],
+      titleBlocks: [],
       reportTitle: client.name + " Billing"
     };
   }
 
-  const movieContactPersons = movieSpecific && selectedMovieId
+  const movieContactPersons = movieSpecific && selectedMovieId && selectedMovieId !== "all"
     ? await db.contactPerson.findMany({
         where: { clientId, movieId: selectedMovieId },
         orderBy: { name: "asc" },
@@ -185,7 +237,7 @@ export async function getGenericBillingReportData({
   const movieContactPersonLabel = buildContactPersonLabel(movieContactPersons);
 
   const projectIdsWithSelectedMovie = new Set<string>();
-  if (movieSpecific && selectedMovieId) {
+  if (movieSpecific && selectedMovieId && selectedMovieId !== "all") {
     const movieEntries = await db.timeEntry.findMany({
       where: { movieId: selectedMovieId, project: { clientId } },
       select: { projectId: true },
@@ -204,8 +256,8 @@ export async function getGenericBillingReportData({
     return buildContactPersonLabel(project.contactPersons);
   };
   const hourlyProjectIds = eligibleProjects.filter((project) => project.billingModel === "HOURLY").map((project) => project.id);
-  const fromBoundary = toStartOfDay(filters.fromDate);
-  const toBoundary = toEndOfDay(filters.toDate);
+  const fromBoundary = filters.fromDate ? toStartOfDay(filters.fromDate) : null;
+  const toBoundary = filters.toDate ? toEndOfDay(filters.toDate) : null;
 
   const hourlyMinutesByProject = new Map<string, number>();
   if (hourlyProjectIds.length) {
@@ -213,8 +265,8 @@ export async function getGenericBillingReportData({
       by: ["projectId"],
       where: {
         projectId: { in: hourlyProjectIds },
-        workDate: { gte: fromBoundary, lte: toBoundary },
-        ...(movieSpecific && selectedMovieId ? { movieId: selectedMovieId } : {}),
+        ...(fromBoundary || toBoundary ? { workDate: { ...(fromBoundary ? { gte: fromBoundary } : {}), ...(toBoundary ? { lte: toBoundary } : {}) } } : {}),
+        ...(movieSpecific && selectedMovieId && selectedMovieId !== "all" ? { movieId: selectedMovieId } : {}),
       },
       _sum: { minutesSpent: true },
     });
@@ -285,7 +337,7 @@ export async function getGenericBillingReportData({
           where: {
             projectId: { in: fixedPerCountryProjectIds },
             countryId: { not: null },
-            ...(movieSpecific && selectedMovieId ? { movieId: selectedMovieId } : {}),
+            ...(movieSpecific && selectedMovieId && selectedMovieId !== "all" ? { movieId: selectedMovieId } : {}),
           },
           select: {
             projectId: true,
@@ -323,7 +375,9 @@ export async function getGenericBillingReportData({
     buildBlock({
       key: "hourly",
       title: "Hourly",
-      description: `Costs are calculated from time entries between ${filters.fromDate} and ${filters.toDate}.`,
+      description: filters.fromDate || filters.toDate
+        ? `Costs are calculated from time entries between ${filters.fromDate || "Start"} and ${filters.toDate || "End"}.`
+        : "Costs are calculated from all available time entries.",
       rows: hourlyRows,
     }),
     buildBlock({
@@ -365,6 +419,7 @@ export async function getGenericBillingReportData({
     movieOptions,
     selectedMovie,
     blocks: possibleBlocks.filter((block) => block.rows.length > 0),
+    titleBlocks: [],
     reportTitle: client.name + " Billing"
   };
 }

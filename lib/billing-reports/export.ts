@@ -96,31 +96,31 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
   const detailRows = [
     excelRow([data.reportTitle]),
     excelRow(["Client", data.client.name]),
-    excelRow(["Date Range", `${data.filters.fromDate} to ${data.filters.toDate}`]),
+    excelRow(["Date Range", data.filters.fromDate || data.filters.toDate ? `${data.filters.fromDate || "Start"} to ${data.filters.toDate || "End"}` : "All dates"]),
     excelRow([]),
   ];
 
-  if (isUniversalLocalization && data.filters.movieId === "all") {
-    const grouped = new Map<string, typeof data.rows>();
-    data.rows.forEach((row) => {
-      const rows = grouped.get(row.titleName) ?? [];
-      rows.push(row);
-      grouped.set(row.titleName, rows);
-    });
-    for (const [titleName, rows] of grouped.entries()) {
-      detailRows.push(excelRow([titleName]), excelRow(detailHeaders), ...rows.map(rowToExcel));
-      detailRows.push(excelRow(["Total Assets", uniqueAssetCount(rows)], [1]));
-      detailRows.push(excelRow(["Total Countries/Territories", uniqueCountryCount(rows)], [1]));
-      detailRows.push(excelRow([]));
-    }
-  } else {
-    detailRows.push(excelRow(detailHeaders), ...data.rows.map(rowToExcel));
-    if (isUniversalSocial) detailRows.push(excelRow(["Total Assets", uniqueAssetCount(data.rows)], [1]));
-    if (isUniversalLocalization) {
-      detailRows.push(excelRow(["Total Assets", uniqueAssetCount(data.rows)], [1]));
-      detailRows.push(excelRow(["Total Countries/Territories", uniqueCountryCount(data.rows)], [1]));
-    }
+  detailRows.push(excelRow(detailHeaders), ...data.rows.map(rowToExcel));
+  if (isUniversalSocial) detailRows.push(excelRow(["Total Assets", uniqueAssetCount(data.rows)], [1]));
+  if (isUniversalLocalization) {
+    detailRows.push(excelRow(["Total Assets", uniqueAssetCount(data.rows)], [1]));
+    detailRows.push(excelRow(["Total Countries/Territories", uniqueCountryCount(data.rows)], [1]));
   }
+
+  const titleSummaryRows = isUniversal
+    ? [
+        excelRow(["Title Summary"]),
+        excelRow(isUniversalLocalization ? ["Title Name", "Total Assets", "Total Countries/Territories"] : ["Title Name", "Total Assets"]),
+        ...data.titleSummaryRows.map((row) => excelRow(isUniversalLocalization ? [row.titleName, row.totalAssets, row.totalCountries] : [row.titleName, row.totalAssets], isUniversalLocalization ? [1, 2] : [1])),
+      ]
+    : [];
+  const completedSummaryRows = isUniversalLocalization
+    ? [
+        excelRow(["Completed & Billed Title Summary"]),
+        excelRow(["Title Name", "Total Assets", "Total Countries/Territories"]),
+        ...data.completedTitleSummaryRows.map((row) => excelRow([row.titleName, row.totalAssets, row.totalCountries], [1, 2])),
+      ]
+    : [];
 
   const summaryRows = !isUniversal
     ? [
@@ -137,6 +137,8 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
  xmlns:x="urn:schemas-microsoft-com:office:excel"
  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
  xmlns:html="http://www.w3.org/TR/REC-html40">
+ ${titleSummaryRows.length ? worksheet("Title Summary", titleSummaryRows) : ""}
+ ${completedSummaryRows.length ? worksheet("Completed Billed", completedSummaryRows) : ""}
  ${worksheet("Details", detailRows)}
  ${summaryRows.length ? worksheet("Summary", summaryRows) : ""}
 </Workbook>`;
@@ -145,14 +147,25 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
 export function buildUniversalBillingSummaryExcel(data: UniversalBillingSummaryData) {
   const totalAssets = data.rows.reduce((sum, row) => sum + row.totalAssets, 0);
   const totalCountries = data.rows.reduce((sum, row) => sum + row.totalCountries, 0);
+  const completedTotalAssets = data.completedTitleSummaryRows.reduce((sum, row) => sum + row.totalAssets, 0);
+  const completedTotalCountries = data.completedTitleSummaryRows.reduce((sum, row) => sum + row.totalCountries, 0);
   const rows = [
     excelRow([data.reportTitle]),
     excelRow(["Client", data.client.name]),
-    excelRow(["Month", data.filters.fromDate.slice(0, 7)]),
+    excelRow(["Title Filter", data.filters.movieId === "all" ? "All titles" : data.filters.movieId]),
     excelRow([]),
     excelRow(["Title Name", "Total Assets", "Total Countries/Territories"]),
     ...data.rows.map((row) => excelRow([row.titleName, row.totalAssets, row.totalCountries], [1, 2])),
     excelRow(["Total", totalAssets, totalCountries], [1, 2]),
+  ];
+  const completedRows = [
+    excelRow(["Completed & Billed Title Summary"]),
+    excelRow(["Client", data.client.name]),
+    excelRow(["Title Filter", data.filters.movieId === "all" ? "All titles" : data.filters.movieId]),
+    excelRow([]),
+    excelRow(["Title Name", "Total Assets", "Total Countries/Territories"]),
+    ...data.completedTitleSummaryRows.map((row) => excelRow([row.titleName, row.totalAssets, row.totalCountries], [1, 2])),
+    ...(data.completedTitleSummaryRows.length ? [excelRow(["Total", completedTotalAssets, completedTotalCountries], [1, 2])] : []),
   ];
   return `<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
@@ -162,6 +175,7 @@ export function buildUniversalBillingSummaryExcel(data: UniversalBillingSummaryD
  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
  xmlns:html="http://www.w3.org/TR/REC-html40">
  ${worksheet("Billing Summary", rows)}
+ ${worksheet("Completed Billed", completedRows)}
 </Workbook>`;
 }
 
@@ -670,10 +684,18 @@ export function buildUniversalBillingSummaryPdf(data: UniversalBillingSummaryDat
   ];
   const rows: PdfTableRow[] = data.rows.map((row) => [row.titleName, row.totalAssets, row.totalCountries]);
   rows.push(["Total", data.rows.reduce((sum, row) => sum + row.totalAssets, 0), data.rows.reduce((sum, row) => sum + row.totalCountries, 0)]);
+  const completedRows: PdfTableRow[] = data.completedTitleSummaryRows.map((row) => [row.titleName, row.totalAssets, row.totalCountries]);
+  if (completedRows.length) {
+    completedRows.push([
+      "Total",
+      data.completedTitleSummaryRows.reduce((sum, row) => sum + row.totalAssets, 0),
+      data.completedTitleSummaryRows.reduce((sum, row) => sum + row.totalCountries, 0),
+    ]);
+  }
   const commands: string[] = [];
   commands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
   commands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
-  commands.push(textCommand(`Month: ${data.filters.fromDate.slice(0, 7)}`, MARGIN_X, TOP_Y - 38, 9));
+  commands.push(textCommand(`Title Filter: ${data.filters.movieId === "all" ? "All titles" : data.filters.movieId}`, MARGIN_X, TOP_Y - 38, 9));
   const startY = TOP_Y - 72;
   drawTableHeader(commands, columns, MARGIN_X, startY);
   let currentY = startY - HEADER_HEIGHT;
@@ -681,6 +703,17 @@ export function buildUniversalBillingSummaryPdf(data: UniversalBillingSummaryDat
     drawTableRow(commands, columns, row, MARGIN_X, currentY, SUMMARY_ROW_HEIGHT, 8);
     currentY -= SUMMARY_ROW_HEIGHT;
   });
+  if (completedRows.length && currentY > 120) {
+    currentY -= 24;
+    commands.push(textCommand("Completed & Billed Title Summary", MARGIN_X, currentY, 12, true));
+    currentY -= 18;
+    drawTableHeader(commands, columns, MARGIN_X, currentY);
+    currentY -= HEADER_HEIGHT;
+    completedRows.slice(0, 6).forEach((row) => {
+      drawTableRow(commands, columns, row, MARGIN_X, currentY, SUMMARY_ROW_HEIGHT, 8);
+      currentY -= SUMMARY_ROW_HEIGHT;
+    });
+  }
   return buildPdfDocument([commands.join("\n")]);
 }
 
@@ -697,16 +730,26 @@ export function buildWarnerDomesticReportExcel(
   const detailRows = [
     excelRow([data.reportTitle]),
     excelRow(["Client", data.client.name]),
-    excelRow(["Title", data.selectedMovie?.title ?? "-"]),
-    ...(data.reportType === "other-deliverable"
-      ? [excelRow(["Country", data.selectedCountry?.name ?? "-"])]
-      : []),
-    excelRow([]),
-    excelRow(["Billing Head / Project", "Cost (USD)"]),
-    ...data.rows.map((row) => excelRow([getDeliverableDisplayLabel(row), row.cost], [1])),
-    excelRow([]),
-    excelRow(["Total", data.totalCost], [1]),
   ];
+  if (data.titleBlocks?.length) {
+    for (const block of data.titleBlocks) {
+      detailRows.push(excelRow([]), excelRow(["Title", block.selectedMovie.title]));
+      if (data.reportType === "other-deliverable") detailRows.push(excelRow(["Country", block.selectedCountry?.name ?? "-"]));
+      detailRows.push(excelRow(["Billing Head / Project", "Cost (USD)"]));
+      detailRows.push(...block.rows.map((row) => excelRow([getDeliverableDisplayLabel(row), row.cost], [1])));
+      detailRows.push(excelRow(["Total", block.totalCost], [1]));
+    }
+  } else {
+    detailRows.push(
+      excelRow(["Title", data.selectedMovie?.title ?? "-"]),
+      ...(data.reportType === "other-deliverable" ? [excelRow(["Country", data.selectedCountry?.name ?? "-"])] : []),
+      excelRow([]),
+      excelRow(["Billing Head / Project", "Cost (USD)"]),
+      ...data.rows.map((row) => excelRow([getDeliverableDisplayLabel(row), row.cost], [1])),
+      excelRow([]),
+      excelRow(["Total", data.totalCost], [1]),
+    );
+  }
 
   return `<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
@@ -724,11 +767,20 @@ function buildWarnerDomesticPdfPages(data: WarnerDomesticDeliverableData) {
     { header: "Billing Head / Project", width: 560 },
     { header: "Cost", width: 170, align: "right" },
   ];
-  const rows: PdfTableRow[] = data.rows.map((row) => [
-    getDeliverableDisplayLabel(row),
-    formatUsd(row.cost),
-  ]);
-  rows.push(["Total", formatUsd(data.totalCost)]);
+  const rows: PdfTableRow[] = [];
+  if (data.titleBlocks?.length) {
+    for (const block of data.titleBlocks) {
+      rows.push([block.selectedMovie.title + (block.selectedCountry ? ` / ${block.selectedCountry.name}` : ""), ""]);
+      rows.push(...block.rows.map((row) => [getDeliverableDisplayLabel(row), formatUsd(row.cost)]));
+      rows.push(["Total", formatUsd(block.totalCost)]);
+    }
+  } else {
+    rows.push(...data.rows.map((row) => [
+      getDeliverableDisplayLabel(row),
+      formatUsd(row.cost),
+    ]));
+    rows.push(["Total", formatUsd(data.totalCost)]);
+  }
 
   const pageStreams: string[] = [];
   const x = MARGIN_X;
@@ -833,6 +885,104 @@ function getDeliverableDisplayLabel(row: WarnerDomesticDeliverableData["rows"][n
 }
 
 export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
+  if (data.titleBlocks?.length) {
+    const usedSheetNames = new Set<string>();
+    const makeSheetName = (base: string) => {
+      const cleaned = base.replace(/[\\/?*\[\]:]/g, " ").trim() || "Sheet";
+      let candidate = cleaned.slice(0, 31);
+      let index = 2;
+      while (usedSheetNames.has(candidate)) {
+        const suffix = ` ${index}`;
+        candidate = `${cleaned.slice(0, Math.max(1, 31 - suffix.length))}${suffix}`;
+        index += 1;
+      }
+      usedSheetNames.add(candidate);
+      return candidate;
+    };
+
+    const blockWorksheet = (title: string, block: GenericBillingReportData["blocks"][number]) => {
+      const header =
+        block.key === "fixedPerCountry"
+          ? [
+              "Project",
+              "Contact Person",
+              "Country List",
+              ...(block.showDeveloperCost
+                ? ["Developer Cost (USD)", "Project Cost (USD)", "Total Cost (USD)"]
+                : ["Cost (USD)"]),
+            ]
+          : [
+              "Project",
+              "Contact Person",
+              "Status",
+              ...(block.showDeveloperCost
+                ? ["Developer Cost (USD)", "Project Cost (USD)", "Total Cost (USD)"]
+                : ["Cost (USD)"]),
+            ];
+      const numericIndexes = block.showDeveloperCost ? [header.length - 3, header.length - 2, header.length - 1] : [header.length - 1];
+      const rows = [
+        excelRow(["Client", data.client.name]),
+        excelRow(["Title", title]),
+        ...(block.key === "hourly" ? [excelRow(["Date Range", data.filters.fromDate || data.filters.toDate ? `${data.filters.fromDate || "Start"} to ${data.filters.toDate || "End"}` : "All dates"])] : []),
+        excelRow([]),
+        excelRow(header),
+        ...block.rows.map((row) => {
+          const values =
+            block.key === "fixedPerCountry"
+              ? [
+                  row.projectName,
+                  row.contactPerson,
+                  row.countryList ?? "-",
+                  ...(block.showDeveloperCost ? [Number(row.developerCost ?? 0), row.projectCost, row.cost] : [row.cost]),
+                ]
+              : [
+                  row.projectName,
+                  row.contactPerson,
+                  row.status,
+                  ...(block.showDeveloperCost ? [Number(row.developerCost ?? 0), row.projectCost, row.cost] : [row.cost]),
+                ];
+          return excelRow(values, numericIndexes);
+        }),
+        excelRow([]),
+        excelRow(["Total", "", "", ...(block.showDeveloperCost
+          ? [
+              block.rows.reduce((sum, row) => sum + Number(row.developerCost ?? 0), 0),
+              block.rows.reduce((sum, row) => sum + row.projectCost, 0),
+              block.rows.reduce((sum, row) => sum + row.cost, 0),
+            ]
+          : [block.rows.reduce((sum, row) => sum + row.cost, 0)])], numericIndexes),
+      ];
+      return worksheet(makeSheetName(`${title} ${block.title}`), rows);
+    };
+
+    const summaryRows = [
+      excelRow([`${data.client.name} Billing`]),
+      excelRow(["Client", data.client.name]),
+      excelRow(["Title", "All Titles"]),
+      excelRow(["Hourly Date Range", data.filters.fromDate || data.filters.toDate ? `${data.filters.fromDate || "Start"} to ${data.filters.toDate || "End"}` : "All dates"]),
+      excelRow([]),
+      excelRow(["Title", "Total Cost (USD)"]),
+      ...data.titleBlocks.map((titleBlock) => excelRow([titleBlock.movie.title, titleBlock.totalCost], [1])),
+      excelRow([]),
+      excelRow(["Grand Total", data.titleBlocks.reduce((sum, titleBlock) => sum + titleBlock.totalCost, 0)], [1]),
+    ];
+
+    const worksheets = data.titleBlocks.flatMap((titleBlock) =>
+      titleBlock.blocks.map((block) => blockWorksheet(titleBlock.movie.title, block)),
+    );
+
+    return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ ${worksheet("Summary", summaryRows)}
+ ${worksheets.join("\n")}
+</Workbook>`;
+  }
+
   const worksheets = data.blocks.map((block) => {
     const header =
       block.key === "fixedPerCountry"
@@ -872,7 +1022,7 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
         ? [
             excelRow([
               "Date Range",
-              `${data.filters.fromDate} to ${data.filters.toDate}`,
+              data.filters.fromDate || data.filters.toDate ? `${data.filters.fromDate || "Start"} to ${data.filters.toDate || "End"}` : "All dates",
             ]),
           ]
         : []),
@@ -942,7 +1092,7 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
       : []),
     excelRow([
       "Hourly Date Range",
-      `${data.filters.fromDate} to ${data.filters.toDate}`,
+      data.filters.fromDate || data.filters.toDate ? `${data.filters.fromDate || "Start"} to ${data.filters.toDate || "End"}` : "All dates",
     ]),
     excelRow([]),
     excelRow(summaryHeader),
@@ -1024,6 +1174,20 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
 }
 
 function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
+  if (data.titleBlocks?.length) {
+    return buildGenericBillingReportPdfPages({
+      ...data,
+      selectedMovie: null,
+      blocks: data.titleBlocks.flatMap((titleBlock) =>
+        titleBlock.blocks.map((block) => ({
+          ...block,
+          title: `${titleBlock.movie.title} - ${block.title}`,
+        })),
+      ),
+      titleBlocks: [],
+    });
+  }
+
   const pageStreams: string[] = [];
   const summaryCommands: string[] = [];
   const hasDeveloperCosts = data.blocks.some(
@@ -1046,7 +1210,7 @@ function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
     );
   summaryCommands.push(
     textCommand(
-      `Hourly Date Range: ${data.filters.fromDate} to ${data.filters.toDate}`,
+      `Hourly Date Range: ${data.filters.fromDate || data.filters.toDate ? `${data.filters.fromDate || "Start"} to ${data.filters.toDate || "End"}` : "All dates"}`,
       MARGIN_X,
       data.selectedMovie ? TOP_Y - 54 : TOP_Y - 38,
       9,

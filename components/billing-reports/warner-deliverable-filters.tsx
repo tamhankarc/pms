@@ -62,7 +62,7 @@ export function WarnerDeliverableFiltersClient({
     setSelectedCountryId(nextCountryId);
   }
 
-  const countryDisabled = hasCountryFilter && !selectedMovieId;
+  const countryDisabled = hasCountryFilter && (!selectedMovieId || selectedMovieId === "all");
 
   return (
     <form ref={formRef} method="get" action={`/billing-reports/${clientId}`} className="card p-5">
@@ -90,9 +90,9 @@ export function WarnerDeliverableFiltersClient({
               value={selectedCountryId}
               onValueChange={handleCountryChange}
               options={countryOptions}
-              placeholder={countryDisabled ? "Select movie first" : "Select country"}
+              placeholder={countryDisabled ? "Select one title first" : "Select country"}
               searchPlaceholder="Search countries..."
-              emptyLabel={countryDisabled ? "Select a movie first." : "No countries found for selected movie."}
+              emptyLabel={countryDisabled ? "Select one title first." : "No countries found for selected title."}
               disabled={countryDisabled}
             />
             <input ref={countryInputRef} type="hidden" aria-hidden="true" tabIndex={-1} value={selectedCountryId} readOnly className="hidden" />

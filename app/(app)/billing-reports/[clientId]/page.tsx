@@ -2,11 +2,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { WarnerDeliverableFiltersClient } from "@/components/billing-reports/warner-deliverable-filters";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canViewBillingReports } from "@/lib/permissions";
-import { FILMIK_CLIENT_ID, isBillingReportClientExcluded } from "@/lib/billing-reports/config";
+import { completeMovieBillingAction } from "@/lib/actions/movie-actions";
+import { FILMIK_CLIENT_ID, SONY_PICTURES_CLASSICS_CLIENT_ID, isBillingReportClientExcluded } from "@/lib/billing-reports/config";
+import { paginateItems, parsePageParam } from "@/lib/pagination";
 import {
   buildGenericBillingReportFilters,
   formatUsd as formatGenericUsd,
@@ -56,6 +59,46 @@ function buildQueryString(values: Record<string, string>) {
   return params.toString();
 }
 
+const BILLING_REPORT_DETAIL_PAGE_SIZE = 20;
+
+type BillingReportPageSearchParams = Record<string, string | string[] | undefined>;
+
+function getSearchParamValue(searchParams: BillingReportPageSearchParams, key: string) {
+  const value = searchParams[key];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function buildBillingReportPaginationSearchParams(searchParams: BillingReportPageSearchParams) {
+  const preserved: Record<string, string | undefined> = {};
+  Object.entries(searchParams).forEach(([key, value]) => {
+    if (key === "detailPage") return;
+    const normalizedValue = Array.isArray(value) ? value[0] : value;
+    if (normalizedValue) preserved[key] = normalizedValue;
+  });
+  return preserved;
+}
+
+
+function BillingDoneButton({ movieId, returnTo, label = "Update Billing Status" }: { movieId: string; returnTo: string; label?: string }) {
+  const today = new Date().toISOString().slice(0, 10);
+  return (
+    <details className="relative">
+      <summary className="btn-secondary list-none cursor-pointer select-none">{label}</summary>
+      <div className="absolute right-0 z-20 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
+        <form action={completeMovieBillingAction} className="space-y-3">
+          <input type="hidden" name="movieId" value={movieId} />
+          <input type="hidden" name="returnTo" value={returnTo} />
+          <div>
+            <label className="label" htmlFor={`billingDate-${movieId}`}>Billing date</label>
+            <input id={`billingDate-${movieId}`} name="billingDate" type="date" className="input" defaultValue={today} required />
+          </div>
+          <button type="submit" className="btn-primary w-full">Billing Done</button>
+        </form>
+      </div>
+    </details>
+  );
+}
+
 function ReportTab({
   clientId,
   reportType,
@@ -90,6 +133,7 @@ function ExportButtons({
     toDate?: string;
     movieId?: string;
     assetTypeId?: string;
+    assetNameId?: string;
     countryId?: string;
     month?: string;
   };
@@ -100,6 +144,7 @@ function ExportButtons({
     toDate: filters.toDate ?? "",
     movieId: filters.movieId ?? "",
     assetTypeId: filters.assetTypeId ?? "",
+    assetNameId: filters.assetNameId ?? "",
     countryId: filters.countryId ?? "",
     month: filters.month ?? "",
   });
@@ -138,7 +183,7 @@ function TimeEntryReportFilters({
       className="card p-5"
     >
       <input type="hidden" name="report" value={reportType} />
-      <div className="grid gap-4 md:grid-cols-[160px_160px_1fr_1fr_auto] md:items-end">
+      <div className={data.client.name === "Universal Pictures International" && reportType === "localization" ? "grid gap-4 md:grid-cols-[150px_150px_1fr_1fr_1fr_auto] md:items-end" : "grid gap-4 md:grid-cols-[160px_160px_1fr_1fr_auto] md:items-end"}>
         <div>
           <label className="label" htmlFor="fromDate">
             Date from
@@ -184,25 +229,42 @@ function TimeEntryReportFilters({
           />
         </div>
         <div>
-          <label className="label" htmlFor="assetTypeId">
-            Asset Type
+          <label className="label" htmlFor={data.client.name === "Universal Pictures International" ? "assetNameId" : "assetTypeId"}>
+            {data.client.name === "Universal Pictures International" ? "Asset Name" : "Asset Type"}
           </label>
           <SearchableCombobox
-            id="assetTypeId"
-            name="assetTypeId"
-            defaultValue={data.filters.assetTypeId}
+            id={data.client.name === "Universal Pictures International" ? "assetNameId" : "assetTypeId"}
+            name={data.client.name === "Universal Pictures International" ? "assetNameId" : "assetTypeId"}
+            defaultValue={data.client.name === "Universal Pictures International" ? data.filters.assetNameId : data.filters.assetTypeId}
             options={[
-              { value: "all", label: "All asset types" },
+              { value: "all", label: data.client.name === "Universal Pictures International" ? "All asset names" : "All asset types" },
               ...data.assetTypeOptions.map((assetType) => ({
                 value: assetType.id,
                 label: assetType.name,
               })),
             ]}
-            placeholder="All asset types"
-            searchPlaceholder="Search asset types..."
-            emptyLabel="No asset types found."
+            placeholder={data.client.name === "Universal Pictures International" ? "All asset names" : "All asset types"}
+            searchPlaceholder={data.client.name === "Universal Pictures International" ? "Search asset names..." : "Search asset types..."}
+            emptyLabel={data.client.name === "Universal Pictures International" ? "No asset names found." : "No asset types found."}
           />
         </div>
+        {data.client.name === "Universal Pictures International" && reportType === "localization" ? (
+          <div>
+            <label className="label" htmlFor="countryId">Territory/Variant</label>
+            <SearchableCombobox
+              id="countryId"
+              name="countryId"
+              defaultValue={data.filters.countryId}
+              options={[
+                { value: "all", label: "All territories/variants" },
+                ...data.countryOptions.map((country) => ({ value: country.id, label: country.name })),
+              ]}
+              placeholder="All territories/variants"
+              searchPlaceholder="Search territories/variants..."
+              emptyLabel="No territories/variants found."
+            />
+          </div>
+        ) : null}
         <button className="btn-primary" type="submit">
           Apply
         </button>
@@ -219,17 +281,23 @@ function getUniversalReportTotals(rows: NonNullable<Awaited<ReturnType<typeof ge
 }
 
 function TimeEntryReportDetailsTable({
+  clientId,
   data,
+  detailPage,
+  searchParams,
 }: {
+  clientId: string;
   data: NonNullable<Awaited<ReturnType<typeof getAmazonBillingReportData>>>;
+  detailPage: number;
+  searchParams: BillingReportPageSearchParams;
 }) {
   const isLocalization = data.reportType === "localization";
   const isUniversal = data.client.name === "Universal Pictures International";
   const isUniversalSocial = isUniversal && data.reportType === "social-assets";
   const isUniversalLocalization = isUniversal && isLocalization;
   const showCost = !isUniversal;
-  const renderTable = (rows: typeof data.rows, keyPrefix: string) => {
-    const totals = getUniversalReportTotals(rows);
+  const renderTable = (rows: typeof data.rows, keyPrefix: string, totalRows: typeof data.rows = rows) => {
+    const totals = getUniversalReportTotals(totalRows);
     const colSpan = isUniversalLocalization ? 5 : isLocalization ? 7 : isUniversalSocial ? 5 : 6;
     return (
       <div className="table-wrap">
@@ -290,27 +358,24 @@ function TimeEntryReportDetailsTable({
     );
   };
 
-  if (isUniversalLocalization && data.filters.movieId === "all") {
-    const grouped = new Map<string, typeof data.rows>();
-    for (const row of data.rows) {
-      const titleRows = grouped.get(row.titleName) ?? [];
-      titleRows.push(row);
-      grouped.set(row.titleName, titleRows);
-    }
-    return (
-      <div className="space-y-6">
-        {Array.from(grouped.entries()).map(([titleName, rows]) => (
-          <div key={titleName} className="space-y-3">
-            <h3 className="text-base font-semibold text-slate-900">{titleName}</h3>
-            {renderTable(rows, titleName)}
-          </div>
-        ))}
-        {data.rows.length === 0 ? renderTable([], "empty") : null}
-      </div>
-    );
-  }
 
-  return renderTable(data.rows, "all");
+  const paginatedRows = paginateItems(data.rows, detailPage, BILLING_REPORT_DETAIL_PAGE_SIZE);
+
+  return (
+    <div className="space-y-3" id="detail-records">
+      {renderTable(paginatedRows.items, "all", data.rows)}
+      <PaginationControls
+        basePath={`/billing-reports/${clientId}`}
+        currentPage={paginatedRows.currentPage}
+        totalPages={paginatedRows.totalPages}
+        totalItems={paginatedRows.totalItems}
+        pageSize={paginatedRows.pageSize}
+        searchParams={buildBillingReportPaginationSearchParams(searchParams)}
+        pageParam="detailPage"
+        anchor="#detail-records"
+      />
+    </div>
+  );
 }
 
 function TimeEntryReportSummaryTable({
@@ -427,14 +492,55 @@ function ReportTabs({
   );
 }
 
+function UniversalTitleSummaryBlock({ title, rows, includeCountries = false }: { title: string; rows: NonNullable<Awaited<ReturnType<typeof getAmazonBillingReportData>>>["titleSummaryRows"]; includeCountries?: boolean }) {
+  const totalAssets = rows.reduce((sum, row) => sum + row.totalAssets, 0);
+  const totalCountries = rows.reduce((sum, row) => sum + row.totalCountries, 0);
+
+  return (
+    <div className="table-wrap">
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">Title Name</th>
+            <th className="table-cell">Total Assets</th>
+            {includeCountries ? <th className="table-cell">Total Territory/Variant</th> : null}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map((row) => (
+            <tr key={`${title}-${row.movieId}`}>
+              <td className="table-cell font-medium text-slate-900">{row.titleName}</td>
+              <td className="table-cell">{row.totalAssets}</td>
+              {includeCountries ? <td className="table-cell">{row.totalCountries}</td> : null}
+            </tr>
+          ))}
+          {rows.length === 0 ? (
+            <tr><td colSpan={includeCountries ? 3 : 2} className="table-cell text-center text-sm text-slate-500">No titles found for the selected filters.</td></tr>
+          ) : (
+            <tr className="bg-slate-100">
+              <td className="table-cell font-semibold text-slate-900">Total</td>
+              <td className="table-cell font-semibold text-slate-900">{totalAssets}</td>
+              {includeCountries ? <td className="table-cell font-semibold text-slate-900">{totalCountries}</td> : null}
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function TimeEntryReportsWorkspace({
   clientId,
   activeReport,
   data,
+  detailPage,
+  searchParams,
 }: {
   clientId: string;
   activeReport: AmazonReportType;
   data: NonNullable<Awaited<ReturnType<typeof getAmazonBillingReportData>>>;
+  detailPage: number;
+  searchParams: BillingReportPageSearchParams;
 }) {
   return (
     <div className="space-y-6">
@@ -455,6 +561,12 @@ function TimeEntryReportsWorkspace({
         reportType={activeReport}
         data={data}
       />
+      {data.client.name === "Universal Pictures International" ? (
+        <div className="space-y-3">
+          <h2 className="section-title">Title Summary</h2>
+          <UniversalTitleSummaryBlock title="active" rows={data.titleSummaryRows} includeCountries={data.reportType === "localization"} />
+        </div>
+      ) : null}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="section-title">{data.reportTitle}</h2>
@@ -462,13 +574,18 @@ function TimeEntryReportsWorkspace({
             Detailed billing records from time entries.
           </p>
         </div>
-        <ExportButtons
-          clientId={clientId}
-          reportType={activeReport}
-          filters={data.filters}
-        />
+        <div className="flex flex-wrap gap-3">
+          <ExportButtons
+            clientId={clientId}
+            reportType={activeReport}
+            filters={data.filters}
+          />
+          {data.client.name === "Amazon Studios" && data.filters.movieId !== "all" ? (
+            <BillingDoneButton movieId={data.filters.movieId} returnTo={`/billing-reports/${clientId}?report=${activeReport}&movieId=${data.filters.movieId}&fromDate=${data.filters.fromDate}&toDate=${data.filters.toDate}&assetTypeId=${data.filters.assetTypeId}`} />
+          ) : null}
+        </div>
       </div>
-      <TimeEntryReportDetailsTable data={data} />
+      <TimeEntryReportDetailsTable clientId={clientId} data={data} detailPage={detailPage} searchParams={searchParams} />
       {data.client.name !== "Universal Pictures International" ? (
         <div>
           <h2 className="section-title mb-3">Summary by Asset Type</h2>
@@ -480,14 +597,21 @@ function TimeEntryReportsWorkspace({
 }
 
 function UniversalBillingSummaryFilters({ clientId, data }: { clientId: string; data: UniversalBillingSummaryData }) {
-  const month = data.filters.fromDate.slice(0, 7);
   return (
     <form method="get" action={`/billing-reports/${clientId}`} className="card p-5">
       <input type="hidden" name="report" value="billing-summary" />
-      <div className="grid gap-4 md:grid-cols-[220px_max-content] md:items-end">
+      <div className="grid gap-4 md:grid-cols-[1fr_max-content] md:items-end">
         <div>
-          <label className="label" htmlFor="month">Month</label>
-          <input id="month" name="month" type="month" className="input" defaultValue={month} />
+          <label className="label" htmlFor="movieId">Title</label>
+          <SearchableCombobox
+            id="movieId"
+            name="movieId"
+            defaultValue={data.filters.movieId}
+            options={[{ value: "all", label: "All titles" }, ...data.titleOptions.map((movie) => ({ value: movie.id, label: movie.title }))]}
+            placeholder="All titles"
+            searchPlaceholder="Search titles..."
+            emptyLabel="No Working/Completed titles found."
+          />
         </div>
         <button className="btn-primary w-full md:w-auto md:px-8" type="submit">
           Apply
@@ -508,6 +632,7 @@ function UniversalBillingSummaryTable({ data }: { data: UniversalBillingSummaryD
             <th className="table-cell">Title Name</th>
             <th className="table-cell">Total Assets</th>
             <th className="table-cell">Total Countries/Territories</th>
+            <th className="table-cell">Action</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -516,15 +641,19 @@ function UniversalBillingSummaryTable({ data }: { data: UniversalBillingSummaryD
               <td className="table-cell font-medium text-slate-900">{row.titleName}</td>
               <td className="table-cell">{row.totalAssets}</td>
               <td className="table-cell">{row.totalCountries}</td>
+              <td className="table-cell">
+                <BillingDoneButton movieId={row.movieId} returnTo={`/billing-reports/${data.client.id}?report=billing-summary&movieId=${data.filters.movieId}`} label="Billing Done" />
+              </td>
             </tr>
           ))}
           {data.rows.length === 0 ? (
-            <tr><td colSpan={3} className="table-cell text-center text-sm text-slate-500">No records found for the selected month.</td></tr>
+            <tr><td colSpan={4} className="table-cell text-center text-sm text-slate-500">No Working/Completed title records found.</td></tr>
           ) : (
             <tr className="bg-slate-100">
               <td className="table-cell font-semibold text-slate-900">Total</td>
               <td className="table-cell font-semibold text-slate-900">{totalAssets}</td>
               <td className="table-cell font-semibold text-slate-900">{totalCountries}</td>
+              <td className="table-cell">-</td>
             </tr>
           )}
         </tbody>
@@ -546,11 +675,15 @@ function UniversalBillingSummaryWorkspace({ clientId, activeReport, data }: { cl
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="section-title">{data.reportTitle}</h2>
-          <p className="section-subtitle">Unique assets and countries/territories by title for the selected month.</p>
+          <p className="section-subtitle">Unique assets and countries/territories by Working/Completed title.</p>
         </div>
-        <ExportButtons clientId={clientId} reportType={activeReport} filters={{ month: data.filters.fromDate.slice(0, 7) }} />
+        <ExportButtons clientId={clientId} reportType={activeReport} filters={{ movieId: data.filters.movieId }} />
       </div>
       <UniversalBillingSummaryTable data={data} />
+      <div className="space-y-3">
+        <h2 className="section-title">Completed & Billed Title Summary</h2>
+        <UniversalTitleSummaryBlock title="completed" rows={data.completedTitleSummaryRows} includeCountries />
+      </div>
     </div>
   );
 }
@@ -576,10 +709,10 @@ function WarnerDeliverableFilters({
       reportType={data.reportType}
       movieId={data.filters.movieId}
       countryId={data.filters.countryId}
-      movieOptions={data.movieOptions.map((movie) => ({
+      movieOptions={[{ value: "all", label: "All Titles" }, ...data.movieOptions.map((movie) => ({
         value: movie.id,
         label: movie.title,
-      }))}
+      }))]}
       countryOptions={data.countryOptions.map((country) => ({
         value: country.id,
         label: country.name,
@@ -592,8 +725,12 @@ function WarnerDeliverableFilters({
 
 function WarnerDomesticTable({
   data,
+  rows = data.rows,
+  totalCost = data.totalCost,
 }: {
   data: WarnerDomesticDeliverableData;
+  rows?: WarnerDomesticDeliverableData["rows"];
+  totalCost?: number;
 }) {
   const canShowRows = Boolean(
     data.selectedMovie &&
@@ -634,7 +771,7 @@ function WarnerDomesticTable({
             </tr>
           ) : null}
           {canShowRows
-            ? data.rows.map((row, index) => (
+            ? rows.map((row, index) => (
                 <tr key={`${row.group}-${row.label}-${index}`}>
                   <td className="table-cell">
                     <div className="font-medium text-slate-900">
@@ -656,7 +793,7 @@ function WarnerDomesticTable({
             <tr className="bg-slate-100">
               <td className="table-cell font-semibold text-slate-900">Total</td>
               <td className="table-cell font-semibold text-slate-900">
-                {formatUsd(data.totalCost)}
+                {formatUsd(totalCost)}
               </td>
             </tr>
           ) : null}
@@ -696,16 +833,38 @@ function WarnerDeliverableWorkspace({
           <h2 className="section-title">{data.reportTitle}</h2>
           <p className="section-subtitle">{subtitle}</p>
         </div>
-        <ExportButtons
-          clientId={clientId}
-          reportType={data.reportType}
-          filters={{
-            movieId: data.filters.movieId,
-            countryId: data.filters.countryId,
-          }}
-        />
+        <div className="flex flex-wrap gap-3">
+          <ExportButtons
+            clientId={clientId}
+            reportType={data.reportType}
+            filters={{
+              movieId: data.filters.movieId,
+              countryId: data.filters.countryId,
+            }}
+          />
+          {data.selectedMovie && data.filters.movieId !== "all" && (
+            (data.reportType === "domestic-deliverable" && data.selectedMovie.billingDomestic) ||
+            (data.reportType === "intl-deliverable" && data.selectedMovie.billingIntl && !data.selectedMovie.billingDomestic) ||
+            (data.reportType === "other-deliverable" && data.selectedMovie.billingOther)
+          ) ? (
+            <BillingDoneButton movieId={data.selectedMovie.id} returnTo={`/billing-reports/${clientId}?report=${data.reportType}&movieId=${data.filters.movieId}&countryId=${data.filters.countryId}`} />
+          ) : null}
+        </div>
       </div>
-      <WarnerDomesticTable data={data} />
+      {data.titleBlocks?.length ? (
+        <div className="space-y-6">
+          {data.titleBlocks.map((block) => (
+            <div key={`${block.selectedMovie.id}-${block.selectedCountry?.id ?? "all"}`} className="space-y-3">
+              <h3 className="text-base font-semibold text-slate-900">
+                {block.selectedMovie.title}{block.selectedCountry ? ` / ${block.selectedCountry.name}` : ""}
+              </h3>
+              <WarnerDomesticTable data={{ ...data, selectedMovie: block.selectedMovie, selectedCountry: block.selectedCountry }} rows={block.rows} totalCost={block.totalCost} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <WarnerDomesticTable data={data} />
+      )}
     </div>
   );
 }
@@ -1328,11 +1487,14 @@ function GenericBillingReportFilters({
               id="movieId"
               name="movieId"
               defaultValue={data.filters.movieId}
-              options={data.movieOptions.map((movie) => ({
-                value: movie.id,
-                label: movie.title,
-              }))}
-              placeholder="Select title"
+              options={[
+                { value: "all", label: "All Titles" },
+                ...data.movieOptions.map((movie) => ({
+                  value: movie.id,
+                  label: movie.title,
+                })),
+              ]}
+              placeholder="All Titles"
               searchPlaceholder="Search titles..."
               emptyLabel="No titles found."
             />
@@ -1349,8 +1511,8 @@ function GenericBillingReportFilters({
       </div>
       {data.movieSpecific ? (
         <p className="mt-3 text-sm text-slate-500">
-          Date range is used for Hourly project costs. Report rows are limited
-          to projects with time entries for the selected title.
+          Date range is used only for Hourly project costs. Leave both dates blank
+          to calculate from all available records.
         </p>
       ) : null}
     </form>
@@ -1517,11 +1679,19 @@ function GenericBillingReportWorkspace({
         <div>
           <h2 className="section-title">{data.reportTitle}</h2>
         </div>
-        <GenericExportButtons
-          clientId={clientId}
-          reportType={reportType}
-          data={data}
-        />
+        <div className="flex flex-wrap gap-3">
+          <GenericExportButtons
+            clientId={clientId}
+            reportType={reportType}
+            data={data}
+          />
+          {data.client.id === SONY_PICTURES_CLASSICS_CLIENT_ID && data.selectedMovie && data.filters.movieId !== "all" ? (
+            <BillingDoneButton
+              movieId={data.selectedMovie.id}
+              returnTo={`/billing-reports/${clientId}?report=${reportType ?? ""}&movieId=${data.selectedMovie.id}&fromDate=${data.filters.fromDate}&toDate=${data.filters.toDate}`}
+            />
+          ) : null}
+        </div>
       </div>
       {data.selectedMovie ? (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
@@ -1531,7 +1701,23 @@ function GenericBillingReportWorkspace({
           </span>
         </div>
       ) : null}
-      {data.blocks.length ? (
+      {data.titleBlocks?.length ? (
+        <div className="space-y-6">
+          {data.titleBlocks.map((titleBlock) => (
+            <section key={titleBlock.movie.id} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <h3 className="text-base font-semibold text-slate-900">{titleBlock.movie.title}</h3>
+                <span className="text-sm font-semibold text-slate-700">Total: {formatGenericUsd(titleBlock.totalCost)}</span>
+              </div>
+              <div className="space-y-4">
+                {titleBlock.blocks.map((block) => (
+                  <GenericBillingModelBlock key={`${titleBlock.movie.id}-${block.key}`} block={block} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : data.blocks.length ? (
         data.blocks.map((block) => (
           <GenericBillingModelBlock key={block.key} block={block} />
         ))
@@ -1556,6 +1742,7 @@ export default async function ClientBillingReportPage({
 
   const { clientId } = await params;
   const resolvedSearchParams = (await searchParams) ?? {};
+  const detailPage = parsePageParam(getSearchParamValue(resolvedSearchParams, "detailPage"));
 
   const client = await db.client.findUnique({
     where: { id: clientId },
@@ -1678,15 +1865,24 @@ export default async function ClientBillingReportPage({
   const royalBillingReportData = client.name.trim().toLowerCase() === ROYAL_CARIBBEAN_CLIENT_NAME.toLowerCase()
     ? await getRoyalBillingReportData({ clientId, filters: royalFilters })
     : null;
+  const isSonyPicturesClassicsReport = client.id === SONY_PICTURES_CLASSICS_CLIENT_ID;
   const genericBillingOptions =
     activeReportDefinition?.kind === "generic-movie"
-      ? { movieSpecific: true }
+      ? { movieSpecific: true, openDateRange: isSonyPicturesClassicsReport }
       : undefined;
+  const effectiveGenericFilters = isSonyPicturesClassicsReport
+    ? {
+        ...genericFilters,
+        fromDate: getSearchParamValue(resolvedSearchParams, "fromDate") ?? "",
+        toDate: getSearchParamValue(resolvedSearchParams, "toDate") ?? "",
+        movieId: getSearchParamValue(resolvedSearchParams, "movieId") ?? "all",
+      }
+    : genericFilters;
   const genericBillingReportData =
     !reportCatalog || genericBillingOptions
       ? await getGenericBillingReportData({
           clientId,
-          filters: genericFilters,
+          filters: effectiveGenericFilters,
           options: genericBillingOptions,
         })
       : null;
@@ -1711,6 +1907,8 @@ export default async function ClientBillingReportPage({
           clientId={clientId}
           activeReport={activeReport}
           data={timeEntryReportData}
+          detailPage={detailPage}
+          searchParams={resolvedSearchParams}
         />
       ) : universalBillingSummaryData ? (
         <UniversalBillingSummaryWorkspace

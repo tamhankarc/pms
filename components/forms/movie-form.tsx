@@ -9,8 +9,8 @@ import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 type Client = { id: string; name: string };
 type Country = { id: string; name: string };
 type MovieStatus = "WORKING" | "COMPLETED" | "COMPLETED_BILLED";
-type BillingHead = { id: string; name: string; clientId: string; costType: "WHOLE_COST" | "PER_UNIT_COST" };
 const SONY_CLIENT_ID = "cmn66d3q40002l104n6wvefvl";
+const WARNER_CLIENT_ID = "cmn66av4j0001l104077m5vxz";
 const initialState: MovieFormState = {};
 
 const movieStatusOptions = [
@@ -22,7 +22,6 @@ const movieStatusOptions = [
 export function MovieForm({ clients, countries = [], action, initialValues, submitLabel, title, canEditCosts = false }: {
   clients: Client[];
   countries?: Country[];
-  billingHeads?: BillingHead[];
   action: (state: MovieFormState, formData: FormData) => Promise<MovieFormState>;
   initialValues?: { id?: string; clientId: string; title: string; description: string | null; status?: MovieStatus; isActive: boolean; billingDomestic?: boolean; billingIntl?: boolean; billingOther?: boolean; otherCountryIds?: string[]; billingUnits?: Record<string, number>; sonyTicketingBannerCost?: number | null; sonyEmailTicketingBannerCost?: number | null };
   submitLabel: string;
@@ -39,6 +38,7 @@ export function MovieForm({ clients, countries = [], action, initialValues, subm
   const clientOptions = useMemo(() => clients.map((client) => ({ value: client.id, label: client.name })), [clients]);
   const countryOptions = useMemo(() => countries.map((country) => ({ value: country.id, label: country.name })), [countries]);
   const showSonyCosts = canEditCosts && selectedClientId === SONY_CLIENT_ID;
+  const showBillingRegion = selectedClientId === WARNER_CLIENT_ID || selectedClientId === SONY_CLIENT_ID;
   const domesticOrIntlSelected = billingDomestic || billingIntl;
   const otherSelected = billingOther;
 
@@ -47,10 +47,16 @@ export function MovieForm({ clients, countries = [], action, initialValues, subm
       {initialValues?.id ? <input type="hidden" name="id" value={initialValues.id} /> : null}
       <input type="hidden" name="clientId" value={selectedClientId} />
       <input type="hidden" name="status" value={movieStatus} />
-      {billingDomestic ? <input type="hidden" name="billingDomestic" value="on" /> : null}
-      {billingIntl ? <input type="hidden" name="billingIntl" value="on" /> : null}
-      {billingOther ? <input type="hidden" name="billingOther" value="on" /> : null}
-      {otherCountryIds.map((id) => <input key={id} type="hidden" name="otherCountryIds" value={id} />)}
+      {showBillingRegion ? (
+        <>
+          {billingDomestic ? <input type="hidden" name="billingDomestic" value="on" /> : null}
+          {billingIntl ? <input type="hidden" name="billingIntl" value="on" /> : null}
+          {billingOther ? <input type="hidden" name="billingOther" value="on" /> : null}
+          {otherCountryIds.map((id) => <input key={id} type="hidden" name="otherCountryIds" value={id} />)}
+        </>
+      ) : (
+        <input type="hidden" name="billingDomestic" value="on" />
+      )}
       <h2 className="section-title">{title}</h2>
       <p className="section-subtitle">Fields marked <span className="text-red-600">*</span> are required. Movie code is generated automatically.</p>
       {state?.error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</div> : null}
@@ -59,16 +65,18 @@ export function MovieForm({ clients, countries = [], action, initialValues, subm
         <div><FormLabel htmlFor="clientId" required>Client</FormLabel><SearchableCombobox id="clientId" options={clientOptions} value={selectedClientId} onValueChange={(value) => { setSelectedClientId(value); }} placeholder="Select client" searchPlaceholder="Search clients..." emptyLabel="No client found." /></div>
         <div><FormLabel htmlFor="title" required>Movie title</FormLabel><input id="title" name="title" className="input" defaultValue={initialValues?.title ?? ""} required /></div>
         <div><FormLabel htmlFor="status" required>Status</FormLabel><SearchableCombobox id="status" options={movieStatusOptions} value={movieStatus} onValueChange={(value) => setMovieStatus(value as MovieStatus)} placeholder="Select status" searchPlaceholder="Search statuses..." emptyLabel="No status found." required /></div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <FormLabel required>Billing region</FormLabel>
-          <div className="mt-3 grid gap-3 md:grid-cols-3">
-            <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${otherSelected ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-700"}`}><input type="checkbox" checked={billingDomestic} disabled={otherSelected} onChange={(e) => setBillingDomestic(e.target.checked)} /> Domestic (US country)</label>
-            <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${otherSelected ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-700"}`}><input type="checkbox" checked={billingIntl} disabled={otherSelected} onChange={(e) => setBillingIntl(e.target.checked)} /> INTL (except US)</label>
-            <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${domesticOrIntlSelected ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-700"}`}><input type="checkbox" checked={billingOther} disabled={domesticOrIntlSelected} onChange={(e) => setBillingOther(e.target.checked)} /> Other (choose countries)</label>
+        {showBillingRegion ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <FormLabel required>Billing region</FormLabel>
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
+              <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${otherSelected ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-700"}`}><input type="checkbox" checked={billingDomestic} disabled={otherSelected} onChange={(e) => setBillingDomestic(e.target.checked)} /> Domestic (US country)</label>
+              <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${otherSelected ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-700"}`}><input type="checkbox" checked={billingIntl} disabled={otherSelected} onChange={(e) => setBillingIntl(e.target.checked)} /> INTL (except US)</label>
+              <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${domesticOrIntlSelected ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-700"}`}><input type="checkbox" checked={billingOther} disabled={domesticOrIntlSelected} onChange={(e) => setBillingOther(e.target.checked)} /> Other (choose countries)</label>
+            </div>
+            {billingOther ? <div className="mt-4"><SearchableMultiSelect id="otherCountryIds" options={countryOptions} value={otherCountryIds} onValueChange={setOtherCountryIds} placeholder="Select one or more countries" searchPlaceholder="Search countries..." emptyLabel="No country found." /></div> : null}
+            <p className="mt-2 text-xs text-slate-500">Domestic/INTL and Other are mutually exclusive for billing reports.</p>
           </div>
-          {billingOther ? <div className="mt-4"><SearchableMultiSelect id="otherCountryIds" options={countryOptions} value={otherCountryIds} onValueChange={setOtherCountryIds} placeholder="Select one or more countries" searchPlaceholder="Search countries..." emptyLabel="No country found." /></div> : null}
-          <p className="mt-2 text-xs text-slate-500">Domestic/INTL and Other are mutually exclusive for billing reports.</p>
-        </div>
+        ) : null}
 
 
         {showSonyCosts ? (

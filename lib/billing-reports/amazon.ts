@@ -18,6 +18,8 @@ export type AmazonBillingReportFilters = {
   toDate: string;
   movieId: string;
   assetTypeId: string;
+  assetNameId: string;
+  countryId: string;
 };
 
 export type AmazonBillingReportRow = {
@@ -36,6 +38,14 @@ export type AmazonBillingReportSummaryRow = {
   totalCost: number;
 };
 
+export type UniversalTitleSummaryRow = {
+  movieId: string;
+  titleName: string;
+  status: string;
+  totalAssets: number;
+  totalCountries: number;
+};
+
 export type AmazonBillingReportData = {
   client: { id: string; name: string };
   reportType: AmazonReportType;
@@ -46,6 +56,9 @@ export type AmazonBillingReportData = {
   assetTypeOptions: { id: string; name: string }[];
   rows: AmazonBillingReportRow[];
   summaryRows: AmazonBillingReportSummaryRow[];
+  titleSummaryRows: UniversalTitleSummaryRow[];
+  completedTitleSummaryRows: UniversalTitleSummaryRow[];
+  countryOptions: { id: string; name: string }[];
   contactPersons: string;
   projectFound: boolean;
 };
@@ -72,10 +85,16 @@ export type WarnerDomesticDeliverableData = {
   filters: WarnerDeliverableFilters;
   movieOptions: { id: string; title: string; status: string }[];
   countryOptions: { id: string; name: string; isoCode: string | null }[];
-  selectedMovie: { id: string; title: string } | null;
+  selectedMovie: { id: string; title: string; billingDomestic?: boolean; billingIntl?: boolean; billingOther?: boolean } | null;
   selectedCountry: { id: string; name: string; isoCode: string | null } | null;
   rows: WarnerDomesticDeliverableLine[];
   totalCost: number;
+  titleBlocks?: Array<{
+    selectedMovie: { id: string; title: string; billingDomestic?: boolean; billingIntl?: boolean; billingOther?: boolean };
+    selectedCountry: { id: string; name: string; isoCode: string | null } | null;
+    rows: WarnerDomesticDeliverableLine[];
+    totalCost: number;
+  }>;
 };
 
 export const AMAZON_CLIENT_NAME = "Amazon Studios";
@@ -252,7 +271,7 @@ export function formatUsd(value: number) {
 }
 
 export function buildAmazonBillingReportFilters(searchParams: URLSearchParams | Record<string, string | string[] | undefined>) {
-  const defaults = getDefaultMonthRange();
+  // const defaults = getDefaultMonthRange();
   const getValue = (key: string) => {
     if (searchParams instanceof URLSearchParams) return searchParams.get(key) ?? undefined;
     const value = searchParams[key];
@@ -263,10 +282,12 @@ export function buildAmazonBillingReportFilters(searchParams: URLSearchParams | 
   const monthRange = monthValue ? getMonthRangeFromDateInput(monthValue) : null;
 
   return {
-    fromDate: monthRange?.fromDate ?? normalizeDateInput(getValue("fromDate"), defaults.fromDate),
-    toDate: monthRange?.toDate ?? normalizeDateInput(getValue("toDate"), defaults.toDate),
+    fromDate: monthRange?.fromDate ?? normalizeDateInput(getValue("fromDate"), ""),
+    toDate: monthRange?.toDate ?? normalizeDateInput(getValue("toDate"), ""),
     movieId: getValue("movieId") || "all",
     assetTypeId: getValue("assetTypeId") || "all",
+    assetNameId: getValue("assetNameId") || getValue("assetTypeId") || "all",
+    countryId: getValue("countryId") || "all",
   } satisfies AmazonBillingReportFilters;
 }
 
@@ -278,7 +299,7 @@ export function buildWarnerDeliverableFilters(searchParams: URLSearchParams | Re
   };
 
   return {
-    movieId: getValue("movieId") || "",
+    movieId: getValue("movieId") || "all",
     countryId: getValue("countryId") || "",
   } satisfies WarnerDeliverableFilters;
 }
@@ -341,47 +362,79 @@ export async function getAmazonBillingReportData({
       assetTypeOptions: [],
       rows: [],
       summaryRows: [],
+      titleSummaryRows: [],
+      completedTitleSummaryRows: [],
+      countryOptions: [],
       contactPersons: "-",
       projectFound: false,
     };
   }
 
+  const isUniversalClientForOptions = client.name.trim().toLowerCase() === UNIVERSAL_CLIENT_NAME.toLowerCase();
+
   const projectEntriesForOptions = await db.timeEntry.findMany({
-    where: { projectId: project.id },
+    where: {
+      projectId: project.id,
+      movie: { status: { in: ["WORKING", "COMPLETED"] } },
+      ...(filters.movieId !== "all" ? { movieId: filters.movieId } : {}),
+    },
     select: {
-      movie: { select: { id: true, title: true } },
+      movie: { select: { id: true, title: true, status: true } },
       assetType: { select: { id: true, name: true } },
+      assetName: { select: { id: true, name: true } },
+      country: { select: { id: true, name: true } },
     },
     orderBy: { workDate: "desc" },
   });
 
   const movieOptionMap = new Map<string, { id: string; title: string }>();
   const assetTypeOptionMap = new Map<string, { id: string; name: string }>();
+  const countryOptionMap = new Map<string, { id: string; name: string }>();
 
   for (const entry of projectEntriesForOptions) {
-    if (entry.movie) {
+    if (entry.movie && entry.movie.status !== "COMPLETED_BILLED") {
       movieOptionMap.set(entry.movie.id, { id: entry.movie.id, title: entry.movie.title });
     }
-    if (entry.assetType) {
+    if (entry.assetName && client.name.trim().toLowerCase() === UNIVERSAL_CLIENT_NAME.toLowerCase()) {
+      assetTypeOptionMap.set(entry.assetName.id, { id: entry.assetName.id, name: entry.assetName.name });
+    } else if (entry.assetType) {
       assetTypeOptionMap.set(entry.assetType.id, { id: entry.assetType.id, name: entry.assetType.name });
+    }
+    if (entry.country) {
+      countryOptionMap.set(entry.country.id, { id: entry.country.id, name: entry.country.name });
     }
   }
 
+  const effectiveFilters = { ...filters };
+  if (isUniversalClientForOptions && effectiveFilters.assetNameId !== "all" && !assetTypeOptionMap.has(effectiveFilters.assetNameId)) {
+    effectiveFilters.assetNameId = "all";
+  }
+  if (effectiveFilters.countryId !== "all" && !countryOptionMap.has(effectiveFilters.countryId)) {
+    effectiveFilters.countryId = "all";
+  }
+  filters = effectiveFilters;
+
   const movieOptions = Array.from(movieOptionMap.values()).sort((a, b) => a.title.localeCompare(b.title));
   const assetTypeOptions = Array.from(assetTypeOptionMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  const countryOptions = Array.from(countryOptionMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
-  const fromBoundary = new Date(`${filters.fromDate}T00:00:00`);
-  const toBoundary = new Date(`${filters.toDate}T23:59:59.999`);
+  const fromBoundary = filters.fromDate ? new Date(`${filters.fromDate}T00:00:00`) : null;
+  const toBoundary = filters.toDate ? new Date(`${filters.toDate}T23:59:59.999`) : null;
+  const isUniversalClient = client.name.trim().toLowerCase() === UNIVERSAL_CLIENT_NAME.toLowerCase();
+  const isAmazonClient = client.name.trim().toLowerCase() === AMAZON_CLIENT_NAME.toLowerCase();
 
   const entries = await db.timeEntry.findMany({
     where: {
       projectId: project.id,
-      workDate: { gte: fromBoundary, lte: toBoundary },
+      ...(fromBoundary || toBoundary ? { workDate: { ...(fromBoundary ? { gte: fromBoundary } : {}), ...(toBoundary ? { lte: toBoundary } : {}) } } : {}),
+      movie: { status: { in: ["WORKING", "COMPLETED"] } },
       ...(filters.movieId !== "all" ? { movieId: filters.movieId } : {}),
-      ...(filters.assetTypeId !== "all" ? { assetTypeId: filters.assetTypeId } : {}),
+      ...(isUniversalClient && filters.assetNameId !== "all" ? { assetNameId: filters.assetNameId } : {}),
+      ...(!isUniversalClient && filters.assetTypeId !== "all" ? { assetTypeId: filters.assetTypeId } : {}),
+      ...(filters.countryId !== "all" ? { countryId: filters.countryId } : {}),
     },
     include: {
-      movie: { select: { title: true } },
+      movie: { select: { id: true, title: true, status: true } },
       assetType: { select: { name: true, cost: true } },
       language: { select: { name: true, code: true } },
       country: { select: { name: true, isoCode: true } },
@@ -404,7 +457,7 @@ export async function getAmazonBillingReportData({
   const rows: AmazonBillingReportRow[] = entries.map((entry) => ({
     date: formatDisplayDate(entry.workDate),
     titleName: entry.movie?.title ?? "-",
-    assetName: entry.assetName?.name || "-",
+    assetName: isAmazonClient ? (entry.taskName || entry.assetName?.name || "-") : (entry.assetName?.name || entry.taskName || "-"),
     territoryVariant: isUniversalLocalization ? entry.country?.name ?? "-" : reportConfig.includeLanguage ? entry.language?.name ?? entry.country?.name ?? "-" : undefined,
     assetType: isUniversalLocalization ? "Assets" : entry.assetType?.name ?? "-",
     cost: isUniversalLocalization ? Number(project.projectCost ?? 0) : Number(entry.assetType?.cost ?? 0),
@@ -423,6 +476,67 @@ export async function getAmazonBillingReportData({
     summaryMap.set(row.assetType, current);
   }
 
+
+  type TitleSummaryEntry = {
+    movieId: string | null;
+    taskName: string | null;
+    movie: {
+      id: string;
+      title: string;
+      status: string;
+    } | null;
+    assetName: {
+      name: string;
+    } | null;
+    country: {
+      name: string;
+    } | null;
+  };
+
+  const buildTitleSummaryRows = (entryList: TitleSummaryEntry[]): UniversalTitleSummaryRow[] => {
+    const map = new Map<string, { movieId: string; titleName: string; status: string; assets: Set<string>; countries: Set<string> }>();
+    for (const entry of entryList) {
+      if (!entry.movie) continue;
+      const current = map.get(entry.movie.title) ?? {
+        movieId: entry.movieId ?? "",
+        titleName: entry.movie.title,
+        status: entry.movie.status ?? "",
+        assets: new Set<string>(),
+        countries: new Set<string>(),
+      };
+      const asset = entry.assetName?.name || entry.taskName || "";
+      if (asset.trim()) current.assets.add(asset.trim());
+      if (entry.country?.name) current.countries.add(entry.country.name);
+      map.set(entry.movie.title, current);
+    }
+    return Array.from(map.values()).map((value) => ({
+      movieId: value.movieId,
+      titleName: value.titleName,
+      status: value.status,
+      totalAssets: value.assets.size,
+      totalCountries: value.countries.size,
+    })).sort((a, b) => a.titleName.localeCompare(b.titleName));
+  };
+
+  const completedEntries = isUniversalClient
+    ? await db.timeEntry.findMany({
+        where: {
+          projectId: project.id,
+          ...(fromBoundary || toBoundary ? { workDate: { ...(fromBoundary ? { gte: fromBoundary } : {}), ...(toBoundary ? { lte: toBoundary } : {}) } } : {}),
+          movie: { status: "COMPLETED_BILLED" },
+          ...(filters.movieId !== "all" ? { movieId: filters.movieId } : {}),
+          ...(isUniversalClient && filters.assetNameId !== "all" ? { assetNameId: filters.assetNameId } : {}),
+          ...(filters.countryId !== "all" ? { countryId: filters.countryId } : {}),
+        },
+        include: {
+          movie: { select: { id: true, title: true, status: true } },
+          assetName: { select: { name: true } },
+          country: { select: { name: true } },
+        },
+        orderBy: [{ movie: { title: "asc" } }, { workDate: "asc" }],
+      })
+    : [];
+
   return {
     client,
     reportType,
@@ -433,13 +547,18 @@ export async function getAmazonBillingReportData({
     assetTypeOptions,
     rows,
     summaryRows: Array.from(summaryMap.values()).sort((a, b) => a.assetType.localeCompare(b.assetType)),
+    titleSummaryRows: isUniversalClient ? buildTitleSummaryRows(entries) : [],
+    completedTitleSummaryRows: isUniversalClient ? buildTitleSummaryRows(completedEntries) : [],
+    countryOptions,
     contactPersons,
     projectFound: true,
   };
 }
 
 export type UniversalBillingSummaryRow = {
+  movieId: string;
   titleName: string;
+  status: string;
   totalAssets: number;
   totalCountries: number;
 };
@@ -449,7 +568,9 @@ export type UniversalBillingSummaryData = {
   reportType: "billing-summary";
   reportTitle: string;
   filters: AmazonBillingReportFilters;
+  titleOptions: { id: string; title: string; status: string }[];
   rows: UniversalBillingSummaryRow[];
+  completedTitleSummaryRows: UniversalTitleSummaryRow[];
   projectFound: boolean;
 };
 
@@ -499,20 +620,29 @@ export async function getUniversalBillingSummaryData({
   const summaryProjectIds = summaryProjects.map((project) => project.id);
 
   if (!summaryProjectIds.length) {
-    return { client, reportType: "billing-summary", reportTitle: reportConfig.title, filters, rows: [], projectFound: false };
+    return { client, reportType: "billing-summary", reportTitle: reportConfig.title, filters, titleOptions: [], rows: [], completedTitleSummaryRows: [], projectFound: false };
   }
 
-  const fromBoundary = new Date(`${filters.fromDate}T00:00:00`);
-  const toBoundary = new Date(`${filters.toDate}T23:59:59.999`);
+  const titleOptions = await db.movie.findMany({
+    where: {
+      clientId,
+      isActive: true,
+      status: { in: ["WORKING", "COMPLETED"] },
+      timeEntries: { some: { projectId: { in: summaryProjectIds } } },
+    },
+    select: { id: true, title: true, status: true },
+    orderBy: { title: "asc" },
+  });
 
   const entries = await db.timeEntry.findMany({
     where: {
       projectId: { in: summaryProjectIds },
-      workDate: { gte: fromBoundary, lte: toBoundary },
       movieId: { not: null },
+      movie: { status: { in: ["WORKING", "COMPLETED"] } },
+      ...(filters.movieId !== "all" ? { movieId: filters.movieId } : {}),
     },
     select: {
-      movie: { select: { title: true } },
+      movie: { select: { id: true, title: true, status: true } },
       assetName: { select: { name: true } },
       taskName: true,
       country: { select: { name: true } },
@@ -520,23 +650,75 @@ export async function getUniversalBillingSummaryData({
     orderBy: [{ movie: { title: "asc" } }, { workDate: "asc" }],
   });
 
-  const map = new Map<string, { assets: Set<string>; countries: Set<string> }>();
+  const map = new Map<string, { movieId: string; titleName: string; status: string; assets: Set<string>; countries: Set<string> }>();
   for (const entry of entries) {
-    const titleName = entry.movie?.title ?? "-";
-    const current = map.get(titleName) ?? { assets: new Set<string>(), countries: new Set<string>() };
+    if (!entry.movie) continue;
+    const current = map.get(entry.movie.id) ?? { movieId: entry.movie.id, titleName: entry.movie.title, status: entry.movie.status, assets: new Set<string>(), countries: new Set<string>() };
     const asset = entry.assetName?.name ?? entry.taskName ?? "";
     if (asset.trim()) current.assets.add(asset.trim());
     if (entry.country?.name) current.countries.add(entry.country.name);
-    map.set(titleName, current);
+    map.set(entry.movie.id, current);
   }
 
-  const rows = Array.from(map.entries()).map(([titleName, value]) => ({
-    titleName,
+  const rows = Array.from(map.values()).map((value) => ({
+    movieId: value.movieId,
+    titleName: `${value.titleName} (${formatMovieStatus(value.status)})`,
+    status: value.status,
     totalAssets: value.assets.size,
     totalCountries: value.countries.size,
-  }));
+  })).sort((a, b) => a.titleName.localeCompare(b.titleName));
 
-  return { client, reportType: "billing-summary", reportTitle: reportConfig.title, filters, rows, projectFound: true };
+  const completedEntries = await db.timeEntry.findMany({
+    where: {
+      projectId: { in: summaryProjectIds },
+      movieId: { not: null },
+      movie: { status: "COMPLETED_BILLED" },
+      ...(filters.movieId !== "all" ? { movieId: filters.movieId } : {}),
+    },
+    select: {
+      movieId: true,
+      taskName: true,
+      movie: { select: { id: true, title: true, status: true } },
+      assetName: { select: { name: true } },
+      country: { select: { name: true } },
+    },
+    orderBy: [{ movie: { title: "asc" } }, { workDate: "asc" }],
+  });
+
+  const completedMap = new Map<string, { movieId: string; titleName: string; status: string; assets: Set<string>; countries: Set<string> }>();
+  for (const entry of completedEntries) {
+    if (!entry.movie) continue;
+    const current = completedMap.get(entry.movie.id) ?? {
+      movieId: entry.movieId ?? "",
+      titleName: `${entry.movie.title} (${formatMovieStatus(entry.movie.status)})`,
+      status: entry.movie.status,
+      assets: new Set<string>(),
+      countries: new Set<string>(),
+    };
+    const asset = entry.assetName?.name ?? entry.taskName ?? "";
+    if (asset.trim()) current.assets.add(asset.trim());
+    if (entry.country?.name) current.countries.add(entry.country.name);
+    completedMap.set(entry.movie.id, current);
+  }
+
+  const completedTitleSummaryRows = Array.from(completedMap.values()).map((value) => ({
+    movieId: value.movieId,
+    titleName: value.titleName,
+    status: value.status,
+    totalAssets: value.assets.size,
+    totalCountries: value.countries.size,
+  })).sort((a, b) => a.titleName.localeCompare(b.titleName));
+
+  return {
+    client,
+    reportType: "billing-summary",
+    reportTitle: reportConfig.title,
+    filters,
+    titleOptions: titleOptions.map((movie) => ({ id: movie.id, title: `${movie.title} (${formatMovieStatus(movie.status)})`, status: movie.status })),
+    rows,
+    completedTitleSummaryRows,
+    projectFound: true,
+  };
 }
 
 function getMovieBillingUnits(movie: { billingUnitsJson: string | null }) {
@@ -578,6 +760,7 @@ async function getWarnerDeliverableEntryCountries(clientId: string) {
       movieId: true,
       country: { select: { name: true, isoCode: true } },
       assetName: { select: { name: true } },
+      taskName: true,
     },
   });
 }
@@ -663,7 +846,7 @@ async function getWarnerDeliverableData({
     orderBy: { title: "asc" },
   });
 
-  const selectedMovieId = filters.movieId || movieOptions[0]?.id || "";
+  const selectedMovieId = filters.movieId || "all";
   const selectedMovie = selectedMovieId
     ? await db.movie.findFirst({
         where: {
@@ -683,7 +866,7 @@ async function getWarnerDeliverableData({
               ],
             }),
         },
-        select: { id: true, title: true, status: true, clientId: true, billingUnitsJson: true, billingOther: true, billingIntl: true },
+        select: { id: true, title: true, status: true, clientId: true, billingUnitsJson: true, billingDomestic: true, billingOther: true, billingIntl: true },
       })
     : null;
 
@@ -704,7 +887,37 @@ async function getWarnerDeliverableData({
     selectedCountry,
     rows: [],
     totalCost: 0,
+    titleBlocks: [],
   });
+
+
+  if (filters.movieId === "all") {
+    const titleBlocks: NonNullable<WarnerDomesticDeliverableData["titleBlocks"]> = [];
+    for (const movie of movieOptions) {
+      const blockData = await getWarnerDeliverableData({ clientId, reportType, filters: { movieId: movie.id, countryId: filters.countryId || "" } });
+      if (blockData?.selectedMovie && (blockData.rows.length > 0 || blockData.totalCost > 0)) {
+        titleBlocks.push({
+          selectedMovie: blockData.selectedMovie,
+          selectedCountry: blockData.selectedCountry,
+          rows: blockData.rows,
+          totalCost: blockData.totalCost,
+        });
+      }
+    }
+    return {
+      client,
+      reportType,
+      reportTitle,
+      filters: { movieId: "all", countryId: filters.countryId || "" },
+      movieOptions: mappedMovieOptions,
+      countryOptions: [],
+      selectedMovie: null,
+      selectedCountry: null,
+      rows: [],
+      totalCost: titleBlocks.reduce((sum, block) => sum + block.totalCost, 0),
+      titleBlocks,
+    };
+  }
 
   if (!selectedMovie) return emptyData();
 
@@ -748,7 +961,7 @@ async function getWarnerDeliverableData({
           filters: { movieId: selectedMovie.id, countryId: filters.countryId || "" },
           movieOptions: mappedMovieOptions,
           countryOptions,
-          selectedMovie: { id: selectedMovie.id, title: `${selectedMovie.title} (${formatMovieStatus(selectedMovie.status)})` },
+          selectedMovie: { id: selectedMovie.id, title: `${selectedMovie.title} (${formatMovieStatus(selectedMovie.status)})`, billingDomestic: selectedMovie.billingDomestic, billingIntl: selectedMovie.billingIntl, billingOther: selectedMovie.billingOther },
           selectedCountry: null,
           rows: [],
           totalCost: 0,
@@ -927,7 +1140,7 @@ async function getWarnerDeliverableData({
     filters: { movieId: selectedMovie.id, countryId: selectedCountry?.id ?? "" },
     movieOptions: mappedMovieOptions,
     countryOptions,
-    selectedMovie: { id: selectedMovie.id, title: `${selectedMovie.title} (${formatMovieStatus(selectedMovie.status)})` },
+    selectedMovie: { id: selectedMovie.id, title: `${selectedMovie.title} (${formatMovieStatus(selectedMovie.status)})`, billingDomestic: selectedMovie.billingDomestic, billingIntl: selectedMovie.billingIntl, billingOther: selectedMovie.billingOther },
     selectedCountry,
     rows,
     totalCost,
