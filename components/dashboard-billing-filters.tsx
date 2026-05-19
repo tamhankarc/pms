@@ -1,5 +1,7 @@
 "use client";
 
+
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { BillingModel } from "@prisma/client";
@@ -93,7 +95,7 @@ export function DashboardBillingFilters({
   }
 
   return (
-    <form className="mt-5 grid gap-3 md:grid-cols-[180px_180px_1fr_1fr_220px_auto]" method="get">
+    <AutoSubmitFilterForm className="mt-5 grid gap-3 md:grid-cols-[180px_180px_1fr_1fr_220px_auto]" method="get">
       <input className="input" type="date" name="billingStartDate" defaultValue={billingStartDate} />
       <input className="input" type="date" name="billingEndDate" defaultValue={billingEndDate} />
 
@@ -146,10 +148,6 @@ export function DashboardBillingFilters({
 
       {leaveMonth ? <input type="hidden" name="leaveMonth" value={leaveMonth} /> : null}
       {month ? <input type="hidden" name="month" value={month} /> : null}
-
-      <button className="btn-secondary" type="submit">
-        Apply
-      </button>
-    </form>
+    </AutoSubmitFilterForm>
   );
 }

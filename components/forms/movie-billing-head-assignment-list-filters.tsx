@@ -1,5 +1,7 @@
 "use client";
 
+
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import { useMemo, useRef, useState } from "react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
@@ -36,7 +38,7 @@ export function MovieBillingHeadAssignmentListFilters({
   }
 
   return (
-    <form ref={formRef} className="grid gap-3 md:grid-cols-[1fr_220px_220px_180px_auto]" method="get">
+    <AutoSubmitFilterForm ref={formRef} className="grid gap-3 md:grid-cols-[1fr_220px_220px_180px_auto]" method="get">
       <input className="input" name="q" defaultValue={q} placeholder="Search by client, movie, or billing head" />
       <input type="hidden" name="clientId" value={selectedClientId} />
       <input type="hidden" name="movieId" value={selectedMovieId} />
@@ -78,7 +80,6 @@ export function MovieBillingHeadAssignmentListFilters({
         searchPlaceholder="Search statuses..."
         emptyLabel="No status found."
       />
-      <button className="btn-secondary" type="submit">Apply</button>
-    </form>
+    </AutoSubmitFilterForm>
   );
 }

@@ -1,3 +1,4 @@
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
@@ -92,7 +93,7 @@ export default async function UsersPage({
       />
 
       <div className="card p-4">
-        <form className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]" method="get">
+        <AutoSubmitFilterForm className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]" method="get">
           <input
             className="input"
             name="q"
@@ -131,10 +132,7 @@ export default async function UsersPage({
             searchPlaceholder="Search user types..."
             emptyLabel="No user type found."
           />
-          <button className="btn-secondary" type="submit">
-            Apply
-          </button>
-        </form>
+        </AutoSubmitFilterForm>
       </div>
 
       {showCreate && canManageUsers(currentUser) ? <UserManageForm mode="create" action={createUserAction} allowOperationsUserType={currentUser.userType === "ADMIN"} /> : null}

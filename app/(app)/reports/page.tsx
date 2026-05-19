@@ -1,3 +1,4 @@
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { FunctionalRoleCode } from "@prisma/client";
@@ -1050,7 +1051,7 @@ export default async function ReportsPage({
           </Link>
         </div>
         <div className="relative z-20 border-b border-slate-100 px-4 py-4">
-          <form className="flex flex-wrap items-end gap-3" method="get" action={`${reportsBasePath}#client-wise-hours`}>
+          <AutoSubmitFilterForm className="flex flex-wrap items-end gap-3" method="get" action={`${reportsBasePath}#client-wise-hours`}>
             <div className="w-full sm:w-[180px]">
               <input className="input w-full" type="date" name="clientFromDate" defaultValue={clientFromDate} />
             </div>
@@ -1075,7 +1076,6 @@ export default async function ReportsPage({
               {Object.entries(clientPreservedParams).map(([key, value]) =>
                 value ? <input key={key} type="hidden" name={key} value={value} /> : null,
               )}
-              <button className="btn-secondary" type="submit">Apply</button>
               <a
                 className="btn-secondary"
                 href={(() => {
@@ -1088,7 +1088,7 @@ export default async function ReportsPage({
                 Reset
               </a>
             </div>
-          </form>
+          </AutoSubmitFilterForm>
         </div>
         <div className="overflow-x-auto">
           <table className="table-base">

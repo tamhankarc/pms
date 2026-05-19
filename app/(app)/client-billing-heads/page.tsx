@@ -1,3 +1,4 @@
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import { canManageClientBillingHeads, canViewCostData } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -68,7 +69,7 @@ export default async function MovieBillingHeadsPage({
   return (
     <div>
       <PageHeader title="Billing Heads" description="Create and maintain client-specific billing heads." actions={<Link href="/client-billing-heads/new" className="btn-primary">Create Billing Head</Link>} />
-      <div className="mb-6 card p-4"><form className="grid gap-3 md:grid-cols-[1fr_220px_180px_auto]" method="get"><input className="input" name="q" defaultValue={q} placeholder="Search by billing head" /><SearchableCombobox id="clientId" name="clientId" defaultValue={clientId} options={[{ value: "all", label: "All clients" }, ...clients.map((client) => ({ value: client.id, label: client.name }))]} placeholder="All clients" searchPlaceholder="Search clients..." emptyLabel="No client found." /><SearchableCombobox id="status" name="status" defaultValue={status} options={[{ value: "all", label: "All statuses" }, { value: "active", label: "Active only" }, { value: "inactive", label: "Inactive only" }]} placeholder="All statuses" searchPlaceholder="Search statuses..." emptyLabel="No status found." /><button className="btn-secondary" type="submit">Apply</button></form></div>
+      <div className="mb-6 card p-4"><AutoSubmitFilterForm className="grid gap-3 md:grid-cols-[1fr_220px_180px_auto]" method="get"><input className="input" name="q" defaultValue={q} placeholder="Search by billing head" /><SearchableCombobox id="clientId" name="clientId" defaultValue={clientId} options={[{ value: "all", label: "All clients" }, ...clients.map((client) => ({ value: client.id, label: client.name }))]} placeholder="All clients" searchPlaceholder="Search clients..." emptyLabel="No client found." /><SearchableCombobox id="status" name="status" defaultValue={status} options={[{ value: "all", label: "All statuses" }, { value: "active", label: "Active only" }, { value: "inactive", label: "Inactive only" }]} placeholder="All statuses" searchPlaceholder="Search statuses..." emptyLabel="No status found." /></AutoSubmitFilterForm></div>
       <div className="table-wrap">
         <table className="table-base">
           <thead className="table-head">

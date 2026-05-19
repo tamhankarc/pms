@@ -1,3 +1,4 @@
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -27,7 +28,7 @@ export default async function LeaveAdminPage({
       <PageHeader title="Leave Administration" description="Manage leave balances, shift, employment status, and official holidays for leave allowed users." />
 
       <section className="card p-5">
-        <form className="grid gap-4 md:grid-cols-3">
+        <AutoSubmitFilterForm className="grid gap-4 md:grid-cols-3">
           <div>
             <label className="label" htmlFor="functionalRole">Functional role</label>
             <select className="input" id="functionalRole" name="functionalRole" defaultValue={params.functionalRole || ""}>
@@ -42,10 +43,9 @@ export default async function LeaveAdminPage({
             </select>
           </div>
           <div className="flex items-end gap-3">
-            <button className="btn-secondary" type="submit">Apply</button>
             <Link className="btn-secondary" href="/leave-admin">Reset</Link>
           </div>
-        </form>
+        </AutoSubmitFilterForm>
       </section>
 
       <section className="table-wrap" id="leave-admin-users-list">

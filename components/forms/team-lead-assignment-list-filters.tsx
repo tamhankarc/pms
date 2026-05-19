@@ -1,5 +1,7 @@
 "use client";
 
+
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import { useMemo, useState } from "react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
@@ -46,7 +48,7 @@ export function TeamLeadAssignmentListFilters({
   }
 
   return (
-    <form method="get" className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)_auto]">
+    <AutoSubmitFilterForm method="get" className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)_auto]">
       <SearchableCombobox
         id="role"
         name="role"
@@ -75,10 +77,6 @@ export function TeamLeadAssignmentListFilters({
         searchPlaceholder="Search employees..."
         emptyLabel="No employee found."
       />
-
-      <button className="btn-secondary" type="submit">
-        Apply
-      </button>
-    </form>
+    </AutoSubmitFilterForm>
   );
 }

@@ -1,3 +1,4 @@
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import { canManageClients } from "@/lib/permissions";
 import { requireUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -49,7 +50,7 @@ export default async function ClientsPage({
       />
 
       <div className="mb-6 card p-4">
-        <form className="grid gap-3 md:grid-cols-[1fr_180px_auto]" method="get">
+        <AutoSubmitFilterForm className="grid gap-3 md:grid-cols-[1fr_180px_auto]" method="get">
           <input className="input" name="q" defaultValue={q} placeholder="Search by client name" />
           <SearchableCombobox
             id="status"
@@ -64,8 +65,7 @@ export default async function ClientsPage({
             searchPlaceholder="Search statuses..."
             emptyLabel="No statuses found."
           />
-          <button className="btn-secondary" type="submit">Apply</button>
-        </form>
+        </AutoSubmitFilterForm>
       </div>
 
       <div className="table-wrap">

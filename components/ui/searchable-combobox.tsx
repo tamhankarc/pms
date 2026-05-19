@@ -46,6 +46,7 @@ export function SearchableCombobox({
   const [query, setQuery] = useState("");
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const hiddenInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -104,13 +105,30 @@ export function SearchableCombobox({
     if (!isControlled) {
       setInternalValue(nextValue);
     }
+
+    if (hiddenInputRef.current) {
+      hiddenInputRef.current.value = nextValue;
+    }
+
     onValueChange?.(nextValue);
     setIsOpen(false);
+
+    window.setTimeout(() => {
+      const hiddenInput = hiddenInputRef.current;
+      if (!hiddenInput) return;
+
+      hiddenInput.value = nextValue;
+
+      const form = hiddenInput.closest("form");
+      if (form instanceof HTMLFormElement && form.dataset.autoSubmitFilter === "true") {
+        form.requestSubmit();
+      }
+    }, 0);
   }
 
   return (
     <div ref={wrapperRef} className="relative w-full">
-      {name ? <input type="hidden" name={name} value={selectedValue} required={required} /> : null}
+      {name ? <input ref={hiddenInputRef} type="hidden" name={name} value={selectedValue} required={required} /> : null}
 
       <button
         id={id}

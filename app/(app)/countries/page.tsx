@@ -1,3 +1,4 @@
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
@@ -49,7 +50,7 @@ export default async function CountriesPage({
       />
 
       <div className="mb-6 card p-4">
-        <form className="grid gap-3 md:grid-cols-[1fr_180px_auto]" method="get">
+        <AutoSubmitFilterForm className="grid gap-3 md:grid-cols-[1fr_180px_auto]" method="get">
           <input
             className="input"
             name="q"
@@ -57,10 +58,7 @@ export default async function CountriesPage({
             placeholder="Search by country name or ISO code"
           />
           <SearchableCombobox id="status" name="status" defaultValue={status} options={[{ value: "all", label: "All statuses" }, { value: "active", label: "Active only" }, { value: "inactive", label: "Inactive only" }]} placeholder="All statuses" searchPlaceholder="Search statuses..." emptyLabel="No statuses found." />
-          <button className="btn-secondary" type="submit">
-            Apply
-          </button>
-        </form>
+        </AutoSubmitFilterForm>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">

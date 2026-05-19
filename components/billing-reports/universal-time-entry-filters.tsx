@@ -1,5 +1,7 @@
 "use client";
 
+
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import { useMemo, useState } from "react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import type { AmazonBillingReportData, AmazonReportType } from "@/lib/billing-reports/amazon";
@@ -53,7 +55,7 @@ export function UniversalTimeEntryFilters({ clientId, reportType, data }: Props)
   const isLocalization = reportType === "localization";
 
   return (
-    <form method="get" action={`/billing-reports/${clientId}`} className="card p-5">
+    <AutoSubmitFilterForm method="get" action={`/billing-reports/${clientId}`} className="card p-5">
       <input type="hidden" name="report" value={reportType} />
       <div className={isLocalization ? "grid gap-4 md:grid-cols-[150px_150px_1fr_1fr_1fr_auto] md:items-end" : "grid gap-4 md:grid-cols-[160px_160px_1fr_1fr_auto] md:items-end"}>
         <div>
@@ -105,8 +107,7 @@ export function UniversalTimeEntryFilters({ clientId, reportType, data }: Props)
             />
           </div>
         ) : null}
-        <button className="btn-primary" type="submit">Apply</button>
       </div>
-    </form>
+    </AutoSubmitFilterForm>
   );
 }

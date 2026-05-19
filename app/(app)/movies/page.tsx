@@ -1,3 +1,4 @@
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import { canManageMovies } from "@/lib/permissions";
 import { requireUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -58,7 +59,7 @@ export default async function MoviesPage({
       />
 
       <div className="mb-6 card p-4">
-        <form className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]" method="get">
+        <AutoSubmitFilterForm className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]" method="get">
           <input className="input" name="q" defaultValue={q} placeholder="Search by movie title" />
           <SearchableCombobox
             id="status"
@@ -85,10 +86,7 @@ export default async function MoviesPage({
             searchPlaceholder="Search clients..."
             emptyLabel="No client found."
           />
-          <button className="btn-secondary" type="submit">
-            Apply
-          </button>
-        </form>
+        </AutoSubmitFilterForm>
       </div>
 
       <div className="table-wrap">

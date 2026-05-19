@@ -1,5 +1,7 @@
 "use client";
 
+
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import { useRef, useState } from "react";
 import type { BillingModel } from "@prisma/client";
 
@@ -50,7 +52,7 @@ export function AttendanceSelectedDateFilters({
   const approvedLeaveInputRef = useRef<HTMLInputElement | null>(null);
 
   return (
-    <form
+    <AutoSubmitFilterForm
       className="mt-4 grid gap-3 lg:grid-cols-[minmax(320px,1fr)_auto_auto]"
       method="get"
       action="/dashboard#attendance-selected-date"
@@ -92,8 +94,6 @@ export function AttendanceSelectedDateFilters({
         </label>
       </div>
 
-      <button className="btn-secondary" type="submit">Apply</button>
-
       <input type="hidden" name="leaveMonth" value={leaveMonth} />
       {month ? <input type="hidden" name="month" value={month} /> : null}
       {billingStartDate ? <input type="hidden" name="billingStartDate" value={billingStartDate} /> : null}
@@ -108,6 +108,6 @@ export function AttendanceSelectedDateFilters({
         defaultValue={approvedLeaveSelectedDate ?? ""}
       />
       {dashboardSection ? <input type="hidden" name="dashboardSection" value={dashboardSection} /> : null}
-    </form>
+    </AutoSubmitFilterForm>
   );
 }

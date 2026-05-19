@@ -1,5 +1,7 @@
 "use client";
 
+
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import { useMemo, useState } from "react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
@@ -88,7 +90,7 @@ export function ProjectHoursFilterForm({
   const effectiveProjectId = isProjectAvailable ? selectedProjectId : "all";
 
   return (
-    <form className="relative z-20 flex flex-wrap items-end gap-3" method="get" action={`${action}${anchor}`}>
+    <AutoSubmitFilterForm className="relative z-20 flex flex-wrap items-end gap-3" method="get" action={`${action}${anchor}`}>
       {renderHiddenParams(preservedParams)}
       <div className="w-full sm:w-[180px]">
         <input className="input w-full" type="date" name="projectFromDate" defaultValue={fromDate} />
@@ -133,10 +135,9 @@ export function ProjectHoursFilterForm({
         />
       </div>
       <div className="flex w-full flex-wrap gap-3 sm:w-auto">
-        <button className="btn-secondary" type="submit">Apply</button>
         <a className="btn-secondary" href={buildResetHref(action, anchor, preservedParams)}>Reset</a>
       </div>
-    </form>
+    </AutoSubmitFilterForm>
   );
 }
 
@@ -271,7 +272,7 @@ export function TaskDetailFilterForm({
     : "all";
 
   return (
-    <form className="relative z-20 flex flex-wrap items-end gap-3" method="get" action={`${action}${anchor}`}>
+    <AutoSubmitFilterForm className="relative z-20 flex flex-wrap items-end gap-3" method="get" action={`${action}${anchor}`}>
       {renderHiddenParams(preservedParams)}
       <div className="w-full sm:w-[180px]">
         <input className="input w-full" type="date" name="taskFromDate" defaultValue={fromDate} />
@@ -384,10 +385,9 @@ export function TaskDetailFilterForm({
         />
       </div>
       <div className="flex w-full flex-wrap gap-3 sm:w-auto">
-        <button className="btn-secondary" type="submit">Apply</button>
         <a className="btn-secondary" href={buildResetHref(action, anchor, preservedParams)}>Reset</a>
       </div>
-    </form>
+    </AutoSubmitFilterForm>
   );
 }
 
@@ -518,7 +518,7 @@ export function ScopedMinutesFilterForm({
       : "all";
 
   return (
-    <form className="relative z-20 flex flex-wrap items-end gap-3" method="get" action={`${action}${anchor}`}>
+    <AutoSubmitFilterForm className="relative z-20 flex flex-wrap items-end gap-3" method="get" action={`${action}${anchor}`}>
       {renderHiddenParams(preservedParams)}
       <div className="w-full sm:w-[180px]">
         <input className="input w-full" type="date" name={`${prefix}FromDate`} defaultValue={fromDate} />
@@ -631,10 +631,9 @@ export function ScopedMinutesFilterForm({
         />
       </div>
       <div className="flex w-full flex-wrap gap-3 sm:w-auto">
-        <button className="btn-secondary" type="submit">Apply</button>
         <a className="btn-secondary" href={buildResetHref(action, anchor, preservedParams)}>Reset</a>
       </div>
-    </form>
+    </AutoSubmitFilterForm>
   );
 }
 
@@ -708,7 +707,7 @@ export function MovieMinutesFilterForm({
       : "all";
 
   return (
-    <form className="relative z-20 flex flex-wrap items-end gap-3" method="get" action={`${action}${anchor}`}>
+    <AutoSubmitFilterForm className="relative z-20 flex flex-wrap items-end gap-3" method="get" action={`${action}${anchor}`}>
       {renderHiddenParams(preservedParams)}
       <div className="w-full sm:w-[180px]">
         <input className="input w-full" type="date" name="movieFromDate" defaultValue={fromDate} />
@@ -810,9 +809,8 @@ export function MovieMinutesFilterForm({
         />
       </div>
       <div className="flex w-full flex-wrap gap-3 sm:w-auto">
-        <button className="btn-secondary" type="submit">Apply</button>
         <a className="btn-secondary" href={buildResetHref(action, anchor, preservedParams)}>Reset</a>
       </div>
-    </form>
+    </AutoSubmitFilterForm>
   );
 }

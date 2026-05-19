@@ -1,3 +1,4 @@
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import { canManageAssetTypes, canViewCostData } from "@/lib/permissions";
 import { requireUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -47,7 +48,7 @@ export default async function FilmikResourcesPage({
         actions={<Link href="/filmik-resource/new" className="btn-primary">Create Resource Type</Link>}
       />
       <div className="mb-6 card p-4">
-        <form className="grid gap-3 md:grid-cols-[1fr_180px_auto]" method="get">
+        <AutoSubmitFilterForm className="grid gap-3 md:grid-cols-[1fr_180px_auto]" method="get">
           <input className="input" name="q" defaultValue={q} placeholder="Search by resource type" />
           <SearchableCombobox
             id="status"
@@ -58,8 +59,7 @@ export default async function FilmikResourcesPage({
             searchPlaceholder="Search statuses..."
             emptyLabel="No status found."
           />
-          <button className="btn-secondary" type="submit">Apply</button>
-        </form>
+        </AutoSubmitFilterForm>
       </div>
       <div className="table-wrap">
         <table className="table-base">

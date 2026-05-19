@@ -1,5 +1,7 @@
 "use client";
 
+
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import { useEffect, useRef, useState } from "react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
@@ -65,7 +67,7 @@ export function WarnerDeliverableFiltersClient({
   const countryDisabled = hasCountryFilter && (!selectedMovieId || selectedMovieId === "all");
 
   return (
-    <form ref={formRef} method="get" action={`/billing-reports/${clientId}`} className="card p-5">
+    <AutoSubmitFilterForm ref={formRef} method="get" action={`/billing-reports/${clientId}`} className="card p-5">
       <input type="hidden" name="report" value={reportType} />
       <div className={hasCountryFilter ? "grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end" : "grid gap-4 md:grid-cols-[1fr_auto] md:items-end"}>
         <div>
@@ -98,8 +100,7 @@ export function WarnerDeliverableFiltersClient({
             <input ref={countryInputRef} type="hidden" aria-hidden="true" tabIndex={-1} value={selectedCountryId} readOnly className="hidden" />
           </div>
         ) : null}
-        <button className="btn-primary" type="submit">Apply</button>
       </div>
-    </form>
+    </AutoSubmitFilterForm>
   );
 }

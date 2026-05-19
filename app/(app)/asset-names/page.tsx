@@ -1,3 +1,4 @@
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
@@ -41,7 +42,7 @@ export default async function AssetNamesPage({ searchParams }: { searchParams?: 
   return <div>
     <PageHeader title="Asset Names" description="Create and manage Universal Pictures International asset names used in Time Entries and Estimates." actions={<Link href="/asset-names/new" className="btn-primary">Create Asset Name</Link>} />
     <div className="mb-6 card p-4">
-      <form className="grid gap-3 md:grid-cols-[1fr_260px_180px_auto]" method="get">
+      <AutoSubmitFilterForm className="grid gap-3 md:grid-cols-[1fr_260px_180px_auto]" method="get">
         <input className="input" name="q" defaultValue={q} placeholder="Search by asset name" />
         <SearchableCombobox
           id="movieId"
@@ -53,8 +54,7 @@ export default async function AssetNamesPage({ searchParams }: { searchParams?: 
           emptyLabel="No movie found."
         />
         <select className="input" name="status" defaultValue={status}><option value="all">All statuses</option><option value="active">Active only</option><option value="inactive">Inactive only</option></select>
-        <button className="btn-secondary" type="submit">Apply</button>
-      </form>
+      </AutoSubmitFilterForm>
     </div>
     <div className="table-wrap">
       <table className="table-base"><thead className="table-head"><tr><th className="table-cell">Asset Name</th><th className="table-cell">Movie</th><th className="table-cell">Client</th><th className="table-cell">Status</th><th className="table-cell">Action</th></tr></thead><tbody className="divide-y divide-slate-100">

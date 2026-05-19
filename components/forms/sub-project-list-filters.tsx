@@ -1,5 +1,7 @@
 "use client";
 
+
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
@@ -29,7 +31,7 @@ export function SubProjectListFilters({
   const effectiveProjectId = filteredProjects.some((project) => project.id === projectId) ? projectId : "";
 
   return (
-    <form method="get" className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
+    <AutoSubmitFilterForm method="get" className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
       <SearchableCombobox
         id="clientId"
         name="clientId"
@@ -79,13 +81,9 @@ export function SubProjectListFilters({
         searchPlaceholder="Search projects..."
         emptyLabel="No projects found."
       />
-
-      <button className="btn-secondary" type="submit">
-        Apply
-      </button>
       <Link href="/sub-project" className="btn-secondary">
         Reset
       </Link>
-    </form>
+    </AutoSubmitFilterForm>
   );
 }

@@ -1,3 +1,4 @@
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import { canManageContactPersons } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -43,12 +44,11 @@ export default async function ContactPersonsPage({
       <PageHeader title="Contact Persons" description="Create and maintain project-specific or movie-specific contact persons." actions={<Link href="/contact-persons/new" className="btn-primary">Create Contact Person</Link>} />
 
       <div className="mb-6 card p-4">
-        <form className="grid gap-3 md:grid-cols-[1fr_220px_220px_auto]" method="get">
+        <AutoSubmitFilterForm className="grid gap-3 md:grid-cols-[1fr_220px_220px_auto]" method="get">
           <input className="input" name="q" defaultValue={q} placeholder="Search by name, email, or contact number" />
           <SearchableCombobox id="clientId" name="clientId" defaultValue={clientId} options={[{ value: "all", label: "All clients" }, ...clients.map((client) => ({ value: client.id, label: client.name }))]} placeholder="All clients" searchPlaceholder="Search clients..." emptyLabel="No client found." />
           <SearchableCombobox id="projectId" name="projectId" defaultValue={projectId} options={[{ value: "all", label: "All projects" }, ...projectOptions]} placeholder="All projects" searchPlaceholder="Search projects..." emptyLabel="No project found." />
-          <button className="btn-secondary" type="submit">Apply</button>
-        </form>
+        </AutoSubmitFilterForm>
       </div>
 
       <div className="table-wrap">

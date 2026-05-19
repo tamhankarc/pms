@@ -1,3 +1,4 @@
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
@@ -184,7 +185,7 @@ function TimeEntryReportFilters({
   }
 
   return (
-    <form
+    <AutoSubmitFilterForm
       method="get"
       action={`/billing-reports/${clientId}`}
       className="card p-5"
@@ -255,11 +256,8 @@ function TimeEntryReportFilters({
             emptyLabel="No asset types found."
           />
         </div>
-        <button className="btn-primary" type="submit">
-          Apply
-        </button>
       </div>
-    </form>
+    </AutoSubmitFilterForm>
   );
 }
 
@@ -588,7 +586,7 @@ function TimeEntryReportsWorkspace({
 
 function UniversalBillingSummaryFilters({ clientId, data }: { clientId: string; data: UniversalBillingSummaryData }) {
   return (
-    <form method="get" action={`/billing-reports/${clientId}`} className="card p-5">
+    <AutoSubmitFilterForm method="get" action={`/billing-reports/${clientId}`} className="card p-5">
       <input type="hidden" name="report" value="billing-summary" />
       <div className="grid gap-4 md:grid-cols-[1fr_max-content] md:items-end">
         <div>
@@ -603,11 +601,8 @@ function UniversalBillingSummaryFilters({ clientId, data }: { clientId: string; 
             emptyLabel="No Working/Completed titles found."
           />
         </div>
-        <button className="btn-primary w-full md:w-auto md:px-8" type="submit">
-          Apply
-        </button>
       </div>
-    </form>
+    </AutoSubmitFilterForm>
   );
 }
 
@@ -869,7 +864,7 @@ function SonyPicturesReportFilters({
   data: SonyPicturesReportData;
 }) {
   return (
-    <form
+    <AutoSubmitFilterForm
       method="get"
       action={`/billing-reports/${clientId}`}
       className="card p-5"
@@ -893,15 +888,12 @@ function SonyPicturesReportFilters({
             emptyLabel="No active Working/Completed titles with time entries found."
           />
         </div>
-        <button className="btn-primary" type="submit">
-          Apply
-        </button>
       </div>
       <p className="mt-3 text-sm text-slate-500">
         Only active Working/Completed titles with one or more Time Entries are
         listed.
       </p>
-    </form>
+    </AutoSubmitFilterForm>
   );
 }
 
@@ -1087,17 +1079,16 @@ function SonyNewsletterBillingFilters({
   data: SonyNewsletterBillingData;
 }) {
   return (
-    <form method="get" action={`/billing-reports/${clientId}`} className="card p-5">
+    <AutoSubmitFilterForm method="get" action={`/billing-reports/${clientId}`} className="card p-5">
       <input type="hidden" name="report" value={reportType} />
       <div className="grid gap-4 md:grid-cols-[220px_auto_1fr] md:items-end">
         <div>
           <label className="label" htmlFor="month">Month</label>
           <input id="month" name="month" type="month" className="input" defaultValue={data.filters.month} />
         </div>
-        <button className="btn-primary" type="submit">Apply</button>
         <p className="text-sm text-slate-500 md:text-right">Newsletter billing is calculated from Time Entries for the selected month.</p>
       </div>
-    </form>
+    </AutoSubmitFilterForm>
   );
 }
 
@@ -1188,17 +1179,16 @@ function FilmikBillingReportFilters({
   data: FilmikBillingReportData;
 }) {
   return (
-    <form method="get" action={`/billing-reports/${clientId}`} className="card p-5">
+    <AutoSubmitFilterForm method="get" action={`/billing-reports/${clientId}`} className="card p-5">
       <input type="hidden" name="report" value={reportType} />
       <div className="grid gap-4 md:grid-cols-[220px_auto_1fr] md:items-end">
         <div>
           <label className="label" htmlFor="month">Month</label>
           <input id="month" name="month" type="month" className="input" defaultValue={data.filters.month} />
         </div>
-        <button className="btn-primary" type="submit">Apply</button>
         <p className="text-sm text-slate-500 md:text-right">Resource counts and project hours are calculated for the selected month.</p>
       </div>
-    </form>
+    </AutoSubmitFilterForm>
   );
 }
 
@@ -1309,16 +1299,15 @@ function FilmikBillingReportWorkspace({
 
 function RoyalBillingReportFilters({ clientId, data }: { clientId: string; data: RoyalBillingData }) {
   return (
-    <form method="get" action={`/billing-reports/${clientId}`} className="card p-5">
+    <AutoSubmitFilterForm method="get" action={`/billing-reports/${clientId}`} className="card p-5">
       <div className="grid gap-4 md:grid-cols-[220px_auto_1fr] md:items-end">
         <div>
           <label className="label" htmlFor="month">Month</label>
           <input id="month" name="month" type="month" className="input" defaultValue={data.filters.month} />
         </div>
-        <button className="btn-primary" type="submit">Apply</button>
         <p className="text-sm text-slate-500 md:text-right">Fixed monthly excess hours are calculated for the selected month.</p>
       </div>
-    </form>
+    </AutoSubmitFilterForm>
   );
 }
 
@@ -1429,7 +1418,7 @@ function GenericBillingReportFilters({
   data: GenericBillingReportData;
 }) {
   return (
-    <form
+    <AutoSubmitFilterForm
       method="get"
       action={`/billing-reports/${clientId}`}
       className="card p-5"
@@ -1490,9 +1479,6 @@ function GenericBillingReportFilters({
             />
           </div>
         ) : null}
-        <button className="btn-primary" type="submit">
-          Apply
-        </button>
         {!data.movieSpecific ? (
           <p className="text-sm text-slate-500 md:text-right">
             Date range is used for Hourly project costs.
@@ -1505,7 +1491,7 @@ function GenericBillingReportFilters({
           to calculate from all available records.
         </p>
       ) : null}
-    </form>
+    </AutoSubmitFilterForm>
   );
 }
 

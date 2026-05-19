@@ -1,3 +1,4 @@
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
@@ -46,7 +47,7 @@ export default async function LanguagesPage({
       />
 
       <div className="mb-6 card p-4">
-        <form className="grid gap-3 md:grid-cols-[1fr_180px_auto]" method="get">
+        <AutoSubmitFilterForm className="grid gap-3 md:grid-cols-[1fr_180px_auto]" method="get">
           <input className="input" name="q" defaultValue={q} placeholder="Search by language name or code" />
           <SearchableCombobox
             id="status"
@@ -61,10 +62,7 @@ export default async function LanguagesPage({
             searchPlaceholder="Search statuses..."
             emptyLabel="No status found."
           />
-          <button className="btn-secondary" type="submit">
-            Apply
-          </button>
-        </form>
+        </AutoSubmitFilterForm>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">

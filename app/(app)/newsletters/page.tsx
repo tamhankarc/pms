@@ -1,3 +1,4 @@
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
@@ -40,12 +41,11 @@ export default async function NewslettersPage({ searchParams }: { searchParams?:
     <div>
       <PageHeader title="Newsletters" description="Create and manage client newsletters used in Time Entries, Estimates, and billing reports." actions={<Link href="/newsletters/new" className="btn-primary">Create Newsletter</Link>} />
       <div className="mb-6 card p-4">
-        <form className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]" method="get">
+        <AutoSubmitFilterForm className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]" method="get">
           <input className="input" name="q" defaultValue={q} placeholder="Search by newsletter name" />
           <SearchableCombobox id="status" name="status" defaultValue={status} options={[{ value: "all", label: "All statuses" }, { value: "active", label: "Active only" }, { value: "inactive", label: "Inactive only" }]} placeholder="All statuses" searchPlaceholder="Search statuses..." emptyLabel="No status found." />
           <SearchableCombobox id="clientId" name="clientId" defaultValue={clientId} options={[{ value: "all", label: "All clients" }, ...clients.map((client) => ({ value: client.id, label: client.name }))]} placeholder="All clients" searchPlaceholder="Search clients..." emptyLabel="No client found." />
-          <button className="btn-secondary" type="submit">Apply</button>
-        </form>
+        </AutoSubmitFilterForm>
       </div>
       <div className="table-wrap">
         <table className="table-base">

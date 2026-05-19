@@ -1,5 +1,7 @@
 "use client";
 
+
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
@@ -55,7 +57,7 @@ export function ListReportFilters({
     projectId === "all" || filteredProjects.some((project) => project.id === projectId) ? projectId : "all";
 
   return (
-    <form method="get" className="flex flex-wrap items-end gap-3">
+    <AutoSubmitFilterForm method="get" className="flex flex-wrap items-end gap-3">
       <div className="w-full sm:w-[180px]">
         <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor={`${basePath}-fromDate`}>
           Date from
@@ -154,13 +156,10 @@ export function ListReportFilters({
       ) : null}
 
       <div className="flex flex-wrap gap-3">
-        <button className="btn-secondary" type="submit">
-          Apply
-        </button>
         <Link className="btn-secondary" href={basePath}>
           Reset
         </Link>
       </div>
-    </form>
+    </AutoSubmitFilterForm>
   );
 }
