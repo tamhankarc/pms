@@ -330,7 +330,7 @@ export async function getAttendanceCalendarData(userId: string, monthKey: string
 
   const holidayRows = await db.officialHoliday.findMany({
     where: {
-      shift: leaveYearProfile.shift,
+      OR: [{ shift: leaveYearProfile.shift }, { shift: "BOTH" }],
       holidayDate: { gte: monthStart, lt: monthEndExclusive },
     },
     select: { holidayDate: true, name: true },
