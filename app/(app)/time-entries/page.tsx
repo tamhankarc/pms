@@ -200,12 +200,15 @@ export default async function TimeEntriesPage({
 
           <tbody className="divide-y divide-slate-100">
             {paginatedEntries.map((entry) => {
+              const isBilledEntry = entry.movie?.status === "COMPLETED_BILLED";
               const canEdit =
-                canFullyModerateProject(user) ||
+                !isBilledEntry &&
+                (canFullyModerateProject(user) ||
                 entry.employeeId === user.id ||
                 ((user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) &&
-                  managedIds.has(entry.employeeId));
+                  managedIds.has(entry.employeeId)));
               const canDelete =
+                !isBilledEntry &&
                 ["ADMIN", "MANAGER", "TEAM_LEAD"].includes(user.userType) &&
                 (canFullyModerateProject(user) ||
                   ((user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) &&
@@ -282,7 +285,15 @@ export default async function TimeEntriesPage({
                           </button>
                         </form>
                       ) : null}
-                      {!canEdit && !canDelete ? (
+                      {isBilledEntry ? (
+                        <Link
+                          className="btn-secondary inline-flex min-w-[64px] xl:min-w-[68px] justify-center whitespace-nowrap text-[11px] xl:text-xs px-2 xl:px-3"
+                          href={`/time-entries/${entry.id}`}
+                        >
+                          View
+                        </Link>
+                      ) : null}
+                      {!canEdit && !canDelete && !isBilledEntry ? (
                         <span className="text-[11px] xl:text-xs text-slate-400 whitespace-nowrap">No action</span>
                       ) : null}
                     </div>

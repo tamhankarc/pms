@@ -82,6 +82,7 @@ enum MovieBillingRegion {
   DOMESTIC
   INTL
   OTHER
+  SOCIAL
 }
 
 enum MovieStatus {
@@ -207,6 +208,7 @@ model Client {
   filmikResourceTypes          FilmikResourceType[]
   movieBillingHeads           MovieBillingHead[]
   movieBillingHeadAssignments MovieBillingHeadAssignment[]
+  monthlyBillings             ClientMonthlyBilling[]
 
   @@index([isActive])
 }
@@ -260,6 +262,7 @@ model Movie {
   billingDomestic              Boolean            @default(true)
   billingIntl                  Boolean            @default(false)
   billingOther                 Boolean            @default(false)
+  billingSocial                Boolean            @default(false)
   otherCountryIds              String?            @db.Text
   billingUnitsJson             String?            @db.Text
   sonyTicketingBannerCost      Decimal            @default(0) @db.Decimal(12, 2)
@@ -278,6 +281,7 @@ model Movie {
   assetNames                  AssetName[]
 
   @@index([clientId, isActive])
+  @@index([billingSocial])
   @@index([title])
 }
 
@@ -838,12 +842,33 @@ model DashboardAnnouncementRecipient {
 }
 
 model OfficialHoliday {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
-  holidayDate DateTime @unique
+  holidayDate DateTime
   year        Int
+  shift       ShiftType @default(DAY)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([holidayDate, shift])
+  @@index([year, holidayDate])
+  @@index([year, shift, holidayDate])
+}
+
+
+model ClientMonthlyBilling {
+  id          String   @id @default(cuid())
+  clientId    String
+  month       DateTime
+  billingDate DateTime
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([year, holidayDate])
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([clientId, month])
+  @@index([clientId])
+  @@index([month])
+  @@index([billingDate])
 }
+

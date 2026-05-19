@@ -23,7 +23,7 @@ export function MovieForm({ clients, countries = [], action, initialValues, subm
   clients: Client[];
   countries?: Country[];
   action: (state: MovieFormState, formData: FormData) => Promise<MovieFormState>;
-  initialValues?: { id?: string; clientId: string; title: string; description: string | null; status?: MovieStatus; isActive: boolean; billingDomestic?: boolean; billingIntl?: boolean; billingOther?: boolean; otherCountryIds?: string[]; billingUnits?: Record<string, number>; sonyTicketingBannerCost?: number | null; sonyEmailTicketingBannerCost?: number | null };
+  initialValues?: { id?: string; clientId: string; title: string; description: string | null; status?: MovieStatus; isActive: boolean; billingDomestic?: boolean; billingIntl?: boolean; billingOther?: boolean; billingSocial?: boolean; otherCountryIds?: string[]; billingUnits?: Record<string, number>; sonyTicketingBannerCost?: number | null; sonyEmailTicketingBannerCost?: number | null };
   submitLabel: string;
   title: string;
   canEditCosts?: boolean;
@@ -34,12 +34,14 @@ export function MovieForm({ clients, countries = [], action, initialValues, subm
   const [billingDomestic, setBillingDomestic] = useState(initialValues?.billingDomestic ?? true);
   const [billingIntl, setBillingIntl] = useState(initialValues?.billingIntl ?? false);
   const [billingOther, setBillingOther] = useState(initialValues?.billingOther ?? false);
+  const [billingSocial, setBillingSocial] = useState(initialValues?.billingSocial ?? false);
   const [otherCountryIds, setOtherCountryIds] = useState<string[]>(initialValues?.otherCountryIds ?? []);
   const clientOptions = useMemo(() => clients.map((client) => ({ value: client.id, label: client.name })), [clients]);
   const countryOptions = useMemo(() => countries.map((country) => ({ value: country.id, label: country.name })), [countries]);
   const showSonyCosts = canEditCosts && selectedClientId === SONY_CLIENT_ID;
   const showBillingRegion = selectedClientId === WARNER_CLIENT_ID || selectedClientId === SONY_CLIENT_ID;
-  const domesticOrIntlSelected = billingDomestic || billingIntl;
+  const isWarnerClient = selectedClientId === WARNER_CLIENT_ID;
+  const domesticOrIntlOrSocialSelected = billingDomestic || billingIntl || billingSocial;
   const otherSelected = billingOther;
 
   return (
@@ -52,6 +54,7 @@ export function MovieForm({ clients, countries = [], action, initialValues, subm
           {billingDomestic ? <input type="hidden" name="billingDomestic" value="on" /> : null}
           {billingIntl ? <input type="hidden" name="billingIntl" value="on" /> : null}
           {billingOther ? <input type="hidden" name="billingOther" value="on" /> : null}
+          {billingSocial ? <input type="hidden" name="billingSocial" value="on" /> : null}
           {otherCountryIds.map((id) => <input key={id} type="hidden" name="otherCountryIds" value={id} />)}
         </>
       ) : (
@@ -68,13 +71,14 @@ export function MovieForm({ clients, countries = [], action, initialValues, subm
         {showBillingRegion ? (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <FormLabel required>Billing region</FormLabel>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <div className="mt-3 grid gap-3 md:grid-cols-4">
               <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${otherSelected ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-700"}`}><input type="checkbox" checked={billingDomestic} disabled={otherSelected} onChange={(e) => setBillingDomestic(e.target.checked)} /> Domestic (US country)</label>
               <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${otherSelected ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-700"}`}><input type="checkbox" checked={billingIntl} disabled={otherSelected} onChange={(e) => setBillingIntl(e.target.checked)} /> INTL (except US)</label>
-              <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${domesticOrIntlSelected ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-700"}`}><input type="checkbox" checked={billingOther} disabled={domesticOrIntlSelected} onChange={(e) => setBillingOther(e.target.checked)} /> Other (choose countries)</label>
+              <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${domesticOrIntlOrSocialSelected ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-700"}`}><input type="checkbox" checked={billingOther} disabled={domesticOrIntlOrSocialSelected} onChange={(e) => setBillingOther(e.target.checked)} /> Other (choose countries)</label>
+              {isWarnerClient ? <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${otherSelected ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-700"}`}><input type="checkbox" checked={billingSocial} disabled={otherSelected} onChange={(e) => setBillingSocial(e.target.checked)} /> Social</label> : null}
             </div>
             {billingOther ? <div className="mt-4"><SearchableMultiSelect id="otherCountryIds" options={countryOptions} value={otherCountryIds} onValueChange={setOtherCountryIds} placeholder="Select one or more countries" searchPlaceholder="Search countries..." emptyLabel="No country found." /></div> : null}
-            <p className="mt-2 text-xs text-slate-500">Domestic/INTL and Other are mutually exclusive for billing reports.</p>
+            <p className="mt-2 text-xs text-slate-500">Social can be combined with Domestic and/or INTL. Other cannot be combined with Domestic, INTL, or Social.</p>
           </div>
         ) : null}
 

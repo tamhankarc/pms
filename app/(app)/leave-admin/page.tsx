@@ -103,19 +103,24 @@ export default async function LeaveAdminPage({
       <section className="card p-6">
         <h2 className="section-title">Official holidays</h2>
         <p className="section-subtitle">Add official holidays for year {data.year}. These days are excluded from paid leave calculation.</p>
-        <form action={createOfficialHolidayAction} className="mt-4 grid gap-4 md:grid-cols-[1fr_220px_auto]">
+        <form action={createOfficialHolidayAction} className="mt-4 grid gap-4 md:grid-cols-[1fr_180px_220px_auto]">
           <input className="input" name="name" placeholder="Holiday name" required />
+          <select className="input" name="shift" defaultValue="DAY" aria-label="Holiday shift">
+            <option value="DAY">Day shift</option>
+            <option value="NIGHT">Night shift</option>
+          </select>
           <input className="input" name="holidayDate" type="date" min={`${data.year}-01-01`} max={`${data.year}-12-31`} required />
           <button className="btn-primary" type="submit">Add holiday</button>
         </form>
         <div className="mt-5 overflow-x-auto">
           <table className="table-base">
-            <thead className="table-head"><tr><th className="table-cell">Date</th><th className="table-cell">Holiday</th><th className="table-cell">Action</th></tr></thead>
+            <thead className="table-head"><tr><th className="table-cell">Date</th><th className="table-cell">Holiday</th><th className="table-cell">Shift</th><th className="table-cell">Action</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {data.holidays.map((holiday) => (
                 <tr key={holiday.id}>
                   <td className="table-cell">{formatDateInIst(holiday.holidayDate)}</td>
                   <td className="table-cell">{holiday.name}</td>
+                  <td className="table-cell">{holiday.shift === "NIGHT" ? "Night" : "Day"}</td>
                   <td className="table-cell">
                     <form action={deleteOfficialHolidayAction}>
                       <input type="hidden" name="id" value={holiday.id} />
@@ -124,7 +129,7 @@ export default async function LeaveAdminPage({
                   </td>
                 </tr>
               ))}
-              {data.holidays.length === 0 ? <tr><td colSpan={3} className="table-cell text-center text-sm text-slate-500">No official holidays added yet.</td></tr> : null}
+              {data.holidays.length === 0 ? <tr><td colSpan={4} className="table-cell text-center text-sm text-slate-500">No official holidays added yet.</td></tr> : null}
             </tbody>
           </table>
         </div>

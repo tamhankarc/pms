@@ -108,7 +108,7 @@ export default async function MoviesPage({
                     <div className="font-medium text-slate-900">{movie.title}</div>
                   </td>
                   <td className="table-cell">{movie.client.name}</td>
-                  <td className="table-cell">{[movie.billingDomestic ? "Domestic" : null, movie.billingIntl ? "INTL" : null, movie.billingOther ? "Other" : null].filter(Boolean).join(", ") || "—"}</td>
+                  <td className="table-cell">{[movie.billingDomestic ? "Domestic" : null, movie.billingIntl ? "INTL" : null, movie.billingOther ? "Other" : null, movie.billingSocial ? "Social" : null].filter(Boolean).join(", ") || "—"}</td>
                   <td className="table-cell"><span className="badge-blue">{formatMovieWorkflowStatus(movie.status)}</span></td>
                   <td className="table-cell">
                     <span className={movie.isActive ? "badge-emerald" : "badge-slate"}>

@@ -29,6 +29,19 @@ export default async function EditMovieBillingHeadPage({
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader title={`Edit Movie Billing Head · ${row.billingHead.name}`} description="Update the Fixed - Optional billing head selected for this client movie." actions={<Link href="/movie-billing-heads" className="btn-secondary">Back to Movie Billing Heads</Link>} />
+      {row.movie.status === "COMPLETED_BILLED" ? (
+        <div className="card p-6">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            This movie billing head belongs to the billed title <strong>{row.movie.title}</strong>. It is viewable but cannot be edited.
+          </div>
+          <dl className="mt-5 grid gap-4 md:grid-cols-2">
+            <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Title</dt><dd className="mt-1 text-sm text-slate-900">{row.movie.title}</dd></div>
+            <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Billing Head</dt><dd className="mt-1 text-sm text-slate-900">{row.billingHead.name}</dd></div>
+            <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Units</dt><dd className="mt-1 text-sm text-slate-900">{row.units ? Number(row.units).toString() : "-"}</dd></div>
+            <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Status</dt><dd className="mt-1 text-sm text-slate-900">{row.isActive ? "Active" : "Inactive"}</dd></div>
+          </dl>
+        </div>
+      ) : (
       <MovieBillingHeadAssignmentForm
         clients={clients}
         countries={countries}
@@ -48,6 +61,7 @@ export default async function EditMovieBillingHeadPage({
           isActive: row.isActive,
         }}
       />
+      )}
     </div>
   );
 }

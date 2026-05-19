@@ -72,7 +72,19 @@ export default async function MovieBillingHeadsPage({
                 {canSeeCosts ? <td className="table-cell">{formatHeadCost(row)}</td> : null}
                 {canSeeCosts ? <td className="table-cell">{row.billingHead.costType === "PER_UNIT_COST" ? Number(row.units ?? 0) : "—"}</td> : null}
                 <td className="table-cell"><span className={row.isActive ? "badge-emerald" : "badge-slate"}>{row.isActive ? "Active" : "Inactive"}</span></td>
-                <td className="table-cell"><div className="flex gap-2"><Link href={`/movie-billing-heads/${row.id}`} className="btn-secondary text-xs">Edit</Link><form action={toggleMovieBillingHeadAssignmentStatusAction}><input type="hidden" name="id" value={row.id} /><button className="btn-secondary text-xs">{row.isActive ? "Deactivate" : "Activate"}</button></form></div></td>
+                <td className="table-cell">
+                  <div className="flex gap-2">
+                    <Link href={`/movie-billing-heads/${row.id}`} className="btn-secondary text-xs">{row.movie.status === "COMPLETED_BILLED" ? "View" : "Edit"}</Link>
+                    {row.movie.status === "COMPLETED_BILLED" ? (
+                      <span className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">Billed</span>
+                    ) : (
+                      <form action={toggleMovieBillingHeadAssignmentStatusAction}>
+                        <input type="hidden" name="id" value={row.id} />
+                        <button className="btn-secondary text-xs">{row.isActive ? "Deactivate" : "Activate"}</button>
+                      </form>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
             {rows.length === 0 ? <tr><td colSpan={canSeeCosts ? 9 : 6} className="table-cell text-center text-sm text-slate-500">No movie billing heads found.</td></tr> : null}

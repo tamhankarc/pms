@@ -378,11 +378,15 @@ async function validateClientFieldRequirements(
         clientId: project.clientId,
         isActive: true,
       },
-      select: { id: true },
+      select: { id: true, status: true },
     });
 
     if (!movie) {
       return { valid: false as const, error: "Selected movie does not belong to the selected client." };
+    }
+
+    if (movie.status === "COMPLETED_BILLED") {
+      return { valid: false as const, error: "Selected title has already been billed and cannot be used for time entries." };
     }
   }
 
@@ -607,9 +611,14 @@ export async function updateTimeEntryAction(
 
     const entry = await db.timeEntry.findUnique({
       where: { id: parsed.data.entryId },
+      include: { movie: { select: { status: true, title: true } } },
     });
 
     if (!entry) return { success: false, error: "Time entry not found" };
+
+    if (entry.movie?.status === "COMPLETED_BILLED") {
+      return { success: false, error: "This time entry belongs to a title that has already been billed and cannot be edited." };
+    }
 
     if (parsed.data.employeeId && parsed.data.employeeId !== entry.employeeId) {
       return { success: false, error: "Employee cannot be changed for an existing time entry." };
@@ -740,11 +749,16 @@ export async function deleteTimeEntryAction(formData: FormData) {
           functionalRole: true,
         },
       },
+      movie: { select: { status: true, title: true } },
     },
   });
 
   if (!entry) {
     throw new Error("Time entry not found.");
+  }
+
+  if (entry.movie?.status === "COMPLETED_BILLED") {
+    throw new Error("This time entry belongs to a title that has already been billed and cannot be deleted.");
   }
 
   if (user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) {

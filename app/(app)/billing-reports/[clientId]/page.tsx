@@ -9,8 +9,8 @@ import { UniversalTimeEntryFilters } from "@/components/billing-reports/universa
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canViewBillingReports } from "@/lib/permissions";
-import { completeMovieBillingAction } from "@/lib/actions/movie-actions";
-import { FILMIK_CLIENT_ID, SONY_PICTURES_CLASSICS_CLIENT_ID, isBillingReportClientExcluded } from "@/lib/billing-reports/config";
+import { completeClientMonthBillingAction, completeMovieBillingAction } from "@/lib/actions/movie-actions";
+import { FILMIK_CLIENT_ID, ROYAL_CARIBBEAN_CLIENT_ID, SONY_PICTURES_CLASSICS_CLIENT_ID, isBillingReportClientExcluded } from "@/lib/billing-reports/config";
 import { paginateItems, parsePageParam } from "@/lib/pagination";
 import {
   buildGenericBillingReportFilters,
@@ -26,7 +26,7 @@ import {
   getFilmikBillingReportMonthLabel,
   type FilmikBillingReportData,
 } from "@/lib/billing-reports/filmik";
-import { buildRoyalBillingFilters, getRoyalBillingReportData, formatUsd as formatRoyalUsd, type RoyalBillingData, ROYAL_CARIBBEAN_CLIENT_NAME } from "@/lib/billing-reports/royal";
+import { buildRoyalBillingFilters, buildRoyalHistoryFilters, getRoyalBillingReportData, getRoyalHistoryData, formatUsd as formatRoyalUsd, type RoyalBillingData, type RoyalHistoryData, ROYAL_CARIBBEAN_CLIENT_NAME } from "@/lib/billing-reports/royal";
 import {
   buildSonyNewsletterBillingFilters,
   buildSonyPicturesReportFilters,
@@ -38,10 +38,12 @@ import {
 } from "@/lib/billing-reports/sony";
 import {
   buildAmazonBillingReportFilters,
+  buildBillingHistoryFilters,
   buildWarnerDomesticDeliverableFilters,
   getBillingReportCatalogForClient,
   formatUsd,
   getAmazonBillingReportData,
+  getBillingHistoryData,
   getWarnerDomesticDeliverableData,
   getWarnerIntlDeliverableData,
   getWarnerOtherDeliverableData,
@@ -49,6 +51,7 @@ import {
   isWarnerBillingReportClient,
   normalizeAmazonReportType,
   type AmazonReportType,
+  type BillingHistoryData,
   type WarnerDomesticDeliverableData,
   type UniversalBillingSummaryData,
 } from "@/lib/billing-reports/amazon";
@@ -93,6 +96,36 @@ function BillingDoneButton({ movieId, returnTo, label = "Update Billing Status" 
           <div>
             <label className="label" htmlFor={`billingDate-${movieId}`}>Billing date</label>
             <input id={`billingDate-${movieId}`} name="billingDate" type="date" className="input" defaultValue={today} required />
+          </div>
+          <button type="submit" className="btn-primary w-full">Billing Done</button>
+        </form>
+      </div>
+    </details>
+  );
+}
+
+
+function MonthBillingDoneButton({
+  clientId,
+  month,
+  returnTo,
+}: {
+  clientId: string;
+  month: string;
+  returnTo: string;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  return (
+    <details className="relative">
+      <summary className="btn-secondary list-none cursor-pointer select-none">Billing Done</summary>
+      <div className="absolute right-0 z-20 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
+        <form action={completeClientMonthBillingAction} className="space-y-3">
+          <input type="hidden" name="clientId" value={clientId} />
+          <input type="hidden" name="month" value={month} />
+          <input type="hidden" name="returnTo" value={returnTo} />
+          <div>
+            <label className="label" htmlFor={`billingDate-${clientId}-${month}`}>Billing date</label>
+            <input id={`billingDate-${clientId}-${month}`} name="billingDate" type="date" className="input" defaultValue={today} required />
           </div>
           <button type="submit" className="btn-primary w-full">Billing Done</button>
         </form>
@@ -1297,6 +1330,139 @@ function FilmikBillingReportWorkspace({
 }
 
 
+
+function BillingHistoryFilters({
+  clientId,
+  activeReport,
+  data,
+}: {
+  clientId: string;
+  activeReport: AmazonReportType;
+  data: BillingHistoryData;
+}) {
+  return (
+    <AutoSubmitFilterForm method="get" action={`/billing-reports/${clientId}`} className="card p-5">
+      <input type="hidden" name="report" value={activeReport} />
+      <div className="grid gap-4 md:grid-cols-[220px_1fr] md:items-end">
+        <div>
+          <label className="label" htmlFor="year">Year</label>
+          <input id="year" name="year" type="number" min="2000" max="2100" className="input" defaultValue={data.filters.year} />
+        </div>
+        <p className="text-sm text-slate-500">Completed & Billed titles are shown for the selected billing year.</p>
+      </div>
+    </AutoSubmitFilterForm>
+  );
+}
+
+function BillingHistoryTable({ data }: { data: BillingHistoryData }) {
+  return (
+    <div className="table-wrap">
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">Title</th>
+            <th className="table-cell">Billing Region</th>
+            <th className="table-cell">Billing Date</th>
+            <th className="table-cell">Time Entries</th>
+            <th className="table-cell">Movie Billing Heads</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {data.rows.map((row) => (
+            <tr key={row.movieId}>
+              <td className="table-cell font-medium text-slate-900">{row.titleName}</td>
+              <td className="table-cell">{row.billingRegion}</td>
+              <td className="table-cell">{row.billingDate}</td>
+              <td className="table-cell">{row.timeEntryCount}</td>
+              <td className="table-cell">{row.movieBillingHeadCount}</td>
+            </tr>
+          ))}
+          {data.rows.length === 0 ? (
+            <tr><td colSpan={5} className="table-cell text-center text-sm text-slate-500">No completed and billed titles found for this year.</td></tr>
+          ) : null}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function BillingHistoryWorkspace({
+  clientId,
+  activeReport,
+  clientName,
+  data,
+}: {
+  clientId: string;
+  activeReport: AmazonReportType;
+  clientName: string;
+  data: BillingHistoryData;
+}) {
+  return (
+    <div className="space-y-6">
+      <ReportTabs clientId={clientId} activeReport={activeReport} clientName={clientName} />
+      <BillingHistoryFilters clientId={clientId} activeReport={activeReport} data={data} />
+      <div>
+        <h2 className="section-title">{data.client.name} Billing History</h2>
+        <p className="section-subtitle">Year: {data.filters.year}</p>
+      </div>
+      <BillingHistoryTable data={data} />
+    </div>
+  );
+}
+
+function RoyalReportTabs({ clientId, activeReport }: { clientId: string; activeReport: AmazonReportType }) {
+  const tabs: Array<[AmazonReportType, string]> = [["social-assets", "Billing"], ["billing-history", "History"]];
+  return (
+    <div className="card p-4">
+      <div className="flex flex-wrap gap-3">
+        {tabs.map(([reportType, label]) => (
+          <ReportTab key={reportType} clientId={clientId} reportType={reportType} activeReport={activeReport} label={label} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RoyalHistoryFilters({ clientId, data }: { clientId: string; data: RoyalHistoryData }) {
+  return (
+    <AutoSubmitFilterForm method="get" action={`/billing-reports/${clientId}`} className="card p-5">
+      <input type="hidden" name="report" value="billing-history" />
+      <div className="grid gap-4 md:grid-cols-[220px_1fr] md:items-end">
+        <div>
+          <label className="label" htmlFor="year">Year</label>
+          <input id="year" name="year" type="number" min="2000" max="2100" className="input" defaultValue={data.filters.year} />
+        </div>
+        <p className="text-sm text-slate-500">Billed Royal Caribbean months are shown for the selected year.</p>
+      </div>
+    </AutoSubmitFilterForm>
+  );
+}
+
+function RoyalHistoryWorkspace({ clientId, data }: { clientId: string; data: RoyalHistoryData }) {
+  return (
+    <div className="space-y-6">
+      <RoyalReportTabs clientId={clientId} activeReport="billing-history" />
+      <RoyalHistoryFilters clientId={clientId} data={data} />
+      <div>
+        <h2 className="section-title">{data.client.name} Billing History</h2>
+        <p className="section-subtitle">Year: {data.filters.year}</p>
+      </div>
+      {data.monthBlocks.map((block) => (
+        <section key={block.month} className="space-y-4">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Month: {block.month}</h3>
+            <p className="text-sm text-slate-500">Billing date: {block.billingDate}</p>
+          </div>
+          <RoyalBillingReportTable data={{ client: data.client, filters: { month: block.month }, rows: block.rows, totals: block.totals, isBilled: true, billingDate: block.billingDate }} />
+        </section>
+      ))}
+      {data.monthBlocks.length === 0 ? (
+        <div className="card p-6 text-sm text-slate-500">No billed months found for this year.</div>
+      ) : null}
+    </div>
+  );
+}
+
 function RoyalBillingReportFilters({ clientId, data }: { clientId: string; data: RoyalBillingData }) {
   return (
     <AutoSubmitFilterForm method="get" action={`/billing-reports/${clientId}`} className="card p-5">
@@ -1368,14 +1534,28 @@ function RoyalBillingReportTable({ data }: { data: RoyalBillingData }) {
 }
 
 function RoyalBillingReportWorkspace({ clientId, data }: { clientId: string; data: RoyalBillingData }) {
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const selectedOlderMonth = data.filters.month < currentMonth;
+  const returnTo = `/billing-reports/${clientId}?report=social-assets&month=${data.filters.month}`;
   return (
     <div className="space-y-6">
+      <RoyalReportTabs clientId={clientId} activeReport="social-assets" />
       <RoyalBillingReportFilters clientId={clientId} data={data} />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div><h2 className="section-title">{data.client.name} Billing</h2><p className="section-subtitle">Month: {data.filters.month}</p></div>
-        <RoyalExportButtons clientId={clientId} data={data} />
+        <div className="flex flex-wrap gap-3">
+          <RoyalExportButtons clientId={clientId} data={data} />
+          {selectedOlderMonth && !data.isBilled ? <MonthBillingDoneButton clientId={clientId} month={data.filters.month} returnTo={returnTo} /> : null}
+        </div>
       </div>
-      <RoyalBillingReportTable data={data} />
+      {data.isBilled ? (
+        <div className="card p-6 text-sm text-slate-600">
+          This month has already been billed{data.billingDate ? ` on ${data.billingDate}` : ""}; please find details in Billing History report.
+        </div>
+      ) : (
+        <RoyalBillingReportTable data={data} />
+      )}
     </div>
   );
 }
@@ -1769,6 +1949,7 @@ export default async function ClientBillingReportPage({
     client.id,
   );
   const filters = buildAmazonBillingReportFilters(resolvedSearchParams);
+  const billingHistoryFilters = buildBillingHistoryFilters(resolvedSearchParams);
   const genericFilters = buildGenericBillingReportFilters(resolvedSearchParams);
   const sonyPicturesFilters =
     buildSonyPicturesReportFilters(resolvedSearchParams);
@@ -1776,6 +1957,7 @@ export default async function ClientBillingReportPage({
     buildSonyNewsletterBillingFilters(resolvedSearchParams);
   const filmikFilters = buildFilmikBillingReportFilters(resolvedSearchParams);
   const royalFilters = buildRoyalBillingFilters(resolvedSearchParams);
+  const royalHistoryFilters = buildRoyalHistoryFilters(resolvedSearchParams);
   const domesticFilters =
     buildWarnerDomesticDeliverableFilters(resolvedSearchParams);
   const reportCatalog = getBillingReportCatalogForClient(
@@ -1783,6 +1965,10 @@ export default async function ClientBillingReportPage({
     client.id,
   );
   const activeReportDefinition = reportCatalog?.[activeReport];
+  const billingHistoryData =
+    activeReportDefinition?.kind === "billing-history"
+      ? await getBillingHistoryData({ clientId, filters: billingHistoryFilters })
+      : null;
   const timeEntryReportData =
     activeReportDefinition?.kind === "time-entry"
       ? await getAmazonBillingReportData({
@@ -1838,8 +2024,12 @@ export default async function ClientBillingReportPage({
     client.id === FILMIK_CLIENT_ID && activeReportDefinition?.kind === "generic-filmik"
       ? await getFilmikBillingReportData(filmikFilters)
       : null;
-  const royalBillingReportData = client.name.trim().toLowerCase() === ROYAL_CARIBBEAN_CLIENT_NAME.toLowerCase()
+  const isRoyalCaribbeanClient = client.id === ROYAL_CARIBBEAN_CLIENT_ID || client.name.trim().toLowerCase() === ROYAL_CARIBBEAN_CLIENT_NAME.toLowerCase();
+  const royalBillingReportData = isRoyalCaribbeanClient && activeReport !== "billing-history"
     ? await getRoyalBillingReportData({ clientId, filters: royalFilters })
+    : null;
+  const royalHistoryData = isRoyalCaribbeanClient && activeReport === "billing-history"
+    ? await getRoyalHistoryData({ clientId, filters: royalHistoryFilters })
     : null;
   const isSonyPicturesClassicsReport = client.id === SONY_PICTURES_CLASSICS_CLIENT_ID;
   const genericBillingOptions =
@@ -1886,6 +2076,13 @@ export default async function ClientBillingReportPage({
           detailPage={detailPage}
           searchParams={resolvedSearchParams}
         />
+      ) : billingHistoryData ? (
+        <BillingHistoryWorkspace
+          clientId={clientId}
+          activeReport={activeReport}
+          clientName={client.name}
+          data={billingHistoryData}
+        />
       ) : universalBillingSummaryData ? (
         <UniversalBillingSummaryWorkspace
           clientId={clientId}
@@ -1906,6 +2103,8 @@ export default async function ClientBillingReportPage({
         />
       ) : royalBillingReportData ? (
         <RoyalBillingReportWorkspace clientId={clientId} data={royalBillingReportData} />
+      ) : royalHistoryData ? (
+        <RoyalHistoryWorkspace clientId={clientId} data={royalHistoryData} />
       ) : filmikBillingReportData ? (
         <FilmikBillingReportWorkspace
           clientId={clientId}

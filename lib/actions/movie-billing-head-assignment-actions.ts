@@ -177,8 +177,9 @@ export async function toggleMovieBillingHeadAssignmentStatusAction(formData: For
   await requireCanManageMovieBillingHeads();
   const id = String(formData.get("id") || "");
   if (!id) throw new Error("Movie billing head is required.");
-  const row = await db.movieBillingHeadAssignment.findUnique({ where: { id } });
+  const row = await db.movieBillingHeadAssignment.findUnique({ where: { id }, include: { movie: { select: { status: true, title: true } } } });
   if (!row) throw new Error("Movie billing head not found.");
+  if (row.movie.status === "COMPLETED_BILLED") throw new Error("This movie billing head belongs to a title that has already been billed and cannot be edited.");
   await db.movieBillingHeadAssignment.update({ where: { id }, data: { isActive: !row.isActive } });
   revalidatePath("/movie-billing-heads");
   revalidatePath(`/movie-billing-heads/${id}`);

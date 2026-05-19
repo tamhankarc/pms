@@ -53,6 +53,8 @@ export async function createOfficialHolidayAction(formData: FormData) {
 
   const name = String(formData.get("name") || "").trim();
   const holidayDate = String(formData.get("holidayDate") || "").trim();
+  const shiftValue = String(formData.get("shift") || "DAY").trim().toUpperCase();
+  const shift = shiftValue === "NIGHT" ? "NIGHT" : "DAY";
 
   if (!name || !holidayDate) throw new Error("Holiday name and date are required.");
 
@@ -61,11 +63,13 @@ export async function createOfficialHolidayAction(formData: FormData) {
       name,
       holidayDate: new Date(`${holidayDate}T00:00:00+05:30`),
       year: Number(holidayDate.slice(0, 4)),
+      shift,
     },
   });
 
   revalidatePath("/leave-admin");
   revalidatePath("/leave-requests");
+  revalidatePath("/dashboard");
 }
 
 export async function deleteOfficialHolidayAction(formData: FormData) {
@@ -79,4 +83,5 @@ export async function deleteOfficialHolidayAction(formData: FormData) {
 
   revalidatePath("/leave-admin");
   revalidatePath("/leave-requests");
+  revalidatePath("/dashboard");
 }

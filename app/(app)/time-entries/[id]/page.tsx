@@ -23,6 +23,12 @@ export default async function EditTimeEntryPage({
         employee: true,
         project: { include: { client: true } },
         subProject: true,
+        movie: true,
+        country: true,
+        assetType: true,
+        assetName: true,
+        newsletter: true,
+        language: true,
       },
     }),
     db.country.findMany({
@@ -30,7 +36,7 @@ export default async function EditTimeEntryPage({
       orderBy: { name: "asc" },
     }),
     db.movie.findMany({
-      where: { isActive: true },
+      where: { isActive: true, status: { not: "COMPLETED_BILLED" } },
       orderBy: { title: "asc" },
     }),
     db.assetType.findMany({
@@ -109,6 +115,11 @@ export default async function EditTimeEntryPage({
           </div>
         </div>
 
+        {entry.movie?.status === "COMPLETED_BILLED" ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            This time entry belongs to the billed title <strong>{entry.movie.title}</strong>. It is viewable but cannot be edited.
+          </div>
+        ) : (
         <TimeEntryEditForm
           entry={{
             id: entry.id,
@@ -171,6 +182,7 @@ export default async function EditTimeEntryPage({
           }))}
           allowUnassignedSubProjects
         />
+        )}
       </div>
     </div>
   );

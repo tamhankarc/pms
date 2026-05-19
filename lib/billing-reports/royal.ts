@@ -4,6 +4,7 @@ import { formatUsd, getExportTimestamp, sanitizeFileSegment } from "@/lib/billin
 export const ROYAL_CARIBBEAN_CLIENT_NAME = "Royal Caribbean Cruises";
 
 export type RoyalBillingFilters = { month: string };
+export type RoyalHistoryFilters = { year: string };
 export type RoyalBillingRow = {
   projectId: string;
   projectName: string;
@@ -22,6 +23,21 @@ export type RoyalBillingData = {
   filters: RoyalBillingFilters;
   rows: RoyalBillingRow[];
   totals: { projectCost: number; excessHours: number; excessCost: number; totalCost: number };
+  isBilled: boolean;
+  billingDate: string | null;
+};
+
+export type RoyalHistoryMonthBlock = {
+  month: string;
+  billingDate: string;
+  rows: RoyalBillingRow[];
+  totals: { projectCost: number; excessHours: number; excessCost: number; totalCost: number };
+};
+
+export type RoyalHistoryData = {
+  client: { id: string; name: string; hourlyCost: number };
+  filters: RoyalHistoryFilters;
+  monthBlocks: RoyalHistoryMonthBlock[];
 };
 
 function getParamValue(searchParams: URLSearchParams | Record<string, string | string[] | undefined>, key: string) {
@@ -35,9 +51,26 @@ function defaultMonthValue() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function defaultYearValue() {
+  return String(new Date().getFullYear());
+}
+
+function formatDisplayDate(date: Date) {
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
 export function buildRoyalBillingFilters(searchParams: URLSearchParams | Record<string, string | string[] | undefined>) {
   const month = getParamValue(searchParams, "month") || defaultMonthValue();
   return { month: /^\d{4}-\d{2}$/.test(month) ? month : defaultMonthValue() } satisfies RoyalBillingFilters;
+}
+
+export function buildRoyalHistoryFilters(searchParams: URLSearchParams | Record<string, string | string[] | undefined>) {
+  const year = getParamValue(searchParams, "year") || defaultYearValue();
+  return { year: /^\d{4}$/.test(year) ? year : defaultYearValue() } satisfies RoyalHistoryFilters;
 }
 
 export function royalMonthRange(month: string) {
@@ -126,7 +159,53 @@ export async function getRoyalBillingReportData({ clientId, filters }: { clientI
     excessCost: acc.excessCost + row.excessCost,
     totalCost: acc.totalCost + row.totalCost,
   }), { projectCost: 0, excessHours: 0, excessCost: 0, totalCost: 0 });
-  return { client: { id: client.id, name: client.name, hourlyCost }, filters, rows, totals };
+  const billed = await db.clientMonthlyBilling.findUnique({
+    where: { clientId_month: { clientId, month: range.start } },
+    select: { billingDate: true },
+  });
+  return {
+    client: { id: client.id, name: client.name, hourlyCost },
+    filters,
+    rows,
+    totals,
+    isBilled: Boolean(billed),
+    billingDate: billed?.billingDate ? formatDisplayDate(billed.billingDate) : null,
+  };
+}
+
+
+export async function getRoyalHistoryData({ clientId, filters }: { clientId: string; filters: RoyalHistoryFilters }): Promise<RoyalHistoryData | null> {
+  const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, name: true, hourlyCost: true } });
+  if (!client) return null;
+
+  const year = Number(filters.year);
+  const start = new Date(Date.UTC(year, 0, 1));
+  const end = new Date(Date.UTC(year + 1, 0, 1));
+
+  const billedMonths = await db.clientMonthlyBilling.findMany({
+    where: { clientId, month: { gte: start, lt: end } },
+    select: { month: true, billingDate: true },
+    orderBy: { month: "desc" },
+  });
+
+  const monthBlocks: RoyalHistoryMonthBlock[] = [];
+  for (const billed of billedMonths) {
+    const month = `${billed.month.getUTCFullYear()}-${String(billed.month.getUTCMonth() + 1).padStart(2, "0")}`;
+    const data = await getRoyalBillingReportData({ clientId, filters: { month } });
+    if (!data) continue;
+    monthBlocks.push({
+      month,
+      billingDate: formatDisplayDate(billed.billingDate),
+      rows: data.rows,
+      totals: data.totals,
+    });
+  }
+
+  return {
+    client: { id: client.id, name: client.name, hourlyCost: Number(client.hourlyCost ?? 0) },
+    filters,
+    monthBlocks,
+  };
 }
 
 export function getRoyalBillingReportFileName(data: RoyalBillingData, extension: "xls" | "pdf") {

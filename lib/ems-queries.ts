@@ -292,6 +292,9 @@ export async function getAttendanceCalendarData(userId: string, monthKey: string
   const monthStart = getMonthStartUtcFromIstKey(monthKey);
   const monthEndExclusive = getMonthEndUtcExclusiveFromIstKey(monthKey);
 
+  const calendarYear = Number(monthKey.slice(0, 4));
+  const leaveYearProfile = await getOrCreateLeaveYearProfile(userId, calendarYear);
+
   const [attendanceRows, leaveRows] = await Promise.all([
     db.attendanceLog.findMany({
       where: {
@@ -327,6 +330,7 @@ export async function getAttendanceCalendarData(userId: string, monthKey: string
 
   const holidayRows = await db.officialHoliday.findMany({
     where: {
+      shift: leaveYearProfile.shift,
       holidayDate: { gte: monthStart, lt: monthEndExclusive },
     },
     select: { holidayDate: true, name: true },
@@ -579,11 +583,11 @@ export async function getLeaveRequestsForUser(userId: string, todayDateKey: stri
     orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
   });
 
-  const [approvers, leaveBalance, officialHolidays] = await Promise.all([
+  const [approvers, leaveBalance] = await Promise.all([
     getAllowedLeaveRequestApproversForUser(userId),
     getLeaveBalanceForUser(userId, Number(todayDateKey.slice(0, 4))),
-    getOfficialHolidayDateKeysForYear(Number(todayDateKey.slice(0, 4))),
   ]);
+  const officialHolidays = await getOfficialHolidayDateKeysForYear(Number(todayDateKey.slice(0, 4)), leaveBalance.shift);
 
   return { current, past, approvers, leaveBalance, officialHolidays };
 }
@@ -644,19 +648,25 @@ export async function getOrCreateLeaveYearProfile(userId: string, year: number) 
   });
 }
 
-export async function getOfficialHolidayDateKeysForYear(year: number) {
+export async function getOfficialHolidayDateKeysForYear(year: number, shift?: "DAY" | "NIGHT" | string | null) {
   const rows = await db.officialHoliday.findMany({
-    where: { year },
+    where: {
+      year,
+      ...(shift === "DAY" || shift === "NIGHT" ? { shift } : {}),
+    },
     orderBy: { holidayDate: "asc" },
     select: { holidayDate: true },
   });
   return rows.map((row) => getIstDateKey(row.holidayDate));
 }
 
-export async function getOfficialHolidaysForYear(year: number) {
+export async function getOfficialHolidaysForYear(year: number, shift?: "DAY" | "NIGHT" | string | null) {
   return db.officialHoliday.findMany({
-    where: { year },
-    orderBy: { holidayDate: "asc" },
+    where: {
+      year,
+      ...(shift === "DAY" || shift === "NIGHT" ? { shift } : {}),
+    },
+    orderBy: [{ holidayDate: "asc" }, { shift: "asc" }],
   });
 }
 

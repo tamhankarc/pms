@@ -19,6 +19,7 @@ import { ApprovedLeaveCalendar } from "@/components/ems/approved-leave-calendar"
 import { AttendanceActionsCard } from "@/components/ems/attendance-actions-card";
 import { AttendanceCalendar } from "@/components/ems/attendance-calendar";
 import { AttendanceSelectedDateFilters } from "@/components/ems/attendance-selected-date-filters";
+import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import { ApproverAssignmentForm } from "@/components/ems/approver-assignment-form";
 import { DashboardBillingFilters } from "@/components/dashboard-billing-filters";
 import { TestMailPanel } from "@/components/dashboard/test-mail-panel";
@@ -46,6 +47,7 @@ import {
   getEmployeeDashboardSnapshot,
   getGlobalApproverAssignmentIds,
   getPendingLeaveApprovalInfoForUser,
+  getOfficialHolidaysForYear,
 } from "@/lib/ems-queries";
 import {
   formatDateInIst,
@@ -235,6 +237,8 @@ export default async function DashboardPage({
     attendancePage?: string;
     approvedLeaveSelectedDate?: string;
     dashboardSection?: string;
+    holidayYear?: string;
+    holidayShift?: string;
   }>;
 }) {
   const user = await requireUser();
@@ -254,6 +258,9 @@ export default async function DashboardPage({
   const attendancePage = parsePageParam(params.attendancePage);
   const approvedLeaveSelectedDate = params.approvedLeaveSelectedDate && /^\d{4}-\d{2}-\d{2}$/.test(params.approvedLeaveSelectedDate) ? params.approvedLeaveSelectedDate : undefined;
   const attendanceWeekend = isWeekendAttendanceDate(attendanceDate);
+  const dashboardHolidayYearValue = Number(params.holidayYear || todayKey.slice(0, 4));
+  const dashboardHolidayYear = Number.isFinite(dashboardHolidayYearValue) && dashboardHolidayYearValue >= 2000 && dashboardHolidayYearValue <= 2100 ? dashboardHolidayYearValue : Number(todayKey.slice(0, 4));
+  const dashboardHolidayShift = params.holidayShift === "NIGHT" ? "NIGHT" : "DAY";
 
   const defaultBillingRange = getDefaultBillingRange();
   const billingStartDate = normalizeDateInput(params.billingStartDate) ?? defaultBillingRange.startDate;
@@ -320,6 +327,7 @@ export default async function DashboardPage({
     focusCalendarData,
     adminDashboardData,
     activeAnnouncements,
+    dashboardOfficialHolidays,
   ] = await Promise.all([
     getDashboardStats(user),
     getVisibleProjects(user),
@@ -353,6 +361,7 @@ export default async function DashboardPage({
     showAttendanceCard ? getAttendanceCalendarData(user.id, focusMonth, resolvedJoiningDate) : Promise.resolve(null),
     showEMSAdminPanel ? getAdminDashboardData(attendanceDate) : Promise.resolve(null),
     getActiveDashboardAnnouncementsForUser(user),
+    isAdmin(user) ? getOfficialHolidaysForYear(dashboardHolidayYear, dashboardHolidayShift) : Promise.resolve([]),
   ]);
 
   const canOpenLeaveApprovals = isAdmin(user) || userIsHR || selectedApproverIds.includes(user.id);
@@ -841,6 +850,65 @@ export default async function DashboardPage({
       {showTestMailPanel ? (
         <TestMailPanel mailEnabled={mailSendingEnabled} fromEmailOptions={testMailFromOptions} />
       ) : null}
+
+      {isAdmin(user) ? (
+        <section id="official-holidays" className="card p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="section-title">Official holidays</h2>
+              <p className="section-subtitle">Holiday list by year and shift.</p>
+            </div>
+          </div>
+
+          <AutoSubmitFilterForm action="/dashboard#official-holidays" className="mt-4 grid gap-4 md:grid-cols-[180px_180px_auto]">
+            <div>
+              <label className="label" htmlFor="holidayYear">Year</label>
+              <select className="input" id="holidayYear" name="holidayYear" defaultValue={String(dashboardHolidayYear)}>
+                {Array.from({ length: 7 }, (_, index) => Number(todayKey.slice(0, 4)) - 3 + index).map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label" htmlFor="holidayShift">Shift</label>
+              <select className="input" id="holidayShift" name="holidayShift" defaultValue={dashboardHolidayShift}>
+                <option value="DAY">Day shift</option>
+                <option value="NIGHT">Night shift</option>
+              </select>
+            </div>
+            <div className="flex items-end">
+              <Link className="btn-secondary" href="/dashboard#official-holidays">Reset</Link>
+            </div>
+          </AutoSubmitFilterForm>
+
+          <div className="mt-5 overflow-x-auto">
+            <table className="table-base">
+              <thead className="table-head">
+                <tr>
+                  <th className="table-cell">Date</th>
+                  <th className="table-cell">Holiday</th>
+                  <th className="table-cell">Shift</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {dashboardOfficialHolidays.map((holiday) => (
+                  <tr key={holiday.id}>
+                    <td className="table-cell">{formatDateInIst(holiday.holidayDate)}</td>
+                    <td className="table-cell">{holiday.name}</td>
+                    <td className="table-cell">{holiday.shift === "NIGHT" ? "Night" : "Day"}</td>
+                  </tr>
+                ))}
+                {dashboardOfficialHolidays.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="table-cell text-center text-sm text-slate-500">No official holidays found for the selected year and shift.</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
     </div>
   );
 }

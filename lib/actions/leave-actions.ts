@@ -53,8 +53,10 @@ function validateStartDateNotInPast(startDate: string) {
   }
 }
 
-async function validateBoundaryDates(startDate: string, endDate: string) {
-  const holidayKeys = new Set(await getOfficialHolidayDateKeysForYear(Number(startDate.slice(0, 4))));
+async function validateBoundaryDates(startDate: string, endDate: string, userId: string) {
+  const year = Number(startDate.slice(0, 4));
+  const profile = await getOrCreateLeaveYearProfile(userId, year);
+  const holidayKeys = new Set(await getOfficialHolidayDateKeysForYear(year, profile.shift));
   if (isWeekendDateKey(startDate) || holidayKeys.has(startDate)) {
     throw new Error("Start date cannot be a Saturday, Sunday, or official holiday.");
   }
@@ -66,7 +68,7 @@ async function validateBoundaryDates(startDate: string, endDate: string) {
 async function computeLeaveBreakup(startDateKey: string, endDateKey: string, userId: string) {
   const year = Number(startDateKey.slice(0, 4));
   const profile = await getOrCreateLeaveYearProfile(userId, year);
-  const holidayKeys = new Set(await getOfficialHolidayDateKeysForYear(year));
+  const holidayKeys = new Set(await getOfficialHolidayDateKeysForYear(year, profile.shift));
   let workingDays = 0;
   let cursor = startDateKey;
   while (cursor <= endDateKey) {
@@ -129,7 +131,7 @@ export async function createLeaveRequestAction(
     }
 
     validateStartDateNotInPast(parsed.data.startDate);
-    await validateBoundaryDates(parsed.data.startDate, parsed.data.endDate);
+    await validateBoundaryDates(parsed.data.startDate, parsed.data.endDate, user.id);
     const { start, end } = parseDateRange(parsed.data.startDate, parsed.data.endDate);
     const breakup = await computeLeaveBreakup(parsed.data.startDate, parsed.data.endDate, user.id);
 
@@ -201,7 +203,7 @@ export async function updateLeaveRequestAction(
     }
 
     validateStartDateNotInPast(parsed.data.startDate);
-    await validateBoundaryDates(parsed.data.startDate, parsed.data.endDate);
+    await validateBoundaryDates(parsed.data.startDate, parsed.data.endDate, user.id);
     const { start, end } = parseDateRange(parsed.data.startDate, parsed.data.endDate);
     const breakup = await computeLeaveBreakup(parsed.data.startDate, parsed.data.endDate, user.id);
 

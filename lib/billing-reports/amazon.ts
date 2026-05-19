@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { FILMIK_CLIENT_ID, SONY_PICTURES_CLASSICS_CLIENT_ID, SONY_PICTURES_CLIENT_ID } from "@/lib/billing-reports/config";
+import { FILMIK_CLIENT_ID, SONY_PICTURES_CLASSICS_CLIENT_ID, SONY_PICTURES_CLIENT_ID, WARNER_BROS_CLIENT_ID } from "@/lib/billing-reports/config";
 
 export type AmazonReportType =
   | "social-assets"
@@ -11,7 +11,8 @@ export type AmazonReportType =
   | "spe-main"
   | "canada-other"
   | "newsletters"
-  | "billing-summary";
+  | "billing-summary"
+  | "billing-history";
 
 export type AmazonBillingReportFilters = {
   fromDate: string;
@@ -112,7 +113,7 @@ export type BillingReportDefinition = {
   projectName: string;
   includeLanguage: boolean;
   includeCountry: boolean;
-  kind?: "time-entry" | "time-entry-summary" | "deliverable" | "placeholder" | "generic-movie" | "generic-filmik" | "sony-movie" | "sony-newsletters";
+  kind?: "time-entry" | "time-entry-summary" | "deliverable" | "placeholder" | "generic-movie" | "generic-filmik" | "sony-movie" | "sony-newsletters" | "billing-history";
 };
 
 export const AMAZON_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
@@ -129,6 +130,13 @@ export const AMAZON_REPORTS: Partial<Record<AmazonReportType, BillingReportDefin
     includeLanguage: true,
     includeCountry: false,
     kind: "time-entry",
+  },
+  "billing-history": {
+    title: "Billing History",
+    projectName: "",
+    includeLanguage: false,
+    includeCountry: false,
+    kind: "billing-history",
   },
 };
 
@@ -185,6 +193,13 @@ export const WARNER_REPORTS: Partial<Record<AmazonReportType, BillingReportDefin
     includeCountry: false,
     kind: "deliverable",
   },
+  "billing-history": {
+    title: "Billing History",
+    projectName: "",
+    includeLanguage: false,
+    includeCountry: false,
+    kind: "billing-history",
+  },
 };
 
 export const SONY_PICTURES_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
@@ -195,6 +210,7 @@ export const SONY_PICTURES_REPORTS: Partial<Record<AmazonReportType, BillingRepo
 
 export const SONY_PICTURES_CLASSICS_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
   "social-assets": { title: "Sony Pictures Classics Billing", projectName: "", includeLanguage: false, includeCountry: false, kind: "generic-movie" },
+  "billing-history": { title: "Billing History", projectName: "", includeLanguage: false, includeCountry: false, kind: "billing-history" },
 };
 
 export const FILMIK_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
@@ -371,11 +387,12 @@ export async function getAmazonBillingReportData({
   }
 
   const isUniversalClientForOptions = client.name.trim().toLowerCase() === UNIVERSAL_CLIENT_NAME.toLowerCase();
+  const isWarnerWbheStatus = client.id === WARNER_BROS_CLIENT_ID && reportType === "wbhe-status";
 
   const projectEntriesForOptions = await db.timeEntry.findMany({
     where: {
       projectId: project.id,
-      movie: { status: { in: ["WORKING", "COMPLETED"] } },
+      movie: { status: { in: ["WORKING", "COMPLETED"] }, ...(isWarnerWbheStatus ? { billingSocial: true } : {}) },
     },
     select: {
       movieId: true,
@@ -452,7 +469,7 @@ export async function getAmazonBillingReportData({
     where: {
       projectId: project.id,
       ...(fromBoundary || toBoundary ? { workDate: { ...(fromBoundary ? { gte: fromBoundary } : {}), ...(toBoundary ? { lte: toBoundary } : {}) } } : {}),
-      movie: { status: { in: ["WORKING", "COMPLETED"] } },
+      movie: { status: { in: ["WORKING", "COMPLETED"] }, ...(isWarnerWbheStatus ? { billingSocial: true } : {}) },
       ...(filters.movieId !== "all" ? { movieId: filters.movieId } : {}),
       ...(isUniversalClient && filters.assetNameId !== "all" ? { assetNameId: filters.assetNameId } : {}),
       ...(!isUniversalClient && filters.assetTypeId !== "all" ? { assetTypeId: filters.assetTypeId } : {}),
@@ -855,6 +872,7 @@ async function getWarnerDeliverableData({
       clientId,
       isActive: true,
       status: { in: ["WORKING", "COMPLETED"] },
+      billingRegion: { not: "SOCIAL" as const },
       ...(!isDomestic ? { timeEntries: { some: { project: { clientId } } } } : {}),
       ...(isDomestic
         ? { billingDomestic: true }
@@ -879,6 +897,7 @@ async function getWarnerDeliverableData({
           clientId,
           isActive: true,
           status: { in: ["WORKING", "COMPLETED"] },
+          billingRegion: { not: "SOCIAL" as const },
           ...(!isDomestic ? { timeEntries: { some: { project: { clientId } } } } : {}),
           ...(isDomestic
             ? { billingDomestic: true }
@@ -1201,6 +1220,96 @@ export async function getWarnerOtherDeliverableData({
 }): Promise<WarnerDomesticDeliverableData | null> {
   return getWarnerDeliverableData({ clientId, filters, reportType: "other-deliverable" });
 }
+
+
+export type BillingHistoryFilters = { year: string };
+
+export type BillingHistoryRow = {
+  movieId: string;
+  titleName: string;
+  billingRegion: string;
+  billingDate: string;
+  timeEntryCount: number;
+  movieBillingHeadCount: number;
+};
+
+export type BillingHistoryData = {
+  client: { id: string; name: string };
+  filters: BillingHistoryFilters;
+  rows: BillingHistoryRow[];
+};
+
+export function buildBillingHistoryFilters(searchParams: URLSearchParams | Record<string, string | string[] | undefined>) {
+  const getValue = (key: string) => {
+    if (searchParams instanceof URLSearchParams) return searchParams.get(key) ?? undefined;
+    const value = searchParams[key];
+    return Array.isArray(value) ? value[0] : value;
+  };
+  const currentYear = String(new Date().getFullYear());
+  const year = getValue("year") || currentYear;
+  return { year: /^\d{4}$/.test(year) ? year : currentYear } satisfies BillingHistoryFilters;
+}
+
+function formatBillingRegion(value: string) {
+  const labels: Record<string, string> = {
+    DOMESTIC: "Domestic",
+    INTL: "INTL",
+    OTHER: "Other",
+    SOCIAL: "Social",
+  };
+  return labels[value] ?? value.replaceAll("_", " ");
+}
+
+export async function getBillingHistoryData({
+  clientId,
+  filters,
+}: {
+  clientId: string;
+  filters: BillingHistoryFilters;
+}): Promise<BillingHistoryData | null> {
+  const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } });
+  if (!client) return null;
+
+  const year = Number(filters.year);
+  const start = new Date(year, 0, 1);
+  const end = new Date(year + 1, 0, 1);
+
+  const movies = await db.movie.findMany({
+    where: {
+      clientId,
+      isActive: true,
+      status: "COMPLETED_BILLED",
+      billingDate: { gte: start, lt: end },
+    },
+    select: {
+      id: true,
+      title: true,
+      billingRegion: true,
+      billingDate: true,
+      _count: {
+        select: {
+          timeEntries: true,
+          movieBillingHeadAssignments: true,
+        },
+      },
+    },
+    orderBy: [{ billingDate: "desc" }, { title: "asc" }],
+  });
+
+  return {
+    client,
+    filters,
+    rows: movies.map((movie) => ({
+      movieId: movie.id,
+      titleName: movie.title,
+      billingRegion: formatBillingRegion(movie.billingRegion),
+      billingDate: movie.billingDate ? formatDisplayDate(movie.billingDate) : "-",
+      timeEntryCount: movie._count.timeEntries,
+      movieBillingHeadCount: movie._count.movieBillingHeadAssignments,
+    })),
+  };
+}
+
 
 export function sanitizeFileSegment(value: string) {
   return value
