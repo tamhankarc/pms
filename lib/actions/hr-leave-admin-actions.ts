@@ -54,7 +54,7 @@ export async function createOfficialHolidayAction(formData: FormData) {
   const name = String(formData.get("name") || "").trim();
   const holidayDate = String(formData.get("holidayDate") || "").trim();
   const shiftValue = String(formData.get("shift") || "DAY").trim().toUpperCase();
-  const shift = shiftValue === "NIGHT" ? "NIGHT" : "DAY";
+  const shift = shiftValue === "BOTH" ? "BOTH" : shiftValue === "NIGHT" ? "NIGHT" : "DAY";
 
   if (!name || !holidayDate) throw new Error("Holiday name and date are required.");
 

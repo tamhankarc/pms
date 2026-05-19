@@ -648,11 +648,21 @@ export async function getOrCreateLeaveYearProfile(userId: string, year: number) 
   });
 }
 
-export async function getOfficialHolidayDateKeysForYear(year: number, shift?: "DAY" | "NIGHT" | string | null) {
+function getOfficialHolidayShiftWhere(shift?: "DAY" | "NIGHT" | "BOTH" | string | null): Prisma.OfficialHolidayWhereInput {
+  if (shift === "DAY" || shift === "NIGHT") {
+    return { shift: { in: [shift, "BOTH"] } };
+  }
+  if (shift === "BOTH") {
+    return { shift: "BOTH" };
+  }
+  return {};
+}
+
+export async function getOfficialHolidayDateKeysForYear(year: number, shift?: "DAY" | "NIGHT" | "BOTH" | string | null) {
   const rows = await db.officialHoliday.findMany({
     where: {
       year,
-      ...(shift === "DAY" || shift === "NIGHT" ? { shift } : {}),
+      ...getOfficialHolidayShiftWhere(shift),
     },
     orderBy: { holidayDate: "asc" },
     select: { holidayDate: true },
@@ -660,11 +670,11 @@ export async function getOfficialHolidayDateKeysForYear(year: number, shift?: "D
   return rows.map((row) => getIstDateKey(row.holidayDate));
 }
 
-export async function getOfficialHolidaysForYear(year: number, shift?: "DAY" | "NIGHT" | string | null) {
+export async function getOfficialHolidaysForYear(year: number, shift?: "DAY" | "NIGHT" | "BOTH" | string | null) {
   return db.officialHoliday.findMany({
     where: {
       year,
-      ...(shift === "DAY" || shift === "NIGHT" ? { shift } : {}),
+      ...getOfficialHolidayShiftWhere(shift),
     },
     orderBy: [{ holidayDate: "asc" }, { shift: "asc" }],
   });

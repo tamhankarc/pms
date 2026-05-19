@@ -108,6 +108,7 @@ export default async function LeaveAdminPage({
           <select className="input" name="shift" defaultValue="DAY" aria-label="Holiday shift">
             <option value="DAY">Day shift</option>
             <option value="NIGHT">Night shift</option>
+            <option value="BOTH">Both shifts</option>
           </select>
           <input className="input" name="holidayDate" type="date" min={`${data.year}-01-01`} max={`${data.year}-12-31`} required />
           <button className="btn-primary" type="submit">Add holiday</button>
@@ -120,7 +121,7 @@ export default async function LeaveAdminPage({
                 <tr key={holiday.id}>
                   <td className="table-cell">{formatDateInIst(holiday.holidayDate)}</td>
                   <td className="table-cell">{holiday.name}</td>
-                  <td className="table-cell">{holiday.shift === "NIGHT" ? "Night" : "Day"}</td>
+                  <td className="table-cell">{holiday.shift === "BOTH" ? "Both" : holiday.shift === "NIGHT" ? "Night" : "Day"}</td>
                   <td className="table-cell">
                     <form action={deleteOfficialHolidayAction}>
                       <input type="hidden" name="id" value={holiday.id} />

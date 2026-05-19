@@ -117,6 +117,12 @@ enum ShiftType {
   NIGHT
 }
 
+enum HolidayShift {
+  DAY
+  NIGHT
+  BOTH
+}
+
 enum EmploymentStatus {
   PROBATION
   PERMANENT
@@ -846,7 +852,7 @@ model OfficialHoliday {
   name        String
   holidayDate DateTime
   year        Int
-  shift       ShiftType @default(DAY)
+  shift       HolidayShift @default(DAY)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

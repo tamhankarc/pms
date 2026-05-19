@@ -260,7 +260,7 @@ export default async function DashboardPage({
   const attendanceWeekend = isWeekendAttendanceDate(attendanceDate);
   const dashboardHolidayYearValue = Number(params.holidayYear || todayKey.slice(0, 4));
   const dashboardHolidayYear = Number.isFinite(dashboardHolidayYearValue) && dashboardHolidayYearValue >= 2000 && dashboardHolidayYearValue <= 2100 ? dashboardHolidayYearValue : Number(todayKey.slice(0, 4));
-  const dashboardHolidayShift = params.holidayShift === "NIGHT" ? "NIGHT" : "DAY";
+  const dashboardHolidayShift = params.holidayShift === "BOTH" ? "BOTH" : params.holidayShift === "NIGHT" ? "NIGHT" : "DAY";
 
   const defaultBillingRange = getDefaultBillingRange();
   const billingStartDate = normalizeDateInput(params.billingStartDate) ?? defaultBillingRange.startDate;
@@ -874,6 +874,7 @@ export default async function DashboardPage({
               <select className="input" id="holidayShift" name="holidayShift" defaultValue={dashboardHolidayShift}>
                 <option value="DAY">Day shift</option>
                 <option value="NIGHT">Night shift</option>
+                <option value="BOTH">Both shifts</option>
               </select>
             </div>
             <div className="flex items-end">
@@ -895,7 +896,7 @@ export default async function DashboardPage({
                   <tr key={holiday.id}>
                     <td className="table-cell">{formatDateInIst(holiday.holidayDate)}</td>
                     <td className="table-cell">{holiday.name}</td>
-                    <td className="table-cell">{holiday.shift === "NIGHT" ? "Night" : "Day"}</td>
+                    <td className="table-cell">{holiday.shift === "BOTH" ? "Both" : holiday.shift === "NIGHT" ? "Night" : "Day"}</td>
                   </tr>
                 ))}
                 {dashboardOfficialHolidays.length === 0 ? (
