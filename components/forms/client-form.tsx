@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { FormLabel } from "@/components/ui/form-label";
 import type { ClientFormState } from "@/lib/actions/client-actions";
 
@@ -21,13 +21,20 @@ type ClientFormProps = {
     showNewslettersInEntries?: boolean;
     enableProjectTypes?: boolean;
     hourlyCost?: string | number;
+    sonyCoppaSiteCost?: string | number;
+    sonyUsEpkSiteCost?: string | number;
+    sonyGlobalEpkSiteCost?: string | number;
   };
 };
 
 const initialState: ClientFormState = {};
+const SONY_PICTURES_CLIENT_ID = "cmn66d3q40002l104n6wvefvl";
+const SONY_PICTURES_CLIENT_NAME = "sony pictures entertainment";
 
 export function ClientForm({ mode, action, initialValues, canEditCosts = false }: ClientFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
+  const [clientName, setClientName] = useState(initialValues?.name ?? "");
+  const isSonyPicturesClient = initialValues?.id === SONY_PICTURES_CLIENT_ID || clientName.trim().toLowerCase() === SONY_PICTURES_CLIENT_NAME;
 
   return (
     <form action={formAction} className="card p-6">
@@ -58,7 +65,7 @@ export function ClientForm({ mode, action, initialValues, canEditCosts = false }
           <FormLabel htmlFor="name" required>
             Client name
           </FormLabel>
-          <input id="name" className="input" name="name" defaultValue={initialValues?.name ?? ""} required />
+          <input id="name" className="input" name="name" value={clientName} onChange={(event) => setClientName(event.target.value)} required />
         </div>
 
         {canEditCosts ? (
@@ -67,6 +74,27 @@ export function ClientForm({ mode, action, initialValues, canEditCosts = false }
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
               <input id="hourlyCost" name="hourlyCost" type="number" min="0" step="0.01" className="input currency-input" defaultValue={initialValues?.hourlyCost ?? "0.00"} />
+            </div>
+          </div>
+        ) : null}
+
+        {canEditCosts && isSonyPicturesClient ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="mb-4 text-sm font-semibold text-slate-900">Sony Pictures Entertainment site charges</p>
+            <div className="grid gap-4 md:grid-cols-3">
+              {[
+                { id: "sonyCoppaSiteCost", label: "COPPA Site", value: initialValues?.sonyCoppaSiteCost },
+                { id: "sonyUsEpkSiteCost", label: "US EPK Site", value: initialValues?.sonyUsEpkSiteCost },
+                { id: "sonyGlobalEpkSiteCost", label: "Global EPK Site", value: initialValues?.sonyGlobalEpkSiteCost },
+              ].map((field) => (
+                <div key={field.id}>
+                  <FormLabel htmlFor={field.id}>{field.label} (USD)</FormLabel>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
+                    <input id={field.id} name={field.id} type="number" min="0" step="0.01" className="input currency-input" defaultValue={field.value ?? "0.00"} />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         ) : null}

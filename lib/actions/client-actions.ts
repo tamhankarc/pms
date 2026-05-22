@@ -7,6 +7,9 @@ import { requireUserForAction } from "@/lib/auth";
 import { canManageClients, canViewCostData } from "@/lib/permissions";
 import { generateClientCode } from "@/lib/project-code";
 
+const SONY_PICTURES_CLIENT_ID = "cmn66d3q40002l104n6wvefvl";
+const SONY_PICTURES_CLIENT_NAME = "sony pictures entertainment";
+
 export type ClientFormState = {
   success?: boolean;
   error?: string;
@@ -23,6 +26,9 @@ const clientSchema = z.object({
   showNewslettersInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   enableProjectTypes: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   hourlyCost: z.coerce.number().min(0, "Per hour cost cannot be negative.").optional(),
+  sonyCoppaSiteCost: z.coerce.number().min(0, "COPPA Site cost cannot be negative.").optional(),
+  sonyUsEpkSiteCost: z.coerce.number().min(0, "US EPK Site cost cannot be negative.").optional(),
+  sonyGlobalEpkSiteCost: z.coerce.number().min(0, "Global EPK Site cost cannot be negative.").optional(),
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
 
@@ -49,6 +55,9 @@ export async function createClientAction(
       showNewslettersInEntries: formData.get("showNewslettersInEntries") ?? undefined,
       enableProjectTypes: formData.get("enableProjectTypes") ?? undefined,
       hourlyCost: formData.get("hourlyCost") ?? "0",
+      sonyCoppaSiteCost: formData.get("sonyCoppaSiteCost") ?? "0",
+      sonyUsEpkSiteCost: formData.get("sonyUsEpkSiteCost") ?? "0",
+      sonyGlobalEpkSiteCost: formData.get("sonyGlobalEpkSiteCost") ?? "0",
       isActive: formData.get("isActive") ?? "on",
     });
 
@@ -60,6 +69,7 @@ export async function createClientAction(
     }
 
     const generatedCode = await generateClientCode(parsed.data.name.trim());
+    const isSonyPicturesClient = parsed.data.name.trim().toLowerCase() === SONY_PICTURES_CLIENT_NAME;
 
     await db.client.create({
       data: {
@@ -73,6 +83,9 @@ export async function createClientAction(
         showNewslettersInEntries: Boolean(parsed.data.showNewslettersInEntries),
         enableProjectTypes: Boolean(parsed.data.enableProjectTypes),
         hourlyCost: canViewCostData(user) ? (parsed.data.hourlyCost ?? 0) : 0,
+        sonyCoppaSiteCost: canViewCostData(user) && isSonyPicturesClient ? (parsed.data.sonyCoppaSiteCost ?? 0) : 0,
+        sonyUsEpkSiteCost: canViewCostData(user) && isSonyPicturesClient ? (parsed.data.sonyUsEpkSiteCost ?? 0) : 0,
+        sonyGlobalEpkSiteCost: canViewCostData(user) && isSonyPicturesClient ? (parsed.data.sonyGlobalEpkSiteCost ?? 0) : 0,
         isActive: Boolean(parsed.data.isActive),
       },
     });
@@ -114,6 +127,9 @@ export async function updateClientAction(
       showNewslettersInEntries: formData.get("showNewslettersInEntries") ?? undefined,
       enableProjectTypes: formData.get("enableProjectTypes") ?? undefined,
       hourlyCost: formData.get("hourlyCost") ?? "0",
+      sonyCoppaSiteCost: formData.get("sonyCoppaSiteCost") ?? "0",
+      sonyUsEpkSiteCost: formData.get("sonyUsEpkSiteCost") ?? "0",
+      sonyGlobalEpkSiteCost: formData.get("sonyGlobalEpkSiteCost") ?? "0",
       isActive: formData.get("isActive") ?? undefined,
     });
 
@@ -126,7 +142,7 @@ export async function updateClientAction(
 
     const existingClient = await db.client.findUnique({
       where: { id: parsed.data.id },
-      select: { code: true, hourlyCost: true },
+      select: { code: true, hourlyCost: true, sonyCoppaSiteCost: true, sonyUsEpkSiteCost: true, sonyGlobalEpkSiteCost: true },
     });
 
     if (!existingClient) {
@@ -134,6 +150,7 @@ export async function updateClientAction(
     }
 
     const code = existingClient.code?.trim() || (await generateClientCode(parsed.data.name.trim()));
+    const isSonyPicturesClient = parsed.data.id === SONY_PICTURES_CLIENT_ID;
 
     await db.client.update({
       where: { id: parsed.data.id },
@@ -148,6 +165,9 @@ export async function updateClientAction(
         showNewslettersInEntries: Boolean(parsed.data.showNewslettersInEntries),
         enableProjectTypes: Boolean(parsed.data.enableProjectTypes),
         hourlyCost: canViewCostData(user) ? (parsed.data.hourlyCost ?? 0) : existingClient.hourlyCost,
+        sonyCoppaSiteCost: canViewCostData(user) && isSonyPicturesClient ? (parsed.data.sonyCoppaSiteCost ?? 0) : existingClient.sonyCoppaSiteCost,
+        sonyUsEpkSiteCost: canViewCostData(user) && isSonyPicturesClient ? (parsed.data.sonyUsEpkSiteCost ?? 0) : existingClient.sonyUsEpkSiteCost,
+        sonyGlobalEpkSiteCost: canViewCostData(user) && isSonyPicturesClient ? (parsed.data.sonyGlobalEpkSiteCost ?? 0) : existingClient.sonyGlobalEpkSiteCost,
         isActive: Boolean(parsed.data.isActive),
       },
     });

@@ -30,11 +30,14 @@ import { buildRoyalBillingFilters, buildRoyalHistoryFilters, getRoyalBillingRepo
 import {
   buildSonyNewsletterBillingFilters,
   buildSonyPicturesReportFilters,
+  buildSonyBillingSummaryHistoryFilters,
   formatUsd as formatSonyUsd,
   getSonyNewsletterBillingData,
   getSonyPicturesReportData,
+  getSonyBillingSummaryHistoryData,
   type SonyNewsletterBillingData,
   type SonyPicturesReportData,
+  type SonyBillingSummaryHistoryData,
 } from "@/lib/billing-reports/sony";
 import {
   buildAmazonBillingReportFilters,
@@ -923,7 +926,7 @@ function SonyPicturesReportFilters({
         </div>
       </div>
       <p className="mt-3 text-sm text-slate-500">
-        Only active Working/Completed titles with one or more Time Entries are
+        Only active Working/Completed titles with one or more Ticketing Time Entries are
         listed.
       </p>
     </AutoSubmitFilterForm>
@@ -967,9 +970,9 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
       <table className="table-base">
         <thead className="table-head">
           <tr>
-            <th className="table-cell">Project</th>
+            <th className="table-cell">Billing Header / Project</th>
             <th className="table-cell">Contact Person</th>
-            <th className="table-cell">Billing Model</th>
+            <th className="table-cell">Cost Type</th>
             <th className="table-cell">Cost</th>
           </tr>
         </thead>
@@ -990,7 +993,7 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
                 colSpan={4}
                 className="table-cell text-center text-sm text-slate-500"
               >
-                No projects have Time Entries for the selected title.
+                No valid billing headers are available for the selected title.
               </td>
             </tr>
           ) : null}
@@ -1098,6 +1101,99 @@ function SonyPicturesReportWorkspace({
         </div>
       ) : null}
       <SonyPicturesReportTable data={data} />
+    </div>
+  );
+}
+
+function SonyBillingSummaryHistoryWorkspace({
+  clientId,
+  activeReport,
+  data,
+}: {
+  clientId: string;
+  activeReport: AmazonReportType;
+  data: SonyBillingSummaryHistoryData;
+}) {
+  return (
+    <div className="space-y-6">
+      <ReportTabs clientId={clientId} activeReport={activeReport} clientName={data.client.name} />
+
+      <section className="table-wrap">
+        <div className="border-b border-slate-200 px-6 py-5">
+          <h2 className="section-title">Billing Summary</h2>
+          <p className="section-subtitle">Titles with Ticketing entries which have not been marked Completed &amp; Billed.</p>
+        </div>
+        <table className="table-base">
+          <thead className="table-head">
+            <tr>
+              <th className="table-cell">Title</th>
+              <th className="table-cell">Billing Region</th>
+              <th className="table-cell">Status</th>
+              <th className="table-cell">Time Entries</th>
+              <th className="table-cell">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {data.summaryRows.map((row) => (
+              <tr key={row.movieId}>
+                <td className="table-cell font-medium text-slate-900">{row.title}</td>
+                <td className="table-cell">{row.billingRegions}</td>
+                <td className="table-cell">{row.status}</td>
+                <td className="table-cell">{row.timeEntryCount}</td>
+                <td className="table-cell">
+                  <BillingDoneButton movieId={row.movieId} label="Billing Done" returnTo={`/billing-reports/${clientId}?report=billing-summary-history&year=${data.filters.year}`} />
+                </td>
+              </tr>
+            ))}
+            {data.summaryRows.length === 0 ? (
+              <tr><td colSpan={5} className="table-cell text-center text-sm text-slate-500">No pending billing titles available.</td></tr>
+            ) : null}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="table-wrap">
+        <div className="border-b border-slate-200 px-6 py-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="section-title">Billing History</h2>
+              <p className="section-subtitle">Titles marked Completed &amp; Billed for the selected billing year.</p>
+            </div>
+            <AutoSubmitFilterForm method="get" action={`/billing-reports/${clientId}`} className="w-full sm:w-44">
+              <input type="hidden" name="report" value="billing-summary-history" />
+              <label className="label" htmlFor="sonyHistoryYear">Year</label>
+              <select id="sonyHistoryYear" name="year" className="input" defaultValue={data.filters.year}>
+                {Array.from({ length: 7 }, (_, index) => String(new Date().getFullYear() - index)).map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </AutoSubmitFilterForm>
+          </div>
+        </div>
+        <table className="table-base">
+          <thead className="table-head">
+            <tr>
+              <th className="table-cell">Title</th>
+              <th className="table-cell">Billing Region</th>
+              <th className="table-cell">Billing Date</th>
+              <th className="table-cell">Time Entries</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {data.historyRows.map((row) => (
+              <tr key={row.movieId}>
+                <td className="table-cell font-medium text-slate-900">{row.title}</td>
+                <td className="table-cell">{row.billingRegions}</td>
+                <td className="table-cell">{row.billingDate}</td>
+                <td className="table-cell">{row.timeEntryCount}</td>
+              </tr>
+            ))}
+            {data.historyRows.length === 0 ? (
+              <tr><td colSpan={4} className="table-cell text-center text-sm text-slate-500">No billed titles found for {data.filters.year}.</td></tr>
+            ) : null}
+          </tbody>
+        </table>
+      </section>
     </div>
   );
 }
@@ -1493,9 +1589,9 @@ function RoyalBillingReportTable({ data }: { data: RoyalBillingData }) {
       <table className="table-base">
         <thead className="table-head">
           <tr>
-            <th className="table-cell">Project</th>
+            <th className="table-cell">Billing Header / Project</th>
             <th className="table-cell">Contact Person</th>
-            <th className="table-cell">Billing Model</th>
+            <th className="table-cell">Cost Type</th>
             <th className="table-cell">Project Hours</th>
             <th className="table-cell">Fixed Monthly Hours</th>
             <th className="table-cell">Additional Hours</th>
@@ -1955,6 +2051,8 @@ export default async function ClientBillingReportPage({
     buildSonyPicturesReportFilters(resolvedSearchParams);
   const sonyNewsletterFilters =
     buildSonyNewsletterBillingFilters(resolvedSearchParams);
+  const sonyBillingSummaryHistoryFilters =
+    buildSonyBillingSummaryHistoryFilters(resolvedSearchParams);
   const filmikFilters = buildFilmikBillingReportFilters(resolvedSearchParams);
   const royalFilters = buildRoyalBillingFilters(resolvedSearchParams);
   const royalHistoryFilters = buildRoyalHistoryFilters(resolvedSearchParams);
@@ -2018,6 +2116,13 @@ export default async function ClientBillingReportPage({
       ? await getSonyNewsletterBillingData({
           clientId,
           filters: sonyNewsletterFilters,
+        })
+      : null;
+  const sonyBillingSummaryHistoryData =
+    activeReportDefinition?.kind === "sony-summary-history"
+      ? await getSonyBillingSummaryHistoryData({
+          clientId,
+          filters: sonyBillingSummaryHistoryFilters,
         })
       : null;
   const filmikBillingReportData =
@@ -2100,6 +2205,12 @@ export default async function ClientBillingReportPage({
           clientId={clientId}
           activeReport={activeReport}
           data={sonyNewsletterBillingData}
+        />
+      ) : sonyBillingSummaryHistoryData ? (
+        <SonyBillingSummaryHistoryWorkspace
+          clientId={clientId}
+          activeReport={activeReport}
+          data={sonyBillingSummaryHistoryData}
         />
       ) : royalBillingReportData ? (
         <RoyalBillingReportWorkspace clientId={clientId} data={royalBillingReportData} />

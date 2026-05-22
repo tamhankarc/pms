@@ -1,6 +1,9 @@
 import { db } from "@/lib/db";
 import { formatUsd, getExportTimestamp, sanitizeFileSegment } from "@/lib/billing-reports/amazon";
 
+const SONY_TICKETING_PROJECT_ID = "cmnn1qrex000ll7043zm4uyti";
+const SONY_NEWSLETTER_PROJECT_ID = "cmnijd30h0001l404y6i8tb2y";
+
 export type SonyPicturesReportFilters = {
   movieId: string;
 };
@@ -35,6 +38,22 @@ export type SonyPicturesReportData = {
   totalCost: number;
 };
 
+export type SonyBillingSummaryHistoryFilters = { year: string };
+export type SonyBillingSummaryHistoryRow = {
+  movieId: string;
+  title: string;
+  status: string;
+  billingRegions: string;
+  billingDate: string;
+  timeEntryCount: number;
+};
+export type SonyBillingSummaryHistoryData = {
+  client: { id: string; name: string };
+  filters: SonyBillingSummaryHistoryFilters;
+  summaryRows: SonyBillingSummaryHistoryRow[];
+  historyRows: SonyBillingSummaryHistoryRow[];
+};
+
 function getParamValue(searchParams: URLSearchParams | Record<string, string | string[] | undefined>, key: string) {
   if (searchParams instanceof URLSearchParams) return searchParams.get(key) ?? undefined;
   const value = searchParams[key];
@@ -42,9 +61,13 @@ function getParamValue(searchParams: URLSearchParams | Record<string, string | s
 }
 
 export function buildSonyPicturesReportFilters(searchParams: URLSearchParams | Record<string, string | string[] | undefined>) {
-  return {
-    movieId: getParamValue(searchParams, "movieId") || "",
-  } satisfies SonyPicturesReportFilters;
+  return { movieId: getParamValue(searchParams, "movieId") || "" } satisfies SonyPicturesReportFilters;
+}
+
+export function buildSonyBillingSummaryHistoryFilters(searchParams: URLSearchParams | Record<string, string | string[] | undefined>) {
+  const currentYear = String(new Date().getFullYear());
+  const year = getParamValue(searchParams, "year") || currentYear;
+  return { year: /^\d{4}$/.test(year) ? year : currentYear } satisfies SonyBillingSummaryHistoryFilters;
 }
 
 function formatMovieStatus(status: string) {
@@ -66,13 +89,57 @@ function formatBillingModel(model: string) {
   return labels[model] ?? model.replaceAll("_", " ");
 }
 
+function formatDisplayDate(value: Date | null) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(value);
+}
+
 function buildContactPersonLabel(contactPersons: { name: string; email: string }[]) {
   if (!contactPersons.length) return "-";
   return contactPersons.map((person) => `${person.name}${person.email ? ` (${person.email})` : ""}`).join(", ");
 }
 
-function sortRows(rows: SonyPicturesReportProjectRow[]) {
-  return [...rows].sort((a, b) => a.projectName.localeCompare(b.projectName));
+function normalizeCountryCode(country: { isoCode: string | null; name: string } | null) {
+  return (country?.isoCode || country?.name || "").trim().toUpperCase();
+}
+
+function isUnitedStates(code: string) {
+  return code === "US" || code === "USA" || code === "UNITED STATES" || code === "UNITED STATES OF AMERICA";
+}
+
+function isCanada(code: string) {
+  return code === "CA" || code === "CAN" || code === "CANADA";
+}
+
+function formatBillingRegions(movie: { billingDomestic: boolean; billingIntl: boolean; billingOther: boolean; billingSocial: boolean }) {
+  const values: string[] = [];
+  if (movie.billingDomestic) values.push("Domestic");
+  if (movie.billingIntl) values.push("INTL");
+  if (movie.billingOther) values.push("Other");
+  if (movie.billingSocial) values.push("Social");
+  return values.length ? values.join(", ") : "-";
+}
+
+function calculateProjectCost(project: {
+  billingModel: string;
+  fixedContractHours: unknown;
+  fixedMonthlyHours: unknown;
+  additionalCharges: unknown;
+  partialBillingCost: unknown;
+  perCountryCharges: unknown;
+  projectCost: unknown;
+  projectCostOtherMovieBillingRegion: unknown;
+}, minutes: number, countryCount: number, hourlyCost: number, otherVariant: boolean) {
+  if (project.billingModel === "HOURLY") return (minutes / 60) * hourlyCost;
+  if (project.billingModel === "FIXED_PER_COUNTRY") return countryCount * Number(project.perCountryCharges ?? 0);
+  if (project.billingModel === "FIXED_MONTHLY") return Number(project.fixedMonthlyHours ?? 0) * hourlyCost;
+  if (project.billingModel === "FIXED_FULL") {
+    return (Number(project.fixedContractHours ?? 0) * hourlyCost) + Number(project.additionalCharges ?? 0) - Number(project.partialBillingCost ?? 0);
+  }
+  if (project.billingModel === "FIXED_COST") {
+    return otherVariant ? Number(project.projectCostOtherMovieBillingRegion ?? 0) : Number(project.projectCost ?? 0);
+  }
+  return 0;
 }
 
 export async function getSonyPicturesReportData({
@@ -86,79 +153,93 @@ export async function getSonyPicturesReportData({
 }): Promise<SonyPicturesReportData | null> {
   const client = await db.client.findUnique({
     where: { id: clientId },
-    select: { id: true, name: true, hourlyCost: true },
-  });
-
-  if (!client) return null;
-
-  const rawMovieOptions = await db.movie.findMany({
-    where: {
-      clientId,
-      isActive: true,
-      status: { in: ["WORKING", "COMPLETED"] },
-      timeEntries: { some: { project: { clientId } } },
-    },
     select: {
       id: true,
-      title: true,
-      status: true,
-      billingDomestic: true,
-      billingIntl: true,
-      billingOther: true,
-      timeEntries: {
-        where: { project: { clientId } },
-        select: { country: { select: { isoCode: true, name: true } } },
-      },
+      name: true,
+      hourlyCost: true,
+      sonyCoppaSiteCost: true,
+      sonyUsEpkSiteCost: true,
+      sonyGlobalEpkSiteCost: true,
     },
-    orderBy: { title: "asc" },
   });
+  if (!client) return null;
 
+  const [rawMovieOptions, otherProjectEntryMovieIds] = await Promise.all([
+    db.movie.findMany({
+      where: {
+        clientId,
+        isActive: true,
+        status: { in: ["WORKING", "COMPLETED"] },
+        timeEntries: { some: { projectId: SONY_TICKETING_PROJECT_ID } },
+      },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        billingDomestic: true,
+        billingIntl: true,
+        billingOther: true,
+        billingSocial: true,
+        sonyCoppaSite: true,
+        sonyGlobalEpkSite: true,
+        sonyTicketingBannerCost: true,
+        sonyEmailTicketingBannerCost: true,
+        timeEntries: {
+          where: { projectId: SONY_TICKETING_PROJECT_ID, countryId: { not: null } },
+          select: { country: { select: { name: true, isoCode: true } } },
+        },
+      },
+      orderBy: { title: "asc" },
+    }),
+    db.timeEntry.findMany({
+      where: {
+        movie: { clientId, isActive: true, status: { in: ["WORKING", "COMPLETED"] } },
+        projectId: { notIn: [SONY_TICKETING_PROJECT_ID, SONY_NEWSLETTER_PROJECT_ID] },
+      },
+      select: { movieId: true },
+    }),
+  ]);
+  const moviesWithOtherProjectRows = new Set(otherProjectEntryMovieIds.map((entry) => entry.movieId).filter(Boolean));
   const movieOptions = rawMovieOptions.filter((movie) => {
-    const countryCodes = new Set(movie.timeEntries.map((entry) => (entry.country?.isoCode || entry.country?.name || "").toUpperCase()).filter(Boolean));
-    const hasCanada = countryCodes.has("CA") || countryCodes.has("CANADA");
-    const hasNonCanada = Array.from(countryCodes).some((code) => code !== "CA" && code !== "CANADA");
-    if (variant === "canada-other") {
-      return movie.billingOther || (movie.billingIntl && hasCanada);
-    }
-
-    if (!movie.billingDomestic && !movie.billingIntl) {
-      return false;
-    }
-
-    const canadaOnlyIntl = movie.billingIntl && !movie.billingDomestic && !movie.billingOther && hasCanada && !hasNonCanada;
-    return !canadaOnlyIntl;
+    if (variant === "canada-other") return movie.billingDomestic || movie.billingIntl || movie.billingOther || movie.billingSocial;
+    if (!movie.billingDomestic && !movie.billingIntl) return false;
+    const countryCodes = movie.timeEntries.map((entry) => normalizeCountryCode(entry.country));
+    return (
+      (movie.billingDomestic && countryCodes.some(isUnitedStates)) ||
+      movie.sonyCoppaSite ||
+      (movie.billingIntl && countryCodes.some((code) => !isUnitedStates(code) && !isCanada(code))) ||
+      movie.sonyGlobalEpkSite ||
+      Number(movie.sonyTicketingBannerCost ?? 0) > 0 ||
+      Number(movie.sonyEmailTicketingBannerCost ?? 0) > 0 ||
+      moviesWithOtherProjectRows.has(movie.id)
+    );
   });
-
   const selectedMovieId = filters.movieId || movieOptions[0]?.id || "";
   const selectedMovieAllowed = movieOptions.some((movie) => movie.id === selectedMovieId);
-  const selectedMovie = selectedMovieId && selectedMovieAllowed
+  const selectedMovie = selectedMovieAllowed
     ? await db.movie.findFirst({
-        where: {
-          id: selectedMovieId,
-          clientId,
-          isActive: true,
-          status: { in: ["WORKING", "COMPLETED"] },
-          timeEntries: { some: { project: { clientId } } },
-        },
+        where: { id: selectedMovieId, clientId, isActive: true, status: { in: ["WORKING", "COMPLETED"] }, timeEntries: { some: { projectId: SONY_TICKETING_PROJECT_ID } } },
         select: {
           id: true,
           title: true,
           status: true,
+          billingDomestic: true,
+          billingIntl: true,
+          billingOther: true,
+          billingSocial: true,
+          sonyCoppaSite: true,
+          sonyGlobalEpkSite: true,
           sonyTicketingBannerCost: true,
           sonyEmailTicketingBannerCost: true,
         },
       })
     : null;
 
-  const mappedMovieOptions = movieOptions.map((movie) => ({
-    id: movie.id,
-    title: `${movie.title} (${formatMovieStatus(movie.status)})`,
-    status: movie.status,
-  }));
-
+  const mappedMovieOptions = movieOptions.map((movie) => ({ id: movie.id, title: `${movie.title} (${formatMovieStatus(movie.status)})`, status: movie.status }));
+  const reportTitle = variant === "canada-other" ? "SPE US Ticketing, Canada & Other" : "SPE Billing";
   if (!selectedMovie) {
     return {
-      reportTitle: variant === "canada-other" ? "SPE Canada & Other" : "SPE Billing",
+      reportTitle,
       showCountryList: variant === "canada-other",
       client: { id: client.id, name: client.name, hourlyCost: Number(client.hourlyCost ?? 0) },
       filters: { movieId: selectedMovieId },
@@ -170,118 +251,148 @@ export async function getSonyPicturesReportData({
     };
   }
 
-  const projects = await db.project.findMany({
-    where: {
-      clientId,
-      isActive: true,
-      timeEntries: { some: { movieId: selectedMovie.id } },
-      id: { not: SONY_NEWSLETTER_PROJECT_ID },
-    },
-    select: {
-      id: true,
-      name: true,
-      billingModel: true,
-      status: true,
-      fixedContractHours: true,
-      fixedMonthlyHours: true,
-      additionalCharges: true,
-      partialBillingCost: true,
-      perCountryCharges: true,
-      projectCost: true,
-      projectCostOtherMovieBillingRegion: true,
-      contactPersons: {
-        orderBy: { name: "asc" },
-        select: { name: true, email: true },
+  const [ticketingProject, ticketingEntries, otherProjects, movieContactPersons] = await Promise.all([
+    db.project.findFirst({
+      where: { id: SONY_TICKETING_PROJECT_ID, clientId },
+      select: { id: true, name: true, perCountryCharges: true, projectCostOtherMovieBillingRegion: true, contactPersons: { orderBy: { name: "asc" }, select: { name: true, email: true } } },
+    }),
+    db.timeEntry.findMany({
+      where: { movieId: selectedMovie.id, projectId: SONY_TICKETING_PROJECT_ID, countryId: { not: null } },
+      select: { country: { select: { id: true, name: true, isoCode: true } } },
+    }),
+    db.project.findMany({
+      where: {
+        clientId,
+        isActive: true,
+        id: { notIn: [SONY_TICKETING_PROJECT_ID, SONY_NEWSLETTER_PROJECT_ID] },
+        timeEntries: { some: { movieId: selectedMovie.id } },
       },
-    },
-    orderBy: { name: "asc" },
-  });
+      select: {
+        id: true, name: true, billingModel: true, status: true, fixedContractHours: true, fixedMonthlyHours: true,
+        additionalCharges: true, partialBillingCost: true, perCountryCharges: true, projectCost: true, projectCostOtherMovieBillingRegion: true,
+        contactPersons: { orderBy: { name: "asc" }, select: { name: true, email: true } },
+      },
+      orderBy: { name: "asc" },
+    }),
+    db.contactPerson.findMany({ where: { clientId, movieId: selectedMovie.id }, orderBy: { name: "asc" }, select: { name: true, email: true } }),
+  ]);
 
-  const projectIds = projects.map((project) => project.id);
-  const movieContactPersons = await db.contactPerson.findMany({
-    where: { clientId, movieId: selectedMovie.id },
-    orderBy: { name: "asc" },
-    select: { name: true, email: true },
-  });
-  const movieContactPersonLabel = buildContactPersonLabel(movieContactPersons);
+  const ticketingContact = buildContactPersonLabel(movieContactPersons.length ? movieContactPersons : ticketingProject?.contactPersons ?? []);
+  const ticketCountries = new Map<string, { label: string; code: string }>();
+  for (const entry of ticketingEntries) {
+    if (!entry.country) continue;
+    const code = normalizeCountryCode(entry.country);
+    ticketCountries.set(entry.country.id, { label: entry.country.isoCode ? `${entry.country.name} (${entry.country.isoCode})` : entry.country.name, code });
+  }
+  const countryValues = Array.from(ticketCountries.values());
+  const hasUs = countryValues.some((country) => isUnitedStates(country.code));
+  const hasCanada = countryValues.some((country) => isCanada(country.code));
+  const internationalCountries = countryValues.filter((country) => !isUnitedStates(country.code) && !isCanada(country.code)).map((country) => country.label).sort();
+  const allTicketingCountries = countryValues.map((country) => country.label).sort();
+  const projectRows: SonyPicturesReportProjectRow[] = [];
+  const pushLine = (projectId: string, projectName: string, billingModel: string, cost: number, countryList = "", contactPerson = ticketingContact) => {
+    projectRows.push({ projectId, projectName, contactPerson, billingModel, countryList, cost });
+  };
 
-  const minutesByProject = new Map<string, number>();
-  if (projectIds.length) {
-    const minuteGroups = await db.timeEntry.groupBy({
-      by: ["projectId"],
-      where: { projectId: { in: projectIds }, movieId: selectedMovie.id },
-      _sum: { minutesSpent: true },
-    });
-    minuteGroups.forEach((group) => minutesByProject.set(group.projectId, group._sum.minutesSpent ?? 0));
+  if (variant === "main") {
+    if (selectedMovie.billingDomestic && hasUs) pushLine("sony-us-epk", "US EPK", "Client Fixed Cost", Number(client.sonyUsEpkSiteCost ?? 0), "United States");
+    if (selectedMovie.sonyCoppaSite) pushLine("sony-coppa", "COPPA", "Client Fixed Cost", Number(client.sonyCoppaSiteCost ?? 0));
+    if (selectedMovie.billingIntl && internationalCountries.length && ticketingProject) {
+      pushLine("sony-international-ticketing", "International Ticketing", "Per Country", internationalCountries.length * Number(ticketingProject.perCountryCharges ?? 0), internationalCountries.join(", "));
+    }
+    if (selectedMovie.sonyGlobalEpkSite) pushLine("sony-global-epk", "Global EPK Site", "Client Fixed Cost", Number(client.sonyGlobalEpkSiteCost ?? 0));
+    if (Number(selectedMovie.sonyTicketingBannerCost ?? 0) > 0) pushLine("sony-ticketing-banner", "Ticketing Banners", "Title Charge", Number(selectedMovie.sonyTicketingBannerCost));
+    if (Number(selectedMovie.sonyEmailTicketingBannerCost ?? 0) > 0) pushLine("sony-email-ticketing-banner", "Email Ticketing Banners", "Title Charge", Number(selectedMovie.sonyEmailTicketingBannerCost));
+  } else {
+    if (selectedMovie.billingDomestic && hasUs && ticketingProject) pushLine("sony-us-ticketing", "US Ticketing", "Per Country", Number(ticketingProject.perCountryCharges ?? 0), "United States");
+    if (selectedMovie.billingIntl && hasCanada && ticketingProject) pushLine("sony-canada-site", "Canada Site", "Per Country", Number(ticketingProject.perCountryCharges ?? 0), "Canada");
+    if (selectedMovie.billingOther && allTicketingCountries.length && ticketingProject) {
+      pushLine("sony-ticketing-site", "Ticketing Site", "Other Region Per Country", allTicketingCountries.length * Number(ticketingProject.projectCostOtherMovieBillingRegion ?? 0), allTicketingCountries.join(", "));
+    }
   }
 
-  const countryEntries = projectIds.length
-    ? await db.timeEntry.findMany({
-        where: { projectId: { in: projectIds }, movieId: selectedMovie.id, countryId: { not: null } },
-        select: {
-          projectId: true,
-          country: { select: { id: true, name: true, isoCode: true } },
-        },
-      })
-    : [];
-
+  const permittedOtherProjects = variant === "main" ? otherProjects : selectedMovie.billingOther ? otherProjects : [];
+  const projectIds = permittedOtherProjects.map((project) => project.id);
+  const [minuteGroups, otherCountryEntries] = projectIds.length
+    ? await Promise.all([
+        db.timeEntry.groupBy({ by: ["projectId"], where: { projectId: { in: projectIds }, movieId: selectedMovie.id }, _sum: { minutesSpent: true } }),
+        db.timeEntry.findMany({ where: { projectId: { in: projectIds }, movieId: selectedMovie.id, countryId: { not: null } }, select: { projectId: true, country: { select: { id: true, name: true, isoCode: true } } } }),
+      ])
+    : [[], []];
+  const minutesByProject = new Map(minuteGroups.map((group) => [group.projectId, group._sum.minutesSpent ?? 0]));
   const countriesByProject = new Map<string, Map<string, string>>();
-  for (const entry of countryEntries) {
+  for (const entry of otherCountryEntries) {
     if (!entry.country) continue;
     const current = countriesByProject.get(entry.projectId) ?? new Map<string, string>();
     current.set(entry.country.id, entry.country.isoCode ? `${entry.country.name} (${entry.country.isoCode})` : entry.country.name);
     countriesByProject.set(entry.projectId, current);
   }
-
+  const movieContactPersonLabel = buildContactPersonLabel(movieContactPersons);
   const hourlyCost = Number(client.hourlyCost ?? 0);
-  const projectRows = sortRows(projects.map((project) => {
+  for (const project of permittedOtherProjects) {
     const countries = Array.from(countriesByProject.get(project.id)?.values() ?? []).sort((a, b) => a.localeCompare(b));
-    let cost = 0;
-
-    if (project.billingModel === "HOURLY") {
-      cost = ((minutesByProject.get(project.id) ?? 0) / 60) * hourlyCost;
-    } else if (project.billingModel === "FIXED_PER_COUNTRY") {
-      cost = countries.length * Number(project.perCountryCharges ?? 0);
-    } else if (project.billingModel === "FIXED_MONTHLY") {
-      cost = Number(project.fixedMonthlyHours ?? 0) * hourlyCost;
-    } else if (project.billingModel === "FIXED_FULL") {
-      cost = (Number(project.fixedContractHours ?? 0) * hourlyCost) + Number(project.additionalCharges ?? 0) - Number(project.partialBillingCost ?? 0);
-    } else if (project.billingModel === "FIXED_COST") {
-      cost = variant === "canada-other"
-        ? Number(project.projectCostOtherMovieBillingRegion ?? 0)
-        : Number(project.projectCost ?? 0);
-    }
-
-    const contactPerson = movieContactPersons.length ? movieContactPersonLabel : buildContactPersonLabel(project.contactPersons);
-
-    return {
-      projectId: project.id,
-      projectName: `${project.name}${project.status ? ` (${formatProjectStatus(project.status)})` : ""}`,
-      contactPerson,
-      billingModel: formatBillingModel(project.billingModel),
-      countryList: variant === "canada-other" ? countries.join(", ") : "",
+    const cost = calculateProjectCost(project, minutesByProject.get(project.id) ?? 0, countries.length, hourlyCost, variant === "canada-other");
+    pushLine(
+      project.id,
+      `${project.name}${project.status ? ` (${formatProjectStatus(project.status)})` : ""}`,
+      formatBillingModel(project.billingModel),
       cost,
-    } satisfies SonyPicturesReportProjectRow;
-  }));
-
-  const chargeRows: SonyPicturesReportChargeRow[] = [
-    { label: "Ticketing Banner", cost: Number(selectedMovie.sonyTicketingBannerCost ?? 0) },
-    { label: "Email Ticketing Banner", cost: Number(selectedMovie.sonyEmailTicketingBannerCost ?? 0) },
-  ].filter((row) => row.cost > 0);
-
-  const totalCost = projectRows.reduce((sum, row) => sum + row.cost, 0) + chargeRows.reduce((sum, row) => sum + row.cost, 0);
+      variant === "canada-other" ? countries.join(", ") : "",
+      movieContactPersons.length ? movieContactPersonLabel : buildContactPersonLabel(project.contactPersons),
+    );
+  }
 
   return {
-    reportTitle: variant === "canada-other" ? "SPE Canada & Other" : "SPE Billing",
-    showCountryList: variant === "canada-other",
+    reportTitle,
+    showCountryList: variant === "canada-other" || variant === "main",
     client: { id: client.id, name: client.name, hourlyCost },
     filters: { movieId: selectedMovie.id },
     movieOptions: mappedMovieOptions,
     selectedMovie: { id: selectedMovie.id, title: `${selectedMovie.title} (${formatMovieStatus(selectedMovie.status)})`, status: selectedMovie.status },
     projectRows,
-    chargeRows,
-    totalCost,
+    chargeRows: [],
+    totalCost: projectRows.reduce((sum, row) => sum + row.cost, 0),
   };
+}
+
+export async function getSonyBillingSummaryHistoryData({ clientId, filters }: { clientId: string; filters: SonyBillingSummaryHistoryFilters }): Promise<SonyBillingSummaryHistoryData | null> {
+  const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } });
+  if (!client) return null;
+  const year = Number(filters.year);
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd = new Date(year + 1, 0, 1);
+  const baseSelect = {
+    id: true,
+    title: true,
+    status: true,
+    billingDate: true,
+    billingDomestic: true,
+    billingIntl: true,
+    billingOther: true,
+    billingSocial: true,
+    _count: { select: { timeEntries: true } },
+  } as const;
+  const [summaryMovies, historyMovies] = await Promise.all([
+    db.movie.findMany({
+      where: { clientId, isActive: true, status: { in: ["WORKING", "COMPLETED"] }, timeEntries: { some: { projectId: SONY_TICKETING_PROJECT_ID } } },
+      select: baseSelect,
+      orderBy: { title: "asc" },
+    }),
+    db.movie.findMany({
+      where: { clientId, isActive: true, status: "COMPLETED_BILLED", billingDate: { gte: yearStart, lt: yearEnd }, timeEntries: { some: { projectId: SONY_TICKETING_PROJECT_ID } } },
+      select: baseSelect,
+      orderBy: [{ billingDate: "desc" }, { title: "asc" }],
+    }),
+  ]);
+  const mapRow = (movie: (typeof summaryMovies)[number]): SonyBillingSummaryHistoryRow => ({
+    movieId: movie.id,
+    title: movie.title,
+    status: formatMovieStatus(movie.status),
+    billingRegions: formatBillingRegions(movie),
+    billingDate: formatDisplayDate(movie.billingDate),
+    timeEntryCount: movie._count.timeEntries,
+  });
+  return { client, filters, summaryRows: summaryMovies.map(mapRow), historyRows: historyMovies.map(mapRow) };
 }
 
 export function getSonyPicturesReportFileName(data: SonyPicturesReportData, extension: "xls" | "pdf") {
@@ -301,8 +412,6 @@ export type SonyNewsletterBillingData = {
   totalCount: number;
   totalCost: number;
 };
-
-const SONY_NEWSLETTER_PROJECT_ID = "cmnijd30h0001l404y6i8tb2y";
 
 function defaultMonthValue() {
   const now = new Date();

@@ -201,6 +201,9 @@ model Client {
   showNewslettersInEntries   Boolean  @default(false)
   enableProjectTypes         Boolean  @default(false)
   hourlyCost                 Decimal  @default(0) @db.Decimal(12, 2)
+  sonyCoppaSiteCost          Decimal  @default(0) @db.Decimal(12, 2)
+  sonyUsEpkSiteCost          Decimal  @default(0) @db.Decimal(12, 2)
+  sonyGlobalEpkSiteCost      Decimal  @default(0) @db.Decimal(12, 2)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
@@ -273,6 +276,8 @@ model Movie {
   billingUnitsJson             String?            @db.Text
   sonyTicketingBannerCost      Decimal            @default(0) @db.Decimal(12, 2)
   sonyEmailTicketingBannerCost Decimal            @default(0) @db.Decimal(12, 2)
+  sonyCoppaSite                Boolean            @default(false)
+  sonyGlobalEpkSite            Boolean            @default(false)
   status                       MovieStatus        @default(WORKING)
   billingDate                  DateTime?
   isActive                     Boolean            @default(true)

@@ -110,6 +110,9 @@ export default async function ClientEditPage({
             showNewslettersInEntries: client.showNewslettersInEntries,
             enableProjectTypes: client.enableProjectTypes,
             hourlyCost: Number(client.hourlyCost ?? 0).toFixed(2),
+            sonyCoppaSiteCost: Number(client.sonyCoppaSiteCost ?? 0).toFixed(2),
+            sonyUsEpkSiteCost: Number(client.sonyUsEpkSiteCost ?? 0).toFixed(2),
+            sonyGlobalEpkSiteCost: Number(client.sonyGlobalEpkSiteCost ?? 0).toFixed(2),
           }}
         />
       </div>

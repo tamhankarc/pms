@@ -14,8 +14,7 @@ import {
 
 export function isLeaveAllowedUser(user: { userType: string; functionalRole?: string | null; isActive?: boolean }) {
   if (user.isActive === false) return false;
-  if (user.userType === "REPORT_VIEWER" || user.userType === "ACCOUNTS") return false;
-  if (user.userType === "ADMIN" && ["DIRECTOR", "OTHER"].includes(user.functionalRole ?? "")) return false;
+  if (["ADMIN", "OPERATIONS", "REPORT_VIEWER", "ACCOUNTS"].includes(user.userType)) return false;
   return true;
 }
 
@@ -687,10 +686,7 @@ export async function getLeaveAdminList(filters?: { functionalRole?: string; use
 
   const userWhere: Prisma.UserWhereInput = {
     isActive: true,
-    AND: [
-      { NOT: [{ userType: "REPORT_VIEWER" }, { userType: "ACCOUNTS" }] },
-      { NOT: [{ userType: "ADMIN", functionalRole: { in: ["DIRECTOR", "OTHER"] } }] },
-    ],
+    userType: { notIn: ["ADMIN", "OPERATIONS", "REPORT_VIEWER", "ACCOUNTS"] },
   };
 
   if (filters?.functionalRole) {

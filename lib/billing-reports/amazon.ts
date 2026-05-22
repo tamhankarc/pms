@@ -12,7 +12,8 @@ export type AmazonReportType =
   | "canada-other"
   | "newsletters"
   | "billing-summary"
-  | "billing-history";
+  | "billing-history"
+  | "billing-summary-history";
 
 export type AmazonBillingReportFilters = {
   fromDate: string;
@@ -113,7 +114,7 @@ export type BillingReportDefinition = {
   projectName: string;
   includeLanguage: boolean;
   includeCountry: boolean;
-  kind?: "time-entry" | "time-entry-summary" | "deliverable" | "placeholder" | "generic-movie" | "generic-filmik" | "sony-movie" | "sony-newsletters" | "billing-history";
+  kind?: "time-entry" | "time-entry-summary" | "deliverable" | "placeholder" | "generic-movie" | "generic-filmik" | "sony-movie" | "sony-newsletters" | "sony-summary-history" | "billing-history";
 };
 
 export const AMAZON_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
@@ -204,8 +205,9 @@ export const WARNER_REPORTS: Partial<Record<AmazonReportType, BillingReportDefin
 
 export const SONY_PICTURES_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
   "spe-main": { title: "SPE Billing", projectName: "", includeLanguage: false, includeCountry: false, kind: "sony-movie" },
-  "canada-other": { title: "SPE Canada & Other", projectName: "", includeLanguage: false, includeCountry: false, kind: "sony-movie" },
+  "canada-other": { title: "SPE US Ticketing, Canada & Other", projectName: "", includeLanguage: false, includeCountry: false, kind: "sony-movie" },
   newsletters: { title: "Newsletters", projectName: "Newsletters", includeLanguage: false, includeCountry: false, kind: "sony-newsletters" },
+  "billing-summary-history": { title: "Billing Summary & History", projectName: "", includeLanguage: false, includeCountry: false, kind: "sony-summary-history" },
 };
 
 export const SONY_PICTURES_CLASSICS_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {

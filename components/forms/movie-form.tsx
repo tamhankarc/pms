@@ -23,7 +23,7 @@ export function MovieForm({ clients, countries = [], action, initialValues, subm
   clients: Client[];
   countries?: Country[];
   action: (state: MovieFormState, formData: FormData) => Promise<MovieFormState>;
-  initialValues?: { id?: string; clientId: string; title: string; description: string | null; status?: MovieStatus; isActive: boolean; billingDomestic?: boolean; billingIntl?: boolean; billingOther?: boolean; billingSocial?: boolean; otherCountryIds?: string[]; billingUnits?: Record<string, number>; sonyTicketingBannerCost?: number | null; sonyEmailTicketingBannerCost?: number | null };
+  initialValues?: { id?: string; clientId: string; title: string; description: string | null; status?: MovieStatus; isActive: boolean; billingDomestic?: boolean; billingIntl?: boolean; billingOther?: boolean; billingSocial?: boolean; otherCountryIds?: string[]; billingUnits?: Record<string, number>; sonyTicketingBannerCost?: number | null; sonyEmailTicketingBannerCost?: number | null; sonyCoppaSite?: boolean; sonyGlobalEpkSite?: boolean };
   submitLabel: string;
   title: string;
   canEditCosts?: boolean;
@@ -35,10 +35,13 @@ export function MovieForm({ clients, countries = [], action, initialValues, subm
   const [billingIntl, setBillingIntl] = useState(initialValues?.billingIntl ?? false);
   const [billingOther, setBillingOther] = useState(initialValues?.billingOther ?? false);
   const [billingSocial, setBillingSocial] = useState(initialValues?.billingSocial ?? false);
+  const [sonyCoppaSite, setSonyCoppaSite] = useState(initialValues?.sonyCoppaSite ?? false);
+  const [sonyGlobalEpkSite, setSonyGlobalEpkSite] = useState(initialValues?.sonyGlobalEpkSite ?? false);
   const [otherCountryIds, setOtherCountryIds] = useState<string[]>(initialValues?.otherCountryIds ?? []);
   const clientOptions = useMemo(() => clients.map((client) => ({ value: client.id, label: client.name })), [clients]);
   const countryOptions = useMemo(() => countries.map((country) => ({ value: country.id, label: country.name })), [countries]);
-  const showSonyCosts = canEditCosts && selectedClientId === SONY_CLIENT_ID;
+  const isSonyClient = selectedClientId === SONY_CLIENT_ID;
+  const showSonyCosts = canEditCosts && isSonyClient;
   const showBillingRegion = selectedClientId === WARNER_CLIENT_ID || selectedClientId === SONY_CLIENT_ID;
   const isWarnerClient = selectedClientId === WARNER_CLIENT_ID;
   const domesticOrIntlOrSocialSelected = billingDomestic || billingIntl || billingSocial;
@@ -49,6 +52,8 @@ export function MovieForm({ clients, countries = [], action, initialValues, subm
       {initialValues?.id ? <input type="hidden" name="id" value={initialValues.id} /> : null}
       <input type="hidden" name="clientId" value={selectedClientId} />
       <input type="hidden" name="status" value={movieStatus} />
+      {isSonyClient && sonyCoppaSite ? <input type="hidden" name="sonyCoppaSite" value="on" /> : null}
+      {isSonyClient && sonyGlobalEpkSite ? <input type="hidden" name="sonyGlobalEpkSite" value="on" /> : null}
       {showBillingRegion ? (
         <>
           {billingDomestic ? <input type="hidden" name="billingDomestic" value="on" /> : null}
@@ -65,7 +70,7 @@ export function MovieForm({ clients, countries = [], action, initialValues, subm
       {state?.error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</div> : null}
       {state?.success ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Movie saved successfully.</div> : null}
       <div className="mt-5 space-y-4">
-        <div><FormLabel htmlFor="clientId" required>Client</FormLabel><SearchableCombobox id="clientId" options={clientOptions} value={selectedClientId} onValueChange={(value) => { setSelectedClientId(value); }} placeholder="Select client" searchPlaceholder="Search clients..." emptyLabel="No client found." /></div>
+        <div><FormLabel htmlFor="clientId" required>Client</FormLabel><SearchableCombobox id="clientId" options={clientOptions} value={selectedClientId} onValueChange={(value) => { setSelectedClientId(value); if (value !== SONY_CLIENT_ID) { setSonyCoppaSite(false); setSonyGlobalEpkSite(false); } }} placeholder="Select client" searchPlaceholder="Search clients..." emptyLabel="No client found." /></div>
         <div><FormLabel htmlFor="title" required>Movie title</FormLabel><input id="title" name="title" className="input" defaultValue={initialValues?.title ?? ""} required /></div>
         <div><FormLabel htmlFor="status" required>Status</FormLabel><SearchableCombobox id="status" options={movieStatusOptions} value={movieStatus} onValueChange={(value) => setMovieStatus(value as MovieStatus)} placeholder="Select status" searchPlaceholder="Search statuses..." emptyLabel="No status found." required /></div>
         {showBillingRegion ? (
@@ -82,6 +87,22 @@ export function MovieForm({ clients, countries = [], action, initialValues, subm
           </div>
         ) : null}
 
+
+        {isSonyClient ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="mb-3 text-sm font-semibold text-slate-900">Sony Pictures Entertainment site options</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                <input type="checkbox" checked={sonyCoppaSite} onChange={(event) => setSonyCoppaSite(event.target.checked)} />
+                COPPA Site
+              </label>
+              <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                <input type="checkbox" checked={sonyGlobalEpkSite} onChange={(event) => setSonyGlobalEpkSite(event.target.checked)} />
+                Global EPK Site
+              </label>
+            </div>
+          </div>
+        ) : null}
 
         {showSonyCosts ? (
           <div className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">

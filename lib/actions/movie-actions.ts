@@ -33,6 +33,8 @@ const movieSchema = z.object({
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
   sonyTicketingBannerCost: z.coerce.number().nonnegative("Ticketing Banner cost cannot be negative.").optional(),
   sonyEmailTicketingBannerCost: z.coerce.number().nonnegative("Email Ticketing Banner cost cannot be negative.").optional(),
+  sonyCoppaSite: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  sonyGlobalEpkSite: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
 
 
@@ -61,6 +63,8 @@ export async function createMovieAction(
       isActive: formData.get("isActive") ?? "on",
       sonyTicketingBannerCost: formData.get("sonyTicketingBannerCost") || 0,
       sonyEmailTicketingBannerCost: formData.get("sonyEmailTicketingBannerCost") || 0,
+      sonyCoppaSite: formData.get("sonyCoppaSite") ?? undefined,
+      sonyGlobalEpkSite: formData.get("sonyGlobalEpkSite") ?? undefined,
     });
 
     if (!parsed.success) {
@@ -98,6 +102,8 @@ export async function createMovieAction(
         otherCountryIds: billingOther ? JSON.stringify(otherCountryIds) : null,
         sonyTicketingBannerCost: canViewCostData(user) ? (parsed.data.sonyTicketingBannerCost ?? 0) : 0,
         sonyEmailTicketingBannerCost: canViewCostData(user) ? (parsed.data.sonyEmailTicketingBannerCost ?? 0) : 0,
+        sonyCoppaSite: parsed.data.clientId === SONY_PICTURES_CLIENT_ID ? Boolean(parsed.data.sonyCoppaSite) : false,
+        sonyGlobalEpkSite: parsed.data.clientId === SONY_PICTURES_CLIENT_ID ? Boolean(parsed.data.sonyGlobalEpkSite) : false,
         billingUnitsJson: JSON.stringify(
           Object.fromEntries(
             Array.from(formData.entries())
@@ -151,6 +157,8 @@ export async function updateMovieAction(
       isActive: formData.get("isActive") ?? undefined,
       sonyTicketingBannerCost: formData.get("sonyTicketingBannerCost") || 0,
       sonyEmailTicketingBannerCost: formData.get("sonyEmailTicketingBannerCost") || 0,
+      sonyCoppaSite: formData.get("sonyCoppaSite") ?? undefined,
+      sonyGlobalEpkSite: formData.get("sonyGlobalEpkSite") ?? undefined,
     });
 
     if (!parsed.success || !parsed.data.id) {
@@ -162,7 +170,7 @@ export async function updateMovieAction(
 
     const existingMovie = await db.movie.findUnique({
       where: { id: parsed.data.id },
-      select: { code: true, sonyTicketingBannerCost: true, sonyEmailTicketingBannerCost: true, billingUnitsJson: true },
+      select: { code: true, sonyTicketingBannerCost: true, sonyEmailTicketingBannerCost: true, sonyCoppaSite: true, sonyGlobalEpkSite: true, billingUnitsJson: true },
     });
 
     if (!existingMovie) {
@@ -198,6 +206,8 @@ export async function updateMovieAction(
         otherCountryIds: billingOther ? JSON.stringify(otherCountryIds) : null,
         sonyTicketingBannerCost: canViewCostData(user) ? (parsed.data.sonyTicketingBannerCost ?? 0) : existingMovie.sonyTicketingBannerCost,
         sonyEmailTicketingBannerCost: canViewCostData(user) ? (parsed.data.sonyEmailTicketingBannerCost ?? 0) : existingMovie.sonyEmailTicketingBannerCost,
+        sonyCoppaSite: parsed.data.clientId === SONY_PICTURES_CLIENT_ID ? Boolean(parsed.data.sonyCoppaSite) : false,
+        sonyGlobalEpkSite: parsed.data.clientId === SONY_PICTURES_CLIENT_ID ? Boolean(parsed.data.sonyGlobalEpkSite) : false,
         billingUnitsJson: canViewCostData(user) ? JSON.stringify(
           Object.fromEntries(
             Array.from(formData.entries())

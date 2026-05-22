@@ -1517,7 +1517,7 @@ export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
     excelRow(["Client", data.client.name]),
     excelRow(["Title", data.selectedMovie?.title ?? "-"]),
     excelRow([]),
-    excelRow(data.showCountryList ? ["Project", "Country List", "Contact Person", "Billing Model", "Cost (USD)"] : ["Project", "Contact Person", "Billing Model", "Cost (USD)"]),
+    excelRow(data.showCountryList ? ["Billing Header / Project", "Country List", "Contact Person", "Cost Type", "Cost (USD)"] : ["Billing Header / Project", "Contact Person", "Cost Type", "Cost (USD)"]),
     ...data.projectRows.map((row) =>
       excelRow(
         data.showCountryList
@@ -1552,10 +1552,10 @@ export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
 
 function buildSonyPicturesReportPdfPages(data: SonyPicturesReportData) {
   const columns: PdfTableColumn[] = [
-    { header: "Project / Charge", width: 230 },
+    { header: "Billing Header / Project", width: 230 },
     { header: "Countries", width: 180 },
     { header: "Contact Person", width: 170 },
-    { header: "Billing Model", width: 95 },
+    { header: "Cost Type", width: 95 },
     { header: "Cost", width: 80, align: "right" },
   ];
   const rows: PdfTableRow[] = [
