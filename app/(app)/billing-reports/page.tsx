@@ -5,21 +5,28 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canViewBillingReports } from "@/lib/permissions";
 import { billingReportClientVisibilityWhere } from "@/lib/billing-reports/config";
+import { getBillingReportCatalogForClient } from "@/lib/billing-reports/amazon";
 
 export default async function BillingReportsPage() {
   const user = await requireUser();
   if (!canViewBillingReports(user)) redirect("/dashboard");
 
-  const clients = await db.client.findMany({
+  const availableClients = await db.client.findMany({
     where: billingReportClientVisibilityWhere,
     select: {
       id: true,
       name: true,
       isActive: true,
-      projects: { select: { id: true } },
-      movies: { select: { id: true } },
+      showMoviesInEntries: true,
+      projects: { select: { id: true, _count: { select: { timeEntries: true } } } },
+      movies: { select: { id: true, isActive: true, _count: { select: { timeEntries: true } } } },
     },
     orderBy: { name: "asc" },
+  });
+
+  const clients = availableClients.filter((client) => {
+    if (getBillingReportCatalogForClient(client.name, client.id) || !client.showMoviesInEntries) return true;
+    return client.projects.some((project) => project._count.timeEntries > 0) || client.movies.some((movie) => movie.isActive);
   });
 
   return (

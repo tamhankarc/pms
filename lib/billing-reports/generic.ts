@@ -38,6 +38,23 @@ export type GenericBillingReportTitleBlock = {
   totalCost: number;
 };
 
+export type GenericBillingSummaryHistoryFilters = { year: string };
+
+export type GenericBillingSummaryHistoryRow = {
+  movieId: string;
+  title: string;
+  status: string;
+  billingRegions: string;
+  billingDate: string;
+};
+
+export type GenericBillingSummaryHistoryData = {
+  client: { id: string; name: string };
+  filters: GenericBillingSummaryHistoryFilters;
+  summaryRows: GenericBillingSummaryHistoryRow[];
+  historyRows: GenericBillingSummaryHistoryRow[];
+};
+
 export type GenericBillingReportData = {
   client: {
     id: string;
@@ -68,6 +85,67 @@ export function buildGenericBillingReportFilters(searchParams: URLSearchParams |
     toDate: normalizeDateInput(getParamValue(searchParams, "toDate"), defaults.toDate),
     movieId: getParamValue(searchParams, "movieId") || "",
   } satisfies GenericBillingReportFilters;
+}
+
+export function buildGenericBillingSummaryHistoryFilters(searchParams: URLSearchParams | Record<string, string | string[] | undefined>) {
+  const currentYear = String(new Date().getFullYear());
+  const suppliedYear = getParamValue(searchParams, "year") || currentYear;
+  return { year: /^\d{4}$/.test(suppliedYear) ? suppliedYear : currentYear } satisfies GenericBillingSummaryHistoryFilters;
+}
+
+function formatMovieStatus(status: string) {
+  return status.replaceAll("_", " ").replace("COMPLETED BILLED", "COMPLETED & BILLED");
+}
+
+function formatBillingRegions(movie: { billingDomestic: boolean; billingIntl: boolean; billingOther: boolean; billingSocial: boolean }) {
+  const regions: string[] = [];
+  if (movie.billingDomestic) regions.push("Domestic");
+  if (movie.billingIntl) regions.push("INTL");
+  if (movie.billingOther) regions.push("Other");
+  if (movie.billingSocial) regions.push("Social");
+  return regions.join(", ") || "-";
+}
+
+function formatBillingDate(value: Date | null) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(value);
+}
+
+export async function getGenericBillingSummaryHistoryData({
+  clientId,
+  filters,
+}: {
+  clientId: string;
+  filters: GenericBillingSummaryHistoryFilters;
+}): Promise<GenericBillingSummaryHistoryData | null> {
+  const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } });
+  if (!client) return null;
+  const year = Number(filters.year);
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd = new Date(year + 1, 0, 1);
+  const select = {
+    id: true, title: true, status: true, billingDate: true, billingDomestic: true, billingIntl: true, billingOther: true, billingSocial: true,
+  } as const;
+  const [summaryMovies, historyMovies] = await Promise.all([
+    db.movie.findMany({
+      where: { clientId, isActive: true, status: { in: ["WORKING", "COMPLETED"] } },
+      select,
+      orderBy: { title: "asc" },
+    }),
+    db.movie.findMany({
+      where: { clientId, isActive: true, status: "COMPLETED_BILLED", billingDate: { gte: yearStart, lt: yearEnd } },
+      select,
+      orderBy: [{ billingDate: "desc" }, { title: "asc" }],
+    }),
+  ]);
+  const mapRow = (movie: (typeof summaryMovies)[number]): GenericBillingSummaryHistoryRow => ({
+    movieId: movie.id,
+    title: movie.title,
+    status: formatMovieStatus(movie.status),
+    billingRegions: formatBillingRegions(movie),
+    billingDate: formatBillingDate(movie.billingDate),
+  });
+  return { client, filters, summaryRows: summaryMovies.map(mapRow), historyRows: historyMovies.map(mapRow) };
 }
 
 function formatProjectStatus(status: string) {
@@ -168,10 +246,15 @@ export async function getGenericBillingReportData({
       })
     : [];
 
-  const selectedMovieId = movieSpecific ? (filters.movieId || "all") : "";
+  const requestedMovieId = filters.movieId;
+  const selectedMovieId = movieSpecific
+    ? movieOptions.length > 1
+      ? requestedMovieId === "all" || movieOptions.some((movie) => movie.id === requestedMovieId) ? requestedMovieId || "all" : "all"
+      : movieOptions[0]?.id ?? ""
+    : "";
   const selectedMovie = selectedMovieId && selectedMovieId !== "all" ? movieOptions.find((movie) => movie.id === selectedMovieId) ?? null : null;
 
-  if (movieSpecific && selectedMovieId === "all") {
+  if (movieSpecific && movieOptions.length > 1 && selectedMovieId === "all") {
     const titleBlocks: GenericBillingReportTitleBlock[] = [];
     for (const movie of movieOptions) {
       const titleData = await getGenericBillingReportData({

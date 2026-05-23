@@ -6,6 +6,7 @@ import {
   buildWarnerDomesticDeliverableFilters,
   getAmazonBillingReportData,
   getBillingReportCatalogForClient,
+  GENERIC_TITLE_REPORTS,
   getWarnerDomesticDeliverableData,
   getWarnerIntlDeliverableData,
   getWarnerOtherDeliverableData,
@@ -56,12 +57,19 @@ export async function GET(
   if (!canViewBillingReports(user)) return new Response("Forbidden", { status: 403 });
 
   const { clientId } = await params;
-  const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } });
+  const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, name: true, showMoviesInEntries: true } });
   if (!client || isBillingReportClientExcluded(client.id)) redirect("/billing-reports");
 
   const { searchParams } = new URL(request.url);
-  const reportType = normalizeAmazonReportType(searchParams.get("report"), client.name, client.id);
-  const reportDefinition = getBillingReportCatalogForClient(client.name, client.id)?.[reportType];
+  const configuredReportCatalog = getBillingReportCatalogForClient(client.name, client.id);
+  const reportCatalog = configuredReportCatalog ?? (client.showMoviesInEntries ? GENERIC_TITLE_REPORTS : null);
+  const requestedReport = searchParams.get("report");
+  const reportType = reportCatalog
+    ? requestedReport && Object.prototype.hasOwnProperty.call(reportCatalog, requestedReport)
+      ? requestedReport as import("@/lib/billing-reports/amazon").AmazonReportType
+      : Object.keys(reportCatalog)[0] as import("@/lib/billing-reports/amazon").AmazonReportType
+    : normalizeAmazonReportType(requestedReport, client.name, client.id);
+  const reportDefinition = reportCatalog?.[reportType];
   const format = searchParams.get("format") === "pdf" ? "pdf" : "excel";
 
 

@@ -114,7 +114,7 @@ export type BillingReportDefinition = {
   projectName: string;
   includeLanguage: boolean;
   includeCountry: boolean;
-  kind?: "time-entry" | "time-entry-summary" | "deliverable" | "placeholder" | "generic-movie" | "generic-filmik" | "sony-movie" | "sony-newsletters" | "sony-summary-history" | "billing-history";
+  kind?: "time-entry" | "time-entry-summary" | "deliverable" | "placeholder" | "generic-movie" | "generic-summary-history" | "generic-filmik" | "sony-movie" | "sony-newsletters" | "sony-summary-history" | "billing-history";
 };
 
 export const AMAZON_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
@@ -217,6 +217,11 @@ export const SONY_PICTURES_CLASSICS_REPORTS: Partial<Record<AmazonReportType, Bi
 
 export const FILMIK_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
   "social-assets": { title: "Filmik Billing", projectName: "", includeLanguage: false, includeCountry: false, kind: "generic-filmik" },
+};
+
+export const GENERIC_TITLE_REPORTS: Partial<Record<AmazonReportType, BillingReportDefinition>> = {
+  "social-assets": { title: "Billing", projectName: "", includeLanguage: false, includeCountry: false, kind: "generic-movie" },
+  "billing-summary-history": { title: "Billing Summary & History", projectName: "", includeLanguage: false, includeCountry: false, kind: "generic-summary-history" },
 };
 
 export function getBillingReportCatalogForClient(clientName: string, clientId?: string) {

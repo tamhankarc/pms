@@ -22,6 +22,13 @@ export type SonyPicturesReportChargeRow = {
   cost: number;
 };
 
+export type SonyPicturesReportTitleBlock = {
+  movie: { id: string; title: string; status: string };
+  projectRows: SonyPicturesReportProjectRow[];
+  chargeRows: SonyPicturesReportChargeRow[];
+  totalCost: number;
+};
+
 export type SonyPicturesReportData = {
   reportTitle: string;
   showCountryList: boolean;
@@ -36,6 +43,7 @@ export type SonyPicturesReportData = {
   projectRows: SonyPicturesReportProjectRow[];
   chargeRows: SonyPicturesReportChargeRow[];
   totalCost: number;
+  titleBlocks: SonyPicturesReportTitleBlock[];
 };
 
 export type SonyBillingSummaryHistoryFilters = { year: string };
@@ -45,7 +53,6 @@ export type SonyBillingSummaryHistoryRow = {
   status: string;
   billingRegions: string;
   billingDate: string;
-  timeEntryCount: number;
 };
 export type SonyBillingSummaryHistoryData = {
   client: { id: string; name: string };
@@ -214,11 +221,43 @@ export async function getSonyPicturesReportData({
       moviesWithOtherProjectRows.has(movie.id)
     );
   });
-  const selectedMovieId = filters.movieId || movieOptions[0]?.id || "";
+  const requestedMovieId = filters.movieId;
+  const selectedMovieId = movieOptions.length > 1
+    ? (requestedMovieId === "all" || movieOptions.some((movie) => movie.id === requestedMovieId) ? requestedMovieId || "all" : "all")
+    : movieOptions[0]?.id || "";
+  const mappedMovieOptions = movieOptions.map((movie) => ({ id: movie.id, title: `${movie.title} (${formatMovieStatus(movie.status)})`, status: movie.status }));
+  const reportTitle = variant === "canada-other" ? "SPE US Ticketing, Canada & Other" : "SPE Billing";
+
+  if (movieOptions.length > 1 && selectedMovieId === "all") {
+    const titleReports = await Promise.all(
+      movieOptions.map((movie) => getSonyPicturesReportData({ clientId, filters: { movieId: movie.id }, variant })),
+    );
+    const titleBlocks = titleReports
+      .filter((result): result is SonyPicturesReportData => Boolean(result?.selectedMovie && result.projectRows.length))
+      .map((result) => ({
+        movie: result.selectedMovie!,
+        projectRows: result.projectRows,
+        chargeRows: result.chargeRows,
+        totalCost: result.totalCost,
+      }));
+    return {
+      reportTitle,
+      showCountryList: true,
+      client: { id: client.id, name: client.name, hourlyCost: Number(client.hourlyCost ?? 0) },
+      filters: { movieId: "all" },
+      movieOptions: mappedMovieOptions,
+      selectedMovie: null,
+      projectRows: [],
+      chargeRows: [],
+      totalCost: titleBlocks.reduce((sum, block) => sum + block.totalCost, 0),
+      titleBlocks,
+    };
+  }
+
   const selectedMovieAllowed = movieOptions.some((movie) => movie.id === selectedMovieId);
   const selectedMovie = selectedMovieAllowed
     ? await db.movie.findFirst({
-        where: { id: selectedMovieId, clientId, isActive: true, status: { in: ["WORKING", "COMPLETED"] }, timeEntries: { some: { projectId: SONY_TICKETING_PROJECT_ID } } },
+        where: { id: selectedMovieId, clientId, isActive: true, status: { in: ["WORKING", "COMPLETED"] } },
         select: {
           id: true,
           title: true,
@@ -235,8 +274,6 @@ export async function getSonyPicturesReportData({
       })
     : null;
 
-  const mappedMovieOptions = movieOptions.map((movie) => ({ id: movie.id, title: `${movie.title} (${formatMovieStatus(movie.status)})`, status: movie.status }));
-  const reportTitle = variant === "canada-other" ? "SPE US Ticketing, Canada & Other" : "SPE Billing";
   if (!selectedMovie) {
     return {
       reportTitle,
@@ -248,6 +285,7 @@ export async function getSonyPicturesReportData({
       projectRows: [],
       chargeRows: [],
       totalCost: 0,
+      titleBlocks: [],
     };
   }
 
@@ -352,6 +390,7 @@ export async function getSonyPicturesReportData({
     projectRows,
     chargeRows: [],
     totalCost: projectRows.reduce((sum, row) => sum + row.cost, 0),
+    titleBlocks: [],
   };
 }
 
@@ -370,16 +409,15 @@ export async function getSonyBillingSummaryHistoryData({ clientId, filters }: { 
     billingIntl: true,
     billingOther: true,
     billingSocial: true,
-    _count: { select: { timeEntries: true } },
   } as const;
   const [summaryMovies, historyMovies] = await Promise.all([
     db.movie.findMany({
-      where: { clientId, isActive: true, status: { in: ["WORKING", "COMPLETED"] }, timeEntries: { some: { projectId: SONY_TICKETING_PROJECT_ID } } },
+      where: { clientId, isActive: true, status: { in: ["WORKING", "COMPLETED"] } },
       select: baseSelect,
       orderBy: { title: "asc" },
     }),
     db.movie.findMany({
-      where: { clientId, isActive: true, status: "COMPLETED_BILLED", billingDate: { gte: yearStart, lt: yearEnd }, timeEntries: { some: { projectId: SONY_TICKETING_PROJECT_ID } } },
+      where: { clientId, isActive: true, status: "COMPLETED_BILLED", billingDate: { gte: yearStart, lt: yearEnd } },
       select: baseSelect,
       orderBy: [{ billingDate: "desc" }, { title: "asc" }],
     }),
@@ -390,7 +428,6 @@ export async function getSonyBillingSummaryHistoryData({ clientId, filters }: { 
     status: formatMovieStatus(movie.status),
     billingRegions: formatBillingRegions(movie),
     billingDate: formatDisplayDate(movie.billingDate),
-    timeEntryCount: movie._count.timeEntries,
   });
   return { client, filters, summaryRows: summaryMovies.map(mapRow), historyRows: historyMovies.map(mapRow) };
 }

@@ -101,23 +101,23 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
   ];
 
   detailRows.push(excelRow(detailHeaders), ...data.rows.map(rowToExcel));
-  if (isUniversalSocial) detailRows.push(excelRow(["Total Assets", uniqueAssetCount(data.rows)], [1]));
+  if (isUniversalSocial) detailRows.push(excelRow(["Total Unique Assets", uniqueAssetCount(data.rows)], [1]));
   if (isUniversalLocalization) {
-    detailRows.push(excelRow(["Total Assets", uniqueAssetCount(data.rows)], [1]));
-    detailRows.push(excelRow(["Total Countries/Territories", uniqueCountryCount(data.rows)], [1]));
+    detailRows.push(excelRow(["Total Unique Assets", uniqueAssetCount(data.rows)], [1]));
+    detailRows.push(excelRow(["Total Unique Territory/Variant", uniqueCountryCount(data.rows)], [1]));
   }
 
   const titleSummaryRows = isUniversal
     ? [
         excelRow(["Title Summary"]),
-        excelRow(isUniversalLocalization ? ["Title Name", "Total Assets", "Total Countries/Territories"] : ["Title Name", "Total Assets"]),
+        excelRow(isUniversalLocalization ? ["Title Name", "Total Unique Assets", "Total Unique Territory/Variant"] : ["Title Name", "Total Assets"]),
         ...data.titleSummaryRows.map((row) => excelRow(isUniversalLocalization ? [row.titleName, row.totalAssets, row.totalCountries] : [row.titleName, row.totalAssets], isUniversalLocalization ? [1, 2] : [1])),
       ]
     : [];
   const completedSummaryRows = isUniversalLocalization
     ? [
         excelRow(["Completed & Billed Title Summary"]),
-        excelRow(["Title Name", "Total Assets", "Total Countries/Territories"]),
+        excelRow(["Title Name", "Total Unique Assets", "Total Unique Territory/Variant"]),
         ...data.completedTitleSummaryRows.map((row) => excelRow([row.titleName, row.totalAssets, row.totalCountries], [1, 2])),
       ]
     : [];
@@ -154,7 +154,7 @@ export function buildUniversalBillingSummaryExcel(data: UniversalBillingSummaryD
     excelRow(["Client", data.client.name]),
     excelRow(["Title Filter", data.filters.movieId === "all" ? "All titles" : data.filters.movieId]),
     excelRow([]),
-    excelRow(["Title Name", "Total Assets", "Total Countries/Territories"]),
+    excelRow(["Title Name", "Total Unique Assets", "Total Unique Territory/Variant"]),
     ...data.rows.map((row) => excelRow([row.titleName, row.totalAssets, row.totalCountries], [1, 2])),
     excelRow(["Total", totalAssets, totalCountries], [1, 2]),
   ];
@@ -163,7 +163,7 @@ export function buildUniversalBillingSummaryExcel(data: UniversalBillingSummaryD
     excelRow(["Client", data.client.name]),
     excelRow(["Title Filter", data.filters.movieId === "all" ? "All titles" : data.filters.movieId]),
     excelRow([]),
-    excelRow(["Title Name", "Total Assets", "Total Countries/Territories"]),
+    excelRow(["Title Name", "Total Unique Assets", "Total Unique Territory/Variant"]),
     ...data.completedTitleSummaryRows.map((row) => excelRow([row.titleName, row.totalAssets, row.totalCountries], [1, 2])),
     ...(data.completedTitleSummaryRows.length ? [excelRow(["Total", completedTotalAssets, completedTotalCountries], [1, 2])] : []),
   ];
@@ -564,7 +564,7 @@ function buildSummaryPages(
   const isUniversalLocalization = data.client.name === "Universal Pictures International" && data.reportType === "localization";
   const columns: PdfTableColumn[] = isUniversalLocalization
     ? [
-        { header: "Total Assets", width: 180, align: "right" },
+        { header: "Total Unique Assets", width: 180, align: "right" },
         { header: "Total Cost", width: 180, align: "right" },
       ]
     : [
@@ -679,8 +679,8 @@ export function buildAmazonReportPdf(data: AmazonBillingReportData) {
 export function buildUniversalBillingSummaryPdf(data: UniversalBillingSummaryData) {
   const columns: PdfTableColumn[] = [
     { header: "Title Name", width: 420 },
-    { header: "Total Assets", width: 150, align: "right" },
-    { header: "Total Countries / Territories", width: 220, align: "right" },
+    { header: "Total Unique Assets", width: 150, align: "right" },
+    { header: "Total Unique Territory/Variant", width: 220, align: "right" },
   ];
   const rows: PdfTableRow[] = data.rows.map((row) => [row.titleName, row.totalAssets, row.totalCountries]);
   rows.push(["Total", data.rows.reduce((sum, row) => sum + row.totalAssets, 0), data.rows.reduce((sum, row) => sum + row.totalCountries, 0)]);
@@ -1512,13 +1512,13 @@ export function buildGenericBillingReportPdf(data: GenericBillingReportData) {
 export { getGenericBillingReportFileName };
 
 export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
-  const rows = [
+  const buildRows = (title: string, projectRows: typeof data.projectRows, chargeRows: typeof data.chargeRows, totalCost: number) => [
     excelRow([data.reportTitle]),
     excelRow(["Client", data.client.name]),
-    excelRow(["Title", data.selectedMovie?.title ?? "-"]),
+    excelRow(["Title", title]),
     excelRow([]),
     excelRow(data.showCountryList ? ["Billing Header / Project", "Country List", "Contact Person", "Cost Type", "Cost (USD)"] : ["Billing Header / Project", "Contact Person", "Cost Type", "Cost (USD)"]),
-    ...data.projectRows.map((row) =>
+    ...projectRows.map((row) =>
       excelRow(
         data.showCountryList
           ? [row.projectName, row.countryList || "-", row.contactPerson, row.billingModel, row.cost]
@@ -1526,19 +1526,13 @@ export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
         data.showCountryList ? [4] : [3],
       ),
     ),
-    ...(data.chargeRows.length
-      ? [
-          excelRow([]),
-          excelRow(["Title Charges"]),
-          ...data.chargeRows.map((row) =>
-            excelRow(data.showCountryList ? [row.label, "-", "-", "Title Charge", row.cost] : [row.label, "-", "Title Charge", row.cost], data.showCountryList ? [4] : [3]),
-          ),
-        ]
-      : []),
+    ...(chargeRows.length ? [excelRow([]), excelRow(["Title Charges"]), ...chargeRows.map((row) => excelRow(data.showCountryList ? [row.label, "-", "-", "Title Charge", row.cost] : [row.label, "-", "Title Charge", row.cost], data.showCountryList ? [4] : [3]))] : []),
     excelRow([]),
-    excelRow(data.showCountryList ? ["Total", "", "", "", data.totalCost] : ["Total", "", "", data.totalCost], data.showCountryList ? [4] : [3]),
+    excelRow(data.showCountryList ? ["Total", "", "", "", totalCost] : ["Total", "", "", totalCost], data.showCountryList ? [4] : [3]),
   ];
-
+  const sheets = data.titleBlocks.length
+    ? data.titleBlocks.map((block, index) => worksheet(`Title ${index + 1}`, buildRows(block.movie.title, block.projectRows, block.chargeRows, block.totalCost))).join("\n")
+    : worksheet("Sony Billing", buildRows(data.selectedMovie?.title ?? "-", data.projectRows, data.chargeRows, data.totalCost));
   return `<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
@@ -1546,11 +1540,21 @@ export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
  xmlns:x="urn:schemas-microsoft-com:office:excel"
  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
  xmlns:html="http://www.w3.org/TR/REC-html40">
- ${worksheet("Sony Billing", rows)}
+ ${sheets}
 </Workbook>`;
 }
 
-function buildSonyPicturesReportPdfPages(data: SonyPicturesReportData) {
+function buildSonyPicturesReportPdfPages(data: SonyPicturesReportData): string[] {
+  if (data.titleBlocks.length) {
+    return data.titleBlocks.flatMap((block) => buildSonyPicturesReportPdfPages({
+      ...data,
+      selectedMovie: block.movie,
+      projectRows: block.projectRows,
+      chargeRows: block.chargeRows,
+      totalCost: block.totalCost,
+      titleBlocks: [],
+    }));
+  }
   const columns: PdfTableColumn[] = [
     { header: "Billing Header / Project", width: 230 },
     { header: "Countries", width: 180 },
