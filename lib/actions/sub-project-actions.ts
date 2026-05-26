@@ -13,18 +13,33 @@ const schema = z.object({
   projectId: z.string().min(1, "Project is required."),
   name: z.string().trim().min(2, "Sub Project name is required."),
   description: z.string().optional(),
-  isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  hideCountriesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  hideMoviesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  hideAssetTypesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  hideAssetNamesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  hideNewslettersInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  isActive: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  hideCountriesInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  hideMoviesInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  hideAssetTypesInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  hideLensTypesInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  hideAssetNamesInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  hideNewslettersInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
 });
-
 
 async function requireCanManageSubProjects() {
   const user = await requireUserForAction();
-  if (!canManageSubProjects(user)) throw new Error("You are not allowed to manage sub projects.");
+  if (!canManageSubProjects(user))
+    throw new Error("You are not allowed to manage sub projects.");
   return user;
 }
 export async function createSubProjectAction(
@@ -39,17 +54,24 @@ export async function createSubProjectAction(
       name: String(formData.get("name") ?? ""),
       description: String(formData.get("description") ?? ""),
       isActive: formData.get("isActive") ?? "on",
-      hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
+      hideCountriesInEntries:
+        formData.get("hideCountriesInEntries") ?? undefined,
       hideMoviesInEntries: formData.get("hideMoviesInEntries") ?? undefined,
-      hideAssetTypesInEntries: formData.get("hideAssetTypesInEntries") ?? undefined,
-      hideAssetNamesInEntries: formData.get("hideAssetNamesInEntries") ?? undefined,
-      hideNewslettersInEntries: formData.get("hideNewslettersInEntries") ?? undefined,
+      hideAssetTypesInEntries:
+        formData.get("hideAssetTypesInEntries") ?? undefined,
+      hideLensTypesInEntries:
+        formData.get("hideLensTypesInEntries") ?? undefined,
+      hideAssetNamesInEntries:
+        formData.get("hideAssetNamesInEntries") ?? undefined,
+      hideNewslettersInEntries:
+        formData.get("hideNewslettersInEntries") ?? undefined,
     });
 
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message || "Invalid sub project payload.",
+        error:
+          parsed.error.issues[0]?.message || "Invalid sub project payload.",
       };
     }
 
@@ -57,7 +79,16 @@ export async function createSubProjectAction(
       where: { id: parsed.data.projectId },
       select: {
         id: true,
-        client: { select: { showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true, showAssetNamesInEntries: true, showNewslettersInEntries: true } },
+        client: {
+          select: {
+            showCountriesInTimeEntries: true,
+            showMoviesInEntries: true,
+            showAssetTypesInEntries: true,
+            showLensTypesInEntries: true,
+            showAssetNamesInEntries: true,
+            showNewslettersInEntries: true,
+          },
+        },
       },
     });
 
@@ -79,6 +110,9 @@ export async function createSubProjectAction(
           : false,
         hideAssetTypesInEntries: project.client.showAssetTypesInEntries
           ? Boolean(parsed.data.hideAssetTypesInEntries)
+          : false,
+        hideLensTypesInEntries: project.client.showLensTypesInEntries
+          ? Boolean(parsed.data.hideLensTypesInEntries)
           : false,
         hideAssetNamesInEntries: project.client.showAssetNamesInEntries
           ? Boolean(parsed.data.hideAssetNamesInEntries)
@@ -117,11 +151,17 @@ export async function updateSubProjectAction(
       name: String(formData.get("name") ?? ""),
       description: String(formData.get("description") ?? ""),
       isActive: formData.get("isActive") ?? undefined,
-      hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
+      hideCountriesInEntries:
+        formData.get("hideCountriesInEntries") ?? undefined,
       hideMoviesInEntries: formData.get("hideMoviesInEntries") ?? undefined,
-      hideAssetTypesInEntries: formData.get("hideAssetTypesInEntries") ?? undefined,
-      hideAssetNamesInEntries: formData.get("hideAssetNamesInEntries") ?? undefined,
-      hideNewslettersInEntries: formData.get("hideNewslettersInEntries") ?? undefined,
+      hideAssetTypesInEntries:
+        formData.get("hideAssetTypesInEntries") ?? undefined,
+      hideLensTypesInEntries:
+        formData.get("hideLensTypesInEntries") ?? undefined,
+      hideAssetNamesInEntries:
+        formData.get("hideAssetNamesInEntries") ?? undefined,
+      hideNewslettersInEntries:
+        formData.get("hideNewslettersInEntries") ?? undefined,
     });
 
     if (!parsed.success || !parsed.data.id) {
@@ -137,7 +177,16 @@ export async function updateSubProjectAction(
       where: { id: parsed.data.projectId },
       select: {
         id: true,
-        client: { select: { showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true, showAssetNamesInEntries: true, showNewslettersInEntries: true } },
+        client: {
+          select: {
+            showCountriesInTimeEntries: true,
+            showMoviesInEntries: true,
+            showAssetTypesInEntries: true,
+            showLensTypesInEntries: true,
+            showAssetNamesInEntries: true,
+            showNewslettersInEntries: true,
+          },
+        },
       },
     });
 
@@ -160,6 +209,9 @@ export async function updateSubProjectAction(
           : false,
         hideAssetTypesInEntries: project.client.showAssetTypesInEntries
           ? Boolean(parsed.data.hideAssetTypesInEntries)
+          : false,
+        hideLensTypesInEntries: project.client.showLensTypesInEntries
+          ? Boolean(parsed.data.hideLensTypesInEntries)
           : false,
         hideAssetNamesInEntries: project.client.showAssetNamesInEntries
           ? Boolean(parsed.data.hideAssetNamesInEntries)
@@ -186,7 +238,9 @@ export async function updateSubProjectAction(
   }
 }
 
-export async function toggleSubProjectStatusAction(formData: FormData): Promise<void> {
+export async function toggleSubProjectStatusAction(
+  formData: FormData,
+): Promise<void> {
   await requireCanManageSubProjects();
 
   const subProjectId = String(formData.get("subProjectId") ?? "");

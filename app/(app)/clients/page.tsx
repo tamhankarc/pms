@@ -8,10 +8,13 @@ import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { toggleClientStatusAction } from "@/lib/actions/client-actions";
 import { db } from "@/lib/db";
 import { PaginationControls } from "@/components/ui/pagination-controls";
-import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
+import {
+  DEFAULT_PAGE_SIZE,
+  paginateItems,
+  parsePageParam,
+} from "@/lib/pagination";
 
 export default async function ClientsPage({
-
   searchParams,
 }: {
   searchParams?: Promise<{ q?: string; status?: string; page?: string }>;
@@ -39,19 +42,37 @@ export default async function ClientsPage({
     orderBy: { name: "asc" },
   });
 
-  const { items: clients, currentPage, totalPages, totalItems, pageSize } = paginateItems(allClients, page, DEFAULT_PAGE_SIZE);
+  const {
+    items: clients,
+    currentPage,
+    totalPages,
+    totalItems,
+    pageSize,
+  } = paginateItems(allClients, page, DEFAULT_PAGE_SIZE);
 
   return (
     <div>
       <PageHeader
         title="Clients"
         description="Create and maintain client masters and control whether Movies, Asset Types, Countries, Languages, and Project Types are used in downstream forms."
-        actions={<Link href="/clients/new" className="btn-primary">Create client</Link>}
+        actions={
+          <Link href="/clients/new" className="btn-primary">
+            Create client
+          </Link>
+        }
       />
 
       <div className="mb-6 card p-4">
-        <AutoSubmitFilterForm className="grid gap-3 md:grid-cols-[1fr_180px_auto]" method="get">
-          <input className="input" name="q" defaultValue={q} placeholder="Search by client name" />
+        <AutoSubmitFilterForm
+          className="grid gap-3 md:grid-cols-[1fr_180px_auto]"
+          method="get"
+        >
+          <input
+            className="input"
+            name="q"
+            defaultValue={q}
+            placeholder="Search by client name"
+          />
           <SearchableCombobox
             id="status"
             name="status"
@@ -86,26 +107,64 @@ export default async function ClientsPage({
             {clients.map((client) => (
               <tr key={client.id}>
                 <td className="table-cell">
-                  <div className="font-medium text-slate-900">{client.name}</div>
-                  <div className="text-xs text-slate-500">Created {client.createdAt.toLocaleDateString()}</div>
+                  <div className="font-medium text-slate-900">
+                    {client.name}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    Created {client.createdAt.toLocaleDateString()}
+                  </div>
                 </td>
                 <td className="table-cell">{client.projects.length}</td>
                 <td className="table-cell">{client.movies.length}</td>
                 <td className="table-cell">{client.assetTypes.length}</td>
-                <td className="table-cell">{client.enableProjectTypes ? client.projectTypes.length : "Disabled"}</td>
                 <td className="table-cell">
-                  <div className="text-xs text-slate-600">Countries: {client.showCountriesInTimeEntries ? "Required" : "Hidden"}</div>
-                  <div className="text-xs text-slate-600">Languages: {client.showLanguagesInEntries ? "Required" : "Hidden"}</div>
-                  <div className="text-xs text-slate-600">Movies: {client.showMoviesInEntries ? "Optional" : "Hidden"}</div>
-                  <div className="text-xs text-slate-600">Asset Types: {client.showAssetTypesInEntries ? "Optional" : "Hidden"}</div>
+                  {client.enableProjectTypes
+                    ? client.projectTypes.length
+                    : "Disabled"}
                 </td>
-                <td className="table-cell"><span className={client.isActive ? "badge-emerald" : "badge-slate"}>{client.isActive ? "Active" : "Inactive"}</span></td>
+                <td className="table-cell">
+                  <div className="text-xs text-slate-600">
+                    Countries:{" "}
+                    {client.showCountriesInTimeEntries ? "Required" : "Hidden"}
+                  </div>
+                  <div className="text-xs text-slate-600">
+                    Languages:{" "}
+                    {client.showLanguagesInEntries ? "Required" : "Hidden"}
+                  </div>
+                  <div className="text-xs text-slate-600">
+                    Movies: {client.showMoviesInEntries ? "Optional" : "Hidden"}
+                  </div>
+                  <div className="text-xs text-slate-600">
+                    Asset Types:{" "}
+                    {client.showAssetTypesInEntries ? "Optional" : "Hidden"}
+                  </div>
+                  <div className="text-xs text-slate-600">
+                    Lens Types:{" "}
+                    {client.showLensTypesInEntries ? "Optional" : "Hidden"}
+                  </div>
+                </td>
+                <td className="table-cell">
+                  <span
+                    className={
+                      client.isActive ? "badge-emerald" : "badge-slate"
+                    }
+                  >
+                    {client.isActive ? "Active" : "Inactive"}
+                  </span>
+                </td>
                 <td className="table-cell">
                   <div className="flex gap-2">
-                    <Link className="btn-secondary text-xs" href={`/clients/${client.id}`}>Edit</Link>
+                    <Link
+                      className="btn-secondary text-xs"
+                      href={`/clients/${client.id}`}
+                    >
+                      Edit
+                    </Link>
                     <form action={toggleClientStatusAction}>
                       <input type="hidden" name="clientId" value={client.id} />
-                      <button className="btn-secondary text-xs">{client.isActive ? "Deactivate" : "Activate"}</button>
+                      <button className="btn-secondary text-xs">
+                        {client.isActive ? "Deactivate" : "Activate"}
+                      </button>
                     </form>
                   </div>
                 </td>
@@ -113,11 +172,25 @@ export default async function ClientsPage({
             ))}
 
             {allClients.length === 0 ? (
-              <tr><td colSpan={8} className="table-cell text-center text-sm text-slate-500">No clients found.</td></tr>
+              <tr>
+                <td
+                  colSpan={8}
+                  className="table-cell text-center text-sm text-slate-500"
+                >
+                  No clients found.
+                </td>
+              </tr>
             ) : null}
           </tbody>
         </table>
-        <PaginationControls basePath="/clients" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, status }} />
+        <PaginationControls
+          basePath="/clients"
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          searchParams={{ q, status }}
+        />
       </div>
     </div>
   );

@@ -45,7 +45,10 @@ export type SidebarNavItem = {
   access?: "countries" | "languages";
 };
 
-const iconByMenuKey: Record<MenuKey, React.ComponentType<{ className?: string }>> = {
+const iconByMenuKey: Record<
+  MenuKey,
+  React.ComponentType<{ className?: string }>
+> = {
   dashboard: LayoutDashboard,
   clients: Building2,
   movies: Clapperboard,
@@ -53,6 +56,7 @@ const iconByMenuKey: Record<MenuKey, React.ComponentType<{ className?: string }>
   "client-billing-heads": ReceiptText,
   "movie-billing-heads": ReceiptText,
   "asset-type": Box,
+  "lens-type": Box,
   "asset-names": Box,
   "filmik-resource": Box,
   countries: Globe2,
@@ -78,7 +82,12 @@ const iconByMenuKey: Record<MenuKey, React.ComponentType<{ className?: string }>
 const baseMenuItems: SidebarNavItem[] = menuItems.map((item) => ({
   ...item,
   icon: iconByMenuKey[item.key],
-  access: item.key === "countries" ? "countries" : item.key === "languages" ? "languages" : undefined,
+  access:
+    item.key === "countries"
+      ? "countries"
+      : item.key === "languages"
+        ? "languages"
+        : undefined,
 }));
 
 function getItemsByKeys(keys: MenuKey[]) {
@@ -86,7 +95,11 @@ function getItemsByKeys(keys: MenuKey[]) {
   return baseMenuItems.filter((item) => keySet.has(item.key));
 }
 
-function withLeaveItems(items: SidebarNavItem[], user: SessionUser, canAccessLeaveApprovals: boolean) {
+function withLeaveItems(
+  items: SidebarNavItem[],
+  user: SessionUser,
+  canAccessLeaveApprovals: boolean,
+) {
   const nextItems = [...items];
   const existingKeys = new Set(nextItems.map((item) => item.key));
 
@@ -122,6 +135,7 @@ const fullItems: SidebarNavItem[] = getItemsByKeys([
   "client-billing-heads",
   "movie-billing-heads",
   "asset-type",
+  "lens-type",
   "asset-names",
   "filmik-resource",
   "countries",
@@ -146,6 +160,7 @@ const teamLeadItems: SidebarNavItem[] = getItemsByKeys([
   "movies",
   "newsletters",
   "asset-type",
+  "lens-type",
   "asset-names",
   "filmik-resource",
   "countries",
@@ -173,6 +188,7 @@ const operationsItems: SidebarNavItem[] = getItemsByKeys([
   "movies",
   "newsletters",
   "asset-type",
+  "lens-type",
   "asset-names",
   "filmik-resource",
   "countries",
@@ -188,7 +204,21 @@ const operationsItems: SidebarNavItem[] = getItemsByKeys([
 const accountsItems: SidebarNavItem[] = getItemsByKeys(["billing-reports"]);
 
 function isMasterDataHref(href: string) {
-  return ["/clients", "/movies", "/newsletters", "/asset-type", "/asset-names", "/filmik-resource", "/countries", "/languages", "/projects", "/sub-project", "/user-assignments", "/contact-persons"].includes(href);
+  return [
+    "/clients",
+    "/movies",
+    "/newsletters",
+    "/asset-type",
+    "/lens-type",
+    "/asset-names",
+    "/filmik-resource",
+    "/countries",
+    "/languages",
+    "/projects",
+    "/sub-project",
+    "/user-assignments",
+    "/contact-persons",
+  ].includes(href);
 }
 
 function filterAccess(items: SidebarNavItem[], user: SessionUser) {
@@ -210,13 +240,28 @@ function appendExtraMenus(items: SidebarNavItem[], user: SessionUser) {
   return [...items, ...extras];
 }
 
-export function getSidebarItems(user: SessionUser, canAccessLeaveApprovals: boolean): SidebarNavItem[] {
+export function getSidebarItems(
+  user: SessionUser,
+  canAccessLeaveApprovals: boolean,
+): SidebarNavItem[] {
   if (user.userType === "EMPLOYEE") {
-    return appendExtraMenus(withLeaveItems(employeeItems, user, canAccessLeaveApprovals), user);
+    return appendExtraMenus(
+      withLeaveItems(employeeItems, user, canAccessLeaveApprovals),
+      user,
+    );
   }
 
   if (user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) {
-    return appendExtraMenus(withLeaveItems(filterAccess(teamLeadItems, user).filter((item) => !isMasterDataHref(item.href)), user, canAccessLeaveApprovals), user);
+    return appendExtraMenus(
+      withLeaveItems(
+        filterAccess(teamLeadItems, user).filter(
+          (item) => !isMasterDataHref(item.href),
+        ),
+        user,
+        canAccessLeaveApprovals,
+      ),
+      user,
+    );
   }
 
   if (isOperations(user)) {
@@ -224,7 +269,10 @@ export function getSidebarItems(user: SessionUser, canAccessLeaveApprovals: bool
   }
 
   if (user.userType === "ACCOUNTS") {
-    return appendExtraMenus(withLeaveItems(accountsItems, user, canAccessLeaveApprovals), user);
+    return appendExtraMenus(
+      withLeaveItems(accountsItems, user, canAccessLeaveApprovals),
+      user,
+    );
   }
 
   if (user.userType === "HR") {
@@ -243,13 +291,37 @@ export function getSidebarItems(user: SessionUser, canAccessLeaveApprovals: bool
     );
   }
 
-  const merged = withLeaveItems(filterAccess(fullItems, user), user, canAccessLeaveApprovals);
+  const merged = withLeaveItems(
+    filterAccess(fullItems, user),
+    user,
+    canAccessLeaveApprovals,
+  );
   const filtered = merged.filter((item) => {
-    if (isMasterDataHref(item.href) && user.userType !== "ADMIN" && user.userType !== "OPERATIONS") return false;
+    if (
+      isMasterDataHref(item.href) &&
+      user.userType !== "ADMIN" &&
+      user.userType !== "OPERATIONS"
+    )
+      return false;
     if (item.href === "/users" && !canManageUsers(user)) return false;
-    if (item.href === "/contact-persons" && user.userType !== "ADMIN" && user.userType !== "OPERATIONS") return false;
-    if ((item.href === "/client-billing-heads" || item.href === "/movie-billing-heads") && user.userType !== "ADMIN") return false;
-    if (item.href === "/filmik-resource" && user.userType !== "ADMIN" && user.userType !== "OPERATIONS") return false;
+    if (
+      item.href === "/contact-persons" &&
+      user.userType !== "ADMIN" &&
+      user.userType !== "OPERATIONS"
+    )
+      return false;
+    if (
+      (item.href === "/client-billing-heads" ||
+        item.href === "/movie-billing-heads") &&
+      user.userType !== "ADMIN"
+    )
+      return false;
+    if (
+      item.href === "/filmik-resource" &&
+      user.userType !== "ADMIN" &&
+      user.userType !== "OPERATIONS"
+    )
+      return false;
     return true;
   });
 
@@ -258,7 +330,11 @@ export function getSidebarItems(user: SessionUser, canAccessLeaveApprovals: bool
 
 export type BillingReportClientNavItem = { id: string; name: string };
 
-function BillingReportsAccordion({ clients }: { clients: BillingReportClientNavItem[] }) {
+function BillingReportsAccordion({
+  clients,
+}: {
+  clients: BillingReportClientNavItem[];
+}) {
   const Icon = iconByMenuKey["billing-reports"];
 
   return (
@@ -269,23 +345,40 @@ function BillingReportsAccordion({ clients }: { clients: BillingReportClientNavI
         <ChevronDown className="h-4 w-4 shrink-0 transition group-open:rotate-180" />
       </summary>
       <div className="mt-1 space-y-1 pl-7">
-        <Link href="/billing-reports" className="block rounded-lg px-3 py-2 text-xs font-medium text-slate-400 transition hover:bg-slate-900 hover:text-white">
+        <Link
+          href="/billing-reports"
+          className="block rounded-lg px-3 py-2 text-xs font-medium text-slate-400 transition hover:bg-slate-900 hover:text-white"
+        >
           All Clients
         </Link>
         {clients.map((client) => (
-          <Link key={client.id} href={`/billing-reports/${client.id}`} className="block rounded-lg px-3 py-2 text-xs font-medium text-slate-400 transition hover:bg-slate-900 hover:text-white">
+          <Link
+            key={client.id}
+            href={`/billing-reports/${client.id}`}
+            className="block rounded-lg px-3 py-2 text-xs font-medium text-slate-400 transition hover:bg-slate-900 hover:text-white"
+          >
             <span className="line-clamp-2">{client.name}</span>
           </Link>
         ))}
         {clients.length === 0 ? (
-          <span className="block rounded-lg px-3 py-2 text-xs text-slate-500">No clients available</span>
+          <span className="block rounded-lg px-3 py-2 text-xs text-slate-500">
+            No clients available
+          </span>
         ) : null}
       </div>
     </details>
   );
 }
 
-export function Sidebar({ user, canAccessLeaveApprovals, billingReportClients = [] }: { user: SessionUser; canAccessLeaveApprovals: boolean; billingReportClients?: BillingReportClientNavItem[] }) {
+export function Sidebar({
+  user,
+  canAccessLeaveApprovals,
+  billingReportClients = [],
+}: {
+  user: SessionUser;
+  canAccessLeaveApprovals: boolean;
+  billingReportClients?: BillingReportClientNavItem[];
+}) {
   const items = getSidebarItems(user, canAccessLeaveApprovals);
 
   return (
@@ -295,8 +388,12 @@ export function Sidebar({ user, canAccessLeaveApprovals, billingReportClients = 
           <p className="text-[11px] 2xl:text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
             Internal PMS + EMS
           </p>
-          <h2 className="mt-3 text-base 2xl:text-lg font-semibold">Project &amp; Leave Management Suite</h2>
-          <p className="mt-2 text-sm font-medium text-slate-200">{user.fullName}</p>
+          <h2 className="mt-3 text-base 2xl:text-lg font-semibold">
+            Project &amp; Leave Management Suite
+          </h2>
+          <p className="mt-2 text-sm font-medium text-slate-200">
+            {user.fullName}
+          </p>
           <p className="text-xs text-slate-400">
             {user.designation ? `${user.designation}` : ""}
           </p>
@@ -305,7 +402,12 @@ export function Sidebar({ user, canAccessLeaveApprovals, billingReportClients = 
         <nav className="flex-1 space-y-1 overflow-y-auto px-2.5 2xl:px-3 py-5 2xl:py-6">
           {items.map((item) => {
             if (item.key === "billing-reports") {
-              return <BillingReportsAccordion key={item.href} clients={billingReportClients} />;
+              return (
+                <BillingReportsAccordion
+                  key={item.href}
+                  clients={billingReportClients}
+                />
+              );
             }
 
             const Icon = item.icon;

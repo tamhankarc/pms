@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
-import { canFullyModerateProject, isManager, isRoleScopedManager } from "@/lib/permissions";
+import {
+  canFullyModerateProject,
+  isManager,
+  isRoleScopedManager,
+} from "@/lib/permissions";
 import { recordAuditLog } from "@/lib/audit";
 
 export type EstimateFormState = {
@@ -20,6 +24,7 @@ const estimateSchema = z.object({
   countryId: z.string().optional(),
   movieId: z.string().optional(),
   assetTypeId: z.string().optional(),
+  lensTypeId: z.string().optional(),
   assetNameId: z.string().optional(),
   newsletterId: z.string().optional(),
   languageId: z.string().optional(),
@@ -108,6 +113,7 @@ async function validateClientFieldRequirements(
     countryId,
     movieId,
     assetTypeId,
+    lensTypeId,
     assetNameId,
     newsletterId,
     languageId,
@@ -117,6 +123,7 @@ async function validateClientFieldRequirements(
     countryId?: string;
     movieId?: string;
     assetTypeId?: string;
+    lensTypeId?: string;
     assetNameId?: string;
     newsletterId?: string;
     languageId?: string;
@@ -125,7 +132,20 @@ async function validateClientFieldRequirements(
 ) {
   const project = await db.project.findUnique({
     where: { id: projectId },
-    include: { client: true, subProjects: { select: { id: true, hideCountriesInEntries: true, hideMoviesInEntries: true, hideAssetTypesInEntries: true, hideAssetNamesInEntries: true, hideNewslettersInEntries: true } } },
+    include: {
+      client: true,
+      subProjects: {
+        select: {
+          id: true,
+          hideCountriesInEntries: true,
+          hideMoviesInEntries: true,
+          hideAssetTypesInEntries: true,
+          hideLensTypesInEntries: true,
+          hideAssetNamesInEntries: true,
+          hideNewslettersInEntries: true,
+        },
+      },
+    },
   });
 
   if (!project) {
@@ -133,14 +153,22 @@ async function validateClientFieldRequirements(
   }
 
   if (project.clientId !== clientId) {
-    return { valid: false as const, error: "Selected project does not belong to the selected client." };
+    return {
+      valid: false as const,
+      error: "Selected project does not belong to the selected client.",
+    };
   }
 
   if (!project.isActive || !["ACTIVE", "ON_HOLD"].includes(project.status)) {
-    return { valid: false as const, error: "Estimates can only use active or on-hold projects." };
+    return {
+      valid: false as const,
+      error: "Estimates can only use active or on-hold projects.",
+    };
   }
 
-  const subProject = subProjectId ? project.subProjects.find((row) => row.id === subProjectId) : null;
+  const subProject = subProjectId
+    ? project.subProjects.find((row) => row.id === subProjectId)
+    : null;
   const countryEnabled =
     project.client.showCountriesInTimeEntries &&
     !project.hideCountriesInEntries &&
@@ -153,6 +181,10 @@ async function validateClientFieldRequirements(
     project.client.showAssetTypesInEntries &&
     !project.hideAssetTypesInEntries &&
     !subProject?.hideAssetTypesInEntries;
+  const lensTypeEnabled =
+    project.client.showLensTypesInEntries &&
+    !project.hideLensTypesInEntries &&
+    !subProject?.hideLensTypesInEntries;
   const assetNameEnabled =
     project.client.showAssetNamesInEntries &&
     !project.hideAssetNamesInEntries &&
@@ -163,35 +195,66 @@ async function validateClientFieldRequirements(
     !subProject?.hideNewslettersInEntries;
 
   if (countryEnabled && !countryId) {
-    return { valid: false as const, error: "Country is required for the selected client." };
+    return {
+      valid: false as const,
+      error: "Country is required for the selected client.",
+    };
   }
 
   if (project.client.showLanguagesInEntries && !languageId) {
-    return { valid: false as const, error: "Language is required for the selected client." };
+    return {
+      valid: false as const,
+      error: "Language is required for the selected client.",
+    };
   }
 
   if (!countryEnabled && countryId) {
-    return { valid: false as const, error: "Country is not enabled for the selected project/sub-project." };
+    return {
+      valid: false as const,
+      error: "Country is not enabled for the selected project/sub-project.",
+    };
   }
 
   if (!movieEnabled && movieId) {
-    return { valid: false as const, error: "Movie is not enabled for the selected project/sub-project." };
+    return {
+      valid: false as const,
+      error: "Movie is not enabled for the selected project/sub-project.",
+    };
   }
 
   if (!assetTypeEnabled && assetTypeId) {
-    return { valid: false as const, error: "Asset Type is not enabled for the selected project/sub-project." };
+    return {
+      valid: false as const,
+      error: "Asset Type is not enabled for the selected project/sub-project.",
+    };
+  }
+
+  if (!lensTypeEnabled && lensTypeId) {
+    return {
+      valid: false as const,
+      error: "Lens Type is not enabled for the selected project/sub-project.",
+    };
   }
 
   if (!assetNameEnabled && assetNameId) {
-    return { valid: false as const, error: "Asset Name is not enabled for the selected project/sub-project." };
+    return {
+      valid: false as const,
+      error: "Asset Name is not enabled for the selected project/sub-project.",
+    };
   }
 
   if (!newsletterEnabled && newsletterId) {
-    return { valid: false as const, error: "Newsletter is not enabled for the selected project/sub-project." };
+    return {
+      valid: false as const,
+      error: "Newsletter is not enabled for the selected project/sub-project.",
+    };
   }
 
   if (!project.client.showLanguagesInEntries && languageId) {
-    return { valid: false as const, error: "Language is not enabled for the selected client." };
+    return {
+      valid: false as const,
+      error: "Language is not enabled for the selected client.",
+    };
   }
 
   if (movieId) {
@@ -205,7 +268,10 @@ async function validateClientFieldRequirements(
     });
 
     if (!movie) {
-      return { valid: false as const, error: "Selected movie does not belong to the selected client." };
+      return {
+        valid: false as const,
+        error: "Selected movie does not belong to the selected client.",
+      };
     }
   }
 
@@ -216,22 +282,36 @@ async function validateClientFieldRequirements(
     });
 
     if (!newsletter) {
-      return { valid: false as const, error: "Selected newsletter does not belong to the selected client." };
+      return {
+        valid: false as const,
+        error: "Selected newsletter does not belong to the selected client.",
+      };
     }
   }
 
   if (assetNameId) {
     if (!movieId) {
-      return { valid: false as const, error: "Select a movie before selecting an asset name." };
+      return {
+        valid: false as const,
+        error: "Select a movie before selecting an asset name.",
+      };
     }
 
     const assetName = await db.assetName.findFirst({
-      where: { id: assetNameId, clientId: project.clientId, movieId, isActive: true },
+      where: {
+        id: assetNameId,
+        clientId: project.clientId,
+        movieId,
+        isActive: true,
+      },
       select: { id: true },
     });
 
     if (!assetName) {
-      return { valid: false as const, error: "Selected asset name does not belong to the selected movie." };
+      return {
+        valid: false as const,
+        error: "Selected asset name does not belong to the selected movie.",
+      };
     }
   }
 
@@ -242,7 +322,24 @@ async function validateClientFieldRequirements(
     });
 
     if (!assetType) {
-      return { valid: false as const, error: "Selected asset type does not belong to the selected client." };
+      return {
+        valid: false as const,
+        error: "Selected asset type does not belong to the selected client.",
+      };
+    }
+  }
+
+  if (lensTypeId) {
+    const lensType = await db.lensType.findFirst({
+      where: { id: lensTypeId, isActive: true },
+      select: { id: true },
+    });
+
+    if (!lensType) {
+      return {
+        valid: false as const,
+        error: "Selected Lens Type is invalid or inactive.",
+      };
     }
   }
 
@@ -260,11 +357,18 @@ async function validateClientFieldRequirements(
   return { valid: true as const };
 }
 
-
 async function validateFixedFullProject(projectId: string) {
-  const project = await db.project.findUnique({ where: { id: projectId }, select: { billingModel: true } });
+  const project = await db.project.findUnique({
+    where: { id: projectId },
+    select: { billingModel: true },
+  });
   if (!project) return { valid: false as const, error: "Project not found." };
-  if (project.billingModel !== "FIXED_FULL") return { valid: false as const, error: "Estimates can only be added to projects with Billing model Fixed Full." };
+  if (project.billingModel !== "FIXED_FULL")
+    return {
+      valid: false as const,
+      error:
+        "Estimates can only be added to projects with Billing model Fixed Full.",
+    };
   return { valid: true as const };
 }
 
@@ -277,14 +381,19 @@ async function canActForEstimateEmployee(
   if (isRoleScopedManager(user)) {
     const target = await db.user.findUnique({
       where: { id: employeeId },
-      select: { id: true, userType: true, functionalRole: true, isActive: true },
+      select: {
+        id: true,
+        userType: true,
+        functionalRole: true,
+        isActive: true,
+      },
     });
 
     return Boolean(
       target &&
-        target.isActive &&
-        target.functionalRole === user.functionalRole &&
-        ["EMPLOYEE", "TEAM_LEAD"].includes(target.userType),
+      target.isActive &&
+      target.functionalRole === user.functionalRole &&
+      ["EMPLOYEE", "TEAM_LEAD"].includes(target.userType),
     );
   }
 
@@ -294,7 +403,13 @@ async function canActForEstimateEmployee(
       select: { id: true, userType: true, isActive: true },
     });
 
-    return Boolean(employee && employee.isActive && (user.userType === "ADMIN" ? ["MANAGER", "TEAM_LEAD", "EMPLOYEE"].includes(employee.userType) : employee.userType === "EMPLOYEE"));
+    return Boolean(
+      employee &&
+      employee.isActive &&
+      (user.userType === "ADMIN"
+        ? ["MANAGER", "TEAM_LEAD", "EMPLOYEE"].includes(employee.userType)
+        : employee.userType === "EMPLOYEE"),
+    );
   }
 
   if (user.userType === "TEAM_LEAD") {
@@ -356,7 +471,6 @@ async function userCanUseProject(
   return Boolean(project);
 }
 
-
 async function employeeCanUseProject(projectId: string, employeeId: string) {
   const employee = await db.user.findUnique({
     where: { id: employeeId },
@@ -374,7 +488,11 @@ async function employeeCanUseProject(projectId: string, employeeId: string) {
         ? {
             OR: [
               { assignedUsers: { some: { userId: employeeId } } },
-              { subProjects: { some: { assignments: { some: { userId: employeeId } } } } },
+              {
+                subProjects: {
+                  some: { assignments: { some: { userId: employeeId } } },
+                },
+              },
             ],
           }
         : {}),
@@ -392,8 +510,14 @@ export async function createEstimateAction(
   try {
     const user = await requireUserForAction();
 
-    if (!["ADMIN", "EMPLOYEE", "TEAM_LEAD"].includes(user.userType) && !isRoleScopedManager(user)) {
-      return { success: false, error: "You are not allowed to submit estimates." };
+    if (
+      !["ADMIN", "EMPLOYEE", "TEAM_LEAD"].includes(user.userType) &&
+      !isRoleScopedManager(user)
+    ) {
+      return {
+        success: false,
+        error: "You are not allowed to submit estimates.",
+      };
     }
 
     const parsed = estimateSchema.safeParse({
@@ -404,6 +528,7 @@ export async function createEstimateAction(
       countryId: formData.get("countryId") || undefined,
       movieId: formData.get("movieId") || undefined,
       assetTypeId: formData.get("assetTypeId") || undefined,
+      lensTypeId: formData.get("lensTypeId") || undefined,
       assetNameId: formData.get("assetNameId") || undefined,
       newsletterId: formData.get("newsletterId") || undefined,
       languageId: formData.get("languageId") || undefined,
@@ -420,49 +545,72 @@ export async function createEstimateAction(
     }
 
     if (isFutureWorkDate(parsed.data.workDate)) {
-      return { success: false, error: "Future date is not allowed for estimates." };
+      return {
+        success: false,
+        error: "Future date is not allowed for estimates.",
+      };
     }
 
     const employeeId = parsed.data.employeeId || user.id;
 
     const canAct = await canActForEstimateEmployee(user, employeeId);
     if (!canAct) {
-      return { success: false, error: "You cannot submit estimates for the selected employee." };
+      return {
+        success: false,
+        error: "You cannot submit estimates for the selected employee.",
+      };
     }
 
     const canUseProject = await userCanUseProject(user, parsed.data.projectId);
     if (!canUseProject) {
-      return { success: false, error: "You cannot submit estimates to this project." };
+      return {
+        success: false,
+        error: "You cannot submit estimates to this project.",
+      };
     }
 
-    const fixedFullCheck = await validateFixedFullProject(parsed.data.projectId);
+    const fixedFullCheck = await validateFixedFullProject(
+      parsed.data.projectId,
+    );
     if (!fixedFullCheck.valid) {
       return { success: false, error: fixedFullCheck.error };
     }
 
-    const employeeCanUseSelectedProject = await employeeCanUseProject(parsed.data.projectId, employeeId);
+    const employeeCanUseSelectedProject = await employeeCanUseProject(
+      parsed.data.projectId,
+      employeeId,
+    );
     if (!employeeCanUseSelectedProject) {
       return {
         success: false,
-        error: "Selected employee cannot use the chosen project. Please select a project assigned to that person.",
+        error:
+          "Selected employee cannot use the chosen project. Please select a project assigned to that person.",
       };
     }
 
-    const fieldCheck = await validateClientFieldRequirements(parsed.data.projectId, {
-      clientId: parsed.data.clientId,
-      countryId: parsed.data.countryId,
-      movieId: parsed.data.movieId,
-      assetTypeId: parsed.data.assetTypeId,
-      assetNameId: parsed.data.assetNameId,
-      newsletterId: parsed.data.newsletterId,
-      languageId: parsed.data.languageId,
-      subProjectId: parsed.data.subProjectId,
-    });
+    const fieldCheck = await validateClientFieldRequirements(
+      parsed.data.projectId,
+      {
+        clientId: parsed.data.clientId,
+        countryId: parsed.data.countryId,
+        movieId: parsed.data.movieId,
+        assetTypeId: parsed.data.assetTypeId,
+        lensTypeId: parsed.data.lensTypeId,
+        assetNameId: parsed.data.assetNameId,
+        newsletterId: parsed.data.newsletterId,
+        languageId: parsed.data.languageId,
+        subProjectId: parsed.data.subProjectId,
+      },
+    );
     if (!fieldCheck.valid) {
       return { success: false, error: fieldCheck.error };
     }
 
-    const subProjectCheck = await validateSubProject(parsed.data.projectId, parsed.data.subProjectId, employeeId);
+    const subProjectCheck = await validateSubProject(
+      parsed.data.projectId,
+      parsed.data.subProjectId,
+      employeeId,
+    );
     if (!subProjectCheck.valid) {
       return { success: false, error: subProjectCheck.error };
     }
@@ -475,6 +623,7 @@ export async function createEstimateAction(
         countryId: parsed.data.countryId || null,
         movieId: parsed.data.movieId || null,
         assetTypeId: parsed.data.assetTypeId || null,
+        lensTypeId: parsed.data.lensTypeId || null,
         assetNameId: parsed.data.assetNameId || null,
         newsletterId: parsed.data.newsletterId || null,
         languageId: parsed.data.languageId || null,
@@ -520,6 +669,7 @@ export async function updateEstimateAction(
       countryId: formData.get("countryId") || undefined,
       movieId: formData.get("movieId") || undefined,
       assetTypeId: formData.get("assetTypeId") || undefined,
+      lensTypeId: formData.get("lensTypeId") || undefined,
       assetNameId: formData.get("assetNameId") || undefined,
       newsletterId: formData.get("newsletterId") || undefined,
       languageId: formData.get("languageId") || undefined,
@@ -536,7 +686,10 @@ export async function updateEstimateAction(
     }
 
     if (isFutureWorkDate(parsed.data.workDate)) {
-      return { success: false, error: "Future date is not allowed for estimates." };
+      return {
+        success: false,
+        error: "Future date is not allowed for estimates.",
+      };
     }
 
     const estimate = await db.estimate.findUnique({
@@ -548,57 +701,85 @@ export async function updateEstimateAction(
     }
 
     if (estimate.employeeId !== user.id && !canFullyModerateProject(user)) {
-      return { success: false, error: "You do not have edit access for this estimate." };
+      return {
+        success: false,
+        error: "You do not have edit access for this estimate.",
+      };
     }
 
     const employeeId = parsed.data.employeeId || estimate.employeeId;
     const canAct = await canActForEstimateEmployee(user, employeeId);
     if (!canAct && !canFullyModerateProject(user)) {
-      return { success: false, error: "You cannot use the selected employee for this estimate." };
+      return {
+        success: false,
+        error: "You cannot use the selected employee for this estimate.",
+      };
     }
 
     if (!["DRAFT", "REVISED"].includes(estimate.status)) {
-      return { success: false, error: "Only draft or revised estimates can be edited." };
+      return {
+        success: false,
+        error: "Only draft or revised estimates can be edited.",
+      };
     }
 
     const canUseProject = await userCanUseProject(user, parsed.data.projectId);
     if (!canUseProject && !canFullyModerateProject(user)) {
-      return { success: false, error: "You cannot use this project for the estimate." };
+      return {
+        success: false,
+        error: "You cannot use this project for the estimate.",
+      };
     }
 
-    const fixedFullCheck = await validateFixedFullProject(parsed.data.projectId);
+    const fixedFullCheck = await validateFixedFullProject(
+      parsed.data.projectId,
+    );
     if (!fixedFullCheck.valid) {
       return { success: false, error: fixedFullCheck.error };
     }
 
-    const employeeCanUseSelectedProject = await employeeCanUseProject(parsed.data.projectId, estimate.employeeId);
+    const employeeCanUseSelectedProject = await employeeCanUseProject(
+      parsed.data.projectId,
+      estimate.employeeId,
+    );
     if (!employeeCanUseSelectedProject) {
       return {
         success: false,
-        error: "Selected employee cannot use the chosen project. Please select a project assigned to that person.",
+        error:
+          "Selected employee cannot use the chosen project. Please select a project assigned to that person.",
       };
     }
 
-    const fieldCheck = await validateClientFieldRequirements(parsed.data.projectId, {
-      clientId: parsed.data.clientId,
-      countryId: parsed.data.countryId,
-      movieId: parsed.data.movieId,
-      assetTypeId: parsed.data.assetTypeId,
-      assetNameId: parsed.data.assetNameId,
-      newsletterId: parsed.data.newsletterId,
-      languageId: parsed.data.languageId,
-      subProjectId: parsed.data.subProjectId,
-    });
+    const fieldCheck = await validateClientFieldRequirements(
+      parsed.data.projectId,
+      {
+        clientId: parsed.data.clientId,
+        countryId: parsed.data.countryId,
+        movieId: parsed.data.movieId,
+        assetTypeId: parsed.data.assetTypeId,
+        lensTypeId: parsed.data.lensTypeId,
+        assetNameId: parsed.data.assetNameId,
+        newsletterId: parsed.data.newsletterId,
+        languageId: parsed.data.languageId,
+        subProjectId: parsed.data.subProjectId,
+      },
+    );
     if (!fieldCheck.valid) {
       return { success: false, error: fieldCheck.error };
     }
 
-    const subProjectCheck = await validateSubProject(parsed.data.projectId, parsed.data.subProjectId, employeeId);
+    const subProjectCheck = await validateSubProject(
+      parsed.data.projectId,
+      parsed.data.subProjectId,
+      employeeId,
+    );
     if (!subProjectCheck.valid) {
       return { success: false, error: subProjectCheck.error };
     }
 
-    const existingEstimate = await db.estimate.findUnique({ where: { id: estimate.id } });
+    const existingEstimate = await db.estimate.findUnique({
+      where: { id: estimate.id },
+    });
 
     const updatedEstimate = await db.estimate.update({
       where: { id: estimate.id },
@@ -609,6 +790,7 @@ export async function updateEstimateAction(
         countryId: parsed.data.countryId || null,
         movieId: parsed.data.movieId || null,
         assetTypeId: parsed.data.assetTypeId || null,
+        lensTypeId: parsed.data.lensTypeId || null,
         assetNameId: parsed.data.assetNameId || null,
         newsletterId: parsed.data.newsletterId || null,
         languageId: parsed.data.languageId || null,
@@ -650,7 +832,9 @@ export async function reviewEstimateAction(formData: FormData) {
   });
 
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message || "Invalid review payload");
+    throw new Error(
+      parsed.error.issues[0]?.message || "Invalid review payload",
+    );
   }
 
   const estimate = await db.estimate.findUnique({
@@ -665,7 +849,11 @@ export async function reviewEstimateAction(formData: FormData) {
     throw new Error("Estimate not found.");
   }
 
-  if (!canFullyModerateProject(user) && !isRoleScopedManager(user) && user.userType !== "TEAM_LEAD") {
+  if (
+    !canFullyModerateProject(user) &&
+    !isRoleScopedManager(user) &&
+    user.userType !== "TEAM_LEAD"
+  ) {
     throw new Error("You are not allowed to review estimates.");
   }
 
@@ -687,11 +875,15 @@ export async function reviewEstimateAction(formData: FormData) {
       });
 
       if (!assignment) {
-        throw new Error("You can review estimates only for assigned employees.");
+        throw new Error(
+          "You can review estimates only for assigned employees.",
+        );
       }
 
       if (assignment.employee.functionalRole !== user.functionalRole) {
-        throw new Error("You can review estimates only for employees with matching functional role.");
+        throw new Error(
+          "You can review estimates only for employees with matching functional role.",
+        );
       }
     }
   }
@@ -767,7 +959,9 @@ export async function deleteEstimateAction(formData: FormData) {
     }
 
     if (assignment.employee.functionalRole !== user.functionalRole) {
-      throw new Error("You can delete estimates only for employees with matching functional role.");
+      throw new Error(
+        "You can delete estimates only for employees with matching functional role.",
+      );
     }
   }
 

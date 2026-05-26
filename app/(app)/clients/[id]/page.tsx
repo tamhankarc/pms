@@ -8,7 +8,10 @@ import { updateClientAction } from "@/lib/actions/client-actions";
 import { db } from "@/lib/db";
 
 export default async function ClientEditPage({
- params }: { params: Promise<{ id: string }> }) {
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const currentUser = await requireUser();
   if (!canManageClients(currentUser)) redirect("/dashboard");
 
@@ -42,46 +45,67 @@ export default async function ClientEditPage({
           <h2 className="section-title">Linked records</h2>
           <div className="mt-5 grid gap-5 md:grid-cols-3">
             <div>
-              <div className="text-xs uppercase tracking-wide text-slate-500">Projects</div>
+              <div className="text-xs uppercase tracking-wide text-slate-500">
+                Projects
+              </div>
               <div className="mt-2 space-y-2">
                 {client.projects.length > 0 ? (
                   client.projects.map((project) => (
-                    <div key={project.id} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                    <div
+                      key={project.id}
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    >
                       {project.name}
                     </div>
                   ))
                 ) : (
-                  <div className="text-sm text-slate-500">No linked projects.</div>
+                  <div className="text-sm text-slate-500">
+                    No linked projects.
+                  </div>
                 )}
               </div>
             </div>
 
             <div>
-              <div className="text-xs uppercase tracking-wide text-slate-500">Movies</div>
+              <div className="text-xs uppercase tracking-wide text-slate-500">
+                Movies
+              </div>
               <div className="mt-2 space-y-2">
                 {client.movies.length > 0 ? (
                   client.movies.map((movie) => (
-                    <div key={movie.id} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                    <div
+                      key={movie.id}
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    >
                       {movie.title}
                     </div>
                   ))
                 ) : (
-                  <div className="text-sm text-slate-500">No linked movies.</div>
+                  <div className="text-sm text-slate-500">
+                    No linked movies.
+                  </div>
                 )}
               </div>
             </div>
 
             <div>
-              <div className="text-xs uppercase tracking-wide text-slate-500">Project Types</div>
+              <div className="text-xs uppercase tracking-wide text-slate-500">
+                Project Types
+              </div>
               <div className="mt-2 space-y-2">
                 {client.projectTypes.length > 0 ? (
                   client.projectTypes.map((type) => (
-                    <div key={type.id} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                    <div
+                      key={type.id}
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    >
                       {type.name} · {type.code}
                     </div>
                   ))
                 ) : (
-                  <div className="text-sm text-slate-500">No project types.</div>
+                  <div className="text-sm text-slate-500">
+                    No project types.
+                  </div>
                 )}
               </div>
               <Link
@@ -105,6 +129,7 @@ export default async function ClientEditPage({
             showCountriesInTimeEntries: client.showCountriesInTimeEntries,
             showMoviesInEntries: client.showMoviesInEntries,
             showAssetTypesInEntries: client.showAssetTypesInEntries,
+            showLensTypesInEntries: client.showLensTypesInEntries,
             showAssetNamesInEntries: client.showAssetNamesInEntries,
             showLanguagesInEntries: client.showLanguagesInEntries,
             showNewslettersInEntries: client.showNewslettersInEntries,
@@ -112,7 +137,9 @@ export default async function ClientEditPage({
             hourlyCost: Number(client.hourlyCost ?? 0).toFixed(2),
             sonyCoppaSiteCost: Number(client.sonyCoppaSiteCost ?? 0).toFixed(2),
             sonyUsEpkSiteCost: Number(client.sonyUsEpkSiteCost ?? 0).toFixed(2),
-            sonyGlobalEpkSiteCost: Number(client.sonyGlobalEpkSiteCost ?? 0).toFixed(2),
+            sonyGlobalEpkSiteCost: Number(
+              client.sonyGlobalEpkSiteCost ?? 0,
+            ).toFixed(2),
           }}
         />
       </div>

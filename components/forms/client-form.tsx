@@ -7,7 +7,10 @@ import type { ClientFormState } from "@/lib/actions/client-actions";
 
 type ClientFormProps = {
   mode: "create" | "edit";
-  action: (state: ClientFormState, formData: FormData) => Promise<ClientFormState>;
+  action: (
+    state: ClientFormState,
+    formData: FormData,
+  ) => Promise<ClientFormState>;
   canEditCosts?: boolean;
   initialValues?: {
     id?: string;
@@ -16,6 +19,7 @@ type ClientFormProps = {
     showCountriesInTimeEntries?: boolean;
     showMoviesInEntries?: boolean;
     showAssetTypesInEntries?: boolean;
+    showLensTypesInEntries?: boolean;
     showAssetNamesInEntries?: boolean;
     showLanguagesInEntries?: boolean;
     showNewslettersInEntries?: boolean;
@@ -31,10 +35,17 @@ const initialState: ClientFormState = {};
 const SONY_PICTURES_CLIENT_ID = "cmn66d3q40002l104n6wvefvl";
 const SONY_PICTURES_CLIENT_NAME = "sony pictures entertainment";
 
-export function ClientForm({ mode, action, initialValues, canEditCosts = false }: ClientFormProps) {
+export function ClientForm({
+  mode,
+  action,
+  initialValues,
+  canEditCosts = false,
+}: ClientFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [clientName, setClientName] = useState(initialValues?.name ?? "");
-  const isSonyPicturesClient = initialValues?.id === SONY_PICTURES_CLIENT_ID || clientName.trim().toLowerCase() === SONY_PICTURES_CLIENT_NAME;
+  const isSonyPicturesClient =
+    initialValues?.id === SONY_PICTURES_CLIENT_ID ||
+    clientName.trim().toLowerCase() === SONY_PICTURES_CLIENT_NAME;
 
   return (
     <form action={formAction} className="card p-6">
@@ -42,7 +53,9 @@ export function ClientForm({ mode, action, initialValues, canEditCosts = false }
         <input type="hidden" name="id" value={initialValues.id} />
       ) : null}
 
-      <h2 className="section-title">{mode === "create" ? "Create client" : "Edit client"}</h2>
+      <h2 className="section-title">
+        {mode === "create" ? "Create client" : "Edit client"}
+      </h2>
       <p className="section-subtitle">
         Fields marked <span className="text-red-600">*</span> are required.
         Client code is generated automatically.
@@ -65,33 +78,74 @@ export function ClientForm({ mode, action, initialValues, canEditCosts = false }
           <FormLabel htmlFor="name" required>
             Client name
           </FormLabel>
-          <input id="name" className="input" name="name" value={clientName} onChange={(event) => setClientName(event.target.value)} required />
+          <input
+            id="name"
+            className="input"
+            name="name"
+            value={clientName}
+            onChange={(event) => setClientName(event.target.value)}
+            required
+          />
         </div>
 
         {canEditCosts ? (
           <div>
             <FormLabel htmlFor="hourlyCost">Per hour cost (USD)</FormLabel>
             <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
-              <input id="hourlyCost" name="hourlyCost" type="number" min="0" step="0.01" className="input currency-input" defaultValue={initialValues?.hourlyCost ?? "0.00"} />
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">
+                $
+              </span>
+              <input
+                id="hourlyCost"
+                name="hourlyCost"
+                type="number"
+                min="0"
+                step="0.01"
+                className="input currency-input"
+                defaultValue={initialValues?.hourlyCost ?? "0.00"}
+              />
             </div>
           </div>
         ) : null}
 
         {canEditCosts && isSonyPicturesClient ? (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="mb-4 text-sm font-semibold text-slate-900">Sony Pictures Entertainment site charges</p>
+            <p className="mb-4 text-sm font-semibold text-slate-900">
+              Sony Pictures Entertainment site charges
+            </p>
             <div className="grid gap-4 md:grid-cols-3">
               {[
-                { id: "sonyCoppaSiteCost", label: "COPPA Site", value: initialValues?.sonyCoppaSiteCost },
-                { id: "sonyUsEpkSiteCost", label: "US EPK Site", value: initialValues?.sonyUsEpkSiteCost },
-                { id: "sonyGlobalEpkSiteCost", label: "Global EPK Site", value: initialValues?.sonyGlobalEpkSiteCost },
+                {
+                  id: "sonyCoppaSiteCost",
+                  label: "COPPA Site",
+                  value: initialValues?.sonyCoppaSiteCost,
+                },
+                {
+                  id: "sonyUsEpkSiteCost",
+                  label: "US EPK Site",
+                  value: initialValues?.sonyUsEpkSiteCost,
+                },
+                {
+                  id: "sonyGlobalEpkSiteCost",
+                  label: "Global EPK Site",
+                  value: initialValues?.sonyGlobalEpkSiteCost,
+                },
               ].map((field) => (
                 <div key={field.id}>
                   <FormLabel htmlFor={field.id}>{field.label} (USD)</FormLabel>
                   <div className="relative">
-                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
-                    <input id={field.id} name={field.id} type="number" min="0" step="0.01" className="input currency-input" defaultValue={field.value ?? "0.00"} />
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">
+                      $
+                    </span>
+                    <input
+                      id={field.id}
+                      name={field.id}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="input currency-input"
+                      defaultValue={field.value ?? "0.00"}
+                    />
                   </div>
                 </div>
               ))}
@@ -105,7 +159,8 @@ export function ClientForm({ mode, action, initialValues, canEditCosts = false }
             name="showCountriesInTimeEntries"
             defaultChecked={initialValues?.showCountriesInTimeEntries ?? false}
           />
-          Show Countries dropdown in Time Entries and Estimates and make it mandatory
+          Show Countries dropdown in Time Entries and Estimates and make it
+          mandatory
         </label>
 
         <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
@@ -114,7 +169,8 @@ export function ClientForm({ mode, action, initialValues, canEditCosts = false }
             name="showLanguagesInEntries"
             defaultChecked={initialValues?.showLanguagesInEntries ?? false}
           />
-          Show Language dropdown in Time Entries and Estimates and make it mandatory
+          Show Language dropdown in Time Entries and Estimates and make it
+          mandatory
         </label>
 
         <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
@@ -133,6 +189,15 @@ export function ClientForm({ mode, action, initialValues, canEditCosts = false }
             defaultChecked={initialValues?.showAssetTypesInEntries ?? false}
           />
           Show Asset Type dropdown in Time Entries and Estimates (optional)
+        </label>
+
+        <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            name="showLensTypesInEntries"
+            defaultChecked={initialValues?.showLensTypesInEntries ?? false}
+          />
+          Show Lens Type dropdown in Time Entries and Estimates (optional)
         </label>
 
         <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
@@ -165,19 +230,30 @@ export function ClientForm({ mode, action, initialValues, canEditCosts = false }
         {mode === "edit" && initialValues?.id ? (
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
             Need to manage project types for this client?{" "}
-            <Link href={`/clients/${initialValues.id}/project-types`} className="font-medium text-blue-600 hover:underline">
+            <Link
+              href={`/clients/${initialValues.id}/project-types`}
+              className="font-medium text-blue-600 hover:underline"
+            >
               Open Project Types
             </Link>
           </div>
         ) : null}
 
         <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-          <input type="checkbox" name="isActive" defaultChecked={initialValues?.isActive ?? true} />
+          <input
+            type="checkbox"
+            name="isActive"
+            defaultChecked={initialValues?.isActive ?? true}
+          />
           Active client
         </label>
 
         <button className="btn-primary w-full" disabled={pending}>
-          {pending ? "Saving..." : mode === "create" ? "Create client" : "Save changes"}
+          {pending
+            ? "Saving..."
+            : mode === "create"
+              ? "Create client"
+              : "Save changes"}
         </button>
       </div>
     </form>

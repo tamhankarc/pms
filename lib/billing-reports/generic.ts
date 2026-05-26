@@ -1,5 +1,12 @@
 import { db } from "@/lib/db";
-import { formatUsd, getDefaultMonthRange, getExportTimestamp, normalizeDateInput, sanitizeFileSegment } from "@/lib/billing-reports/amazon";
+import {
+  formatUsd,
+  getDefaultMonthRange,
+  getExportTimestamp,
+  normalizeDateInput,
+  sanitizeFileSegment,
+} from "@/lib/billing-reports/amazon";
+import { getLensBillingAdjustments } from "@/lib/billing-reports/lens";
 
 export type GenericBillingReportFilters = {
   fromDate: string;
@@ -22,10 +29,16 @@ export type GenericBillingReportRow = {
   cost: number;
   developerCost?: number;
   countryList?: string;
+  lensDetails?: string[];
 };
 
 export type GenericBillingReportBlock = {
-  key: "hourly" | "fixedFull" | "fixedMonthly" | "fixedPerCountry" | "fixedCost";
+  key:
+    | "hourly"
+    | "fixedFull"
+    | "fixedMonthly"
+    | "fixedPerCountry"
+    | "fixedCost";
   title: string;
   description: string;
   rows: GenericBillingReportRow[];
@@ -72,32 +85,55 @@ export type GenericBillingReportData = {
   reportTitle: string;
 };
 
-function getParamValue(searchParams: URLSearchParams | Record<string, string | string[] | undefined>, key: string) {
-  if (searchParams instanceof URLSearchParams) return searchParams.get(key) ?? undefined;
+function getParamValue(
+  searchParams: URLSearchParams | Record<string, string | string[] | undefined>,
+  key: string,
+) {
+  if (searchParams instanceof URLSearchParams)
+    return searchParams.get(key) ?? undefined;
   const value = searchParams[key];
   return Array.isArray(value) ? value[0] : value;
 }
 
-export function buildGenericBillingReportFilters(searchParams: URLSearchParams | Record<string, string | string[] | undefined>) {
+export function buildGenericBillingReportFilters(
+  searchParams: URLSearchParams | Record<string, string | string[] | undefined>,
+) {
   const defaults = getDefaultMonthRange();
   return {
-    fromDate: normalizeDateInput(getParamValue(searchParams, "fromDate"), defaults.fromDate),
-    toDate: normalizeDateInput(getParamValue(searchParams, "toDate"), defaults.toDate),
+    fromDate: normalizeDateInput(
+      getParamValue(searchParams, "fromDate"),
+      defaults.fromDate,
+    ),
+    toDate: normalizeDateInput(
+      getParamValue(searchParams, "toDate"),
+      defaults.toDate,
+    ),
     movieId: getParamValue(searchParams, "movieId") || "",
   } satisfies GenericBillingReportFilters;
 }
 
-export function buildGenericBillingSummaryHistoryFilters(searchParams: URLSearchParams | Record<string, string | string[] | undefined>) {
+export function buildGenericBillingSummaryHistoryFilters(
+  searchParams: URLSearchParams | Record<string, string | string[] | undefined>,
+) {
   const currentYear = String(new Date().getFullYear());
   const suppliedYear = getParamValue(searchParams, "year") || currentYear;
-  return { year: /^\d{4}$/.test(suppliedYear) ? suppliedYear : currentYear } satisfies GenericBillingSummaryHistoryFilters;
+  return {
+    year: /^\d{4}$/.test(suppliedYear) ? suppliedYear : currentYear,
+  } satisfies GenericBillingSummaryHistoryFilters;
 }
 
 function formatMovieStatus(status: string) {
-  return status.replaceAll("_", " ").replace("COMPLETED BILLED", "COMPLETED & BILLED");
+  return status
+    .replaceAll("_", " ")
+    .replace("COMPLETED BILLED", "COMPLETED & BILLED");
 }
 
-function formatBillingRegions(movie: { billingDomestic: boolean; billingIntl: boolean; billingOther: boolean; billingSocial: boolean }) {
+function formatBillingRegions(movie: {
+  billingDomestic: boolean;
+  billingIntl: boolean;
+  billingOther: boolean;
+  billingSocial: boolean;
+}) {
   const regions: string[] = [];
   if (movie.billingDomestic) regions.push("Domestic");
   if (movie.billingIntl) regions.push("INTL");
@@ -108,7 +144,11 @@ function formatBillingRegions(movie: { billingDomestic: boolean; billingIntl: bo
 
 function formatBillingDate(value: Date | null) {
   if (!value) return "-";
-  return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(value);
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(value);
 }
 
 export async function getGenericBillingSummaryHistoryData({
@@ -118,34 +158,60 @@ export async function getGenericBillingSummaryHistoryData({
   clientId: string;
   filters: GenericBillingSummaryHistoryFilters;
 }): Promise<GenericBillingSummaryHistoryData | null> {
-  const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } });
+  const client = await db.client.findUnique({
+    where: { id: clientId },
+    select: { id: true, name: true },
+  });
   if (!client) return null;
   const year = Number(filters.year);
   const yearStart = new Date(year, 0, 1);
   const yearEnd = new Date(year + 1, 0, 1);
   const select = {
-    id: true, title: true, status: true, billingDate: true, billingDomestic: true, billingIntl: true, billingOther: true, billingSocial: true,
+    id: true,
+    title: true,
+    status: true,
+    billingDate: true,
+    billingDomestic: true,
+    billingIntl: true,
+    billingOther: true,
+    billingSocial: true,
   } as const;
   const [summaryMovies, historyMovies] = await Promise.all([
     db.movie.findMany({
-      where: { clientId, isActive: true, status: { in: ["WORKING", "COMPLETED"] } },
+      where: {
+        clientId,
+        isActive: true,
+        status: { in: ["WORKING", "COMPLETED"] },
+      },
       select,
       orderBy: { title: "asc" },
     }),
     db.movie.findMany({
-      where: { clientId, isActive: true, status: "COMPLETED_BILLED", billingDate: { gte: yearStart, lt: yearEnd } },
+      where: {
+        clientId,
+        isActive: true,
+        status: "COMPLETED_BILLED",
+        billingDate: { gte: yearStart, lt: yearEnd },
+      },
       select,
       orderBy: [{ billingDate: "desc" }, { title: "asc" }],
     }),
   ]);
-  const mapRow = (movie: (typeof summaryMovies)[number]): GenericBillingSummaryHistoryRow => ({
+  const mapRow = (
+    movie: (typeof summaryMovies)[number],
+  ): GenericBillingSummaryHistoryRow => ({
     movieId: movie.id,
     title: movie.title,
     status: formatMovieStatus(movie.status),
     billingRegions: formatBillingRegions(movie),
     billingDate: formatBillingDate(movie.billingDate),
   });
-  return { client, filters, summaryRows: summaryMovies.map(mapRow), historyRows: historyMovies.map(mapRow) };
+  return {
+    client,
+    filters,
+    summaryRows: summaryMovies.map(mapRow),
+    historyRows: historyMovies.map(mapRow),
+  };
 }
 
 function formatProjectStatus(status: string) {
@@ -164,25 +230,49 @@ function sortRows(rows: GenericBillingReportRow[]) {
   return [...rows].sort((a, b) => a.projectName.localeCompare(b.projectName));
 }
 
-function getDeveloperCost(project: { developerCount: number; perDeveloperCost: unknown }, includeDeveloperCosts: boolean) {
-  if (!includeDeveloperCosts || Number(project.developerCount || 0) <= 0) return undefined;
-  return Number(project.developerCount || 0) * Number(project.perDeveloperCost ?? 0);
+function getDeveloperCost(
+  project: { developerCount: number; perDeveloperCost: unknown },
+  includeDeveloperCosts: boolean,
+) {
+  if (!includeDeveloperCosts || Number(project.developerCount || 0) <= 0)
+    return undefined;
+  return (
+    Number(project.developerCount || 0) * Number(project.perDeveloperCost ?? 0)
+  );
 }
 
-function addDeveloperCost(baseCost: number, project: { developerCount: number; perDeveloperCost: unknown }, includeDeveloperCosts: boolean) {
+function addDeveloperCost(
+  baseCost: number,
+  project: { developerCount: number; perDeveloperCost: unknown },
+  includeDeveloperCosts: boolean,
+) {
   const developerCost = getDeveloperCost(project, includeDeveloperCosts);
-  return { projectCost: baseCost, cost: baseCost + Number(developerCost ?? 0), developerCost };
+  return {
+    projectCost: baseCost,
+    cost: baseCost + Number(developerCost ?? 0),
+    developerCost,
+  };
 }
 
-function buildContactPersonLabel(contactPersons: { name: string; email: string }[]) {
+function buildContactPersonLabel(
+  contactPersons: { name: string; email: string }[],
+) {
   if (!contactPersons.length) return "-";
-  return contactPersons.map((person) => `${person.name}${person.email ? ` (${person.email})` : ""}`).join(", ");
+  return contactPersons
+    .map(
+      (person) => `${person.name}${person.email ? ` (${person.email})` : ""}`,
+    )
+    .join(", ");
 }
 
-function buildBlock(block: Omit<GenericBillingReportBlock, "showDeveloperCost">): GenericBillingReportBlock {
+function buildBlock(
+  block: Omit<GenericBillingReportBlock, "showDeveloperCost">,
+): GenericBillingReportBlock {
   return {
     ...block,
-    showDeveloperCost: block.rows.some((row) => row.developerCost !== undefined),
+    showDeveloperCost: block.rows.some(
+      (row) => row.developerCost !== undefined,
+    ),
   };
 }
 
@@ -249,10 +339,16 @@ export async function getGenericBillingReportData({
   const requestedMovieId = filters.movieId;
   const selectedMovieId = movieSpecific
     ? movieOptions.length > 1
-      ? requestedMovieId === "all" || movieOptions.some((movie) => movie.id === requestedMovieId) ? requestedMovieId || "all" : "all"
-      : movieOptions[0]?.id ?? ""
+      ? requestedMovieId === "all" ||
+        movieOptions.some((movie) => movie.id === requestedMovieId)
+        ? requestedMovieId || "all"
+        : "all"
+      : (movieOptions[0]?.id ?? "")
     : "";
-  const selectedMovie = selectedMovieId && selectedMovieId !== "all" ? movieOptions.find((movie) => movie.id === selectedMovieId) ?? null : null;
+  const selectedMovie =
+    selectedMovieId && selectedMovieId !== "all"
+      ? (movieOptions.find((movie) => movie.id === selectedMovieId) ?? null)
+      : null;
 
   if (movieSpecific && movieOptions.length > 1 && selectedMovieId === "all") {
     const titleBlocks: GenericBillingReportTitleBlock[] = [];
@@ -267,7 +363,8 @@ export async function getGenericBillingReportData({
         movie,
         blocks: titleData.blocks,
         totalCost: titleData.blocks.reduce(
-          (sum, block) => sum + block.rows.reduce((blockSum, row) => blockSum + row.cost, 0),
+          (sum, block) =>
+            sum + block.rows.reduce((blockSum, row) => blockSum + row.cost, 0),
           0,
         ),
       });
@@ -280,14 +377,19 @@ export async function getGenericBillingReportData({
         hourlyCost: Number(client.hourlyCost ?? 0),
         showCountriesInTimeEntries: client.showCountriesInTimeEntries,
       },
-      filters: { ...filters, movieId: "all", fromDate: openDateRange ? filters.fromDate : filters.fromDate, toDate: openDateRange ? filters.toDate : filters.toDate },
+      filters: {
+        ...filters,
+        movieId: "all",
+        fromDate: openDateRange ? filters.fromDate : filters.fromDate,
+        toDate: openDateRange ? filters.toDate : filters.toDate,
+      },
       movieSpecific,
       includeDeveloperCosts,
       movieOptions,
       selectedMovie: null,
       blocks: [],
       titleBlocks,
-      reportTitle: client.name + " Billing"
+      reportTitle: client.name + " Billing",
     };
   }
 
@@ -306,17 +408,18 @@ export async function getGenericBillingReportData({
       selectedMovie: null,
       blocks: [],
       titleBlocks: [],
-      reportTitle: client.name + " Billing"
+      reportTitle: client.name + " Billing",
     };
   }
 
-  const movieContactPersons = movieSpecific && selectedMovieId && selectedMovieId !== "all"
-    ? await db.contactPerson.findMany({
-        where: { clientId, movieId: selectedMovieId },
-        orderBy: { name: "asc" },
-        select: { name: true, email: true },
-      })
-    : [];
+  const movieContactPersons =
+    movieSpecific && selectedMovieId && selectedMovieId !== "all"
+      ? await db.contactPerson.findMany({
+          where: { clientId, movieId: selectedMovieId },
+          orderBy: { name: "asc" },
+          select: { name: true, email: true },
+        })
+      : [];
   const movieContactPersonLabel = buildContactPersonLabel(movieContactPersons);
 
   const projectIdsWithSelectedMovie = new Set<string>();
@@ -326,19 +429,56 @@ export async function getGenericBillingReportData({
       select: { projectId: true },
       distinct: ["projectId"],
     });
-    movieEntries.forEach((entry) => projectIdsWithSelectedMovie.add(entry.projectId));
+    movieEntries.forEach((entry) =>
+      projectIdsWithSelectedMovie.add(entry.projectId),
+    );
   }
 
   const eligibleProjects = movieSpecific
-    ? client.projects.filter((project) => projectIdsWithSelectedMovie.has(project.id))
+    ? client.projects.filter((project) =>
+        projectIdsWithSelectedMovie.has(project.id),
+      )
     : client.projects;
 
+  const eligibleProjectIds = eligibleProjects.map((project) => project.id);
+  const lensAdjustments = await getLensBillingAdjustments({
+    projectIds: eligibleProjectIds,
+    ...(movieSpecific && selectedMovieId && selectedMovieId !== "all"
+      ? { movieId: selectedMovieId }
+      : {}),
+  });
   const hourlyCost = Number(client.hourlyCost ?? 0);
-  const getProjectContactPerson = (project: { contactPersons: { name: string; email: string }[] }) => {
-    if (movieSpecific && movieContactPersons.length) return movieContactPersonLabel;
+  const applyLensAdjustment = (
+    row: GenericBillingReportRow,
+    project: { id: string; name: string; billingModel: string },
+  ) => {
+    const lens = lensAdjustments.get(project.id);
+    if (!lens) return row;
+    const developerCost = Number(row.developerCost ?? 0);
+    return {
+      ...row,
+      projectName:
+        project.billingModel === "FIXED_PER_COUNTRY"
+          ? project.name
+          : `${project.name} (${lens.lensNames.join(", ")})`,
+      projectCost: lens.cost,
+      cost: lens.cost + developerCost,
+      lensDetails:
+        project.billingModel === "FIXED_PER_COUNTRY"
+          ? lens.detailLines
+          : undefined,
+    };
+  };
+  const getProjectContactPerson = (project: {
+    contactPersons: { name: string; email: string }[];
+  }) => {
+    if (movieSpecific && movieContactPersons.length)
+      return movieContactPersonLabel;
     return buildContactPersonLabel(project.contactPersons);
   };
-  const hourlyProjectIds = eligibleProjects.filter((project) => project.billingModel === "HOURLY").map((project) => project.id);
+  const hourlyProjectIds = eligibleProjects
+    .filter((project) => project.billingModel === "HOURLY")
+    .map((project) => project.id);
   const fromBoundary = filters.fromDate ? toStartOfDay(filters.fromDate) : null;
   const toBoundary = filters.toDate ? toEndOfDay(filters.toDate) : null;
 
@@ -348,8 +488,17 @@ export async function getGenericBillingReportData({
       by: ["projectId"],
       where: {
         projectId: { in: hourlyProjectIds },
-        ...(fromBoundary || toBoundary ? { workDate: { ...(fromBoundary ? { gte: fromBoundary } : {}), ...(toBoundary ? { lte: toBoundary } : {}) } } : {}),
-        ...(movieSpecific && selectedMovieId && selectedMovieId !== "all" ? { movieId: selectedMovieId } : {}),
+        ...(fromBoundary || toBoundary
+          ? {
+              workDate: {
+                ...(fromBoundary ? { gte: fromBoundary } : {}),
+                ...(toBoundary ? { lte: toBoundary } : {}),
+              },
+            }
+          : {}),
+        ...(movieSpecific && selectedMovieId && selectedMovieId !== "all"
+          ? { movieId: selectedMovieId }
+          : {}),
       },
       _sum: { minutesSpent: true },
     });
@@ -359,68 +508,114 @@ export async function getGenericBillingReportData({
     }
   }
 
-  const hourlyRows = sortRows(eligibleProjects
-    .filter((project) => project.billingModel === "HOURLY")
-    .map((project) => {
-      const minutes = hourlyMinutesByProject.get(project.id) ?? 0;
-      const developer = addDeveloperCost((minutes / 60) * hourlyCost, project, includeDeveloperCosts);
-      return {
-        projectId: project.id,
-        projectName: project.name,
-        contactPerson: getProjectContactPerson(project),
-        status: formatProjectStatus(project.status),
-        ...developer,
-      } satisfies GenericBillingReportRow;
-    }));
+  const hourlyRows = sortRows(
+    eligibleProjects
+      .filter((project) => project.billingModel === "HOURLY")
+      .map((project) => {
+        const minutes = hourlyMinutesByProject.get(project.id) ?? 0;
+        const developer = addDeveloperCost(
+          (minutes / 60) * hourlyCost,
+          project,
+          includeDeveloperCosts,
+        );
+        return applyLensAdjustment(
+          {
+            projectId: project.id,
+            projectName: project.name,
+            contactPerson: getProjectContactPerson(project),
+            status: formatProjectStatus(project.status),
+            ...developer,
+          } satisfies GenericBillingReportRow,
+          project,
+        );
+      }),
+  );
 
-  const fixedFullRows = sortRows(eligibleProjects
-    .filter((project) => project.billingModel === "FIXED_FULL" && project.status === "COMPLETED")
-    .map((project) => {
-      const developer = addDeveloperCost((Number(project.fixedContractHours ?? 0) * hourlyCost) + Number(project.additionalCharges ?? 0) - Number(project.partialBillingCost ?? 0), project, includeDeveloperCosts);
-      return {
-        projectId: project.id,
-        projectName: project.name,
-        contactPerson: getProjectContactPerson(project),
-        status: formatProjectStatus(project.status),
-        ...developer,
-      } satisfies GenericBillingReportRow;
-    }));
+  const fixedFullRows = sortRows(
+    eligibleProjects
+      .filter(
+        (project) =>
+          project.billingModel === "FIXED_FULL" &&
+          project.status === "COMPLETED",
+      )
+      .map((project) => {
+        const developer = addDeveloperCost(
+          Number(project.fixedContractHours ?? 0) * hourlyCost +
+            Number(project.additionalCharges ?? 0) -
+            Number(project.partialBillingCost ?? 0),
+          project,
+          includeDeveloperCosts,
+        );
+        return applyLensAdjustment(
+          {
+            projectId: project.id,
+            projectName: project.name,
+            contactPerson: getProjectContactPerson(project),
+            status: formatProjectStatus(project.status),
+            ...developer,
+          } satisfies GenericBillingReportRow,
+          project,
+        );
+      }),
+  );
 
-  const fixedMonthlyRows = sortRows(eligibleProjects
-    .filter((project) => project.billingModel === "FIXED_MONTHLY")
-    .map((project) => {
-      const developer = addDeveloperCost(Number(project.fixedMonthlyHours ?? 0) * hourlyCost, project, includeDeveloperCosts);
-      return {
-        projectId: project.id,
-        projectName: project.name,
-        contactPerson: getProjectContactPerson(project),
-        status: formatProjectStatus(project.status),
-        ...developer,
-      } satisfies GenericBillingReportRow;
-    }));
+  const fixedMonthlyRows = sortRows(
+    eligibleProjects
+      .filter((project) => project.billingModel === "FIXED_MONTHLY")
+      .map((project) => {
+        const developer = addDeveloperCost(
+          Number(project.fixedMonthlyHours ?? 0) * hourlyCost,
+          project,
+          includeDeveloperCosts,
+        );
+        return applyLensAdjustment(
+          {
+            projectId: project.id,
+            projectName: project.name,
+            contactPerson: getProjectContactPerson(project),
+            status: formatProjectStatus(project.status),
+            ...developer,
+          } satisfies GenericBillingReportRow,
+          project,
+        );
+      }),
+  );
 
-  const fixedCostRows = sortRows(eligibleProjects
-    .filter((project) => project.billingModel === "FIXED_COST")
-    .map((project) => {
-      const developer = addDeveloperCost(Number(project.projectCost ?? 0), project, includeDeveloperCosts);
-      return {
-        projectId: project.id,
-        projectName: project.name,
-        contactPerson: getProjectContactPerson(project),
-        status: formatProjectStatus(project.status),
-        ...developer,
-      } satisfies GenericBillingReportRow;
-    }));
+  const fixedCostRows = sortRows(
+    eligibleProjects
+      .filter((project) => project.billingModel === "FIXED_COST")
+      .map((project) => {
+        const developer = addDeveloperCost(
+          Number(project.projectCost ?? 0),
+          project,
+          includeDeveloperCosts,
+        );
+        return applyLensAdjustment(
+          {
+            projectId: project.id,
+            projectName: project.name,
+            contactPerson: getProjectContactPerson(project),
+            status: formatProjectStatus(project.status),
+            ...developer,
+          } satisfies GenericBillingReportRow,
+          project,
+        );
+      }),
+  );
 
   let fixedPerCountryRows: GenericBillingReportRow[] = [];
   if (client.showCountriesInTimeEntries) {
-    const fixedPerCountryProjectIds = eligibleProjects.filter((project) => project.billingModel === "FIXED_PER_COUNTRY").map((project) => project.id);
+    const fixedPerCountryProjectIds = eligibleProjects
+      .filter((project) => project.billingModel === "FIXED_PER_COUNTRY")
+      .map((project) => project.id);
     const countryEntries = fixedPerCountryProjectIds.length
       ? await db.timeEntry.findMany({
           where: {
             projectId: { in: fixedPerCountryProjectIds },
             countryId: { not: null },
-            ...(movieSpecific && selectedMovieId && selectedMovieId !== "all" ? { movieId: selectedMovieId } : {}),
+            ...(movieSpecific && selectedMovieId && selectedMovieId !== "all"
+              ? { movieId: selectedMovieId }
+              : {}),
           },
           select: {
             projectId: true,
@@ -432,47 +627,67 @@ export async function getGenericBillingReportData({
     const countriesByProject = new Map<string, Map<string, string>>();
     for (const entry of countryEntries) {
       if (!entry.country) continue;
-      const projectCountries = countriesByProject.get(entry.projectId) ?? new Map<string, string>();
-      projectCountries.set(entry.country.id, entry.country.isoCode ? `${entry.country.name} (${entry.country.isoCode})` : entry.country.name);
+      const projectCountries =
+        countriesByProject.get(entry.projectId) ?? new Map<string, string>();
+      projectCountries.set(
+        entry.country.id,
+        entry.country.isoCode
+          ? `${entry.country.name} (${entry.country.isoCode})`
+          : entry.country.name,
+      );
       countriesByProject.set(entry.projectId, projectCountries);
     }
 
-    fixedPerCountryRows = sortRows(eligibleProjects
-      .filter((project) => project.billingModel === "FIXED_PER_COUNTRY")
-      .map((project) => {
-        const countries = Array.from(countriesByProject.get(project.id)?.values() ?? []).sort((a, b) => a.localeCompare(b));
-        const developer = addDeveloperCost(countries.length * Number(project.perCountryCharges ?? 0), project, includeDeveloperCosts);
-        return {
-          projectId: project.id,
-          projectName: project.name,
-          contactPerson: getProjectContactPerson(project),
-          status: formatProjectStatus(project.status),
-          countryList: countries.join(", "),
-          ...developer,
-        } satisfies GenericBillingReportRow;
-      })
-      .filter((row) => Boolean(row.countryList)));
+    fixedPerCountryRows = sortRows(
+      eligibleProjects
+        .filter((project) => project.billingModel === "FIXED_PER_COUNTRY")
+        .map((project) => {
+          const countries = Array.from(
+            countriesByProject.get(project.id)?.values() ?? [],
+          ).sort((a, b) => a.localeCompare(b));
+          const developer = addDeveloperCost(
+            countries.length * Number(project.perCountryCharges ?? 0),
+            project,
+            includeDeveloperCosts,
+          );
+          return applyLensAdjustment(
+            {
+              projectId: project.id,
+              projectName: project.name,
+              contactPerson: getProjectContactPerson(project),
+              status: formatProjectStatus(project.status),
+              countryList: countries.join(", "),
+              ...developer,
+            } satisfies GenericBillingReportRow,
+            project,
+          );
+        })
+        .filter((row) => Boolean(row.countryList)),
+    );
   }
 
   const possibleBlocks: GenericBillingReportBlock[] = [
     buildBlock({
       key: "hourly",
       title: "Hourly",
-      description: filters.fromDate || filters.toDate
-        ? `Costs are calculated from time entries between ${filters.fromDate || "Start"} and ${filters.toDate || "End"}.`
-        : "Costs are calculated from all available time entries.",
+      description:
+        filters.fromDate || filters.toDate
+          ? `Costs are calculated from time entries between ${filters.fromDate || "Start"} and ${filters.toDate || "End"}.`
+          : "Costs are calculated from all available time entries.",
       rows: hourlyRows,
     }),
     buildBlock({
       key: "fixedFull",
       title: "Fixed - Full Project",
-      description: "Only completed Fixed - Full Project records are shown here.",
+      description:
+        "Only completed Fixed - Full Project records are shown here.",
       rows: fixedFullRows,
     }),
     buildBlock({
       key: "fixedMonthly",
       title: "Fixed - Monthly",
-      description: "Costs are calculated from fixed monthly hours and the client hourly cost.",
+      description:
+        "Costs are calculated from fixed monthly hours and the client hourly cost.",
       rows: fixedMonthlyRows,
     }),
     buildBlock({
@@ -481,12 +696,17 @@ export async function getGenericBillingReportData({
       description: "Costs are calculated from the fixed project cost.",
       rows: fixedCostRows,
     }),
-    ...(client.showCountriesInTimeEntries ? [buildBlock({
-      key: "fixedPerCountry" as const,
-      title: "Fixed Per Country",
-      description: "Costs are calculated from distinct countries used in time entries.",
-      rows: fixedPerCountryRows,
-    })] : []),
+    ...(client.showCountriesInTimeEntries
+      ? [
+          buildBlock({
+            key: "fixedPerCountry" as const,
+            title: "Fixed Per Country",
+            description:
+              "Costs are calculated from distinct countries used in time entries.",
+            rows: fixedPerCountryRows,
+          }),
+        ]
+      : []),
   ];
 
   return {
@@ -503,12 +723,17 @@ export async function getGenericBillingReportData({
     selectedMovie,
     blocks: possibleBlocks.filter((block) => block.rows.length > 0),
     titleBlocks: [],
-    reportTitle: client.name + " Billing"
+    reportTitle: client.name + " Billing",
   };
 }
 
-export function getGenericBillingReportFileName(data: GenericBillingReportData, extension: "xls" | "pdf") {
-  const moviePart = data.selectedMovie ? `_${sanitizeFileSegment(data.selectedMovie.title)}` : "";
+export function getGenericBillingReportFileName(
+  data: GenericBillingReportData,
+  extension: "xls" | "pdf",
+) {
+  const moviePart = data.selectedMovie
+    ? `_${sanitizeFileSegment(data.selectedMovie.title)}`
+    : "";
   return `${sanitizeFileSegment(data.client.name)}${moviePart}_Billing_Report_${getExportTimestamp()}.${extension}`;
 }
 

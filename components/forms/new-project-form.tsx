@@ -1,7 +1,10 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
-import { createProjectAction, type ProjectFormState } from "@/lib/actions/project-actions";
+import {
+  createProjectAction,
+  type ProjectFormState,
+} from "@/lib/actions/project-actions";
 import { FormLabel } from "@/components/ui/form-label";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
@@ -12,6 +15,7 @@ type Client = {
   showCountriesInTimeEntries: boolean;
   showMoviesInEntries: boolean;
   showAssetTypesInEntries: boolean;
+  showLensTypesInEntries: boolean;
   showAssetNamesInEntries: boolean;
   showNewslettersInEntries: boolean;
 };
@@ -27,7 +31,12 @@ type FilmikResourceType = {
   name: string;
 };
 
-type BillingModel = "HOURLY" | "FIXED_FULL" | "FIXED_MONTHLY" | "FIXED_PER_COUNTRY" | "FIXED_COST";
+type BillingModel =
+  | "HOURLY"
+  | "FIXED_FULL"
+  | "FIXED_MONTHLY"
+  | "FIXED_PER_COUNTRY"
+  | "FIXED_COST";
 type ProjectStatus = "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "ARCHIVED";
 
 const FILMIK_CLIENT_ID = "cmne6ed2o0000jo04t3363pqz";
@@ -53,11 +62,18 @@ export function NewProjectForm({
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(false);
   const [hideMoviesInEntries, setHideMoviesInEntries] = useState(false);
   const [hideAssetTypesInEntries, setHideAssetTypesInEntries] = useState(false);
+  const [hideLensTypesInEntries, setHideLensTypesInEntries] = useState(false);
   const [hideAssetNamesInEntries, setHideAssetNamesInEntries] = useState(false);
-  const [hideNewslettersInEntries, setHideNewslettersInEntries] = useState(false);
+  const [hideNewslettersInEntries, setHideNewslettersInEntries] =
+    useState(false);
   const [addToBilling, setAddToBilling] = useState(false);
-  const [monthlyAdditionalRows, setMonthlyAdditionalRows] = useState([{ month: new Date().toISOString().slice(0, 7), hours: "" }]);
-  const [state, formAction, pending] = useActionState(createProjectAction, initialState);
+  const [monthlyAdditionalRows, setMonthlyAdditionalRows] = useState([
+    { month: new Date().toISOString().slice(0, 7), hours: "" },
+  ]);
+  const [state, formAction, pending] = useActionState(
+    createProjectAction,
+    initialState,
+  );
 
   const selectedClient = clients.find((client) => client.id === clientId);
   const isFilmikClient = clientId === FILMIK_CLIENT_ID;
@@ -75,12 +91,27 @@ export function NewProjectForm({
       <input type="hidden" name="projectTypeId" value={projectTypeId} />
       <input type="hidden" name="billingModel" value={billingModel} />
       <input type="hidden" name="status" value={status} />
-      {hideCountriesInEntries ? <input type="hidden" name="hideCountriesInEntries" value="on" /> : null}
-      {hideMoviesInEntries ? <input type="hidden" name="hideMoviesInEntries" value="on" /> : null}
-      {hideAssetTypesInEntries ? <input type="hidden" name="hideAssetTypesInEntries" value="on" /> : null}
-      {hideAssetNamesInEntries ? <input type="hidden" name="hideAssetNamesInEntries" value="on" /> : null}
-      {hideNewslettersInEntries ? <input type="hidden" name="hideNewslettersInEntries" value="on" /> : null}
-      {addToBilling ? <input type="hidden" name="addToBilling" value="on" /> : null}
+      {hideCountriesInEntries ? (
+        <input type="hidden" name="hideCountriesInEntries" value="on" />
+      ) : null}
+      {hideMoviesInEntries ? (
+        <input type="hidden" name="hideMoviesInEntries" value="on" />
+      ) : null}
+      {hideAssetTypesInEntries ? (
+        <input type="hidden" name="hideAssetTypesInEntries" value="on" />
+      ) : null}
+      {hideLensTypesInEntries ? (
+        <input type="hidden" name="hideLensTypesInEntries" value="on" />
+      ) : null}
+      {hideAssetNamesInEntries ? (
+        <input type="hidden" name="hideAssetNamesInEntries" value="on" />
+      ) : null}
+      {hideNewslettersInEntries ? (
+        <input type="hidden" name="hideNewslettersInEntries" value="on" />
+      ) : null}
+      {addToBilling ? (
+        <input type="hidden" name="addToBilling" value="on" />
+      ) : null}
 
       <h2 className="section-title">Create project</h2>
       <p className="section-subtitle">
@@ -113,10 +144,14 @@ export function NewProjectForm({
               setHideCountriesInEntries(false);
               setHideMoviesInEntries(false);
               setHideAssetTypesInEntries(false);
+              setHideLensTypesInEntries(false);
               setHideAssetNamesInEntries(false);
               setHideNewslettersInEntries(false);
             }}
-            options={clients.map((client) => ({ value: client.id, label: client.name }))}
+            options={clients.map((client) => ({
+              value: client.id,
+              label: client.name,
+            }))}
             placeholder="Select client"
             searchPlaceholder="Search clients..."
             emptyLabel="No client found."
@@ -133,7 +168,10 @@ export function NewProjectForm({
               id="projectTypeId"
               value={projectTypeId}
               onValueChange={setProjectTypeId}
-              options={filteredProjectTypes.map((type) => ({ value: type.id, label: type.name }))}
+              options={filteredProjectTypes.map((type) => ({
+                value: type.id,
+                label: type.name,
+              }))}
               placeholder="Select project type"
               searchPlaceholder="Search project types..."
               emptyLabel="No project type found."
@@ -198,12 +236,13 @@ export function NewProjectForm({
             <input
               type="checkbox"
               checked={hideCountriesInEntries}
-              onChange={(event) => setHideCountriesInEntries(event.target.checked)}
+              onChange={(event) =>
+                setHideCountriesInEntries(event.target.checked)
+              }
             />
             Hide country dropdown in Time Entries and Estimates for this project
           </label>
         ) : null}
-
 
         {selectedClient?.showMoviesInEntries ? (
           <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
@@ -221,9 +260,26 @@ export function NewProjectForm({
             <input
               type="checkbox"
               checked={hideAssetTypesInEntries}
-              onChange={(event) => setHideAssetTypesInEntries(event.target.checked)}
+              onChange={(event) =>
+                setHideAssetTypesInEntries(event.target.checked)
+              }
             />
-            Hide asset type dropdown in Time Entries and Estimates for this project
+            Hide asset type dropdown in Time Entries and Estimates for this
+            project
+          </label>
+        ) : null}
+
+        {selectedClient?.showLensTypesInEntries ? (
+          <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={hideLensTypesInEntries}
+              onChange={(event) =>
+                setHideLensTypesInEntries(event.target.checked)
+              }
+            />
+            Hide Lens Type dropdown in Time Entries and Estimates for this
+            project
           </label>
         ) : null}
 
@@ -232,105 +288,202 @@ export function NewProjectForm({
             <input
               type="checkbox"
               checked={hideAssetNamesInEntries}
-              onChange={(event) => setHideAssetNamesInEntries(event.target.checked)}
+              onChange={(event) =>
+                setHideAssetNamesInEntries(event.target.checked)
+              }
             />
-            Hide asset name dropdown in Time Entries and Estimates for this project
+            Hide asset name dropdown in Time Entries and Estimates for this
+            project
           </label>
         ) : null}
-
 
         {selectedClient?.showNewslettersInEntries ? (
           <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
             <input
               type="checkbox"
               checked={hideNewslettersInEntries}
-              onChange={(event) => setHideNewslettersInEntries(event.target.checked)}
+              onChange={(event) =>
+                setHideNewslettersInEntries(event.target.checked)
+              }
             />
-            Hide newsletter dropdown in Time Entries and Estimates for this project
+            Hide newsletter dropdown in Time Entries and Estimates for this
+            project
           </label>
         ) : null}
         <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-          <input type="checkbox" checked={addToBilling} onChange={(event) => setAddToBilling(event.target.checked)} />
+          <input
+            type="checkbox"
+            checked={addToBilling}
+            onChange={(event) => setAddToBilling(event.target.checked)}
+          />
           Add to Billing
         </label>
 
         {isAdmin && billingModel === "FIXED_FULL" ? (
           <div className="md:col-span-2">
-            <FormLabel htmlFor="additionalCharges">Additional Charges (USD)</FormLabel>
+            <FormLabel htmlFor="additionalCharges">
+              Additional Charges (USD)
+            </FormLabel>
             <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
-              <input id="additionalCharges" className="input currency-input" name="additionalCharges" type="number" min="0" step="0.01" defaultValue="0.00" />
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">
+                $
+              </span>
+              <input
+                id="additionalCharges"
+                className="input currency-input"
+                name="additionalCharges"
+                type="number"
+                min="0"
+                step="0.01"
+                defaultValue="0.00"
+              />
             </div>
           </div>
         ) : null}
-
-
 
         {isAdmin && billingModel === "FIXED_FULL" ? (
           <div className="md:col-span-2">
-            <FormLabel htmlFor="partialBillingCost">Partial Billing cost (USD)</FormLabel>
+            <FormLabel htmlFor="partialBillingCost">
+              Partial Billing cost (USD)
+            </FormLabel>
             <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
-              <input id="partialBillingCost" className="input currency-input" name="partialBillingCost" type="number" min="0" step="0.01" defaultValue="0.00" />
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">
+                $
+              </span>
+              <input
+                id="partialBillingCost"
+                className="input currency-input"
+                name="partialBillingCost"
+                type="number"
+                min="0"
+                step="0.01"
+                defaultValue="0.00"
+              />
             </div>
           </div>
         ) : null}
-
 
         {isAdmin && billingModel === "FIXED_COST" ? (
           <div className="md:col-span-2">
             <FormLabel htmlFor="projectCost">Project Cost (USD)</FormLabel>
             <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
-              <input id="projectCost" className="input currency-input" name="projectCost" type="number" min="0" step="0.01" defaultValue="0.00" />
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">
+                $
+              </span>
+              <input
+                id="projectCost"
+                className="input currency-input"
+                name="projectCost"
+                type="number"
+                min="0"
+                step="0.01"
+                defaultValue="0.00"
+              />
             </div>
           </div>
         ) : null}
 
-
         {isAdmin && isSonyPicturesClient ? (
           <div className="md:col-span-2">
-            <FormLabel htmlFor="projectCostOtherMovieBillingRegion">Project Cost - Other Movie Billing Region (USD)</FormLabel>
+            <FormLabel htmlFor="projectCostOtherMovieBillingRegion">
+              Project Cost - Other Movie Billing Region (USD)
+            </FormLabel>
             <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
-              <input id="projectCostOtherMovieBillingRegion" className="input currency-input" name="projectCostOtherMovieBillingRegion" type="number" min="0" step="0.01" defaultValue="0.00" />
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">
+                $
+              </span>
+              <input
+                id="projectCostOtherMovieBillingRegion"
+                className="input currency-input"
+                name="projectCostOtherMovieBillingRegion"
+                type="number"
+                min="0"
+                step="0.01"
+                defaultValue="0.00"
+              />
             </div>
           </div>
         ) : null}
         {isFilmikClient ? (
           <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <h3 className="text-sm font-semibold text-slate-900">Resources</h3>
-            <p className="mt-1 text-xs text-slate-500">Add count per Filmik resource type and the month from which that count is applicable. These entries are saved as monthly history for billing.</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Add count per Filmik resource type and the month from which that
+              count is applicable. These entries are saved as monthly history
+              for billing.
+            </p>
             {filmikResourceTypes.length ? (
               <div className="mt-4 space-y-3">
                 {filmikResourceTypes.map((resource) => (
-                  <div key={resource.id} className="grid gap-4 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[1fr_160px_180px] md:items-end">
+                  <div
+                    key={resource.id}
+                    className="grid gap-4 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[1fr_160px_180px] md:items-end"
+                  >
                     <div>
-                      <div className="text-sm font-medium text-slate-900">{resource.name}</div>
+                      <div className="text-sm font-medium text-slate-900">
+                        {resource.name}
+                      </div>
                     </div>
                     <div>
-                      <FormLabel htmlFor={`filmikResourceCount__${resource.id}`}>Count</FormLabel>
-                      <input id={`filmikResourceCount__${resource.id}`} className="input" name={`filmikResourceCount__${resource.id}`} type="number" min="0" step="1" defaultValue="0" />
+                      <FormLabel
+                        htmlFor={`filmikResourceCount__${resource.id}`}
+                      >
+                        Count
+                      </FormLabel>
+                      <input
+                        id={`filmikResourceCount__${resource.id}`}
+                        className="input"
+                        name={`filmikResourceCount__${resource.id}`}
+                        type="number"
+                        min="0"
+                        step="1"
+                        defaultValue="0"
+                      />
                     </div>
                     <div>
-                      <FormLabel htmlFor={`filmikResourceMonth__${resource.id}`}>Applicable from</FormLabel>
-                      <input id={`filmikResourceMonth__${resource.id}`} className="input" name={`filmikResourceMonth__${resource.id}`} type="month" defaultValue={currentMonth} />
+                      <FormLabel
+                        htmlFor={`filmikResourceMonth__${resource.id}`}
+                      >
+                        Applicable from
+                      </FormLabel>
+                      <input
+                        id={`filmikResourceMonth__${resource.id}`}
+                        className="input"
+                        name={`filmikResourceMonth__${resource.id}`}
+                        type="month"
+                        defaultValue={currentMonth}
+                      />
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Create Filmik resource types from the Filmik Resources menu before assigning resource counts.</div>
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Create Filmik resource types from the Filmik Resources menu
+                before assigning resource counts.
+              </div>
             )}
           </div>
         ) : null}
 
         {isAdmin && billingModel === "FIXED_PER_COUNTRY" ? (
           <div className="md:col-span-2">
-            <FormLabel htmlFor="perCountryCharges">Per Country Charges (USD)</FormLabel>
+            <FormLabel htmlFor="perCountryCharges">
+              Per Country Charges (USD)
+            </FormLabel>
             <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">$</span>
-              <input id="perCountryCharges" className="input currency-input" name="perCountryCharges" type="number" min="0" step="0.01" defaultValue="0.00" />
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">
+                $
+              </span>
+              <input
+                id="perCountryCharges"
+                className="input currency-input"
+                name="perCountryCharges"
+                type="number"
+                min="0"
+                step="0.01"
+                defaultValue="0.00"
+              />
             </div>
           </div>
         ) : null}
@@ -340,7 +493,15 @@ export function NewProjectForm({
             <FormLabel htmlFor="fixedContractHours" required>
               Fixed contract hours
             </FormLabel>
-            <input id="fixedContractHours" className="input" name="fixedContractHours" type="number" min="0" step="0.25" required />
+            <input
+              id="fixedContractHours"
+              className="input"
+              name="fixedContractHours"
+              type="number"
+              min="0"
+              step="0.25"
+              required
+            />
           </div>
         ) : null}
 
@@ -349,37 +510,114 @@ export function NewProjectForm({
             <FormLabel htmlFor="fixedMonthlyHours" required>
               Fixed monthly hours
             </FormLabel>
-            <input id="fixedMonthlyHours" className="input" name="fixedMonthlyHours" type="number" min="0" step="0.25" required />
+            <input
+              id="fixedMonthlyHours"
+              className="input"
+              name="fixedMonthlyHours"
+              type="number"
+              min="0"
+              step="0.25"
+              required
+            />
           </div>
         ) : null}
 
-
         {isAdmin && billingModel === "FIXED_MONTHLY" ? (
           <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Monthly Additional Hours</h3>
-            <p className="mt-1 text-xs text-slate-500">Add extra fixed monthly hours for specific months. Leave blank if no extra hours apply.</p>
+            <h3 className="text-sm font-semibold text-slate-900">
+              Monthly Additional Hours
+            </h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Add extra fixed monthly hours for specific months. Leave blank if
+              no extra hours apply.
+            </p>
             <div className="mt-4 space-y-3">
               {monthlyAdditionalRows.map((row, index) => (
-                <div key={index} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[180px_1fr_auto] md:items-end">
+                <div
+                  key={index}
+                  className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[180px_1fr_auto] md:items-end"
+                >
                   <div>
-                    <FormLabel htmlFor={`monthlyAdditionalHourMonth_${index}`}>Month</FormLabel>
-                    <input id={`monthlyAdditionalHourMonth_${index}`} className="input" name="monthlyAdditionalHourMonth" type="month" value={row.month} onChange={(event) => setMonthlyAdditionalRows((rows) => rows.map((item, itemIndex) => itemIndex === index ? { ...item, month: event.target.value } : item))} />
+                    <FormLabel htmlFor={`monthlyAdditionalHourMonth_${index}`}>
+                      Month
+                    </FormLabel>
+                    <input
+                      id={`monthlyAdditionalHourMonth_${index}`}
+                      className="input"
+                      name="monthlyAdditionalHourMonth"
+                      type="month"
+                      value={row.month}
+                      onChange={(event) =>
+                        setMonthlyAdditionalRows((rows) =>
+                          rows.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? { ...item, month: event.target.value }
+                              : item,
+                          ),
+                        )
+                      }
+                    />
                   </div>
                   <div>
-                    <FormLabel htmlFor={`monthlyAdditionalHourHours_${index}`}>Additional hours</FormLabel>
-                    <input id={`monthlyAdditionalHourHours_${index}`} className="input" name="monthlyAdditionalHourHours" type="number" min="0" step="0.25" value={row.hours} onChange={(event) => setMonthlyAdditionalRows((rows) => rows.map((item, itemIndex) => itemIndex === index ? { ...item, hours: event.target.value } : item))} />
+                    <FormLabel htmlFor={`monthlyAdditionalHourHours_${index}`}>
+                      Additional hours
+                    </FormLabel>
+                    <input
+                      id={`monthlyAdditionalHourHours_${index}`}
+                      className="input"
+                      name="monthlyAdditionalHourHours"
+                      type="number"
+                      min="0"
+                      step="0.25"
+                      value={row.hours}
+                      onChange={(event) =>
+                        setMonthlyAdditionalRows((rows) =>
+                          rows.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? { ...item, hours: event.target.value }
+                              : item,
+                          ),
+                        )
+                      }
+                    />
                   </div>
-                  <button type="button" className="btn-secondary" onClick={() => setMonthlyAdditionalRows((rows) => rows.filter((_, itemIndex) => itemIndex !== index))} disabled={monthlyAdditionalRows.length === 1}>Remove</button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() =>
+                      setMonthlyAdditionalRows((rows) =>
+                        rows.filter((_, itemIndex) => itemIndex !== index),
+                      )
+                    }
+                    disabled={monthlyAdditionalRows.length === 1}
+                  >
+                    Remove
+                  </button>
                 </div>
               ))}
             </div>
-            <button type="button" className="btn-secondary mt-3" onClick={() => setMonthlyAdditionalRows((rows) => [...rows, { month: currentMonth, hours: "" }])}>Add month</button>
+            <button
+              type="button"
+              className="btn-secondary mt-3"
+              onClick={() =>
+                setMonthlyAdditionalRows((rows) => [
+                  ...rows,
+                  { month: currentMonth, hours: "" },
+                ])
+              }
+            >
+              Add month
+            </button>
           </div>
         ) : null}
 
         <div className="md:col-span-2">
           <FormLabel htmlFor="description">Description</FormLabel>
-          <textarea id="description" className="input min-h-24" name="description" />
+          <textarea
+            id="description"
+            className="input min-h-24"
+            name="description"
+          />
         </div>
 
         <div className="md:col-span-2">

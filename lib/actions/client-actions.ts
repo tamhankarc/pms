@@ -18,24 +18,55 @@ export type ClientFormState = {
 const clientSchema = z.object({
   id: z.string().optional(),
   name: z.string().trim().min(2, "Client name is required."),
-  showCountriesInTimeEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  showMoviesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  showAssetTypesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  showAssetNamesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  showLanguagesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  showNewslettersInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  enableProjectTypes: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  hourlyCost: z.coerce.number().min(0, "Per hour cost cannot be negative.").optional(),
-  sonyCoppaSiteCost: z.coerce.number().min(0, "COPPA Site cost cannot be negative.").optional(),
-  sonyUsEpkSiteCost: z.coerce.number().min(0, "US EPK Site cost cannot be negative.").optional(),
-  sonyGlobalEpkSiteCost: z.coerce.number().min(0, "Global EPK Site cost cannot be negative.").optional(),
-  isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  showCountriesInTimeEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  showMoviesInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  showAssetTypesInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  showLensTypesInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  showAssetNamesInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  showLanguagesInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  showNewslettersInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  enableProjectTypes: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  hourlyCost: z.coerce
+    .number()
+    .min(0, "Per hour cost cannot be negative.")
+    .optional(),
+  sonyCoppaSiteCost: z.coerce
+    .number()
+    .min(0, "COPPA Site cost cannot be negative.")
+    .optional(),
+  sonyUsEpkSiteCost: z.coerce
+    .number()
+    .min(0, "US EPK Site cost cannot be negative.")
+    .optional(),
+  sonyGlobalEpkSiteCost: z.coerce
+    .number()
+    .min(0, "Global EPK Site cost cannot be negative.")
+    .optional(),
+  isActive: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
 });
-
 
 async function requireCanManageClients() {
   const user = await requireUserForAction();
-  if (!canManageClients(user)) throw new Error("You are not allowed to manage clients.");
+  if (!canManageClients(user))
+    throw new Error("You are not allowed to manage clients.");
   return user;
 }
 export async function createClientAction(
@@ -47,12 +78,19 @@ export async function createClientAction(
 
     const parsed = clientSchema.safeParse({
       name: String(formData.get("name") ?? ""),
-      showCountriesInTimeEntries: formData.get("showCountriesInTimeEntries") ?? undefined,
+      showCountriesInTimeEntries:
+        formData.get("showCountriesInTimeEntries") ?? undefined,
       showMoviesInEntries: formData.get("showMoviesInEntries") ?? undefined,
-      showAssetTypesInEntries: formData.get("showAssetTypesInEntries") ?? undefined,
-      showAssetNamesInEntries: formData.get("showAssetNamesInEntries") ?? undefined,
-      showLanguagesInEntries: formData.get("showLanguagesInEntries") ?? undefined,
-      showNewslettersInEntries: formData.get("showNewslettersInEntries") ?? undefined,
+      showAssetTypesInEntries:
+        formData.get("showAssetTypesInEntries") ?? undefined,
+      showLensTypesInEntries:
+        formData.get("showLensTypesInEntries") ?? undefined,
+      showAssetNamesInEntries:
+        formData.get("showAssetNamesInEntries") ?? undefined,
+      showLanguagesInEntries:
+        formData.get("showLanguagesInEntries") ?? undefined,
+      showNewslettersInEntries:
+        formData.get("showNewslettersInEntries") ?? undefined,
       enableProjectTypes: formData.get("enableProjectTypes") ?? undefined,
       hourlyCost: formData.get("hourlyCost") ?? "0",
       sonyCoppaSiteCost: formData.get("sonyCoppaSiteCost") ?? "0",
@@ -69,23 +107,36 @@ export async function createClientAction(
     }
 
     const generatedCode = await generateClientCode(parsed.data.name.trim());
-    const isSonyPicturesClient = parsed.data.name.trim().toLowerCase() === SONY_PICTURES_CLIENT_NAME;
+    const isSonyPicturesClient =
+      parsed.data.name.trim().toLowerCase() === SONY_PICTURES_CLIENT_NAME;
 
     await db.client.create({
       data: {
         name: parsed.data.name.trim(),
         code: generatedCode,
-        showCountriesInTimeEntries: Boolean(parsed.data.showCountriesInTimeEntries),
+        showCountriesInTimeEntries: Boolean(
+          parsed.data.showCountriesInTimeEntries,
+        ),
         showMoviesInEntries: Boolean(parsed.data.showMoviesInEntries),
         showAssetTypesInEntries: Boolean(parsed.data.showAssetTypesInEntries),
+        showLensTypesInEntries: Boolean(parsed.data.showLensTypesInEntries),
         showAssetNamesInEntries: Boolean(parsed.data.showAssetNamesInEntries),
         showLanguagesInEntries: Boolean(parsed.data.showLanguagesInEntries),
         showNewslettersInEntries: Boolean(parsed.data.showNewslettersInEntries),
         enableProjectTypes: Boolean(parsed.data.enableProjectTypes),
         hourlyCost: canViewCostData(user) ? (parsed.data.hourlyCost ?? 0) : 0,
-        sonyCoppaSiteCost: canViewCostData(user) && isSonyPicturesClient ? (parsed.data.sonyCoppaSiteCost ?? 0) : 0,
-        sonyUsEpkSiteCost: canViewCostData(user) && isSonyPicturesClient ? (parsed.data.sonyUsEpkSiteCost ?? 0) : 0,
-        sonyGlobalEpkSiteCost: canViewCostData(user) && isSonyPicturesClient ? (parsed.data.sonyGlobalEpkSiteCost ?? 0) : 0,
+        sonyCoppaSiteCost:
+          canViewCostData(user) && isSonyPicturesClient
+            ? (parsed.data.sonyCoppaSiteCost ?? 0)
+            : 0,
+        sonyUsEpkSiteCost:
+          canViewCostData(user) && isSonyPicturesClient
+            ? (parsed.data.sonyUsEpkSiteCost ?? 0)
+            : 0,
+        sonyGlobalEpkSiteCost:
+          canViewCostData(user) && isSonyPicturesClient
+            ? (parsed.data.sonyGlobalEpkSiteCost ?? 0)
+            : 0,
         isActive: Boolean(parsed.data.isActive),
       },
     });
@@ -119,12 +170,19 @@ export async function updateClientAction(
     const parsed = clientSchema.safeParse({
       id: String(formData.get("id") ?? ""),
       name: String(formData.get("name") ?? ""),
-      showCountriesInTimeEntries: formData.get("showCountriesInTimeEntries") ?? undefined,
+      showCountriesInTimeEntries:
+        formData.get("showCountriesInTimeEntries") ?? undefined,
       showMoviesInEntries: formData.get("showMoviesInEntries") ?? undefined,
-      showAssetTypesInEntries: formData.get("showAssetTypesInEntries") ?? undefined,
-      showAssetNamesInEntries: formData.get("showAssetNamesInEntries") ?? undefined,
-      showLanguagesInEntries: formData.get("showLanguagesInEntries") ?? undefined,
-      showNewslettersInEntries: formData.get("showNewslettersInEntries") ?? undefined,
+      showAssetTypesInEntries:
+        formData.get("showAssetTypesInEntries") ?? undefined,
+      showLensTypesInEntries:
+        formData.get("showLensTypesInEntries") ?? undefined,
+      showAssetNamesInEntries:
+        formData.get("showAssetNamesInEntries") ?? undefined,
+      showLanguagesInEntries:
+        formData.get("showLanguagesInEntries") ?? undefined,
+      showNewslettersInEntries:
+        formData.get("showNewslettersInEntries") ?? undefined,
       enableProjectTypes: formData.get("enableProjectTypes") ?? undefined,
       hourlyCost: formData.get("hourlyCost") ?? "0",
       sonyCoppaSiteCost: formData.get("sonyCoppaSiteCost") ?? "0",
@@ -136,20 +194,30 @@ export async function updateClientAction(
     if (!parsed.success || !parsed.data.id) {
       return {
         success: false,
-        error: parsed.success ? "Client is required." : parsed.error.issues[0]?.message,
+        error: parsed.success
+          ? "Client is required."
+          : parsed.error.issues[0]?.message,
       };
     }
 
     const existingClient = await db.client.findUnique({
       where: { id: parsed.data.id },
-      select: { code: true, hourlyCost: true, sonyCoppaSiteCost: true, sonyUsEpkSiteCost: true, sonyGlobalEpkSiteCost: true },
+      select: {
+        code: true,
+        hourlyCost: true,
+        sonyCoppaSiteCost: true,
+        sonyUsEpkSiteCost: true,
+        sonyGlobalEpkSiteCost: true,
+      },
     });
 
     if (!existingClient) {
       return { success: false, error: "Client not found." };
     }
 
-    const code = existingClient.code?.trim() || (await generateClientCode(parsed.data.name.trim()));
+    const code =
+      existingClient.code?.trim() ||
+      (await generateClientCode(parsed.data.name.trim()));
     const isSonyPicturesClient = parsed.data.id === SONY_PICTURES_CLIENT_ID;
 
     await db.client.update({
@@ -157,17 +225,31 @@ export async function updateClientAction(
       data: {
         name: parsed.data.name.trim(),
         code,
-        showCountriesInTimeEntries: Boolean(parsed.data.showCountriesInTimeEntries),
+        showCountriesInTimeEntries: Boolean(
+          parsed.data.showCountriesInTimeEntries,
+        ),
         showMoviesInEntries: Boolean(parsed.data.showMoviesInEntries),
         showAssetTypesInEntries: Boolean(parsed.data.showAssetTypesInEntries),
+        showLensTypesInEntries: Boolean(parsed.data.showLensTypesInEntries),
         showAssetNamesInEntries: Boolean(parsed.data.showAssetNamesInEntries),
         showLanguagesInEntries: Boolean(parsed.data.showLanguagesInEntries),
         showNewslettersInEntries: Boolean(parsed.data.showNewslettersInEntries),
         enableProjectTypes: Boolean(parsed.data.enableProjectTypes),
-        hourlyCost: canViewCostData(user) ? (parsed.data.hourlyCost ?? 0) : existingClient.hourlyCost,
-        sonyCoppaSiteCost: canViewCostData(user) && isSonyPicturesClient ? (parsed.data.sonyCoppaSiteCost ?? 0) : existingClient.sonyCoppaSiteCost,
-        sonyUsEpkSiteCost: canViewCostData(user) && isSonyPicturesClient ? (parsed.data.sonyUsEpkSiteCost ?? 0) : existingClient.sonyUsEpkSiteCost,
-        sonyGlobalEpkSiteCost: canViewCostData(user) && isSonyPicturesClient ? (parsed.data.sonyGlobalEpkSiteCost ?? 0) : existingClient.sonyGlobalEpkSiteCost,
+        hourlyCost: canViewCostData(user)
+          ? (parsed.data.hourlyCost ?? 0)
+          : existingClient.hourlyCost,
+        sonyCoppaSiteCost:
+          canViewCostData(user) && isSonyPicturesClient
+            ? (parsed.data.sonyCoppaSiteCost ?? 0)
+            : existingClient.sonyCoppaSiteCost,
+        sonyUsEpkSiteCost:
+          canViewCostData(user) && isSonyPicturesClient
+            ? (parsed.data.sonyUsEpkSiteCost ?? 0)
+            : existingClient.sonyUsEpkSiteCost,
+        sonyGlobalEpkSiteCost:
+          canViewCostData(user) && isSonyPicturesClient
+            ? (parsed.data.sonyGlobalEpkSiteCost ?? 0)
+            : existingClient.sonyGlobalEpkSiteCost,
         isActive: Boolean(parsed.data.isActive),
       },
     });

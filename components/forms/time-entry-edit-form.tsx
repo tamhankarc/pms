@@ -20,6 +20,8 @@ type TimeEntryProjectOption = {
   hideMoviesInEntries: boolean;
   showAssetTypesInEntries: boolean;
   hideAssetTypesInEntries: boolean;
+  showLensTypesInEntries: boolean;
+  hideLensTypesInEntries: boolean;
   showAssetNamesInEntries: boolean;
   hideAssetNamesInEntries: boolean;
   showNewslettersInEntries: boolean;
@@ -36,6 +38,7 @@ type TimeEntrySubProjectOption = {
   hideCountriesInEntries: boolean;
   hideMoviesInEntries: boolean;
   hideAssetTypesInEntries: boolean;
+  hideLensTypesInEntries: boolean;
   hideAssetNamesInEntries: boolean;
   hideNewslettersInEntries: boolean;
 };
@@ -50,6 +53,11 @@ type AssetTypeOption = {
   id: string;
   name: string;
   clientId: string;
+};
+
+type LensTypeOption = {
+  id: string;
+  name: string;
 };
 
 type AssetNameOption = {
@@ -86,6 +94,7 @@ export function TimeEntryEditForm({
   countries,
   movies,
   assetTypes,
+  lensTypes,
   assetNames,
   newsletters,
   languages,
@@ -104,6 +113,7 @@ export function TimeEntryEditForm({
     countryId: string | null;
     movieId: string | null;
     assetTypeId: string | null;
+    lensTypeId: string | null;
     assetNameId: string | null;
     newsletterId: string | null;
     languageId: string | null;
@@ -116,6 +126,7 @@ export function TimeEntryEditForm({
   countries: { id: string; name: string }[];
   movies: MovieOption[];
   assetTypes: AssetTypeOption[];
+  lensTypes: LensTypeOption[];
   assetNames: AssetNameOption[];
   newsletters: NewsletterOption[];
   languages: LanguageOption[];
@@ -123,7 +134,10 @@ export function TimeEntryEditForm({
   subProjects: TimeEntrySubProjectOption[];
   allowUnassignedSubProjects?: boolean;
 }) {
-  const [state, formAction, pending] = useActionState(updateTimeEntryAction, initialState);
+  const [state, formAction, pending] = useActionState(
+    updateTimeEntryAction,
+    initialState,
+  );
   const maxWorkDate = useMemo(() => getTodayDateString(), []);
 
   const clientOptions = useMemo(
@@ -141,7 +155,9 @@ export function TimeEntryEditForm({
 
   const [selectedClientId, setSelectedClientId] = useState(entry.clientId);
   const [selectedProjectId, setSelectedProjectId] = useState(entry.projectId);
-  const [selectedSubProjectId, setSelectedSubProjectId] = useState(entry.subProjectId ?? "");
+  const [selectedSubProjectId, setSelectedSubProjectId] = useState(
+    entry.subProjectId ?? "",
+  );
   const [selectedMovieId, setSelectedMovieId] = useState(entry.movieId ?? "");
 
   const filteredProjects = useMemo(
@@ -151,9 +167,12 @@ export function TimeEntryEditForm({
 
   const bypassAssignmentForEntryEmployee =
     allowUnassignedSubProjects &&
-    (entry.employeeUserType === "MANAGER" || entry.employeeUserType === "TEAM_LEAD");
+    (entry.employeeUserType === "MANAGER" ||
+      entry.employeeUserType === "TEAM_LEAD");
 
-  const selectedProjectOption = projects.find((project) => project.id === selectedProjectId);
+  const selectedProjectOption = projects.find(
+    (project) => project.id === selectedProjectId,
+  );
   const entryEmployeeHasProjectAssignment = Boolean(
     selectedProjectOption?.assignedUserIds.includes(entry.employeeId),
   );
@@ -162,7 +181,11 @@ export function TimeEntryEditForm({
     () =>
       subProjects.filter((subProject) => {
         if (subProject.projectId !== selectedProjectId) return false;
-        if (bypassAssignmentForEntryEmployee || entryEmployeeHasProjectAssignment) return true;
+        if (
+          bypassAssignmentForEntryEmployee ||
+          entryEmployeeHasProjectAssignment
+        )
+          return true;
         return subProject.assignedUserIds.includes(entry.employeeId);
       }),
     [
@@ -180,46 +203,64 @@ export function TimeEntryEditForm({
   );
 
   const filteredAssetTypes = useMemo(
-    () => assetTypes.filter((assetType) => assetType.clientId === selectedClientId),
+    () =>
+      assetTypes.filter((assetType) => assetType.clientId === selectedClientId),
     [assetTypes, selectedClientId],
   );
 
   const filteredAssetNames = useMemo(
-    () => assetNames.filter((assetName) => assetName.clientId === selectedClientId && assetName.movieId === selectedMovieId),
+    () =>
+      assetNames.filter(
+        (assetName) =>
+          assetName.clientId === selectedClientId &&
+          assetName.movieId === selectedMovieId,
+      ),
     [assetNames, selectedClientId, selectedMovieId],
   );
 
   const filteredNewsletters = useMemo(
-    () => newsletters.filter((newsletter) => newsletter.clientId === selectedClientId),
+    () =>
+      newsletters.filter(
+        (newsletter) => newsletter.clientId === selectedClientId,
+      ),
     [newsletters, selectedClientId],
   );
 
-  const selectedProject = projects.find((project) => project.id === selectedProjectId);
-  const selectedSubProject = subProjects.find((subProject) => subProject.id === selectedSubProjectId);
+  const selectedProject = projects.find(
+    (project) => project.id === selectedProjectId,
+  );
+  const selectedSubProject = subProjects.find(
+    (subProject) => subProject.id === selectedSubProjectId,
+  );
   const showCountryField = Boolean(
     selectedProject?.showCountriesInTimeEntries &&
-      !selectedProject?.hideCountriesInEntries &&
-      !selectedSubProject?.hideCountriesInEntries,
+    !selectedProject?.hideCountriesInEntries &&
+    !selectedSubProject?.hideCountriesInEntries,
   );
   const showMovieField = Boolean(
     selectedProject?.showMoviesInEntries &&
-      !selectedProject?.hideMoviesInEntries &&
-      !selectedSubProject?.hideMoviesInEntries,
+    !selectedProject?.hideMoviesInEntries &&
+    !selectedSubProject?.hideMoviesInEntries,
   );
   const showAssetTypeField = Boolean(
     selectedProject?.showAssetTypesInEntries &&
-      !selectedProject?.hideAssetTypesInEntries &&
-      !selectedSubProject?.hideAssetTypesInEntries,
+    !selectedProject?.hideAssetTypesInEntries &&
+    !selectedSubProject?.hideAssetTypesInEntries,
+  );
+  const showLensTypeField = Boolean(
+    selectedProject?.showLensTypesInEntries &&
+    !selectedProject?.hideLensTypesInEntries &&
+    !selectedSubProject?.hideLensTypesInEntries,
   );
   const showAssetNameField = Boolean(
     selectedProject?.showAssetNamesInEntries &&
-      !selectedProject?.hideAssetNamesInEntries &&
-      !selectedSubProject?.hideAssetNamesInEntries,
+    !selectedProject?.hideAssetNamesInEntries &&
+    !selectedSubProject?.hideAssetNamesInEntries,
   );
   const showNewsletterField = Boolean(
     selectedProject?.showNewslettersInEntries &&
-      !selectedProject?.hideNewslettersInEntries &&
-      !selectedSubProject?.hideNewslettersInEntries,
+    !selectedProject?.hideNewslettersInEntries &&
+    !selectedSubProject?.hideNewslettersInEntries,
   );
   const showLanguageField = Boolean(selectedProject?.showLanguagesInEntries);
   const countryRequired = showCountryField;
@@ -245,7 +286,12 @@ export function TimeEntryEditForm({
       <div className="grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
           <FormLabel htmlFor="employeeName">Employee</FormLabel>
-          <input id="employeeName" className="input bg-slate-50" value={entry.employeeName} readOnly />
+          <input
+            id="employeeName"
+            className="input bg-slate-50"
+            value={entry.employeeName}
+            readOnly
+          />
         </div>
 
         <div>
@@ -257,7 +303,9 @@ export function TimeEntryEditForm({
             name="clientId"
             value={selectedClientId}
             onValueChange={(nextValue) => {
-              const nextProjectId = projects.find((project) => project.clientId === nextValue)?.id ?? "";
+              const nextProjectId =
+                projects.find((project) => project.clientId === nextValue)
+                  ?.id ?? "";
               setSelectedClientId(nextValue);
               setSelectedProjectId(nextProjectId);
               setSelectedSubProjectId("");
@@ -330,7 +378,10 @@ export function TimeEntryEditForm({
               defaultValue={entry.countryId ?? ""}
               options={[
                 { value: "", label: "Select country" },
-                ...countries.map((country) => ({ value: country.id, label: country.name })),
+                ...countries.map((country) => ({
+                  value: country.id,
+                  label: country.name,
+                })),
               ]}
               placeholder="Select country"
               searchPlaceholder="Search countries..."
@@ -350,7 +401,10 @@ export function TimeEntryEditForm({
               onValueChange={setSelectedMovieId}
               options={[
                 { value: "", label: "No specific movie" },
-                ...filteredMovies.map((movie) => ({ value: movie.id, label: movie.title })),
+                ...filteredMovies.map((movie) => ({
+                  value: movie.id,
+                  label: movie.title,
+                })),
               ]}
               placeholder="No specific movie"
               searchPlaceholder="Search movies..."
@@ -358,7 +412,6 @@ export function TimeEntryEditForm({
             />
           </div>
         ) : null}
-
 
         {showNewsletterField ? (
           <div>
@@ -369,7 +422,10 @@ export function TimeEntryEditForm({
               defaultValue={entry.newsletterId ?? ""}
               options={[
                 { value: "", label: "No specific newsletter" },
-                ...filteredNewsletters.map((newsletter) => ({ value: newsletter.id, label: newsletter.name })),
+                ...filteredNewsletters.map((newsletter) => ({
+                  value: newsletter.id,
+                  label: newsletter.name,
+                })),
               ]}
               placeholder="No specific newsletter"
               searchPlaceholder="Search newsletters..."
@@ -385,14 +441,34 @@ export function TimeEntryEditForm({
               key={selectedMovieId || "no-movie"}
               id="assetNameId"
               name="assetNameId"
-              defaultValue={selectedMovieId === entry.movieId ? entry.assetNameId ?? "" : ""}
+              defaultValue={
+                selectedMovieId === entry.movieId
+                  ? (entry.assetNameId ?? "")
+                  : ""
+              }
               options={[
-                { value: "", label: selectedMovieId ? "No specific asset name" : "Select movie first" },
-                ...filteredAssetNames.map((assetName) => ({ value: assetName.id, label: assetName.name })),
+                {
+                  value: "",
+                  label: selectedMovieId
+                    ? "No specific asset name"
+                    : "Select movie first",
+                },
+                ...filteredAssetNames.map((assetName) => ({
+                  value: assetName.id,
+                  label: assetName.name,
+                })),
               ]}
-              placeholder={selectedMovieId ? "No specific asset name" : "Select movie first"}
+              placeholder={
+                selectedMovieId
+                  ? "No specific asset name"
+                  : "Select movie first"
+              }
               searchPlaceholder="Search asset names..."
-              emptyLabel={selectedMovieId ? "No asset names found for selected movie." : "Select a movie first."}
+              emptyLabel={
+                selectedMovieId
+                  ? "No asset names found for selected movie."
+                  : "Select a movie first."
+              }
               disabled={!selectedMovieId}
             />
           </div>
@@ -407,11 +483,35 @@ export function TimeEntryEditForm({
               defaultValue={entry.assetTypeId ?? ""}
               options={[
                 { value: "", label: "No specific asset type" },
-                ...filteredAssetTypes.map((assetType) => ({ value: assetType.id, label: assetType.name })),
+                ...filteredAssetTypes.map((assetType) => ({
+                  value: assetType.id,
+                  label: assetType.name,
+                })),
               ]}
               placeholder="No specific asset type"
               searchPlaceholder="Search asset types..."
               emptyLabel="No asset types found."
+            />
+          </div>
+        ) : null}
+
+        {showLensTypeField ? (
+          <div>
+            <FormLabel htmlFor="lensTypeId">Lens Type</FormLabel>
+            <SearchableCombobox
+              id="lensTypeId"
+              name="lensTypeId"
+              defaultValue={entry.lensTypeId ?? ""}
+              options={[
+                { value: "", label: "No specific lens type" },
+                ...lensTypes.map((lensType) => ({
+                  value: lensType.id,
+                  label: lensType.name,
+                })),
+              ]}
+              placeholder="No specific lens type"
+              searchPlaceholder="Search lens types..."
+              emptyLabel="No lens types found."
             />
           </div>
         ) : null}
@@ -427,7 +527,10 @@ export function TimeEntryEditForm({
               defaultValue={entry.languageId ?? ""}
               options={[
                 { value: "", label: "Select language" },
-                ...languages.map((language) => ({ value: language.id, label: `${language.name} (${language.code})` })),
+                ...languages.map((language) => ({
+                  value: language.id,
+                  label: `${language.name} (${language.code})`,
+                })),
               ]}
               placeholder="Select language"
               searchPlaceholder="Search languages..."
@@ -472,17 +575,33 @@ export function TimeEntryEditForm({
           <FormLabel htmlFor="taskName" required>
             Task name
           </FormLabel>
-          <input id="taskName" className="input" name="taskName" defaultValue={entry.taskName} required />
+          <input
+            id="taskName"
+            className="input"
+            name="taskName"
+            defaultValue={entry.taskName}
+            required
+          />
         </div>
 
         <div className="md:col-span-2">
           <FormLabel htmlFor="notes">Task Description</FormLabel>
-          <textarea id="notes" className="input min-h-24" name="notes" defaultValue={entry.notes ?? ""} />
+          <textarea
+            id="notes"
+            className="input min-h-24"
+            name="notes"
+            defaultValue={entry.notes ?? ""}
+          />
         </div>
 
         <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
           <input type="hidden" name="isBillable" value="false" />
-          <input type="checkbox" name="isBillable" value="true" defaultChecked={entry.isBillable} />
+          <input
+            type="checkbox"
+            name="isBillable"
+            value="true"
+            defaultChecked={entry.isBillable}
+          />
           Billable time
         </label>
       </div>

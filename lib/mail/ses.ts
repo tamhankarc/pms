@@ -3,7 +3,11 @@ import "server-only";
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 
 function parseBooleanEnv(value: string | undefined) {
-  return ["1", "true", "yes", "on"].includes(String(value ?? "").trim().toLowerCase());
+  return ["1", "true", "yes", "on"].includes(
+    String(value ?? "")
+      .trim()
+      .toLowerCase(),
+  );
 }
 
 function normalizeEmails(value?: string | string[]) {
@@ -61,7 +65,8 @@ export function getSesFromEmailOptions(): SesFromEmailDetails[] {
 
 function getSourceEmail(fromEmailOption: SesFromEmailOption = "primary") {
   const options = getSesFromEmailOptions();
-  const selected = options.find((option) => option.key === fromEmailOption) ?? options[0];
+  const selected =
+    options.find((option) => option.key === fromEmailOption) ?? options[0];
 
   if (!selected) {
     throw new Error("SES_FROM_EMAIL is not configured.");
@@ -80,6 +85,8 @@ export type SendAppEmailInput = {
   html?: string;
   text?: string;
   fromEmailOption?: SesFromEmailOption;
+  fromEmail?: string;
+  fromName?: string;
   cc?: string | string[];
   bcc?: string | string[];
   replyTo?: string | string[];
@@ -89,7 +96,8 @@ export async function sendAppEmail(input: SendAppEmailInput) {
   if (!isMailSendingEnabled()) {
     return {
       skipped: true,
-      message: "Email sending is disabled. Set SEND_MAILS_ENABLED=true to send mails.",
+      message:
+        "Email sending is disabled. Set SEND_MAILS_ENABLED=true to send mails.",
     };
   }
 
@@ -107,7 +115,8 @@ export async function sendAppEmail(input: SendAppEmailInput) {
     throw new Error("Either HTML or text email body is required.");
   }
 
-  const region = process.env.AWS_REGION?.trim() || process.env.AWS_DEFAULT_REGION?.trim();
+  const region =
+    process.env.AWS_REGION?.trim() || process.env.AWS_DEFAULT_REGION?.trim();
   if (!region) {
     throw new Error("AWS_REGION is not configured.");
   }
@@ -118,7 +127,12 @@ export async function sendAppEmail(input: SendAppEmailInput) {
     // On production this can come from the server role, task role, instance profile, or env provided by DevOps.
   });
 
-  const sourceEmail = getSourceEmail(input.fromEmailOption);
+  const sourceEmail = input.fromEmail
+    ? buildSourceEmail(
+        input.fromEmail,
+        input.fromName || process.env.SES_FROM_NAME,
+      )
+    : getSourceEmail(input.fromEmailOption);
 
   const command = new SendEmailCommand({
     Source: sourceEmail,

@@ -8,9 +8,15 @@ import {
 } from "@/lib/billing-reports/amazon";
 import type { GenericBillingReportData } from "@/lib/billing-reports/generic";
 import { getGenericBillingReportFileName } from "@/lib/billing-reports/generic";
-import type { SonyPicturesReportData, SonyNewsletterBillingData } from "@/lib/billing-reports/sony";
+import type {
+  SonyPicturesReportData,
+  SonyNewsletterBillingData,
+} from "@/lib/billing-reports/sony";
 import type { FilmikBillingReportData } from "@/lib/billing-reports/filmik";
-import { getSonyPicturesReportFileName, getSonyNewsletterBillingFileName } from "@/lib/billing-reports/sony";
+import {
+  getSonyPicturesReportFileName,
+  getSonyNewsletterBillingFileName,
+} from "@/lib/billing-reports/sony";
 import { getFilmikBillingReportMonthLabel } from "@/lib/billing-reports/filmik";
 import type { RoyalBillingData } from "@/lib/billing-reports/royal";
 import { getRoyalBillingReportFileName } from "@/lib/billing-reports/royal";
@@ -44,7 +50,8 @@ function worksheet(name: string, rows: string[]) {
 export function buildAmazonReportExcel(data: AmazonBillingReportData) {
   const isUniversal = data.client.name === "Universal Pictures International";
   const isUniversalSocial = isUniversal && data.reportType === "social-assets";
-  const isUniversalLocalization = isUniversal && data.reportType === "localization";
+  const isUniversalLocalization =
+    isUniversal && data.reportType === "localization";
   const showCost = !isUniversal;
   const detailHeaders =
     data.reportType === "localization"
@@ -66,8 +73,18 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
           "Contact Person",
         ];
 
-  const uniqueAssetCount = (rows: typeof data.rows) => new Set(rows.map((row) => row.assetName).filter((value) => value && value !== "-")).size;
-  const uniqueCountryCount = (rows: typeof data.rows) => new Set(rows.map((row) => row.territoryVariant ?? "").filter((value) => value && value !== "-")).size;
+  const uniqueAssetCount = (rows: typeof data.rows) =>
+    new Set(
+      rows
+        .map((row) => row.assetName)
+        .filter((value) => value && value !== "-"),
+    ).size;
+  const uniqueCountryCount = (rows: typeof data.rows) =>
+    new Set(
+      rows
+        .map((row) => row.territoryVariant ?? "")
+        .filter((value) => value && value !== "-"),
+    ).size;
 
   const rowToExcel = (row: (typeof data.rows)[number]) => {
     if (data.reportType === "localization") {
@@ -96,29 +113,68 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
   const detailRows = [
     excelRow([data.reportTitle]),
     excelRow(["Client", data.client.name]),
-    excelRow(["Date Range", data.filters.fromDate || data.filters.toDate ? `${data.filters.fromDate || "Start"} to ${data.filters.toDate || "End"}` : "All dates"]),
+    excelRow([
+      "Date Range",
+      data.filters.fromDate || data.filters.toDate
+        ? `${data.filters.fromDate || "Start"} to ${data.filters.toDate || "End"}`
+        : "All dates",
+    ]),
     excelRow([]),
   ];
 
   detailRows.push(excelRow(detailHeaders), ...data.rows.map(rowToExcel));
-  if (isUniversalSocial) detailRows.push(excelRow(["Total Unique Assets", uniqueAssetCount(data.rows)], [1]));
+  if (isUniversalSocial)
+    detailRows.push(
+      excelRow(["Total Unique Assets", uniqueAssetCount(data.rows)], [1]),
+    );
   if (isUniversalLocalization) {
-    detailRows.push(excelRow(["Total Unique Assets", uniqueAssetCount(data.rows)], [1]));
-    detailRows.push(excelRow(["Total Unique Territory/Variant", uniqueCountryCount(data.rows)], [1]));
+    detailRows.push(
+      excelRow(["Total Unique Assets", uniqueAssetCount(data.rows)], [1]),
+    );
+    detailRows.push(
+      excelRow(
+        ["Total Unique Territory/Variant", uniqueCountryCount(data.rows)],
+        [1],
+      ),
+    );
   }
 
   const titleSummaryRows = isUniversal
     ? [
         excelRow(["Title Summary"]),
-        excelRow(isUniversalLocalization ? ["Title Name", "Total Unique Assets", "Total Unique Territory/Variant"] : ["Title Name", "Total Assets"]),
-        ...data.titleSummaryRows.map((row) => excelRow(isUniversalLocalization ? [row.titleName, row.totalAssets, row.totalCountries] : [row.titleName, row.totalAssets], isUniversalLocalization ? [1, 2] : [1])),
+        excelRow(
+          isUniversalLocalization
+            ? [
+                "Title Name",
+                "Total Unique Assets",
+                "Total Unique Territory/Variant",
+              ]
+            : ["Title Name", "Total Assets"],
+        ),
+        ...data.titleSummaryRows.map((row) =>
+          excelRow(
+            isUniversalLocalization
+              ? [row.titleName, row.totalAssets, row.totalCountries]
+              : [row.titleName, row.totalAssets],
+            isUniversalLocalization ? [1, 2] : [1],
+          ),
+        ),
       ]
     : [];
   const completedSummaryRows = isUniversalLocalization
     ? [
         excelRow(["Completed & Billed Title Summary"]),
-        excelRow(["Title Name", "Total Unique Assets", "Total Unique Territory/Variant"]),
-        ...data.completedTitleSummaryRows.map((row) => excelRow([row.titleName, row.totalAssets, row.totalCountries], [1, 2])),
+        excelRow([
+          "Title Name",
+          "Total Unique Assets",
+          "Total Unique Territory/Variant",
+        ]),
+        ...data.completedTitleSummaryRows.map((row) =>
+          excelRow(
+            [row.titleName, row.totalAssets, row.totalCountries],
+            [1, 2],
+          ),
+        ),
       ]
     : [];
 
@@ -126,7 +182,9 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
     ? [
         excelRow([`${data.reportTitle} Summary`]),
         excelRow(["Asset Type", "Total Assets", "Total Cost (USD)"]),
-        ...data.summaryRows.map((row) => excelRow([row.assetType, row.totalAssets, row.totalCost], [1, 2])),
+        ...data.summaryRows.map((row) =>
+          excelRow([row.assetType, row.totalAssets, row.totalCost], [1, 2]),
+        ),
       ]
     : [];
 
@@ -144,28 +202,64 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
 </Workbook>`;
 }
 
-export function buildUniversalBillingSummaryExcel(data: UniversalBillingSummaryData) {
+export function buildUniversalBillingSummaryExcel(
+  data: UniversalBillingSummaryData,
+) {
   const totalAssets = data.rows.reduce((sum, row) => sum + row.totalAssets, 0);
-  const totalCountries = data.rows.reduce((sum, row) => sum + row.totalCountries, 0);
-  const completedTotalAssets = data.completedTitleSummaryRows.reduce((sum, row) => sum + row.totalAssets, 0);
-  const completedTotalCountries = data.completedTitleSummaryRows.reduce((sum, row) => sum + row.totalCountries, 0);
+  const totalCountries = data.rows.reduce(
+    (sum, row) => sum + row.totalCountries,
+    0,
+  );
+  const completedTotalAssets = data.completedTitleSummaryRows.reduce(
+    (sum, row) => sum + row.totalAssets,
+    0,
+  );
+  const completedTotalCountries = data.completedTitleSummaryRows.reduce(
+    (sum, row) => sum + row.totalCountries,
+    0,
+  );
   const rows = [
     excelRow([data.reportTitle]),
     excelRow(["Client", data.client.name]),
-    excelRow(["Title Filter", data.filters.movieId === "all" ? "All titles" : data.filters.movieId]),
+    excelRow([
+      "Title Filter",
+      data.filters.movieId === "all" ? "All titles" : data.filters.movieId,
+    ]),
     excelRow([]),
-    excelRow(["Title Name", "Total Unique Assets", "Total Unique Territory/Variant"]),
-    ...data.rows.map((row) => excelRow([row.titleName, row.totalAssets, row.totalCountries], [1, 2])),
+    excelRow([
+      "Title Name",
+      "Total Unique Assets",
+      "Total Unique Territory/Variant",
+    ]),
+    ...data.rows.map((row) =>
+      excelRow([row.titleName, row.totalAssets, row.totalCountries], [1, 2]),
+    ),
     excelRow(["Total", totalAssets, totalCountries], [1, 2]),
   ];
   const completedRows = [
     excelRow(["Completed & Billed Title Summary"]),
     excelRow(["Client", data.client.name]),
-    excelRow(["Title Filter", data.filters.movieId === "all" ? "All titles" : data.filters.movieId]),
+    excelRow([
+      "Title Filter",
+      data.filters.movieId === "all" ? "All titles" : data.filters.movieId,
+    ]),
     excelRow([]),
-    excelRow(["Title Name", "Total Unique Assets", "Total Unique Territory/Variant"]),
-    ...data.completedTitleSummaryRows.map((row) => excelRow([row.titleName, row.totalAssets, row.totalCountries], [1, 2])),
-    ...(data.completedTitleSummaryRows.length ? [excelRow(["Total", completedTotalAssets, completedTotalCountries], [1, 2])] : []),
+    excelRow([
+      "Title Name",
+      "Total Unique Assets",
+      "Total Unique Territory/Variant",
+    ]),
+    ...data.completedTitleSummaryRows.map((row) =>
+      excelRow([row.titleName, row.totalAssets, row.totalCountries], [1, 2]),
+    ),
+    ...(data.completedTitleSummaryRows.length
+      ? [
+          excelRow(
+            ["Total", completedTotalAssets, completedTotalCountries],
+            [1, 2],
+          ),
+        ]
+      : []),
   ];
   return `<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
@@ -435,7 +529,8 @@ function buildPdfDocument(pageStreams: string[]) {
 
 function buildDetailColumns(data: AmazonBillingReportData): PdfTableColumn[] {
   const isUniversal = data.client.name === "Universal Pictures International";
-  const isUniversalLocalization = isUniversal && data.reportType === "localization";
+  const isUniversalLocalization =
+    isUniversal && data.reportType === "localization";
   const isUniversalSocial = isUniversal && data.reportType === "social-assets";
   if (data.reportType === "localization") {
     return isUniversalLocalization
@@ -477,18 +572,46 @@ function buildDetailColumns(data: AmazonBillingReportData): PdfTableColumn[] {
 
 function buildDetailRows(data: AmazonBillingReportData): PdfTableRow[] {
   const isUniversal = data.client.name === "Universal Pictures International";
-  const isUniversalLocalization = isUniversal && data.reportType === "localization";
+  const isUniversalLocalization =
+    isUniversal && data.reportType === "localization";
   const isUniversalSocial = isUniversal && data.reportType === "social-assets";
   return data.rows.map((row) => {
     if (data.reportType === "localization") {
       return isUniversalLocalization
-        ? [row.date, row.titleName, row.assetName, row.territoryVariant ?? "-", row.contactPerson]
-        : [row.date, row.titleName, row.assetName, row.territoryVariant ?? "-", row.assetType, formatUsd(row.cost), row.contactPerson];
+        ? [
+            row.date,
+            row.titleName,
+            row.assetName,
+            row.territoryVariant ?? "-",
+            row.contactPerson,
+          ]
+        : [
+            row.date,
+            row.titleName,
+            row.assetName,
+            row.territoryVariant ?? "-",
+            row.assetType,
+            formatUsd(row.cost),
+            row.contactPerson,
+          ];
     }
 
     return isUniversalSocial
-      ? [row.date, row.titleName, row.assetName, row.assetType, row.contactPerson]
-      : [row.date, row.titleName, row.assetName, row.assetType, formatUsd(row.cost), row.contactPerson];
+      ? [
+          row.date,
+          row.titleName,
+          row.assetName,
+          row.assetType,
+          row.contactPerson,
+        ]
+      : [
+          row.date,
+          row.titleName,
+          row.assetName,
+          row.assetType,
+          formatUsd(row.cost),
+          row.contactPerson,
+        ];
   });
 }
 
@@ -561,7 +684,9 @@ function buildSummaryPages(
   data: AmazonBillingReportData,
   startingPageNumber: number,
 ) {
-  const isUniversalLocalization = data.client.name === "Universal Pictures International" && data.reportType === "localization";
+  const isUniversalLocalization =
+    data.client.name === "Universal Pictures International" &&
+    data.reportType === "localization";
   const columns: PdfTableColumn[] = isUniversalLocalization
     ? [
         { header: "Total Unique Assets", width: 180, align: "right" },
@@ -573,10 +698,14 @@ function buildSummaryPages(
         { header: "Total Cost", width: 150, align: "right" },
       ];
   const rows: PdfTableRow[] = isUniversalLocalization
-    ? [[
-        data.summaryRows.reduce((sum, row) => sum + row.totalAssets, 0),
-        formatUsd(data.summaryRows.reduce((sum, row) => sum + row.totalCost, 0)),
-      ]]
+    ? [
+        [
+          data.summaryRows.reduce((sum, row) => sum + row.totalAssets, 0),
+          formatUsd(
+            data.summaryRows.reduce((sum, row) => sum + row.totalCost, 0),
+          ),
+        ],
+      ]
     : data.summaryRows.map((row) => [
         row.assetType,
         row.totalAssets,
@@ -671,46 +800,98 @@ function buildSummaryPages(
 
 export function buildAmazonReportPdf(data: AmazonBillingReportData) {
   const detailPages = buildDetailPages(data);
-  if (data.client.name === "Universal Pictures International") return buildPdfDocument(detailPages);
+  if (data.client.name === "Universal Pictures International")
+    return buildPdfDocument(detailPages);
   const summaryPages = buildSummaryPages(data, detailPages.length + 1);
   return buildPdfDocument([...detailPages, ...summaryPages]);
 }
 
-export function buildUniversalBillingSummaryPdf(data: UniversalBillingSummaryData) {
+export function buildUniversalBillingSummaryPdf(
+  data: UniversalBillingSummaryData,
+) {
   const columns: PdfTableColumn[] = [
     { header: "Title Name", width: 420 },
     { header: "Total Unique Assets", width: 150, align: "right" },
     { header: "Total Unique Territory/Variant", width: 220, align: "right" },
   ];
-  const rows: PdfTableRow[] = data.rows.map((row) => [row.titleName, row.totalAssets, row.totalCountries]);
-  rows.push(["Total", data.rows.reduce((sum, row) => sum + row.totalAssets, 0), data.rows.reduce((sum, row) => sum + row.totalCountries, 0)]);
-  const completedRows: PdfTableRow[] = data.completedTitleSummaryRows.map((row) => [row.titleName, row.totalAssets, row.totalCountries]);
+  const rows: PdfTableRow[] = data.rows.map((row) => [
+    row.titleName,
+    row.totalAssets,
+    row.totalCountries,
+  ]);
+  rows.push([
+    "Total",
+    data.rows.reduce((sum, row) => sum + row.totalAssets, 0),
+    data.rows.reduce((sum, row) => sum + row.totalCountries, 0),
+  ]);
+  const completedRows: PdfTableRow[] = data.completedTitleSummaryRows.map(
+    (row) => [row.titleName, row.totalAssets, row.totalCountries],
+  );
   if (completedRows.length) {
     completedRows.push([
       "Total",
-      data.completedTitleSummaryRows.reduce((sum, row) => sum + row.totalAssets, 0),
-      data.completedTitleSummaryRows.reduce((sum, row) => sum + row.totalCountries, 0),
+      data.completedTitleSummaryRows.reduce(
+        (sum, row) => sum + row.totalAssets,
+        0,
+      ),
+      data.completedTitleSummaryRows.reduce(
+        (sum, row) => sum + row.totalCountries,
+        0,
+      ),
     ]);
   }
   const commands: string[] = [];
   commands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
-  commands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
-  commands.push(textCommand(`Title Filter: ${data.filters.movieId === "all" ? "All titles" : data.filters.movieId}`, MARGIN_X, TOP_Y - 38, 9));
+  commands.push(
+    textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true),
+  );
+  commands.push(
+    textCommand(
+      `Title Filter: ${data.filters.movieId === "all" ? "All titles" : data.filters.movieId}`,
+      MARGIN_X,
+      TOP_Y - 38,
+      9,
+    ),
+  );
   const startY = TOP_Y - 72;
   drawTableHeader(commands, columns, MARGIN_X, startY);
   let currentY = startY - HEADER_HEIGHT;
   rows.slice(0, 13).forEach((row) => {
-    drawTableRow(commands, columns, row, MARGIN_X, currentY, SUMMARY_ROW_HEIGHT, 8);
+    drawTableRow(
+      commands,
+      columns,
+      row,
+      MARGIN_X,
+      currentY,
+      SUMMARY_ROW_HEIGHT,
+      8,
+    );
     currentY -= SUMMARY_ROW_HEIGHT;
   });
   if (completedRows.length && currentY > 120) {
     currentY -= 24;
-    commands.push(textCommand("Completed & Billed Title Summary", MARGIN_X, currentY, 12, true));
+    commands.push(
+      textCommand(
+        "Completed & Billed Title Summary",
+        MARGIN_X,
+        currentY,
+        12,
+        true,
+      ),
+    );
     currentY -= 18;
     drawTableHeader(commands, columns, MARGIN_X, currentY);
     currentY -= HEADER_HEIGHT;
     completedRows.slice(0, 6).forEach((row) => {
-      drawTableRow(commands, columns, row, MARGIN_X, currentY, SUMMARY_ROW_HEIGHT, 8);
+      drawTableRow(
+        commands,
+        columns,
+        row,
+        MARGIN_X,
+        currentY,
+        SUMMARY_ROW_HEIGHT,
+        8,
+      );
       currentY -= SUMMARY_ROW_HEIGHT;
     });
   }
@@ -733,19 +914,33 @@ export function buildWarnerDomesticReportExcel(
   ];
   if (data.titleBlocks?.length) {
     for (const block of data.titleBlocks) {
-      detailRows.push(excelRow([]), excelRow(["Title", block.selectedMovie.title]));
-      if (data.reportType === "other-deliverable") detailRows.push(excelRow(["Country", block.selectedCountry?.name ?? "-"]));
+      detailRows.push(
+        excelRow([]),
+        excelRow(["Title", block.selectedMovie.title]),
+      );
+      if (data.reportType === "other-deliverable")
+        detailRows.push(
+          excelRow(["Country", block.selectedCountry?.name ?? "-"]),
+        );
       detailRows.push(excelRow(["Billing Head / Project", "Cost (USD)"]));
-      detailRows.push(...block.rows.map((row) => excelRow([getDeliverableDisplayLabel(row), row.cost], [1])));
+      detailRows.push(
+        ...block.rows.map((row) =>
+          excelRow([getDeliverableDisplayLabel(row), row.cost], [1]),
+        ),
+      );
       detailRows.push(excelRow(["Total", block.totalCost], [1]));
     }
   } else {
     detailRows.push(
       excelRow(["Title", data.selectedMovie?.title ?? "-"]),
-      ...(data.reportType === "other-deliverable" ? [excelRow(["Country", data.selectedCountry?.name ?? "-"])] : []),
+      ...(data.reportType === "other-deliverable"
+        ? [excelRow(["Country", data.selectedCountry?.name ?? "-"])]
+        : []),
       excelRow([]),
       excelRow(["Billing Head / Project", "Cost (USD)"]),
-      ...data.rows.map((row) => excelRow([getDeliverableDisplayLabel(row), row.cost], [1])),
+      ...data.rows.map((row) =>
+        excelRow([getDeliverableDisplayLabel(row), row.cost], [1]),
+      ),
       excelRow([]),
       excelRow(["Total", data.totalCost], [1]),
     );
@@ -770,15 +965,26 @@ function buildWarnerDomesticPdfPages(data: WarnerDomesticDeliverableData) {
   const rows: PdfTableRow[] = [];
   if (data.titleBlocks?.length) {
     for (const block of data.titleBlocks) {
-      rows.push([block.selectedMovie.title + (block.selectedCountry ? ` / ${block.selectedCountry.name}` : ""), ""]);
-      rows.push(...block.rows.map((row) => [getDeliverableDisplayLabel(row), formatUsd(row.cost)]));
+      rows.push([
+        block.selectedMovie.title +
+          (block.selectedCountry ? ` / ${block.selectedCountry.name}` : ""),
+        "",
+      ]);
+      rows.push(
+        ...block.rows.map((row) => [
+          getDeliverableDisplayLabel(row),
+          formatUsd(row.cost),
+        ]),
+      );
       rows.push(["Total", formatUsd(block.totalCost)]);
     }
   } else {
-    rows.push(...data.rows.map((row) => [
-      getDeliverableDisplayLabel(row),
-      formatUsd(row.cost),
-    ]));
+    rows.push(
+      ...data.rows.map((row) => [
+        getDeliverableDisplayLabel(row),
+        formatUsd(row.cost),
+      ]),
+    );
     rows.push(["Total", formatUsd(data.totalCost)]);
   }
 
@@ -880,8 +1086,20 @@ export function buildWarnerDomesticReportFileName(
   return `${sanitizeFileSegment(data.client.name)}_${sanitizeFileSegment(data.reportTitle)}_${getExportTimestamp()}.${extension}`;
 }
 
-function getDeliverableDisplayLabel(row: WarnerDomesticDeliverableData["rows"][number]) {
-  return row.meta?.startsWith("Countries:") ? `${row.label} - ${row.meta}` : row.label;
+function getDeliverableDisplayLabel(
+  row: WarnerDomesticDeliverableData["rows"][number],
+) {
+  return row.meta?.startsWith("Countries:")
+    ? `${row.label} - ${row.meta}`
+    : row.label;
+}
+
+function formatGenericProjectDisplay(
+  row: GenericBillingReportData["blocks"][number]["rows"][number],
+) {
+  return row.lensDetails?.length
+    ? `${row.projectName}\n${row.lensDetails.join("\n")}`
+    : row.projectName;
 }
 
 export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
@@ -900,7 +1118,10 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
       return candidate;
     };
 
-    const blockWorksheet = (title: string, block: GenericBillingReportData["blocks"][number]) => {
+    const blockWorksheet = (
+      title: string,
+      block: GenericBillingReportData["blocks"][number],
+    ) => {
       const header =
         block.key === "fixedPerCountry"
           ? [
@@ -908,7 +1129,11 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
               "Contact Person",
               "Country List",
               ...(block.showDeveloperCost
-                ? ["Developer Cost (USD)", "Project Cost (USD)", "Total Cost (USD)"]
+                ? [
+                    "Developer Cost (USD)",
+                    "Project Cost (USD)",
+                    "Total Cost (USD)",
+                  ]
                 : ["Cost (USD)"]),
             ]
           : [
@@ -916,41 +1141,79 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
               "Contact Person",
               "Status",
               ...(block.showDeveloperCost
-                ? ["Developer Cost (USD)", "Project Cost (USD)", "Total Cost (USD)"]
+                ? [
+                    "Developer Cost (USD)",
+                    "Project Cost (USD)",
+                    "Total Cost (USD)",
+                  ]
                 : ["Cost (USD)"]),
             ];
-      const numericIndexes = block.showDeveloperCost ? [header.length - 3, header.length - 2, header.length - 1] : [header.length - 1];
+      const numericIndexes = block.showDeveloperCost
+        ? [header.length - 3, header.length - 2, header.length - 1]
+        : [header.length - 1];
       const rows = [
         excelRow(["Client", data.client.name]),
         excelRow(["Title", title]),
-        ...(block.key === "hourly" ? [excelRow(["Date Range", data.filters.fromDate || data.filters.toDate ? `${data.filters.fromDate || "Start"} to ${data.filters.toDate || "End"}` : "All dates"])] : []),
+        ...(block.key === "hourly"
+          ? [
+              excelRow([
+                "Date Range",
+                data.filters.fromDate || data.filters.toDate
+                  ? `${data.filters.fromDate || "Start"} to ${data.filters.toDate || "End"}`
+                  : "All dates",
+              ]),
+            ]
+          : []),
         excelRow([]),
         excelRow(header),
         ...block.rows.map((row) => {
           const values =
             block.key === "fixedPerCountry"
               ? [
-                  row.projectName,
+                  formatGenericProjectDisplay(row),
                   row.contactPerson,
                   row.countryList ?? "-",
-                  ...(block.showDeveloperCost ? [Number(row.developerCost ?? 0), row.projectCost, row.cost] : [row.cost]),
+                  ...(block.showDeveloperCost
+                    ? [
+                        Number(row.developerCost ?? 0),
+                        row.projectCost,
+                        row.cost,
+                      ]
+                    : [row.cost]),
                 ]
               : [
-                  row.projectName,
+                  formatGenericProjectDisplay(row),
                   row.contactPerson,
                   row.status,
-                  ...(block.showDeveloperCost ? [Number(row.developerCost ?? 0), row.projectCost, row.cost] : [row.cost]),
+                  ...(block.showDeveloperCost
+                    ? [
+                        Number(row.developerCost ?? 0),
+                        row.projectCost,
+                        row.cost,
+                      ]
+                    : [row.cost]),
                 ];
           return excelRow(values, numericIndexes);
         }),
         excelRow([]),
-        excelRow(["Total", "", "", ...(block.showDeveloperCost
-          ? [
-              block.rows.reduce((sum, row) => sum + Number(row.developerCost ?? 0), 0),
-              block.rows.reduce((sum, row) => sum + row.projectCost, 0),
-              block.rows.reduce((sum, row) => sum + row.cost, 0),
-            ]
-          : [block.rows.reduce((sum, row) => sum + row.cost, 0)])], numericIndexes),
+        excelRow(
+          [
+            "Total",
+            "",
+            "",
+            ...(block.showDeveloperCost
+              ? [
+                  block.rows.reduce(
+                    (sum, row) => sum + Number(row.developerCost ?? 0),
+                    0,
+                  ),
+                  block.rows.reduce((sum, row) => sum + row.projectCost, 0),
+                  block.rows.reduce((sum, row) => sum + row.cost, 0),
+                ]
+              : [block.rows.reduce((sum, row) => sum + row.cost, 0)]),
+          ],
+          numericIndexes,
+        ),
       ];
       return worksheet(makeSheetName(`${title} ${block.title}`), rows);
     };
@@ -959,16 +1222,34 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
       excelRow([`${data.client.name} Billing`]),
       excelRow(["Client", data.client.name]),
       excelRow(["Title", "All Titles"]),
-      excelRow(["Hourly Date Range", data.filters.fromDate || data.filters.toDate ? `${data.filters.fromDate || "Start"} to ${data.filters.toDate || "End"}` : "All dates"]),
+      excelRow([
+        "Hourly Date Range",
+        data.filters.fromDate || data.filters.toDate
+          ? `${data.filters.fromDate || "Start"} to ${data.filters.toDate || "End"}`
+          : "All dates",
+      ]),
       excelRow([]),
       excelRow(["Title", "Total Cost (USD)"]),
-      ...data.titleBlocks.map((titleBlock) => excelRow([titleBlock.movie.title, titleBlock.totalCost], [1])),
+      ...data.titleBlocks.map((titleBlock) =>
+        excelRow([titleBlock.movie.title, titleBlock.totalCost], [1]),
+      ),
       excelRow([]),
-      excelRow(["Grand Total", data.titleBlocks.reduce((sum, titleBlock) => sum + titleBlock.totalCost, 0)], [1]),
+      excelRow(
+        [
+          "Grand Total",
+          data.titleBlocks.reduce(
+            (sum, titleBlock) => sum + titleBlock.totalCost,
+            0,
+          ),
+        ],
+        [1],
+      ),
     ];
 
     const worksheets = data.titleBlocks.flatMap((titleBlock) =>
-      titleBlock.blocks.map((block) => blockWorksheet(titleBlock.movie.title, block)),
+      titleBlock.blocks.map((block) =>
+        blockWorksheet(titleBlock.movie.title, block),
+      ),
     );
 
     return `<?xml version="1.0"?>
@@ -1022,7 +1303,9 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
         ? [
             excelRow([
               "Date Range",
-              data.filters.fromDate || data.filters.toDate ? `${data.filters.fromDate || "Start"} to ${data.filters.toDate || "End"}` : "All dates",
+              data.filters.fromDate || data.filters.toDate
+                ? `${data.filters.fromDate || "Start"} to ${data.filters.toDate || "End"}`
+                : "All dates",
             ]),
           ]
         : []),
@@ -1032,7 +1315,7 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
         const values =
           block.key === "fixedPerCountry"
             ? [
-                row.projectName,
+                formatGenericProjectDisplay(row),
                 row.contactPerson,
                 row.countryList ?? "-",
                 ...(block.showDeveloperCost
@@ -1040,7 +1323,7 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
                   : [row.cost]),
               ]
             : [
-                row.projectName,
+                formatGenericProjectDisplay(row),
                 row.contactPerson,
                 row.status,
                 ...(block.showDeveloperCost
@@ -1092,7 +1375,9 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
       : []),
     excelRow([
       "Hourly Date Range",
-      data.filters.fromDate || data.filters.toDate ? `${data.filters.fromDate || "Start"} to ${data.filters.toDate || "End"}` : "All dates",
+      data.filters.fromDate || data.filters.toDate
+        ? `${data.filters.fromDate || "Start"} to ${data.filters.toDate || "End"}`
+        : "All dates",
     ]),
     excelRow([]),
     excelRow(summaryHeader),
@@ -1374,7 +1659,7 @@ function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
     const rows: PdfTableRow[] = block.rows.map((row) =>
       isCountryBlock
         ? [
-            row.projectName,
+            formatGenericProjectDisplay(row),
             row.contactPerson,
             row.countryList ?? "-",
             ...(block.showDeveloperCost
@@ -1386,7 +1671,7 @@ function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
               : [formatUsd(row.cost)]),
           ]
         : [
-            row.projectName,
+            formatGenericProjectDisplay(row),
             row.contactPerson,
             row.status,
             ...(block.showDeveloperCost
@@ -1424,9 +1709,7 @@ function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
       const commands: string[] = [];
       const startY = pageNumberForBlock === 1 ? TOP_Y - 104 : TOP_Y - 38;
       if (pageNumberForBlock === 1) {
-        commands.push(
-          textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true),
-        );
+        commands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
         commands.push(
           textCommand(
             `Client: ${data.client.name}`,
@@ -1512,27 +1795,91 @@ export function buildGenericBillingReportPdf(data: GenericBillingReportData) {
 export { getGenericBillingReportFileName };
 
 export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
-  const buildRows = (title: string, projectRows: typeof data.projectRows, chargeRows: typeof data.chargeRows, totalCost: number) => [
+  const buildRows = (
+    title: string,
+    projectRows: typeof data.projectRows,
+    chargeRows: typeof data.chargeRows,
+    totalCost: number,
+  ) => [
     excelRow([data.reportTitle]),
     excelRow(["Client", data.client.name]),
     excelRow(["Title", title]),
     excelRow([]),
-    excelRow(data.showCountryList ? ["Billing Header / Project", "Country List", "Contact Person", "Cost Type", "Cost (USD)"] : ["Billing Header / Project", "Contact Person", "Cost Type", "Cost (USD)"]),
+    excelRow(
+      data.showCountryList
+        ? [
+            "Billing Header / Project",
+            "Country List",
+            "Contact Person",
+            "Cost Type",
+            "Cost (USD)",
+          ]
+        : [
+            "Billing Header / Project",
+            "Contact Person",
+            "Cost Type",
+            "Cost (USD)",
+          ],
+    ),
     ...projectRows.map((row) =>
       excelRow(
         data.showCountryList
-          ? [row.projectName, row.countryList || "-", row.contactPerson, row.billingModel, row.cost]
+          ? [
+              row.projectName,
+              row.countryList || "-",
+              row.contactPerson,
+              row.billingModel,
+              row.cost,
+            ]
           : [row.projectName, row.contactPerson, row.billingModel, row.cost],
         data.showCountryList ? [4] : [3],
       ),
     ),
-    ...(chargeRows.length ? [excelRow([]), excelRow(["Title Charges"]), ...chargeRows.map((row) => excelRow(data.showCountryList ? [row.label, "-", "-", "Title Charge", row.cost] : [row.label, "-", "Title Charge", row.cost], data.showCountryList ? [4] : [3]))] : []),
+    ...(chargeRows.length
+      ? [
+          excelRow([]),
+          excelRow(["Title Charges"]),
+          ...chargeRows.map((row) =>
+            excelRow(
+              data.showCountryList
+                ? [row.label, "-", "-", "Title Charge", row.cost]
+                : [row.label, "-", "Title Charge", row.cost],
+              data.showCountryList ? [4] : [3],
+            ),
+          ),
+        ]
+      : []),
     excelRow([]),
-    excelRow(data.showCountryList ? ["Total", "", "", "", totalCost] : ["Total", "", "", totalCost], data.showCountryList ? [4] : [3]),
+    excelRow(
+      data.showCountryList
+        ? ["Total", "", "", "", totalCost]
+        : ["Total", "", "", totalCost],
+      data.showCountryList ? [4] : [3],
+    ),
   ];
   const sheets = data.titleBlocks.length
-    ? data.titleBlocks.map((block, index) => worksheet(`Title ${index + 1}`, buildRows(block.movie.title, block.projectRows, block.chargeRows, block.totalCost))).join("\n")
-    : worksheet("Sony Billing", buildRows(data.selectedMovie?.title ?? "-", data.projectRows, data.chargeRows, data.totalCost));
+    ? data.titleBlocks
+        .map((block, index) =>
+          worksheet(
+            `Title ${index + 1}`,
+            buildRows(
+              block.movie.title,
+              block.projectRows,
+              block.chargeRows,
+              block.totalCost,
+            ),
+          ),
+        )
+        .join("\n")
+    : worksheet(
+        "Sony Billing",
+        buildRows(
+          data.selectedMovie?.title ?? "-",
+          data.projectRows,
+          data.chargeRows,
+          data.totalCost,
+        ),
+      );
   return `<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
@@ -1544,16 +1891,20 @@ export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
 </Workbook>`;
 }
 
-function buildSonyPicturesReportPdfPages(data: SonyPicturesReportData): string[] {
+function buildSonyPicturesReportPdfPages(
+  data: SonyPicturesReportData,
+): string[] {
   if (data.titleBlocks.length) {
-    return data.titleBlocks.flatMap((block) => buildSonyPicturesReportPdfPages({
-      ...data,
-      selectedMovie: block.movie,
-      projectRows: block.projectRows,
-      chargeRows: block.chargeRows,
-      totalCost: block.totalCost,
-      titleBlocks: [],
-    }));
+    return data.titleBlocks.flatMap((block) =>
+      buildSonyPicturesReportPdfPages({
+        ...data,
+        selectedMovie: block.movie,
+        projectRows: block.projectRows,
+        chargeRows: block.chargeRows,
+        totalCost: block.totalCost,
+        titleBlocks: [],
+      }),
+    );
   }
   const columns: PdfTableColumn[] = [
     { header: "Billing Header / Project", width: 230 },
@@ -1598,9 +1949,7 @@ function buildSonyPicturesReportPdfPages(data: SonyPicturesReportData): string[]
 
   if (!data.selectedMovie) {
     const commands: string[] = [];
-    commands.push(
-      textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true),
-    );
+    commands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
     commands.push(
       textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true),
     );
@@ -1626,9 +1975,7 @@ function buildSonyPicturesReportPdfPages(data: SonyPicturesReportData): string[]
     );
 
     if (isFirstPage) {
-      commands.push(
-        textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true),
-      );
+      commands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
       commands.push(
         textCommand(
           `Client: ${data.client.name}`,
@@ -1656,13 +2003,7 @@ function buildSonyPicturesReportPdfPages(data: SonyPicturesReportData): string[]
       );
     } else {
       commands.push(
-        textCommand(
-          `${data.reportTitle} continued`,
-          MARGIN_X,
-          TOP_Y,
-          13,
-          true,
-        ),
+        textCommand(`${data.reportTitle} continued`, MARGIN_X, TOP_Y, 13, true),
       );
     }
 
@@ -1699,7 +2040,6 @@ export function buildSonyPicturesReportPdf(data: SonyPicturesReportData) {
 
 export { getSonyPicturesReportFileName };
 
-
 export function buildFilmikBillingReportExcel(data: FilmikBillingReportData) {
   const resourceRows = [
     excelRow([`${data.client.name} Resource Cost`]),
@@ -1707,9 +2047,14 @@ export function buildFilmikBillingReportExcel(data: FilmikBillingReportData) {
     excelRow(["Month", getFilmikBillingReportMonthLabel(data)]),
     excelRow([]),
     excelRow(["Resource Type", "Count", "Cost (USD)"]),
-    ...data.resourceRows.map((row) => excelRow([row.resourceTypeName, row.count, row.cost], [1, 2])),
+    ...data.resourceRows.map((row) =>
+      excelRow([row.resourceTypeName, row.count, row.cost], [1, 2]),
+    ),
     excelRow([]),
-    excelRow(["Total", data.resourceTotalCount, data.resourceTotalCost], [1, 2]),
+    excelRow(
+      ["Total", data.resourceTotalCount, data.resourceTotalCost],
+      [1, 2],
+    ),
   ];
 
   const combinedRows = [
@@ -1717,14 +2062,24 @@ export function buildFilmikBillingReportExcel(data: FilmikBillingReportData) {
     excelRow(["Client", data.client.name]),
     excelRow(["Month", getFilmikBillingReportMonthLabel(data)]),
     excelRow([]),
-    excelRow(["Project / Resource", "Resources / Hours", "Cost (USD)", "Contact Person"]),
+    excelRow([
+      "Project / Resource",
+      "Resources / Hours",
+      "Cost (USD)",
+      "Contact Person",
+    ]),
     ...data.combinedRows.map((row) =>
-      excelRow([
-        row.name,
-        row.key === "resource-cost" ? row.quantity : `${row.quantity.toFixed(2)}h`,
-        row.cost,
-        row.contactPerson,
-      ], [2]),
+      excelRow(
+        [
+          row.name,
+          row.key === "resource-cost"
+            ? row.quantity
+            : `${row.quantity.toFixed(2)}h`,
+          row.cost,
+          row.contactPerson,
+        ],
+        [2],
+      ),
     ),
     excelRow([]),
     excelRow(["Total", "", data.combinedTotalCost, "-"], [2]),
@@ -1747,24 +2102,52 @@ function buildFilmikBillingReportPdfPages(data: FilmikBillingReportData) {
   const monthLabel = getFilmikBillingReportMonthLabel(data);
 
   const resourceCommands: string[] = [];
-  resourceCommands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
-  resourceCommands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
-  resourceCommands.push(textCommand(`Month: ${monthLabel}`, MARGIN_X, TOP_Y - 38, 9));
-  resourceCommands.push(textCommand("Resource Cost", MARGIN_X, TOP_Y - 62, 12, true));
+  resourceCommands.push(
+    textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true),
+  );
+  resourceCommands.push(
+    textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true),
+  );
+  resourceCommands.push(
+    textCommand(`Month: ${monthLabel}`, MARGIN_X, TOP_Y - 38, 9),
+  );
+  resourceCommands.push(
+    textCommand("Resource Cost", MARGIN_X, TOP_Y - 62, 12, true),
+  );
   const resourceColumns: PdfTableColumn[] = [
     { header: "Resource Type", width: 360 },
     { header: "Count", width: 120, align: "right" },
     { header: "Cost", width: 150, align: "right" },
   ];
   const resourceRows: PdfTableRow[] = [
-    ...data.resourceRows.map((row) => [row.resourceTypeName, row.count, formatUsd(row.cost)] as PdfTableRow),
+    ...data.resourceRows.map(
+      (row) =>
+        [row.resourceTypeName, row.count, formatUsd(row.cost)] as PdfTableRow,
+    ),
     ["Total", data.resourceTotalCount, formatUsd(data.resourceTotalCost)],
   ];
   drawTableHeader(resourceCommands, resourceColumns, MARGIN_X, TOP_Y - 88);
   let resourceY = TOP_Y - 88 - HEADER_HEIGHT;
   resourceRows.forEach((row) => {
-    if (row[0] === "Total") resourceCommands.push(fillRectCommand(MARGIN_X, resourceY - SUMMARY_ROW_HEIGHT, tableWidth(resourceColumns), SUMMARY_ROW_HEIGHT, 0.9));
-    drawTableRow(resourceCommands, resourceColumns, row, MARGIN_X, resourceY, SUMMARY_ROW_HEIGHT, 8);
+    if (row[0] === "Total")
+      resourceCommands.push(
+        fillRectCommand(
+          MARGIN_X,
+          resourceY - SUMMARY_ROW_HEIGHT,
+          tableWidth(resourceColumns),
+          SUMMARY_ROW_HEIGHT,
+          0.9,
+        ),
+      );
+    drawTableRow(
+      resourceCommands,
+      resourceColumns,
+      row,
+      MARGIN_X,
+      resourceY,
+      SUMMARY_ROW_HEIGHT,
+      8,
+    );
     resourceY -= SUMMARY_ROW_HEIGHT;
   });
   resourceCommands.push(textCommand("Page 1", PAGE_WIDTH - 82, 18, 8));
@@ -1777,12 +2160,17 @@ function buildFilmikBillingReportPdfPages(data: FilmikBillingReportData) {
     { header: "Contact Person", width: 250 },
   ];
   const combinedRows: PdfTableRow[] = [
-    ...data.combinedRows.map((row) => [
-      row.name,
-      row.key === "resource-cost" ? row.quantity : `${row.quantity.toFixed(2)}h`,
-      formatUsd(row.cost),
-      row.contactPerson,
-    ] as PdfTableRow),
+    ...data.combinedRows.map(
+      (row) =>
+        [
+          row.name,
+          row.key === "resource-cost"
+            ? row.quantity
+            : `${row.quantity.toFixed(2)}h`,
+          formatUsd(row.cost),
+          row.contactPerson,
+        ] as PdfTableRow,
+    ),
     ["Total", "", formatUsd(data.combinedTotalCost), "-"],
   ];
   let rowIndex = 0;
@@ -1793,17 +2181,40 @@ function buildFilmikBillingReportPdfPages(data: FilmikBillingReportData) {
     const startY = first ? TOP_Y - 88 : TOP_Y - 38;
     if (first) {
       commands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
-      commands.push(textCommand(`Month: ${monthLabel}`, MARGIN_X, TOP_Y - 22, 9));
-      commands.push(textCommand("Project + Resource Cost", MARGIN_X, TOP_Y - 54, 12, true));
+      commands.push(
+        textCommand(`Month: ${monthLabel}`, MARGIN_X, TOP_Y - 22, 9),
+      );
+      commands.push(
+        textCommand("Project + Resource Cost", MARGIN_X, TOP_Y - 54, 12, true),
+      );
     } else {
-      commands.push(textCommand(`${data.reportTitle} continued`, MARGIN_X, TOP_Y, 13, true));
+      commands.push(
+        textCommand(`${data.reportTitle} continued`, MARGIN_X, TOP_Y, 13, true),
+      );
     }
     drawTableHeader(commands, combinedColumns, MARGIN_X, startY);
     let y = startY - HEADER_HEIGHT;
     const rowsPerPage = Math.max(1, Math.floor((y - 42) / SUMMARY_ROW_HEIGHT));
     combinedRows.slice(rowIndex, rowIndex + rowsPerPage).forEach((row) => {
-      if (row[0] === "Total") commands.push(fillRectCommand(MARGIN_X, y - SUMMARY_ROW_HEIGHT, tableWidth(combinedColumns), SUMMARY_ROW_HEIGHT, 0.9));
-      drawTableRow(commands, combinedColumns, row, MARGIN_X, y, SUMMARY_ROW_HEIGHT, 8);
+      if (row[0] === "Total")
+        commands.push(
+          fillRectCommand(
+            MARGIN_X,
+            y - SUMMARY_ROW_HEIGHT,
+            tableWidth(combinedColumns),
+            SUMMARY_ROW_HEIGHT,
+            0.9,
+          ),
+        );
+      drawTableRow(
+        commands,
+        combinedColumns,
+        row,
+        MARGIN_X,
+        y,
+        SUMMARY_ROW_HEIGHT,
+        8,
+      );
       y -= SUMMARY_ROW_HEIGHT;
     });
     commands.push(textCommand(`Page ${pageNo}`, PAGE_WIDTH - 82, 18, 8));
@@ -1819,8 +2230,9 @@ export function buildFilmikBillingReportPdf(data: FilmikBillingReportData) {
   return buildPdfDocument(buildFilmikBillingReportPdfPages(data));
 }
 
-
-export function buildSonyNewsletterBillingExcel(data: SonyNewsletterBillingData) {
+export function buildSonyNewsletterBillingExcel(
+  data: SonyNewsletterBillingData,
+) {
   const rows = [
     excelRow([`${data.client.name} Newsletters Billing`]),
     excelRow(["Client", data.client.name]),
@@ -1828,7 +2240,9 @@ export function buildSonyNewsletterBillingExcel(data: SonyNewsletterBillingData)
     excelRow(["Project", data.project?.name ?? "Newsletters"]),
     excelRow([]),
     excelRow(["Newsletter Type", "Count", "Cost (USD)"]),
-    ...data.rows.map((row) => excelRow([row.newsletterType, row.count, row.cost], [1, 2])),
+    ...data.rows.map((row) =>
+      excelRow([row.newsletterType, row.count, row.cost], [1, 2]),
+    ),
     excelRow([]),
     excelRow(["Total", data.totalCount, data.totalCost], [1, 2]),
   ];
@@ -1850,19 +2264,48 @@ function buildSonyNewsletterBillingPdfPages(data: SonyNewsletterBillingData) {
     { header: "Cost", width: 160, align: "right" },
   ];
   const rows: PdfTableRow[] = [
-    ...data.rows.map((row) => [row.newsletterType, row.count, formatUsd(row.cost)] as PdfTableRow),
+    ...data.rows.map(
+      (row) =>
+        [row.newsletterType, row.count, formatUsd(row.cost)] as PdfTableRow,
+    ),
     ["Total", data.totalCount, formatUsd(data.totalCost)] as PdfTableRow,
   ];
   const commands: string[] = [];
-  commands.push(textCommand(`${data.client.name} Newsletters Billing`, MARGIN_X, TOP_Y, 15, true));
-  commands.push(textCommand(`Month: ${data.filters.month}`, MARGIN_X, TOP_Y - 24, 9));
-  commands.push(textCommand(`Project: ${data.project?.name ?? "Newsletters"}`, MARGIN_X, TOP_Y - 40, 9));
+  commands.push(
+    textCommand(
+      `${data.client.name} Newsletters Billing`,
+      MARGIN_X,
+      TOP_Y,
+      15,
+      true,
+    ),
+  );
+  commands.push(
+    textCommand(`Month: ${data.filters.month}`, MARGIN_X, TOP_Y - 24, 9),
+  );
+  commands.push(
+    textCommand(
+      `Project: ${data.project?.name ?? "Newsletters"}`,
+      MARGIN_X,
+      TOP_Y - 40,
+      9,
+    ),
+  );
   const x = MARGIN_X;
   let y = TOP_Y - 76;
   drawTableHeader(commands, columns, x, y);
   y -= HEADER_HEIGHT;
   rows.forEach((row) => {
-    if (row[0] === "Total") commands.push(fillRectCommand(x, y - SUMMARY_ROW_HEIGHT, tableWidth(columns), SUMMARY_ROW_HEIGHT, 0.9));
+    if (row[0] === "Total")
+      commands.push(
+        fillRectCommand(
+          x,
+          y - SUMMARY_ROW_HEIGHT,
+          tableWidth(columns),
+          SUMMARY_ROW_HEIGHT,
+          0.9,
+        ),
+      );
     drawTableRow(commands, columns, row, x, y, SUMMARY_ROW_HEIGHT, 8);
     y -= SUMMARY_ROW_HEIGHT;
   });
@@ -1876,26 +2319,55 @@ export function buildSonyNewsletterBillingPdf(data: SonyNewsletterBillingData) {
 
 export { getSonyNewsletterBillingFileName };
 
-
 export function buildRoyalBillingReportExcel(data: RoyalBillingData) {
   const rows = [
     excelRow([`${data.client.name} Billing`]),
     excelRow(["Month", data.filters.month]),
     excelRow([]),
-    excelRow(["Project", "Contact Person", "Billing Model", "Project Hours", "Fixed Monthly Hours", "Additional Hours", "Project Cost (USD)", "Excess Hours", "Excess Cost (USD)", "Total Cost (USD)"]),
-    ...data.rows.map((row) => excelRow([
-      row.projectName,
-      row.contactPerson,
-      row.billingModel,
-      row.projectHours,
-      row.fixedMonthlyHours ?? "-",
-      row.additionalHours ?? "-",
-      row.projectCost ?? "-",
-      row.excessHours > 0 ? row.excessHours : "-",
-      row.excessHours > 0 ? row.excessCost : "-",
-      row.totalCost,
-    ], [3,4,5,6,7,8,9])),
-    excelRow(["Total", "", "", "", "", "", data.totals.projectCost, data.totals.excessHours, data.totals.excessCost, data.totals.totalCost], [6,7,8,9]),
+    excelRow([
+      "Project",
+      "Contact Person",
+      "Billing Model",
+      "Project Hours",
+      "Fixed Monthly Hours",
+      "Additional Hours",
+      "Project Cost (USD)",
+      "Excess Hours",
+      "Excess Cost (USD)",
+      "Total Cost (USD)",
+    ]),
+    ...data.rows.map((row) =>
+      excelRow(
+        [
+          row.projectName,
+          row.contactPerson,
+          row.billingModel,
+          row.projectHours,
+          row.fixedMonthlyHours ?? "-",
+          row.additionalHours ?? "-",
+          row.projectCost ?? "-",
+          row.excessHours > 0 ? row.excessHours : "-",
+          row.excessHours > 0 ? row.excessCost : "-",
+          row.totalCost,
+        ],
+        [3, 4, 5, 6, 7, 8, 9],
+      ),
+    ),
+    excelRow(
+      [
+        "Total",
+        "",
+        "",
+        "",
+        "",
+        "",
+        data.totals.projectCost,
+        data.totals.excessHours,
+        data.totals.excessCost,
+        data.totals.totalCost,
+      ],
+      [6, 7, 8, 9],
+    ),
   ];
   return `<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
@@ -1921,18 +2393,31 @@ export function buildRoyalBillingReportPdf(data: RoyalBillingData) {
     { header: "Total", width: 80, align: "right" },
   ];
   const rows: PdfTableRow[] = [
-    ...data.rows.map((row) => [
-      row.projectName,
-      row.contactPerson,
-      row.billingModel,
-      row.projectHours.toFixed(2),
-      row.additionalHours == null ? "-" : row.additionalHours.toFixed(2),
-      row.projectCost == null ? "-" : formatUsd(row.projectCost),
-      row.excessHours > 0 ? row.excessHours.toFixed(2) : "-",
-      row.excessHours > 0 ? formatUsd(row.excessCost) : "-",
-      formatUsd(row.totalCost),
-    ] as PdfTableRow),
-    ["Total", "", "", "", "", formatUsd(data.totals.projectCost), data.totals.excessHours.toFixed(2), formatUsd(data.totals.excessCost), formatUsd(data.totals.totalCost)] as PdfTableRow,
+    ...data.rows.map(
+      (row) =>
+        [
+          row.projectName,
+          row.contactPerson,
+          row.billingModel,
+          row.projectHours.toFixed(2),
+          row.additionalHours == null ? "-" : row.additionalHours.toFixed(2),
+          row.projectCost == null ? "-" : formatUsd(row.projectCost),
+          row.excessHours > 0 ? row.excessHours.toFixed(2) : "-",
+          row.excessHours > 0 ? formatUsd(row.excessCost) : "-",
+          formatUsd(row.totalCost),
+        ] as PdfTableRow,
+    ),
+    [
+      "Total",
+      "",
+      "",
+      "",
+      "",
+      formatUsd(data.totals.projectCost),
+      data.totals.excessHours.toFixed(2),
+      formatUsd(data.totals.excessCost),
+      formatUsd(data.totals.totalCost),
+    ] as PdfTableRow,
   ];
   const pageStreams: string[] = [];
   const commands: string[] = [

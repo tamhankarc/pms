@@ -112,6 +112,17 @@ enum LeaveType {
   OTHER
 }
 
+enum LeaveDayDuration {
+  FULL_DAY
+  HALF_DAY
+}
+
+enum LeaveDaySelectionMode {
+  FULL_DAYS
+  HALF_DAYS
+  CUSTOM
+}
+
 enum ShiftType {
   DAY
   NIGHT
@@ -196,6 +207,7 @@ model Client {
   showCountriesInTimeEntries Boolean  @default(false)
   showMoviesInEntries        Boolean  @default(false)
   showAssetTypesInEntries    Boolean  @default(false)
+  showLensTypesInEntries     Boolean  @default(false)
   showAssetNamesInEntries    Boolean  @default(false)
   showLanguagesInEntries     Boolean  @default(false)
   showNewslettersInEntries   Boolean  @default(false)
@@ -445,6 +457,21 @@ model AssetType {
   @@index([name])
 }
 
+model LensType {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  cost      Decimal  @default(0) @db.Decimal(12, 2)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  estimates   Estimate[]
+  timeEntries TimeEntry[]
+
+  @@index([isActive])
+  @@index([name])
+}
+
 model Language {
   id        String   @id @default(cuid())
   name      String
@@ -505,6 +532,7 @@ model Project {
   hideCountriesInEntries  Boolean       @default(false)
   hideMoviesInEntries     Boolean       @default(false)
   hideAssetTypesInEntries Boolean       @default(false)
+  hideLensTypesInEntries  Boolean       @default(false)
   hideAssetNamesInEntries Boolean       @default(false)
   hideNewslettersInEntries Boolean      @default(false)
   addToBilling            Boolean       @default(false)
@@ -557,6 +585,7 @@ model SubProject {
   hideCountriesInEntries  Boolean  @default(false)
   hideMoviesInEntries     Boolean  @default(false)
   hideAssetTypesInEntries Boolean  @default(false)
+  hideLensTypesInEntries  Boolean  @default(false)
   hideAssetNamesInEntries Boolean  @default(false)
   hideNewslettersInEntries Boolean @default(false)
 
@@ -619,6 +648,7 @@ model Estimate {
   countryId        String?
   movieId          String?
   assetTypeId      String?
+  lensTypeId       String?
   assetNameId      String?
   languageId       String?
   newsletterId     String?
@@ -635,6 +665,7 @@ model Estimate {
   country    Country?         @relation(fields: [countryId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   movie      Movie?           @relation(fields: [movieId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   assetType  AssetType?       @relation(fields: [assetTypeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  lensType   LensType?        @relation(fields: [lensTypeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   assetName  AssetName?       @relation(fields: [assetNameId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   newsletter Newsletter?      @relation(fields: [newsletterId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   language   Language?        @relation(fields: [languageId], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -647,6 +678,7 @@ model Estimate {
   @@index([countryId])
   @@index([movieId])
   @@index([assetTypeId])
+  @@index([lensTypeId])
   @@index([assetNameId])
   @@index([newsletterId])
   @@index([languageId])
@@ -675,6 +707,7 @@ model TimeEntry {
   countryId    String?
   movieId      String?
   assetTypeId  String?
+  lensTypeId   String?
   assetNameId  String?
   languageId   String?
   newsletterId String?
@@ -693,6 +726,7 @@ model TimeEntry {
   country    Country?          @relation(fields: [countryId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   movie      Movie?            @relation(fields: [movieId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   assetType  AssetType?        @relation(fields: [assetTypeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  lensType   LensType?         @relation(fields: [lensTypeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   assetName  AssetName?        @relation(fields: [assetNameId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   newsletter Newsletter?       @relation(fields: [newsletterId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   language   Language?         @relation(fields: [languageId], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -705,6 +739,7 @@ model TimeEntry {
   @@index([countryId])
   @@index([movieId])
   @@index([assetTypeId])
+  @@index([lensTypeId])
   @@index([assetNameId])
   @@index([newsletterId])
   @@index([languageId])
@@ -778,6 +813,8 @@ model LeaveRequest {
   rejectedAt      DateTime?
   reconsideredAt  DateTime?
   totalLeaveDays  Decimal?    @db.Decimal(6, 2)
+  daySelectionMode LeaveDaySelectionMode @default(FULL_DAYS)
+  leaveDayTypesJson String?    @db.Text
   casualDaysUsed  Decimal?    @db.Decimal(6, 2)
   earnedDaysUsed  Decimal?    @db.Decimal(6, 2)
   unpaidDaysUsed  Decimal?    @db.Decimal(6, 2)

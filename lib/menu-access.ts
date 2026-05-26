@@ -5,29 +5,66 @@ export const menuItems = [
   { key: "clients", href: "/clients", label: "Clients" },
   { key: "movies", href: "/movies", label: "Movies" },
   { key: "newsletters", href: "/newsletters", label: "Newsletters" },
-  { key: "client-billing-heads", href: "/client-billing-heads", label: "Billing Heads" },
-  { key: "movie-billing-heads", href: "/movie-billing-heads", label: "Movie Billing Heads" },
+  {
+    key: "client-billing-heads",
+    href: "/client-billing-heads",
+    label: "Billing Heads",
+  },
+  {
+    key: "movie-billing-heads",
+    href: "/movie-billing-heads",
+    label: "Movie Billing Heads",
+  },
   { key: "asset-type", href: "/asset-type", label: "Asset Types" },
+  { key: "lens-type", href: "/lens-type", label: "Lens Types" },
   { key: "asset-names", href: "/asset-names", label: "Asset Names" },
-  { key: "filmik-resource", href: "/filmik-resource", label: "Filmik Resources" },
+  {
+    key: "filmik-resource",
+    href: "/filmik-resource",
+    label: "Filmik Resources",
+  },
   { key: "countries", href: "/countries", label: "Countries" },
   { key: "languages", href: "/languages", label: "Languages" },
   { key: "projects", href: "/projects", label: "Projects" },
   { key: "sub-project", href: "/sub-project", label: "Sub Projects" },
-  { key: "user-assignments", href: "/user-assignments", label: "User Assignments" },
+  {
+    key: "user-assignments",
+    href: "/user-assignments",
+    label: "User Assignments",
+  },
   { key: "users", href: "/users", label: "Users" },
-  { key: "contact-persons", href: "/contact-persons", label: "Contact Persons" },
+  {
+    key: "contact-persons",
+    href: "/contact-persons",
+    label: "Contact Persons",
+  },
   { key: "time-entries", href: "/time-entries", label: "Time Entries" },
   { key: "estimates", href: "/estimates", label: "Estimates" },
-  { key: "team-lead-assignments", href: "/team-lead-assignments", label: "Team Lead Assignments" },
+  {
+    key: "team-lead-assignments",
+    href: "/team-lead-assignments",
+    label: "Team Lead Assignments",
+  },
   { key: "reports", href: "/reports", label: "Reports" },
-  { key: "billing-reports", href: "/billing-reports", label: "Billing Reports" },
+  {
+    key: "billing-reports",
+    href: "/billing-reports",
+    label: "Billing Reports",
+  },
   { key: "leave-requests", href: "/leave-requests", label: "Leave Requests" },
-  { key: "leave-approvals", href: "/leave-approvals", label: "Leave Approvals" },
+  {
+    key: "leave-approvals",
+    href: "/leave-approvals",
+    label: "Leave Approvals",
+  },
   { key: "leave-admin", href: "/leave-admin", label: "Leave Administration" },
   { key: "announcements", href: "/announcements", label: "Announcements" },
   { key: "profile", href: "/profile", label: "My Profile" },
-  { key: "change-password", href: "/change-password", label: "Change Password" },
+  {
+    key: "change-password",
+    href: "/change-password",
+    label: "Change Password",
+  },
 ] as const;
 
 export type MenuKey = (typeof menuItems)[number]["key"];
@@ -36,7 +73,13 @@ export const menuKeySet = new Set<string>(menuItems.map((item) => item.key));
 
 export function normalizeMenuKeys(values: unknown): MenuKey[] {
   if (!Array.isArray(values)) return [];
-  return Array.from(new Set(values.map(String).filter((value): value is MenuKey => menuKeySet.has(value))));
+  return Array.from(
+    new Set(
+      values
+        .map(String)
+        .filter((value): value is MenuKey => menuKeySet.has(value)),
+    ),
+  );
 }
 
 export function parseMenuKeysJson(value?: string | null): MenuKey[] {
@@ -48,23 +91,73 @@ export function parseMenuKeysJson(value?: string | null): MenuKey[] {
   }
 }
 
-export function getBaseMenuKeysForUserType(userType: UserType | string): MenuKey[] {
+export function getBaseMenuKeysForUserType(
+  userType: UserType | string,
+): MenuKey[] {
   switch (userType) {
     case "ADMIN":
       return menuItems.map((item) => item.key);
     case "OPERATIONS":
-      return ["dashboard", "clients", "movies", "newsletters", "asset-type", "asset-names", "filmik-resource", "countries", "languages", "projects", "sub-project", "user-assignments", "contact-persons", "profile", "change-password"];
+      return [
+        "dashboard",
+        "clients",
+        "movies",
+        "newsletters",
+        "asset-type",
+        "lens-type",
+        "asset-names",
+        "filmik-resource",
+        "countries",
+        "languages",
+        "projects",
+        "sub-project",
+        "user-assignments",
+        "contact-persons",
+        "profile",
+        "change-password",
+      ];
     case "HR":
-      return ["dashboard", "users", "leave-requests", "leave-approvals", "leave-admin", "announcements", "profile", "change-password"];
+      return [
+        "dashboard",
+        "users",
+        "leave-requests",
+        "leave-approvals",
+        "leave-admin",
+        "announcements",
+        "profile",
+        "change-password",
+      ];
     case "ACCOUNTS":
       return ["billing-reports"];
     case "EMPLOYEE":
-      return ["dashboard", "time-entries", "estimates", "leave-requests", "profile", "change-password"];
+      return [
+        "dashboard",
+        "time-entries",
+        "estimates",
+        "leave-requests",
+        "profile",
+        "change-password",
+      ];
     case "TEAM_LEAD":
-      return ["dashboard", "time-entries", "estimates", "leave-requests", "profile", "change-password"];
+      return [
+        "dashboard",
+        "time-entries",
+        "estimates",
+        "leave-requests",
+        "profile",
+        "change-password",
+      ];
     case "MANAGER":
     case "REPORT_VIEWER":
-      return ["dashboard", "time-entries", "estimates", "team-lead-assignments", "reports", "profile", "change-password"];
+      return [
+        "dashboard",
+        "time-entries",
+        "estimates",
+        "team-lead-assignments",
+        "reports",
+        "profile",
+        "change-password",
+      ];
     default:
       return [];
   }
@@ -75,7 +168,11 @@ export function getExtraMenuOptionsForUserType(userType: UserType | string) {
   return menuItems.filter((item) => {
     if (defaults.has(item.key)) return false;
     if (item.key === "billing-reports") return false;
-    if (userType === "ACCOUNTS" && ["dashboard", "reports", "change-password"].includes(item.key)) return false;
+    if (
+      userType === "ACCOUNTS" &&
+      ["dashboard", "reports", "change-password"].includes(item.key)
+    )
+      return false;
     return true;
   });
 }

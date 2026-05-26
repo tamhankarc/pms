@@ -8,7 +8,10 @@ import { SubProjectForm } from "@/components/forms/sub-project-form";
 import { updateSubProjectAction } from "@/lib/actions/sub-project-actions";
 
 export default async function SubProjectEditPage({
- params }: { params: Promise<{ id: string }> }) {
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const currentUser = await requireUser();
   if (!canManageSubProjects(currentUser)) redirect("/dashboard");
 
@@ -47,16 +50,22 @@ export default async function SubProjectEditPage({
           name: project.name,
           clientId: project.clientId,
           clientName: project.client.name,
-          clientShowsCountriesInEntries: project.client.showCountriesInTimeEntries,
+          clientShowsCountriesInEntries:
+            project.client.showCountriesInTimeEntries,
           clientShowsMoviesInEntries: project.client.showMoviesInEntries,
-          clientShowsAssetTypesInEntries: project.client.showAssetTypesInEntries,
-            clientShowsAssetNamesInEntries: project.client.showAssetNamesInEntries,
-            clientShowsNewslettersInEntries: project.client.showNewslettersInEntries,
+          clientShowsAssetTypesInEntries:
+            project.client.showAssetTypesInEntries,
+          clientShowsLensTypesInEntries: project.client.showLensTypesInEntries,
+          clientShowsAssetNamesInEntries:
+            project.client.showAssetNamesInEntries,
+          clientShowsNewslettersInEntries:
+            project.client.showNewslettersInEntries,
           hideCountriesInEntries: project.hideCountriesInEntries,
           hideMoviesInEntries: project.hideMoviesInEntries,
           hideAssetTypesInEntries: project.hideAssetTypesInEntries,
-            hideAssetNamesInEntries: project.hideAssetNamesInEntries,
-            hideNewslettersInEntries: project.hideNewslettersInEntries,
+          hideLensTypesInEntries: project.hideLensTypesInEntries,
+          hideAssetNamesInEntries: project.hideAssetNamesInEntries,
+          hideNewslettersInEntries: project.hideNewslettersInEntries,
         }))}
         action={updateSubProjectAction}
         initialValues={{
@@ -69,6 +78,7 @@ export default async function SubProjectEditPage({
           hideCountriesInEntries: subProject.hideCountriesInEntries,
           hideMoviesInEntries: subProject.hideMoviesInEntries,
           hideAssetTypesInEntries: subProject.hideAssetTypesInEntries,
+          hideLensTypesInEntries: subProject.hideLensTypesInEntries,
           hideAssetNamesInEntries: subProject.hideAssetNamesInEntries,
           hideNewslettersInEntries: subProject.hideNewslettersInEntries,
         }}

@@ -19,6 +19,8 @@ type TimeEntryProjectOption = {
   hideMoviesInEntries: boolean;
   showAssetTypesInEntries: boolean;
   hideAssetTypesInEntries: boolean;
+  showLensTypesInEntries: boolean;
+  hideLensTypesInEntries: boolean;
   showAssetNamesInEntries: boolean;
   hideAssetNamesInEntries: boolean;
   showNewslettersInEntries: boolean;
@@ -35,6 +37,7 @@ type TimeEntrySubProjectOption = {
   hideCountriesInEntries: boolean;
   hideMoviesInEntries: boolean;
   hideAssetTypesInEntries: boolean;
+  hideLensTypesInEntries: boolean;
   hideAssetNamesInEntries: boolean;
   hideNewslettersInEntries: boolean;
 };
@@ -55,6 +58,11 @@ type AssetTypeOption = {
   id: string;
   name: string;
   clientId: string;
+};
+
+type LensTypeOption = {
+  id: string;
+  name: string;
 };
 
 type AssetNameOption = {
@@ -92,6 +100,7 @@ export function TimeEntryCreateForm({
   countries,
   movies,
   assetTypes,
+  lensTypes,
   assetNames,
   newsletters,
   languages,
@@ -104,6 +113,7 @@ export function TimeEntryCreateForm({
   countries: { id: string; name: string }[];
   movies: MovieOption[];
   assetTypes: AssetTypeOption[];
+  lensTypes: LensTypeOption[];
   assetNames: AssetNameOption[];
   newsletters: NewsletterOption[];
   languages: LanguageOption[];
@@ -111,7 +121,10 @@ export function TimeEntryCreateForm({
   defaultEmployeeId?: string;
   allowUnassignedSubProjects?: boolean;
 }) {
-  const [state, formAction, pending] = useActionState(createTimeEntryAction, initialState);
+  const [state, formAction, pending] = useActionState(
+    createTimeEntryAction,
+    initialState,
+  );
   const maxWorkDate = useMemo(() => getTodayDateString(), []);
 
   const clientOptions = useMemo(
@@ -138,10 +151,13 @@ export function TimeEntryCreateForm({
   const [selectedSubProjectId, setSelectedSubProjectId] = useState("");
   const [selectedMovieId, setSelectedMovieId] = useState("");
 
-  const selectedEmployee = assignableEmployees.find((employee) => employee.id === selectedEmployeeId);
+  const selectedEmployee = assignableEmployees.find(
+    (employee) => employee.id === selectedEmployeeId,
+  );
   const bypassAssignmentForSelectedEmployee =
     allowUnassignedSubProjects &&
-    (selectedEmployee?.userType === "MANAGER" || selectedEmployee?.userType === "TEAM_LEAD");
+    (selectedEmployee?.userType === "MANAGER" ||
+      selectedEmployee?.userType === "TEAM_LEAD");
 
   const filteredProjects = useMemo(
     () =>
@@ -149,28 +165,48 @@ export function TimeEntryCreateForm({
         if (project.clientId !== selectedClientId) return false;
         if (bypassAssignmentForSelectedEmployee) return true;
 
-        const hasProjectAssignment = project.assignedUserIds.includes(selectedEmployeeId);
+        const hasProjectAssignment =
+          project.assignedUserIds.includes(selectedEmployeeId);
         const hasSubProjectAssignment = subProjects.some(
           (subProject) =>
-            subProject.projectId === project.id && subProject.assignedUserIds.includes(selectedEmployeeId),
+            subProject.projectId === project.id &&
+            subProject.assignedUserIds.includes(selectedEmployeeId),
         );
 
-        return !selectedEmployeeId || hasProjectAssignment || hasSubProjectAssignment;
+        return (
+          !selectedEmployeeId || hasProjectAssignment || hasSubProjectAssignment
+        );
       }),
-    [projects, selectedClientId, selectedEmployeeId, bypassAssignmentForSelectedEmployee, subProjects],
+    [
+      projects,
+      selectedClientId,
+      selectedEmployeeId,
+      bypassAssignmentForSelectedEmployee,
+      subProjects,
+    ],
   );
 
-  const selectedProjectOption = projects.find((project) => project.id === selectedProjectId);
+  const selectedProjectOption = projects.find(
+    (project) => project.id === selectedProjectId,
+  );
   const selectedEmployeeHasProjectAssignment = Boolean(
-    selectedEmployeeId && selectedProjectOption?.assignedUserIds.includes(selectedEmployeeId),
+    selectedEmployeeId &&
+    selectedProjectOption?.assignedUserIds.includes(selectedEmployeeId),
   );
 
   const filteredSubProjects = useMemo(
     () =>
       subProjects.filter((subProject) => {
         if (subProject.projectId !== selectedProjectId) return false;
-        if (bypassAssignmentForSelectedEmployee || selectedEmployeeHasProjectAssignment) return true;
-        return !selectedEmployeeId || subProject.assignedUserIds.includes(selectedEmployeeId);
+        if (
+          bypassAssignmentForSelectedEmployee ||
+          selectedEmployeeHasProjectAssignment
+        )
+          return true;
+        return (
+          !selectedEmployeeId ||
+          subProject.assignedUserIds.includes(selectedEmployeeId)
+        );
       }),
     [
       subProjects,
@@ -182,7 +218,10 @@ export function TimeEntryCreateForm({
   );
 
   useEffect(() => {
-    if (selectedProjectId && filteredProjects.some((project) => project.id === selectedProjectId)) {
+    if (
+      selectedProjectId &&
+      filteredProjects.some((project) => project.id === selectedProjectId)
+    ) {
       return;
     }
 
@@ -200,47 +239,65 @@ export function TimeEntryCreateForm({
   );
 
   const filteredAssetTypes = useMemo(
-    () => assetTypes.filter((assetType) => assetType.clientId === selectedClientId),
+    () =>
+      assetTypes.filter((assetType) => assetType.clientId === selectedClientId),
     [assetTypes, selectedClientId],
   );
 
   const filteredAssetNames = useMemo(
-    () => assetNames.filter((assetName) => assetName.clientId === selectedClientId && assetName.movieId === selectedMovieId),
+    () =>
+      assetNames.filter(
+        (assetName) =>
+          assetName.clientId === selectedClientId &&
+          assetName.movieId === selectedMovieId,
+      ),
     [assetNames, selectedClientId, selectedMovieId],
   );
 
   const filteredNewsletters = useMemo(
-    () => newsletters.filter((newsletter) => newsletter.clientId === selectedClientId),
+    () =>
+      newsletters.filter(
+        (newsletter) => newsletter.clientId === selectedClientId,
+      ),
     [newsletters, selectedClientId],
   );
 
   const showEmployeeField = assignableEmployees.length > 1;
-  const selectedProject = projects.find((project) => project.id === selectedProjectId);
-  const selectedSubProject = subProjects.find((subProject) => subProject.id === selectedSubProjectId);
+  const selectedProject = projects.find(
+    (project) => project.id === selectedProjectId,
+  );
+  const selectedSubProject = subProjects.find(
+    (subProject) => subProject.id === selectedSubProjectId,
+  );
   const showCountryField = Boolean(
     selectedProject?.showCountriesInTimeEntries &&
-      !selectedProject?.hideCountriesInEntries &&
-      !selectedSubProject?.hideCountriesInEntries,
+    !selectedProject?.hideCountriesInEntries &&
+    !selectedSubProject?.hideCountriesInEntries,
   );
   const showMovieField = Boolean(
     selectedProject?.showMoviesInEntries &&
-      !selectedProject?.hideMoviesInEntries &&
-      !selectedSubProject?.hideMoviesInEntries,
+    !selectedProject?.hideMoviesInEntries &&
+    !selectedSubProject?.hideMoviesInEntries,
   );
   const showAssetTypeField = Boolean(
     selectedProject?.showAssetTypesInEntries &&
-      !selectedProject?.hideAssetTypesInEntries &&
-      !selectedSubProject?.hideAssetTypesInEntries,
+    !selectedProject?.hideAssetTypesInEntries &&
+    !selectedSubProject?.hideAssetTypesInEntries,
+  );
+  const showLensTypeField = Boolean(
+    selectedProject?.showLensTypesInEntries &&
+    !selectedProject?.hideLensTypesInEntries &&
+    !selectedSubProject?.hideLensTypesInEntries,
   );
   const showAssetNameField = Boolean(
     selectedProject?.showAssetNamesInEntries &&
-      !selectedProject?.hideAssetNamesInEntries &&
-      !selectedSubProject?.hideAssetNamesInEntries,
+    !selectedProject?.hideAssetNamesInEntries &&
+    !selectedSubProject?.hideAssetNamesInEntries,
   );
   const showNewsletterField = Boolean(
     selectedProject?.showNewslettersInEntries &&
-      !selectedProject?.hideNewslettersInEntries &&
-      !selectedSubProject?.hideNewslettersInEntries,
+    !selectedProject?.hideNewslettersInEntries &&
+    !selectedSubProject?.hideNewslettersInEntries,
   );
   const showLanguageField = Boolean(selectedProject?.showLanguagesInEntries);
   const countryRequired = showCountryField;
@@ -296,7 +353,9 @@ export function TimeEntryCreateForm({
             name="clientId"
             value={selectedClientId}
             onValueChange={(nextValue) => {
-              const nextProjectId = projects.find((project) => project.clientId === nextValue)?.id ?? "";
+              const nextProjectId =
+                projects.find((project) => project.clientId === nextValue)
+                  ?.id ?? "";
               setSelectedClientId(nextValue);
               setSelectedProjectId(nextProjectId);
               setSelectedSubProjectId("");
@@ -369,7 +428,10 @@ export function TimeEntryCreateForm({
               defaultValue=""
               options={[
                 { value: "", label: "Select country" },
-                ...countries.map((country) => ({ value: country.id, label: country.name })),
+                ...countries.map((country) => ({
+                  value: country.id,
+                  label: country.name,
+                })),
               ]}
               placeholder="Select country"
               searchPlaceholder="Search countries..."
@@ -389,7 +451,10 @@ export function TimeEntryCreateForm({
               onValueChange={setSelectedMovieId}
               options={[
                 { value: "", label: "No specific movie" },
-                ...filteredMovies.map((movie) => ({ value: movie.id, label: movie.title })),
+                ...filteredMovies.map((movie) => ({
+                  value: movie.id,
+                  label: movie.title,
+                })),
               ]}
               placeholder="No specific movie"
               searchPlaceholder="Search movies..."
@@ -397,7 +462,6 @@ export function TimeEntryCreateForm({
             />
           </div>
         ) : null}
-
 
         {showNewsletterField ? (
           <div>
@@ -408,7 +472,10 @@ export function TimeEntryCreateForm({
               defaultValue=""
               options={[
                 { value: "", label: "No specific newsletter" },
-                ...filteredNewsletters.map((newsletter) => ({ value: newsletter.id, label: newsletter.name })),
+                ...filteredNewsletters.map((newsletter) => ({
+                  value: newsletter.id,
+                  label: newsletter.name,
+                })),
               ]}
               placeholder="No specific newsletter"
               searchPlaceholder="Search newsletters..."
@@ -426,12 +493,28 @@ export function TimeEntryCreateForm({
               name="assetNameId"
               defaultValue=""
               options={[
-                { value: "", label: selectedMovieId ? "No specific asset name" : "Select movie first" },
-                ...filteredAssetNames.map((assetName) => ({ value: assetName.id, label: assetName.name })),
+                {
+                  value: "",
+                  label: selectedMovieId
+                    ? "No specific asset name"
+                    : "Select movie first",
+                },
+                ...filteredAssetNames.map((assetName) => ({
+                  value: assetName.id,
+                  label: assetName.name,
+                })),
               ]}
-              placeholder={selectedMovieId ? "No specific asset name" : "Select movie first"}
+              placeholder={
+                selectedMovieId
+                  ? "No specific asset name"
+                  : "Select movie first"
+              }
               searchPlaceholder="Search asset names..."
-              emptyLabel={selectedMovieId ? "No asset names found for selected movie." : "Select a movie first."}
+              emptyLabel={
+                selectedMovieId
+                  ? "No asset names found for selected movie."
+                  : "Select a movie first."
+              }
               disabled={!selectedMovieId}
             />
           </div>
@@ -446,11 +529,35 @@ export function TimeEntryCreateForm({
               defaultValue={""}
               options={[
                 { value: "", label: "No specific asset type" },
-                ...filteredAssetTypes.map((assetType) => ({ value: assetType.id, label: assetType.name })),
+                ...filteredAssetTypes.map((assetType) => ({
+                  value: assetType.id,
+                  label: assetType.name,
+                })),
               ]}
               placeholder="No specific asset type"
               searchPlaceholder="Search asset types..."
               emptyLabel="No asset types found."
+            />
+          </div>
+        ) : null}
+
+        {showLensTypeField ? (
+          <div>
+            <FormLabel htmlFor="lensTypeId">Lens Type</FormLabel>
+            <SearchableCombobox
+              id="lensTypeId"
+              name="lensTypeId"
+              defaultValue={""}
+              options={[
+                { value: "", label: "No specific lens type" },
+                ...lensTypes.map((lensType) => ({
+                  value: lensType.id,
+                  label: lensType.name,
+                })),
+              ]}
+              placeholder="No specific lens type"
+              searchPlaceholder="Search lens types..."
+              emptyLabel="No lens types found."
             />
           </div>
         ) : null}
@@ -466,7 +573,10 @@ export function TimeEntryCreateForm({
               defaultValue=""
               options={[
                 { value: "", label: "Select language" },
-                ...languages.map((language) => ({ value: language.id, label: `${language.name} (${language.code})` })),
+                ...languages.map((language) => ({
+                  value: language.id,
+                  label: `${language.name} (${language.code})`,
+                })),
               ]}
               placeholder="Select language"
               searchPlaceholder="Search languages..."
@@ -480,14 +590,30 @@ export function TimeEntryCreateForm({
           <FormLabel htmlFor="workDate" required>
             Work date
           </FormLabel>
-          <input id="workDate" className="input" name="workDate" type="date" defaultValue={maxWorkDate} max={maxWorkDate} required />
+          <input
+            id="workDate"
+            className="input"
+            name="workDate"
+            type="date"
+            defaultValue={maxWorkDate}
+            max={maxWorkDate}
+            required
+          />
         </div>
 
         <div>
           <FormLabel htmlFor="minutesSpent" required>
             Time spent (minutes)
           </FormLabel>
-          <input id="minutesSpent" className="input" name="minutesSpent" type="number" min="1" step="1" required />
+          <input
+            id="minutesSpent"
+            className="input"
+            name="minutesSpent"
+            type="number"
+            min="1"
+            step="1"
+            required
+          />
         </div>
 
         <div className="md:col-span-2">
@@ -504,7 +630,12 @@ export function TimeEntryCreateForm({
 
         <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
           <input type="hidden" name="isBillable" value="false" />
-          <input type="checkbox" name="isBillable" value="true" defaultChecked />
+          <input
+            type="checkbox"
+            name="isBillable"
+            value="true"
+            defaultChecked
+          />
           Billable time
         </label>
 

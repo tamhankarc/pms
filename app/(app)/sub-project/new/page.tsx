@@ -8,7 +8,6 @@ import { SubProjectForm } from "@/components/forms/sub-project-form";
 import { createSubProjectAction } from "@/lib/actions/sub-project-actions";
 
 export default async function NewSubProjectPage({
-
   searchParams,
 }: {
   searchParams?: Promise<{ clientId?: string; projectId?: string }>;
@@ -44,14 +43,21 @@ export default async function NewSubProjectPage({
             name: project.name,
             clientId: project.clientId,
             clientName: project.client.name,
-            clientShowsCountriesInEntries: project.client.showCountriesInTimeEntries,
+            clientShowsCountriesInEntries:
+              project.client.showCountriesInTimeEntries,
             clientShowsMoviesInEntries: project.client.showMoviesInEntries,
-            clientShowsAssetTypesInEntries: project.client.showAssetTypesInEntries,
-            clientShowsAssetNamesInEntries: project.client.showAssetNamesInEntries,
-            clientShowsNewslettersInEntries: project.client.showNewslettersInEntries,
+            clientShowsAssetTypesInEntries:
+              project.client.showAssetTypesInEntries,
+            clientShowsLensTypesInEntries:
+              project.client.showLensTypesInEntries,
+            clientShowsAssetNamesInEntries:
+              project.client.showAssetNamesInEntries,
+            clientShowsNewslettersInEntries:
+              project.client.showNewslettersInEntries,
             hideCountriesInEntries: project.hideCountriesInEntries,
             hideMoviesInEntries: project.hideMoviesInEntries,
             hideAssetTypesInEntries: project.hideAssetTypesInEntries,
+            hideLensTypesInEntries: project.hideLensTypesInEntries,
             hideAssetNamesInEntries: project.hideAssetNamesInEntries,
             hideNewslettersInEntries: project.hideNewslettersInEntries,
           }))}

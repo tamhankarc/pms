@@ -2,8 +2,17 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { requireUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { canAccessMenuItem, canViewEMSAdminDashboard, isAdmin, isAdminProjectManager, isHR } from "@/lib/permissions";
-import { getLeaveApprovalsForUser, getGlobalApproverAssignmentIds } from "@/lib/ems-queries";
+import {
+  canAccessMenuItem,
+  canViewEMSAdminDashboard,
+  isAdmin,
+  isAdminProjectManager,
+  isHR,
+} from "@/lib/permissions";
+import {
+  getLeaveApprovalsForUser,
+  getGlobalApproverAssignmentIds,
+} from "@/lib/ems-queries";
 import { formatDateInIst } from "@/lib/ist";
 import { paginateItems, parsePageParam } from "@/lib/pagination";
 import { LeaveReviewActions } from "./leave-review-actions";
@@ -11,13 +20,17 @@ import { LeaveReviewActions } from "./leave-review-actions";
 export default async function LeaveApprovalsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ page?: string }>;
+  searchParams?: Promise<{ page?: string; requestId?: string }>;
 }) {
   const user = await requireUser();
   const selectedApproverIds = await getGlobalApproverAssignmentIds();
   const isDesignatedApprover = selectedApproverIds.includes(user.id);
   const isAdminPmApprover = isAdminProjectManager(user) && isDesignatedApprover;
-  const canAccessPage = isAdmin(user) || isHR(user) || isDesignatedApprover || canAccessMenuItem(user, "leave-approvals");
+  const canAccessPage =
+    isAdmin(user) ||
+    isHR(user) ||
+    isDesignatedApprover ||
+    canAccessMenuItem(user, "leave-approvals");
 
   if (!canAccessPage) {
     redirect("/dashboard");
@@ -27,7 +40,14 @@ export default async function LeaveApprovalsPage({
   const canViewAll = canViewEMSAdminDashboard(user);
   const rows = await getLeaveApprovalsForUser(user.id, !canViewAll);
   const params = (await searchParams) ?? {};
-  const pagination = paginateItems(rows, parsePageParam(params.page), 10);
+  const visibleRows = params.requestId
+    ? rows.filter((row) => row.id === params.requestId)
+    : rows;
+  const pagination = paginateItems(
+    visibleRows,
+    parsePageParam(params.page),
+    10,
+  );
 
   return (
     <div className="space-y-6">
@@ -49,6 +69,7 @@ export default async function LeaveApprovalsPage({
               <th className="table-cell">Functional role</th>
               <th className="table-cell">Leave type</th>
               <th className="table-cell">Date range</th>
+              <th className="table-cell">Days</th>
               <th className="table-cell">Status</th>
               <th className="table-cell">Reason / Comment</th>
               <th className="table-cell">Approver</th>
@@ -57,31 +78,55 @@ export default async function LeaveApprovalsPage({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {pagination.items.map((row) => {
-              const showActions = row.status === "PENDING" && (row.approverId === user.id || isAdminPmApprover);
+              const showActions =
+                row.status === "PENDING" &&
+                (row.approverId === user.id || isAdminPmApprover);
 
               return (
                 <tr key={row.id}>
-                  <td className="table-cell font-medium text-slate-900">{row.user.fullName}</td>
-                  <td className="table-cell">{row.user.userType.replaceAll("_", " ")}</td>
-                  <td className="table-cell">
-                    {(row.user.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}
-                  </td>
-                  <td className="table-cell">{row.leaveType.replaceAll("_", " ")}</td>
-                  <td className="table-cell">
-                    {formatDateInIst(row.startDate)} - {formatDateInIst(row.endDate)}
+                  <td className="table-cell font-medium text-slate-900">
+                    {row.user.fullName}
                   </td>
                   <td className="table-cell">
-                    <span className="badge-blue">{row.status.replaceAll("_", " ")}</span>
+                    {row.user.userType.replaceAll("_", " ")}
+                  </td>
+                  <td className="table-cell">
+                    {(row.user.functionalRole ?? "UNASSIGNED").replaceAll(
+                      "_",
+                      " ",
+                    )}
+                  </td>
+                  <td className="table-cell">
+                    {row.leaveType.replaceAll("_", " ")}
+                  </td>
+                  <td className="table-cell">
+                    {formatDateInIst(row.startDate)} -{" "}
+                    {formatDateInIst(row.endDate)}
+                  </td>
+                  <td className="table-cell">
+                    {Number(row.totalLeaveDays ?? 0).toFixed(2)}
+                  </td>
+                  <td className="table-cell">
+                    <span className="badge-blue">
+                      {row.status.replaceAll("_", " ")}
+                    </span>
                   </td>
                   <td className="table-cell whitespace-pre-line">
-                    {row.approverComment || row.reconsiderNote || row.reason || "—"}
+                    {row.approverComment ||
+                      row.reconsiderNote ||
+                      row.reason ||
+                      "—"}
                   </td>
-                  <td className="table-cell">{row.approver?.fullName || "—"}</td>
+                  <td className="table-cell">
+                    {row.approver?.fullName || "—"}
+                  </td>
                   <td className="table-cell">
                     {showActions ? (
                       <LeaveReviewActions id={row.id} />
                     ) : (
-                      <span className="text-sm text-slate-500">Status only</span>
+                      <span className="text-sm text-slate-500">
+                        Status only
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -89,7 +134,10 @@ export default async function LeaveApprovalsPage({
             })}
             {pagination.totalItems === 0 ? (
               <tr>
-                <td colSpan={9} className="table-cell text-center text-sm text-slate-500">
+                <td
+                  colSpan={10}
+                  className="table-cell text-center text-sm text-slate-500"
+                >
                   No leave requests found.
                 </td>
               </tr>
@@ -103,7 +151,7 @@ export default async function LeaveApprovalsPage({
           totalPages={pagination.totalPages}
           totalItems={pagination.totalItems}
           pageSize={pagination.pageSize}
-          searchParams={{ page: params.page }}
+          searchParams={{ requestId: params.requestId }}
           anchor="#leave-approvals-list"
         />
       </section>

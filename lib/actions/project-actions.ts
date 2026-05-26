@@ -14,24 +14,69 @@ const baseSchema = z.object({
   clientId: z.string().optional(),
   projectTypeId: z.string().optional().nullable(),
   name: z.string().min(2, "Project name is required."),
-  billingModel: z.enum(["HOURLY", "FIXED_FULL", "FIXED_MONTHLY", "FIXED_PER_COUNTRY", "FIXED_COST"]),
+  billingModel: z.enum([
+    "HOURLY",
+    "FIXED_FULL",
+    "FIXED_MONTHLY",
+    "FIXED_PER_COUNTRY",
+    "FIXED_COST",
+  ]),
   fixedContractHours: z.coerce.number().nonnegative().optional(),
   fixedMonthlyHours: z.coerce.number().nonnegative().optional(),
-  additionalCharges: z.coerce.number().nonnegative("Additional Charges cannot be negative.").optional(),
-  partialBillingCost: z.coerce.number().nonnegative("Partial Billing cost cannot be negative.").optional(),
-  projectCost: z.coerce.number().nonnegative("Project Cost cannot be negative.").optional(),
-  projectCostOtherMovieBillingRegion: z.coerce.number().nonnegative("Project Cost - Other Movie Billing Region cannot be negative.").optional(),
-  perCountryCharges: z.coerce.number().nonnegative("Per Country Charges cannot be negative.").optional(),
-  developerCount: z.coerce.number().int().nonnegative("Developer count cannot be negative.").optional(),
-  perDeveloperCost: z.coerce.number().nonnegative("Per Developer Cost cannot be negative.").optional(),
+  additionalCharges: z.coerce
+    .number()
+    .nonnegative("Additional Charges cannot be negative.")
+    .optional(),
+  partialBillingCost: z.coerce
+    .number()
+    .nonnegative("Partial Billing cost cannot be negative.")
+    .optional(),
+  projectCost: z.coerce
+    .number()
+    .nonnegative("Project Cost cannot be negative.")
+    .optional(),
+  projectCostOtherMovieBillingRegion: z.coerce
+    .number()
+    .nonnegative(
+      "Project Cost - Other Movie Billing Region cannot be negative.",
+    )
+    .optional(),
+  perCountryCharges: z.coerce
+    .number()
+    .nonnegative("Per Country Charges cannot be negative.")
+    .optional(),
+  developerCount: z.coerce
+    .number()
+    .int()
+    .nonnegative("Developer count cannot be negative.")
+    .optional(),
+  perDeveloperCost: z.coerce
+    .number()
+    .nonnegative("Per Developer Cost cannot be negative.")
+    .optional(),
   status: z.enum(["DRAFT", "ACTIVE", "ON_HOLD", "COMPLETED", "ARCHIVED"]),
   description: z.string().optional(),
-  hideCountriesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  hideMoviesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  hideAssetTypesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  hideAssetNamesInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  hideNewslettersInEntries: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  addToBilling: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  hideCountriesInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  hideMoviesInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  hideAssetTypesInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  hideLensTypesInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  hideAssetNamesInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  hideNewslettersInEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  addToBilling: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
 });
 
 async function requireMasterDataActionUser() {
@@ -42,9 +87,15 @@ async function requireMasterDataActionUser() {
   return user;
 }
 
-async function validateProjectType(clientId: string, projectTypeId?: string | null) {
+async function validateProjectType(
+  clientId: string,
+  projectTypeId?: string | null,
+) {
   if (!projectTypeId) return null;
-  return db.projectType.findFirst({ where: { id: projectTypeId, clientId, isActive: true }, select: { id: true, name: true } });
+  return db.projectType.findFirst({
+    where: { id: projectTypeId, clientId, isActive: true },
+    select: { id: true, name: true },
+  });
 }
 
 const FILMIK_CLIENT_ID = "cmne6ed2o0000jo04t3363pqz";
@@ -57,12 +108,18 @@ function parseMonthStart(value: string) {
 }
 
 function parseFilmikResourceRows(formData: FormData) {
-  const rows: Array<{ resourceTypeId: string; count: number; effectiveMonth: Date }> = [];
+  const rows: Array<{
+    resourceTypeId: string;
+    count: number;
+    effectiveMonth: Date;
+  }> = [];
   for (const [key, value] of formData.entries()) {
     if (!key.startsWith("filmikResourceCount__")) continue;
     const resourceTypeId = key.replace("filmikResourceCount__", "");
     const count = Math.max(0, Math.trunc(Number(value || 0)));
-    const monthValue = String(formData.get(`filmikResourceMonth__${resourceTypeId}`) || "");
+    const monthValue = String(
+      formData.get(`filmikResourceMonth__${resourceTypeId}`) || "",
+    );
     const effectiveMonth = parseMonthStart(monthValue);
     if (!resourceTypeId || !effectiveMonth) continue;
     rows.push({ resourceTypeId, count, effectiveMonth });
@@ -70,11 +127,14 @@ function parseFilmikResourceRows(formData: FormData) {
   return rows;
 }
 
-
 function parseMonthlyAdditionalHourRows(formData: FormData) {
   const rows: Array<{ month: Date; hours: number }> = [];
-  const months = formData.getAll("monthlyAdditionalHourMonth").map((value) => String(value || ""));
-  const hours = formData.getAll("monthlyAdditionalHourHours").map((value) => Number(value || 0));
+  const months = formData
+    .getAll("monthlyAdditionalHourMonth")
+    .map((value) => String(value || ""));
+  const hours = formData
+    .getAll("monthlyAdditionalHourHours")
+    .map((value) => Number(value || 0));
   months.forEach((monthValue, index) => {
     const month = parseMonthStart(monthValue);
     const hourValue = Math.max(0, Number(hours[index] || 0));
@@ -84,7 +144,11 @@ function parseMonthlyAdditionalHourRows(formData: FormData) {
   return rows;
 }
 
-async function saveMonthlyAdditionalHours(projectId: string, billingModel: string, formData: FormData) {
+async function saveMonthlyAdditionalHours(
+  projectId: string,
+  billingModel: string,
+  formData: FormData,
+) {
   if (billingModel !== "FIXED_MONTHLY") {
     await db.projectMonthlyAdditionalHours.deleteMany({ where: { projectId } });
     return;
@@ -98,14 +162,25 @@ async function saveMonthlyAdditionalHours(projectId: string, billingModel: strin
   }
 }
 
-async function saveFilmikResourceCounts(projectId: string, clientId: string, formData: FormData) {
+async function saveFilmikResourceCounts(
+  projectId: string,
+  clientId: string,
+  formData: FormData,
+) {
   if (clientId !== FILMIK_CLIENT_ID) return;
   const rows = parseFilmikResourceRows(formData);
   if (!rows.length) return;
-  const validResourceIds = new Set((await db.filmikResourceType.findMany({
-    where: { clientId: FILMIK_CLIENT_ID, id: { in: rows.map((row) => row.resourceTypeId) } },
-    select: { id: true },
-  })).map((resource) => resource.id));
+  const validResourceIds = new Set(
+    (
+      await db.filmikResourceType.findMany({
+        where: {
+          clientId: FILMIK_CLIENT_ID,
+          id: { in: rows.map((row) => row.resourceTypeId) },
+        },
+        select: { id: true },
+      })
+    ).map((resource) => resource.id),
+  );
 
   for (const row of rows) {
     if (!validResourceIds.has(row.resourceTypeId)) continue;
@@ -128,7 +203,10 @@ async function saveFilmikResourceCounts(projectId: string, clientId: string, for
   }
 }
 
-export async function createProjectAction(_prevState: ProjectFormState, formData: FormData): Promise<ProjectFormState> {
+export async function createProjectAction(
+  _prevState: ProjectFormState,
+  formData: FormData,
+): Promise<ProjectFormState> {
   try {
     const user = await requireMasterDataActionUser();
     const parsed = baseSchema.safeParse({
@@ -141,29 +219,68 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
       additionalCharges: formData.get("additionalCharges") || 0,
       partialBillingCost: formData.get("partialBillingCost") || 0,
       projectCost: formData.get("projectCost") || 0,
-      projectCostOtherMovieBillingRegion: formData.get("projectCostOtherMovieBillingRegion") || 0,
+      projectCostOtherMovieBillingRegion:
+        formData.get("projectCostOtherMovieBillingRegion") || 0,
       perCountryCharges: formData.get("perCountryCharges") || 0,
       developerCount: formData.get("developerCount") || 0,
       perDeveloperCost: formData.get("perDeveloperCost") || 0,
       status: formData.get("status"),
       description: String(formData.get("description") ?? ""),
-      hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
+      hideCountriesInEntries:
+        formData.get("hideCountriesInEntries") ?? undefined,
       hideMoviesInEntries: formData.get("hideMoviesInEntries") ?? undefined,
-      hideAssetTypesInEntries: formData.get("hideAssetTypesInEntries") ?? undefined,
-      hideAssetNamesInEntries: formData.get("hideAssetNamesInEntries") ?? undefined,
-      hideNewslettersInEntries: formData.get("hideNewslettersInEntries") ?? undefined,
+      hideAssetTypesInEntries:
+        formData.get("hideAssetTypesInEntries") ?? undefined,
+      hideLensTypesInEntries:
+        formData.get("hideLensTypesInEntries") ?? undefined,
+      hideAssetNamesInEntries:
+        formData.get("hideAssetNamesInEntries") ?? undefined,
+      hideNewslettersInEntries:
+        formData.get("hideNewslettersInEntries") ?? undefined,
       addToBilling: formData.get("addToBilling") ?? undefined,
     });
 
     if (!parsed.success || !parsed.data.clientId) {
-      return { success: false, error: parsed.success ? "Client is required." : parsed.error.issues[0]?.message };
+      return {
+        success: false,
+        error: parsed.success
+          ? "Client is required."
+          : parsed.error.issues[0]?.message,
+      };
     }
 
-    const client = await db.client.findUnique({ where: { id: parsed.data.clientId }, select: { id: true, enableProjectTypes: true, showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true, showAssetNamesInEntries: true, showNewslettersInEntries: true } });
+    const client = await db.client.findUnique({
+      where: { id: parsed.data.clientId },
+      select: {
+        id: true,
+        enableProjectTypes: true,
+        showCountriesInTimeEntries: true,
+        showMoviesInEntries: true,
+        showAssetTypesInEntries: true,
+        showLensTypesInEntries: true,
+        showAssetNamesInEntries: true,
+        showNewslettersInEntries: true,
+      },
+    });
     if (!client) return { success: false, error: "Client not found." };
-    if (client.enableProjectTypes && !parsed.data.projectTypeId) return { success: false, error: "Project type is required for the selected client." };
-    if (!client.enableProjectTypes && parsed.data.projectTypeId) return { success: false, error: "Selected client does not use project types." };
-    if (parsed.data.projectTypeId && !(await validateProjectType(client.id, parsed.data.projectTypeId))) return { success: false, error: "Selected project type is invalid for the chosen client." };
+    if (client.enableProjectTypes && !parsed.data.projectTypeId)
+      return {
+        success: false,
+        error: "Project type is required for the selected client.",
+      };
+    if (!client.enableProjectTypes && parsed.data.projectTypeId)
+      return {
+        success: false,
+        error: "Selected client does not use project types.",
+      };
+    if (
+      parsed.data.projectTypeId &&
+      !(await validateProjectType(client.id, parsed.data.projectTypeId))
+    )
+      return {
+        success: false,
+        error: "Selected project type is invalid for the chosen client.",
+      };
 
     const isAdminUser = user.userType === "ADMIN";
     const projectCode = await generateProjectCode(client.id);
@@ -174,29 +291,67 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
         name: parsed.data.name.trim(),
         code: projectCode,
         billingModel: parsed.data.billingModel,
-        fixedContractHours: parsed.data.billingModel === "FIXED_FULL" && isAdminUser ? (parsed.data.fixedContractHours ?? 0) : null,
-        fixedMonthlyHours: parsed.data.billingModel === "FIXED_MONTHLY" && isAdminUser ? (parsed.data.fixedMonthlyHours ?? 0) : null,
-        additionalCharges: parsed.data.billingModel === "FIXED_FULL" && isAdminUser ? (parsed.data.additionalCharges ?? 0) : 0,
-        partialBillingCost: parsed.data.billingModel === "FIXED_FULL" && isAdminUser ? (parsed.data.partialBillingCost ?? 0) : 0,
-        projectCost: parsed.data.billingModel === "FIXED_COST" && isAdminUser ? (parsed.data.projectCost ?? 0) : 0,
-        projectCostOtherMovieBillingRegion: client.id === SONY_PICTURES_CLIENT_ID && isAdminUser ? (parsed.data.projectCostOtherMovieBillingRegion ?? 0) : 0,
-        perCountryCharges: parsed.data.billingModel === "FIXED_PER_COUNTRY" && isAdminUser ? (parsed.data.perCountryCharges ?? 0) : 0,
+        fixedContractHours:
+          parsed.data.billingModel === "FIXED_FULL" && isAdminUser
+            ? (parsed.data.fixedContractHours ?? 0)
+            : null,
+        fixedMonthlyHours:
+          parsed.data.billingModel === "FIXED_MONTHLY" && isAdminUser
+            ? (parsed.data.fixedMonthlyHours ?? 0)
+            : null,
+        additionalCharges:
+          parsed.data.billingModel === "FIXED_FULL" && isAdminUser
+            ? (parsed.data.additionalCharges ?? 0)
+            : 0,
+        partialBillingCost:
+          parsed.data.billingModel === "FIXED_FULL" && isAdminUser
+            ? (parsed.data.partialBillingCost ?? 0)
+            : 0,
+        projectCost:
+          parsed.data.billingModel === "FIXED_COST" && isAdminUser
+            ? (parsed.data.projectCost ?? 0)
+            : 0,
+        projectCostOtherMovieBillingRegion:
+          client.id === SONY_PICTURES_CLIENT_ID && isAdminUser
+            ? (parsed.data.projectCostOtherMovieBillingRegion ?? 0)
+            : 0,
+        perCountryCharges:
+          parsed.data.billingModel === "FIXED_PER_COUNTRY" && isAdminUser
+            ? (parsed.data.perCountryCharges ?? 0)
+            : 0,
         developerCount: 0,
         perDeveloperCost: 0,
         status: parsed.data.status,
         description: parsed.data.description || null,
         createdById: user.id,
         updatedById: user.id,
-        hideCountriesInEntries: client.showCountriesInTimeEntries ? Boolean(parsed.data.hideCountriesInEntries) : false,
-        hideMoviesInEntries: client.showMoviesInEntries ? Boolean(parsed.data.hideMoviesInEntries) : false,
-        hideAssetTypesInEntries: client.showAssetTypesInEntries ? Boolean(parsed.data.hideAssetTypesInEntries) : false,
-        hideAssetNamesInEntries: client.showAssetNamesInEntries ? Boolean(parsed.data.hideAssetNamesInEntries) : false,
-        hideNewslettersInEntries: client.showNewslettersInEntries ? Boolean(parsed.data.hideNewslettersInEntries) : false,
+        hideCountriesInEntries: client.showCountriesInTimeEntries
+          ? Boolean(parsed.data.hideCountriesInEntries)
+          : false,
+        hideMoviesInEntries: client.showMoviesInEntries
+          ? Boolean(parsed.data.hideMoviesInEntries)
+          : false,
+        hideAssetTypesInEntries: client.showAssetTypesInEntries
+          ? Boolean(parsed.data.hideAssetTypesInEntries)
+          : false,
+        hideLensTypesInEntries: client.showLensTypesInEntries
+          ? Boolean(parsed.data.hideLensTypesInEntries)
+          : false,
+        hideAssetNamesInEntries: client.showAssetNamesInEntries
+          ? Boolean(parsed.data.hideAssetNamesInEntries)
+          : false,
+        hideNewslettersInEntries: client.showNewslettersInEntries
+          ? Boolean(parsed.data.hideNewslettersInEntries)
+          : false,
         addToBilling: Boolean(parsed.data.addToBilling),
       },
     });
 
-    await saveMonthlyAdditionalHours(project.id, parsed.data.billingModel, formData);
+    await saveMonthlyAdditionalHours(
+      project.id,
+      parsed.data.billingModel,
+      formData,
+    );
     await saveFilmikResourceCounts(project.id, client.id, formData);
 
     revalidatePath("/projects");
@@ -207,20 +362,46 @@ export async function createProjectAction(_prevState: ProjectFormState, formData
     revalidatePath("/estimates");
     redirect("/projects");
   } catch (error) {
-    if (error && typeof error === "object" && "digest" in error && String((error as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT")) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "digest" in error &&
+      String((error as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT")
+    ) {
       throw error;
     }
-    return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Something went wrong.",
+    };
   }
 }
 
 const projectUpdateSchema = baseSchema.omit({ clientId: true });
 
-export async function updateProjectAction(projectId: string, _prevState: ProjectFormState, formData: FormData): Promise<ProjectFormState> {
+export async function updateProjectAction(
+  projectId: string,
+  _prevState: ProjectFormState,
+  formData: FormData,
+): Promise<ProjectFormState> {
   try {
     const user = await requireMasterDataActionUser();
-    const existingProject = await db.project.findUnique({ where: { id: projectId }, select: { id: true, clientId: true, fixedContractHours: true, fixedMonthlyHours: true, additionalCharges: true, partialBillingCost: true, projectCost: true, projectCostOtherMovieBillingRegion: true, perCountryCharges: true } });
-    if (!existingProject) return { success: false, error: "Project not found." };
+    const existingProject = await db.project.findUnique({
+      where: { id: projectId },
+      select: {
+        id: true,
+        clientId: true,
+        fixedContractHours: true,
+        fixedMonthlyHours: true,
+        additionalCharges: true,
+        partialBillingCost: true,
+        projectCost: true,
+        projectCostOtherMovieBillingRegion: true,
+        perCountryCharges: true,
+      },
+    });
+    if (!existingProject)
+      return { success: false, error: "Project not found." };
 
     const parsed = projectUpdateSchema.safeParse({
       projectTypeId: String(formData.get("projectTypeId") ?? "") || null,
@@ -231,27 +412,65 @@ export async function updateProjectAction(projectId: string, _prevState: Project
       additionalCharges: formData.get("additionalCharges") || 0,
       partialBillingCost: formData.get("partialBillingCost") || 0,
       projectCost: formData.get("projectCost") || 0,
-      projectCostOtherMovieBillingRegion: formData.get("projectCostOtherMovieBillingRegion") || 0,
+      projectCostOtherMovieBillingRegion:
+        formData.get("projectCostOtherMovieBillingRegion") || 0,
       perCountryCharges: formData.get("perCountryCharges") || 0,
       developerCount: formData.get("developerCount") || 0,
       perDeveloperCost: formData.get("perDeveloperCost") || 0,
       status: formData.get("status"),
       description: String(formData.get("description") ?? ""),
-      hideCountriesInEntries: formData.get("hideCountriesInEntries") ?? undefined,
+      hideCountriesInEntries:
+        formData.get("hideCountriesInEntries") ?? undefined,
       hideMoviesInEntries: formData.get("hideMoviesInEntries") ?? undefined,
-      hideAssetTypesInEntries: formData.get("hideAssetTypesInEntries") ?? undefined,
-      hideAssetNamesInEntries: formData.get("hideAssetNamesInEntries") ?? undefined,
-      hideNewslettersInEntries: formData.get("hideNewslettersInEntries") ?? undefined,
+      hideAssetTypesInEntries:
+        formData.get("hideAssetTypesInEntries") ?? undefined,
+      hideLensTypesInEntries:
+        formData.get("hideLensTypesInEntries") ?? undefined,
+      hideAssetNamesInEntries:
+        formData.get("hideAssetNamesInEntries") ?? undefined,
+      hideNewslettersInEntries:
+        formData.get("hideNewslettersInEntries") ?? undefined,
       addToBilling: formData.get("addToBilling") ?? undefined,
     });
 
-    if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message || "Invalid project payload." };
+    if (!parsed.success)
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message || "Invalid project payload.",
+      };
 
-    const client = await db.client.findUnique({ where: { id: existingProject.clientId }, select: { id: true, enableProjectTypes: true, showCountriesInTimeEntries: true, showMoviesInEntries: true, showAssetTypesInEntries: true, showAssetNamesInEntries: true, showNewslettersInEntries: true } });
+    const client = await db.client.findUnique({
+      where: { id: existingProject.clientId },
+      select: {
+        id: true,
+        enableProjectTypes: true,
+        showCountriesInTimeEntries: true,
+        showMoviesInEntries: true,
+        showAssetTypesInEntries: true,
+        showLensTypesInEntries: true,
+        showAssetNamesInEntries: true,
+        showNewslettersInEntries: true,
+      },
+    });
     if (!client) return { success: false, error: "Client not found." };
-    if (client.enableProjectTypes && !parsed.data.projectTypeId) return { success: false, error: "Project type is required for the selected client." };
-    if (!client.enableProjectTypes && parsed.data.projectTypeId) return { success: false, error: "Selected client does not use project types." };
-    if (parsed.data.projectTypeId && !(await validateProjectType(client.id, parsed.data.projectTypeId))) return { success: false, error: "Selected project type is invalid for the chosen client." };
+    if (client.enableProjectTypes && !parsed.data.projectTypeId)
+      return {
+        success: false,
+        error: "Project type is required for the selected client.",
+      };
+    if (!client.enableProjectTypes && parsed.data.projectTypeId)
+      return {
+        success: false,
+        error: "Selected client does not use project types.",
+      };
+    if (
+      parsed.data.projectTypeId &&
+      !(await validateProjectType(client.id, parsed.data.projectTypeId))
+    )
+      return {
+        success: false,
+        error: "Selected project type is invalid for the chosen client.",
+      };
 
     const isAdminUser = user.userType === "ADMIN";
 
@@ -261,29 +480,81 @@ export async function updateProjectAction(projectId: string, _prevState: Project
         projectTypeId: parsed.data.projectTypeId || null,
         name: parsed.data.name.trim(),
         billingModel: parsed.data.billingModel,
-        fixedContractHours: parsed.data.billingModel === "FIXED_FULL" ? (isAdminUser ? (parsed.data.fixedContractHours ?? 0) : existingProject.fixedContractHours) : null,
-        fixedMonthlyHours: parsed.data.billingModel === "FIXED_MONTHLY" ? (isAdminUser ? (parsed.data.fixedMonthlyHours ?? 0) : existingProject.fixedMonthlyHours) : null,
-        additionalCharges: parsed.data.billingModel === "FIXED_FULL" ? (isAdminUser ? (parsed.data.additionalCharges ?? 0) : existingProject.additionalCharges) : 0,
-        partialBillingCost: parsed.data.billingModel === "FIXED_FULL" ? (isAdminUser ? (parsed.data.partialBillingCost ?? 0) : existingProject.partialBillingCost) : 0,
-        projectCost: parsed.data.billingModel === "FIXED_COST" ? (isAdminUser ? (parsed.data.projectCost ?? 0) : existingProject.projectCost) : 0,
-        projectCostOtherMovieBillingRegion: client.id === SONY_PICTURES_CLIENT_ID ? (isAdminUser ? (parsed.data.projectCostOtherMovieBillingRegion ?? 0) : existingProject.projectCostOtherMovieBillingRegion) : 0,
-        perCountryCharges: parsed.data.billingModel === "FIXED_PER_COUNTRY" ? (isAdminUser ? (parsed.data.perCountryCharges ?? 0) : existingProject.perCountryCharges) : 0,
+        fixedContractHours:
+          parsed.data.billingModel === "FIXED_FULL"
+            ? isAdminUser
+              ? (parsed.data.fixedContractHours ?? 0)
+              : existingProject.fixedContractHours
+            : null,
+        fixedMonthlyHours:
+          parsed.data.billingModel === "FIXED_MONTHLY"
+            ? isAdminUser
+              ? (parsed.data.fixedMonthlyHours ?? 0)
+              : existingProject.fixedMonthlyHours
+            : null,
+        additionalCharges:
+          parsed.data.billingModel === "FIXED_FULL"
+            ? isAdminUser
+              ? (parsed.data.additionalCharges ?? 0)
+              : existingProject.additionalCharges
+            : 0,
+        partialBillingCost:
+          parsed.data.billingModel === "FIXED_FULL"
+            ? isAdminUser
+              ? (parsed.data.partialBillingCost ?? 0)
+              : existingProject.partialBillingCost
+            : 0,
+        projectCost:
+          parsed.data.billingModel === "FIXED_COST"
+            ? isAdminUser
+              ? (parsed.data.projectCost ?? 0)
+              : existingProject.projectCost
+            : 0,
+        projectCostOtherMovieBillingRegion:
+          client.id === SONY_PICTURES_CLIENT_ID
+            ? isAdminUser
+              ? (parsed.data.projectCostOtherMovieBillingRegion ?? 0)
+              : existingProject.projectCostOtherMovieBillingRegion
+            : 0,
+        perCountryCharges:
+          parsed.data.billingModel === "FIXED_PER_COUNTRY"
+            ? isAdminUser
+              ? (parsed.data.perCountryCharges ?? 0)
+              : existingProject.perCountryCharges
+            : 0,
         developerCount: 0,
         perDeveloperCost: 0,
         status: parsed.data.status,
         description: parsed.data.description || null,
         updatedById: user.id,
-        hideCountriesInEntries: client.showCountriesInTimeEntries ? Boolean(parsed.data.hideCountriesInEntries) : false,
-        hideMoviesInEntries: client.showMoviesInEntries ? Boolean(parsed.data.hideMoviesInEntries) : false,
-        hideAssetTypesInEntries: client.showAssetTypesInEntries ? Boolean(parsed.data.hideAssetTypesInEntries) : false,
-        hideAssetNamesInEntries: client.showAssetNamesInEntries ? Boolean(parsed.data.hideAssetNamesInEntries) : false,
-        hideNewslettersInEntries: client.showNewslettersInEntries ? Boolean(parsed.data.hideNewslettersInEntries) : false,
+        hideCountriesInEntries: client.showCountriesInTimeEntries
+          ? Boolean(parsed.data.hideCountriesInEntries)
+          : false,
+        hideMoviesInEntries: client.showMoviesInEntries
+          ? Boolean(parsed.data.hideMoviesInEntries)
+          : false,
+        hideAssetTypesInEntries: client.showAssetTypesInEntries
+          ? Boolean(parsed.data.hideAssetTypesInEntries)
+          : false,
+        hideLensTypesInEntries: client.showLensTypesInEntries
+          ? Boolean(parsed.data.hideLensTypesInEntries)
+          : false,
+        hideAssetNamesInEntries: client.showAssetNamesInEntries
+          ? Boolean(parsed.data.hideAssetNamesInEntries)
+          : false,
+        hideNewslettersInEntries: client.showNewslettersInEntries
+          ? Boolean(parsed.data.hideNewslettersInEntries)
+          : false,
         addToBilling: Boolean(parsed.data.addToBilling),
       },
     });
 
     if (isAdminUser) {
-      await saveMonthlyAdditionalHours(projectId, parsed.data.billingModel, formData);
+      await saveMonthlyAdditionalHours(
+        projectId,
+        parsed.data.billingModel,
+        formData,
+      );
     }
     await saveFilmikResourceCounts(projectId, client.id, formData);
 
@@ -294,7 +565,10 @@ export async function updateProjectAction(projectId: string, _prevState: Project
     revalidatePath("/estimates");
     return { success: true };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Something went wrong.",
+    };
   }
 }
 
@@ -304,7 +578,10 @@ export async function toggleProjectStatusAction(formData: FormData) {
   if (!projectId) throw new Error("Project is required.");
   const project = await db.project.findUnique({ where: { id: projectId } });
   if (!project) throw new Error("Project not found.");
-  await db.project.update({ where: { id: projectId }, data: { isActive: !project.isActive } });
+  await db.project.update({
+    where: { id: projectId },
+    data: { isActive: !project.isActive },
+  });
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects/${projectId}/edit`);

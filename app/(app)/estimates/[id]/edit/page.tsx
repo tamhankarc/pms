@@ -13,7 +13,18 @@ export default async function EditEstimatePage({
   const user = await requireUser();
   if (!canAccessMenuItem(user, "estimates")) redirect("/dashboard");
 
-  const [estimate, countries, movies, assetTypes, assetNames, newsletters, languages, projects, subProjects] = await Promise.all([
+  const [
+    estimate,
+    countries,
+    movies,
+    assetTypes,
+    lensTypes,
+    assetNames,
+    newsletters,
+    languages,
+    projects,
+    subProjects,
+  ] = await Promise.all([
     db.estimate.findUnique({
       where: { id },
       include: {
@@ -45,6 +56,10 @@ export default async function EditEstimatePage({
       where: { isActive: true },
       orderBy: { name: "asc" },
     }),
+    db.lensType.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+    }),
     db.assetName.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
@@ -58,7 +73,11 @@ export default async function EditEstimatePage({
       orderBy: { name: "asc" },
     }),
     db.project.findMany({
-      where: { isActive: true, status: { in: ["ACTIVE", "ON_HOLD"] }, billingModel: "FIXED_FULL" },
+      where: {
+        isActive: true,
+        status: { in: ["ACTIVE", "ON_HOLD"] },
+        billingModel: "FIXED_FULL",
+      },
       include: {
         client: true,
         assignedUsers: true,
@@ -66,10 +85,17 @@ export default async function EditEstimatePage({
       orderBy: { name: "asc" },
     }),
     db.subProject.findMany({
-      where: { isActive: true, project: { isActive: true, status: { in: ["ACTIVE", "ON_HOLD"] }, billingModel: "FIXED_FULL" } },
+      where: {
+        isActive: true,
+        project: {
+          isActive: true,
+          status: { in: ["ACTIVE", "ON_HOLD"] },
+          billingModel: "FIXED_FULL",
+        },
+      },
       include: { assignments: true },
       orderBy: { name: "asc" },
-    })
+    }),
   ]);
 
   if (!estimate) {
@@ -89,7 +115,6 @@ export default async function EditEstimatePage({
 
   const latestReview = estimate.reviews[0];
 
-
   return (
     <div className="mx-auto max-w-3xl">
       <div className="card p-6">
@@ -103,34 +128,55 @@ export default async function EditEstimatePage({
         <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="grid gap-3 md:grid-cols-2">
             <div>
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Employee</div>
-              <div className="mt-1 text-sm text-slate-900">{estimate.employee.fullName}</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Employee
+              </div>
+              <div className="mt-1 text-sm text-slate-900">
+                {estimate.employee.fullName}
+              </div>
             </div>
 
             <div>
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Project</div>
-              <div className="mt-1 text-sm text-slate-900">{estimate.project.name}</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Project
+              </div>
+              <div className="mt-1 text-sm text-slate-900">
+                {estimate.project.name}
+              </div>
             </div>
 
             <div>
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Sub Project</div>
-              <div className="mt-1 text-sm text-slate-900">{estimate.subProject?.name ?? "No Sub Project"}</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Sub Project
+              </div>
+              <div className="mt-1 text-sm text-slate-900">
+                {estimate.subProject?.name ?? "No Sub Project"}
+              </div>
             </div>
 
             <div>
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Current status</div>
-              <div className="mt-1 text-sm text-slate-900">{estimate.status}</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Current status
+              </div>
+              <div className="mt-1 text-sm text-slate-900">
+                {estimate.status}
+              </div>
             </div>
 
             <div>
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Current estimate</div>
-              <div className="mt-1 text-sm text-slate-900">{estimate.estimatedMinutes} minutes</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Current estimate
+              </div>
+              <div className="mt-1 text-sm text-slate-900">
+                {estimate.estimatedMinutes} minutes
+              </div>
             </div>
           </div>
 
           {latestReview?.remarks ? (
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              <span className="font-medium">Latest review note:</span> {latestReview.remarks}
+              <span className="font-medium">Latest review note:</span>{" "}
+              {latestReview.remarks}
             </div>
           ) : null}
         </div>
@@ -147,6 +193,7 @@ export default async function EditEstimatePage({
             countryId: estimate.countryId,
             movieId: estimate.movieId,
             assetTypeId: estimate.assetTypeId,
+            lensTypeId: estimate.lensTypeId,
             assetNameId: estimate.assetNameId,
             newsletterId: estimate.newsletterId,
             languageId: estimate.languageId,
@@ -159,18 +206,23 @@ export default async function EditEstimatePage({
             name: project.name,
             clientId: project.clientId,
             clientName: project.client.name,
-            showCountriesInTimeEntries: project.client.showCountriesInTimeEntries,
+            showCountriesInTimeEntries:
+              project.client.showCountriesInTimeEntries,
             hideCountriesInEntries: project.hideCountriesInEntries,
             showMoviesInEntries: project.client.showMoviesInEntries,
             hideMoviesInEntries: project.hideMoviesInEntries,
             showAssetTypesInEntries: project.client.showAssetTypesInEntries,
             hideAssetTypesInEntries: project.hideAssetTypesInEntries,
+            showLensTypesInEntries: project.client.showLensTypesInEntries,
+            hideLensTypesInEntries: project.hideLensTypesInEntries,
             showAssetNamesInEntries: project.client.showAssetNamesInEntries,
             hideAssetNamesInEntries: project.hideAssetNamesInEntries,
             showNewslettersInEntries: project.client.showNewslettersInEntries,
             hideNewslettersInEntries: project.hideNewslettersInEntries,
             showLanguagesInEntries: project.client.showLanguagesInEntries,
-            assignedUserIds: project.assignedUsers.map((assignment) => assignment.userId),
+            assignedUserIds: project.assignedUsers.map(
+              (assignment) => assignment.userId,
+            ),
           }))}
           subProjects={subProjects.map((subProject) => ({
             id: subProject.id,
@@ -180,14 +232,39 @@ export default async function EditEstimatePage({
             hideCountriesInEntries: subProject.hideCountriesInEntries,
             hideMoviesInEntries: subProject.hideMoviesInEntries,
             hideAssetTypesInEntries: subProject.hideAssetTypesInEntries,
+            hideLensTypesInEntries: subProject.hideLensTypesInEntries,
             hideAssetNamesInEntries: subProject.hideAssetNamesInEntries,
             hideNewslettersInEntries: subProject.hideNewslettersInEntries,
           }))}
-          countries={countries.map((country) => ({ id: country.id, name: country.name }))}
-          movies={movies.map((movie) => ({ id: movie.id, title: movie.title, clientId: movie.clientId }))}
-          assetTypes={assetTypes.map((assetType) => ({ id: assetType.id, name: assetType.name, clientId: assetType.clientId }))}
-          assetNames={assetNames.map((assetName) => ({ id: assetName.id, name: assetName.name, clientId: assetName.clientId, movieId: assetName.movieId }))}
-          newsletters={newsletters.map((newsletter) => ({ id: newsletter.id, name: newsletter.name, clientId: newsletter.clientId }))}
+          countries={countries.map((country) => ({
+            id: country.id,
+            name: country.name,
+          }))}
+          movies={movies.map((movie) => ({
+            id: movie.id,
+            title: movie.title,
+            clientId: movie.clientId,
+          }))}
+          assetTypes={assetTypes.map((assetType) => ({
+            id: assetType.id,
+            name: assetType.name,
+            clientId: assetType.clientId,
+          }))}
+          lensTypes={lensTypes.map((lensType) => ({
+            id: lensType.id,
+            name: lensType.name,
+          }))}
+          assetNames={assetNames.map((assetName) => ({
+            id: assetName.id,
+            name: assetName.name,
+            clientId: assetName.clientId,
+            movieId: assetName.movieId,
+          }))}
+          newsletters={newsletters.map((newsletter) => ({
+            id: newsletter.id,
+            name: newsletter.name,
+            clientId: newsletter.clientId,
+          }))}
           languages={languages.map((language) => ({
             id: language.id,
             name: language.name,
@@ -201,14 +278,22 @@ export default async function EditEstimatePage({
             <h2 className="section-title">Review History</h2>
             <div className="mt-4 space-y-3">
               {estimate.reviews.map((review) => (
-                <div key={review.id} className="rounded-xl border border-slate-200 px-4 py-3">
+                <div
+                  key={review.id}
+                  className="rounded-xl border border-slate-200 px-4 py-3"
+                >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-sm font-medium text-slate-900">{review.decisionStatus}</div>
+                    <div className="text-sm font-medium text-slate-900">
+                      {review.decisionStatus}
+                    </div>
                     <div className="text-xs text-slate-500">
-                      {review.reviewer.fullName} · {new Date(review.reviewedAt).toLocaleString()}
+                      {review.reviewer.fullName} ·{" "}
+                      {new Date(review.reviewedAt).toLocaleString()}
                     </div>
                   </div>
-                  <div className="mt-2 text-sm text-slate-700">{review.remarks || "No remarks."}</div>
+                  <div className="mt-2 text-sm text-slate-700">
+                    {review.remarks || "No remarks."}
+                  </div>
                 </div>
               ))}
             </div>
