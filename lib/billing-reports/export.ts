@@ -1097,9 +1097,15 @@ function getDeliverableDisplayLabel(
 function formatGenericProjectDisplay(
   row: GenericBillingReportData["blocks"][number]["rows"][number],
 ) {
+  return row.projectName;
+}
+
+function formatGenericCountryDisplay(
+  row: GenericBillingReportData["blocks"][number]["rows"][number],
+) {
   return row.lensDetails?.length
-    ? `${row.projectName}\n${row.lensDetails.join("\n")}`
-    : row.projectName;
+    ? row.lensDetails.join("\n")
+    : (row.countryList ?? "-");
 }
 
 export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
@@ -1127,7 +1133,7 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
           ? [
               "Project",
               "Contact Person",
-              "Country List",
+              "Lens Type / Country List",
               ...(block.showDeveloperCost
                 ? [
                     "Developer Cost (USD)",
@@ -1172,7 +1178,7 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
               ? [
                   formatGenericProjectDisplay(row),
                   row.contactPerson,
-                  row.countryList ?? "-",
+                  formatGenericCountryDisplay(row),
                   ...(block.showDeveloperCost
                     ? [
                         Number(row.developerCost ?? 0),
@@ -1270,7 +1276,7 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
         ? [
             "Project",
             "Contact Person",
-            "Country List",
+            "Lens Type / Country List",
             ...(block.showDeveloperCost
               ? [
                   "Developer Cost (USD)",
@@ -1317,7 +1323,7 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
             ? [
                 formatGenericProjectDisplay(row),
                 row.contactPerson,
-                row.countryList ?? "-",
+                formatGenericCountryDisplay(row),
                 ...(block.showDeveloperCost
                   ? [Number(row.developerCost ?? 0), row.projectCost, row.cost]
                   : [row.cost]),
@@ -1622,7 +1628,7 @@ function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
           { header: "Project", width: 145 },
           { header: "Contact Person", width: 150 },
           {
-            header: "Country List",
+            header: "Lens Type / Country List",
             width: block.showDeveloperCost ? 195 : 300,
           },
           ...(block.showDeveloperCost
@@ -1661,7 +1667,7 @@ function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
         ? [
             formatGenericProjectDisplay(row),
             row.contactPerson,
-            row.countryList ?? "-",
+            formatGenericCountryDisplay(row),
             ...(block.showDeveloperCost
               ? [
                   formatUsd(Number(row.developerCost ?? 0)),
@@ -1809,30 +1815,25 @@ export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
       data.showCountryList
         ? [
             "Billing Header / Project",
-            "Country List",
+            "Countries / Lens Type Countries",
             "Contact Person",
-            "Cost Type",
             "Cost (USD)",
           ]
-        : [
-            "Billing Header / Project",
-            "Contact Person",
-            "Cost Type",
-            "Cost (USD)",
-          ],
+        : ["Billing Header / Project", "Contact Person", "Cost (USD)"],
     ),
     ...projectRows.map((row) =>
       excelRow(
         data.showCountryList
           ? [
               row.projectName,
-              row.countryList || "-",
+              row.lensDetails?.length
+                ? row.lensDetails.join("\n")
+                : row.countryList || "-",
               row.contactPerson,
-              row.billingModel,
               row.cost,
             ]
-          : [row.projectName, row.contactPerson, row.billingModel, row.cost],
-        data.showCountryList ? [4] : [3],
+          : [row.projectName, row.contactPerson, row.cost],
+        data.showCountryList ? [3] : [2],
       ),
     ),
     ...(chargeRows.length
@@ -1842,9 +1843,9 @@ export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
           ...chargeRows.map((row) =>
             excelRow(
               data.showCountryList
-                ? [row.label, "-", "-", "Title Charge", row.cost]
-                : [row.label, "-", "Title Charge", row.cost],
-              data.showCountryList ? [4] : [3],
+                ? [row.label, "-", "-", row.cost]
+                : [row.label, "-", row.cost],
+              data.showCountryList ? [3] : [2],
             ),
           ),
         ]
@@ -1852,9 +1853,9 @@ export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
     excelRow([]),
     excelRow(
       data.showCountryList
-        ? ["Total", "", "", "", totalCost]
-        : ["Total", "", "", totalCost],
-      data.showCountryList ? [4] : [3],
+        ? ["Total", "", "", totalCost]
+        : ["Total", "", totalCost],
+      data.showCountryList ? [3] : [2],
     ),
   ];
   const sheets = data.titleBlocks.length
@@ -1907,10 +1908,9 @@ function buildSonyPicturesReportPdfPages(
     );
   }
   const columns: PdfTableColumn[] = [
-    { header: "Billing Header / Project", width: 230 },
-    { header: "Countries", width: 180 },
-    { header: "Contact Person", width: 170 },
-    { header: "Cost Type", width: 95 },
+    { header: "Billing Header / Project", width: 250 },
+    { header: "Countries / Lens Type Countries", width: 230 },
+    { header: "Contact Person", width: 195 },
     { header: "Cost", width: 80, align: "right" },
   ];
   const rows: PdfTableRow[] = [
@@ -1918,26 +1918,20 @@ function buildSonyPicturesReportPdfPages(
       (row) =>
         [
           row.projectName,
-          row.countryList || "-",
+          row.lensDetails?.length
+            ? row.lensDetails.join("; ")
+            : row.countryList || "-",
           row.contactPerson,
-          row.billingModel,
           formatUsd(row.cost),
         ] as PdfTableRow,
     ),
     ...(data.chargeRows.length
-      ? [["Title Charges", "", "", "", ""] as PdfTableRow]
+      ? [["Title Charges", "", "", ""] as PdfTableRow]
       : []),
     ...data.chargeRows.map(
-      (row) =>
-        [
-          row.label,
-          "-",
-          "-",
-          "Title Charge",
-          formatUsd(row.cost),
-        ] as PdfTableRow,
+      (row) => [row.label, "-", "-", formatUsd(row.cost)] as PdfTableRow,
     ),
-    ["Total", "", "", "", formatUsd(data.totalCost)] as PdfTableRow,
+    ["Total", "", "", formatUsd(data.totalCost)] as PdfTableRow,
   ];
 
   const pageStreams: string[] = [];

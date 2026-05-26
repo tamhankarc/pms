@@ -19,6 +19,7 @@ export type SonyPicturesReportProjectRow = {
   contactPerson: string;
   billingModel: string;
   countryList: string;
+  lensDetails?: string[];
   cost: number;
 };
 
@@ -496,6 +497,7 @@ export async function getSonyPicturesReportData({
     cost: number,
     countryList = "",
     contactPerson = ticketingContact,
+    lensDetails?: string[],
   ) => {
     projectRows.push({
       projectId,
@@ -503,6 +505,7 @@ export async function getSonyPicturesReportData({
       contactPerson,
       billingModel,
       countryList,
+      lensDetails,
       cost,
     });
   };
@@ -671,6 +674,9 @@ export async function getSonyPicturesReportData({
       movieContactPersons.length
         ? movieContactPersonLabel
         : buildContactPersonLabel(project.contactPersons),
+      lens && project.billingModel === "FIXED_PER_COUNTRY"
+        ? lens.detailLines
+        : undefined,
     );
   }
 

@@ -1253,7 +1253,6 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
           <tr>
             <th className="table-cell">Billing Header / Project</th>
             <th className="table-cell">Contact Person</th>
-            <th className="table-cell">Cost Type</th>
             <th className="table-cell">Cost</th>
           </tr>
         </thead>
@@ -1261,7 +1260,7 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
           {!data.selectedMovie ? (
             <tr>
               <td
-                colSpan={4}
+                colSpan={3}
                 className="table-cell text-center text-sm text-slate-500"
               >
                 Select a title to view billing records.
@@ -1271,7 +1270,7 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
           {data.selectedMovie && data.projectRows.length === 0 ? (
             <tr>
               <td
-                colSpan={4}
+                colSpan={3}
                 className="table-cell text-center text-sm text-slate-500"
               >
                 No valid billing headers are available for the selected title.
@@ -1284,16 +1283,22 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
                 <div className="font-medium text-slate-900">
                   {row.projectName}
                 </div>
-                {data.showCountryList && row.countryList ? (
+                {row.lensDetails?.length ? (
+                  <div className="mt-1 space-y-1 text-xs text-slate-500">
+                    <div className="font-medium text-slate-600">
+                      Lens Type / Countries
+                    </div>
+                    {row.lensDetails.map((detail) => (
+                      <div key={detail}>{detail}</div>
+                    ))}
+                  </div>
+                ) : data.showCountryList && row.countryList ? (
                   <div className="mt-1 text-xs text-slate-500">
                     Countries: {row.countryList}
                   </div>
                 ) : null}
               </td>
               <td className="table-cell">{row.contactPerson}</td>
-              <td className="table-cell">
-                <span className="badge-blue">{row.billingModel}</span>
-              </td>
               <td className="table-cell whitespace-nowrap font-medium text-slate-900">
                 {formatSonyUsd(row.cost)}
               </td>
@@ -1302,7 +1307,7 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
           {data.chargeRows.length ? (
             <tr className="bg-slate-50">
               <td
-                colSpan={4}
+                colSpan={3}
                 className="table-cell text-xs font-semibold uppercase tracking-[0.2em] text-slate-600"
               >
                 Title Charges
@@ -1315,9 +1320,6 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
                 {row.label}
               </td>
               <td className="table-cell">-</td>
-              <td className="table-cell">
-                <span className="badge-blue">Title Charge</span>
-              </td>
               <td className="table-cell whitespace-nowrap font-medium text-slate-900">
                 {formatSonyUsd(row.cost)}
               </td>
@@ -1327,7 +1329,7 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
             <tr className="bg-slate-100">
               <td
                 className="table-cell font-semibold text-slate-900"
-                colSpan={3}
+                colSpan={2}
               >
                 Total
               </td>
@@ -2512,7 +2514,7 @@ function GenericBillingModelBlock({
             <th className="table-cell">Project</th>
             <th className="table-cell">Contact Person</th>
             {isCountryBlock ? (
-              <th className="table-cell">Country List</th>
+              <th className="table-cell">Lens Type / Country List</th>
             ) : (
               <th className="table-cell">Status</th>
             )}
@@ -2534,6 +2536,9 @@ function GenericBillingModelBlock({
                 {row.projectName}
                 {row.lensDetails?.length ? (
                   <div className="mt-1 space-y-1 text-xs font-normal text-slate-500">
+                    <div className="font-medium text-slate-600">
+                      Lens Type / Countries
+                    </div>
                     {row.lensDetails.map((detail) => (
                       <div key={detail}>{detail}</div>
                     ))}
@@ -2542,7 +2547,15 @@ function GenericBillingModelBlock({
               </td>
               <td className="table-cell">{row.contactPerson}</td>
               {isCountryBlock ? (
-                <td className="table-cell">{row.countryList || "-"}</td>
+                <td className="table-cell">
+                  {row.lensDetails?.length ? (
+                    <span className="text-slate-500">
+                      See Lens Type breakdown
+                    </span>
+                  ) : (
+                    row.countryList || "-"
+                  )}
+                </td>
               ) : (
                 <td className="table-cell">
                   <span className="badge-blue">{row.status}</span>
