@@ -126,6 +126,7 @@ export default async function TimeEntriesPage({
       movie: true,
       language: true,
       assetName: true,
+      newsletter: true
     },
     orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
   });
@@ -233,9 +234,11 @@ export default async function TimeEntriesPage({
                     <div className="font-medium text-slate-900 break-words text-[13px] xl:text-sm">
                       {entry.project.name}
                     </div>
-                    <div className="text-[11px] xl:text-xs text-slate-500 break-words">
-                      {entry.subProject?.name ?? "No Sub Project"}
-                    </div>
+                    {entry.project.id != "cmnijd30h0001l404y6i8tb2y" && (
+                      <div className="text-[11px] xl:text-xs text-slate-500 break-words">
+                        {entry.subProject?.name ?? "No Sub Project"}
+                      </div>
+                    )}
                     {entry.assetName ? (
                       <div className="text-[11px] xl:text-xs text-slate-500 break-words">
                         {entry.assetName.name}
@@ -243,15 +246,26 @@ export default async function TimeEntriesPage({
                     ) : (
                       <div className="text-[11px] xl:text-xs text-slate-500 break-words">{entry.taskName}</div>
                     )}
-                    <div className="text-[11px] xl:text-xs text-slate-500 break-words">
-                      {entry.countryId ? countryMap.get(entry.countryId) ?? "—" : "No specific country"}
-                    </div>
-                    <div className="text-[11px] xl:text-xs text-slate-500 break-words">
-                      {entry.movie?.title ?? "No specific movie"}
-                    </div>
+                    {entry.project?.client.showCountriesInTimeEntries && (
+                      <div className="text-[11px] xl:text-xs text-slate-500 break-words">
+                        {entry.countryId ? countryMap.get(entry.countryId) ?? "—" : "No specific country"}
+                      </div>
+                    )}
+                    {entry.project.id == "cmnijd30h0001l404y6i8tb2y" ? (
+                      <div className="text-[11px] xl:text-xs text-slate-500 break-words">
+                        {entry.newsletter?.newsletterType ?? "No Newsletter Type"}
+                      </div>
+                    ) : (
+                      entry.project?.client.showMoviesInEntries && (
+                        <div className="text-[11px] xl:text-xs text-slate-500 break-words">
+                          {entry.movie?.title ?? "No specific movie"}
+                        </div>
+                      )
+                    )}
                     {entry.language && (
                       <div className="text-[11px] xl:text-xs text-slate-500 break-words">
                         {entry.language.name} ({entry.language.code})
+                        {entry.project?.client.showMoviesInEntries}
                       </div>
                     )}
                   </td>
