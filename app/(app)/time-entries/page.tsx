@@ -262,6 +262,11 @@ export default async function TimeEntriesPage({
                         </div>
                       )
                     )}
+                    {entry.project.id == "cmnijd30h0001l404y6i8tb2y" && (
+                      <div className="text-[11px] xl:text-xs text-slate-500 break-words">
+                        {entry.newsletter?.name ?? "No Newsletter Name"}
+                      </div>
+                    )}
                     {entry.language && (
                       <div className="text-[11px] xl:text-xs text-slate-500 break-words">
                         {entry.language.name} ({entry.language.code})
