@@ -30,6 +30,14 @@ const clientSchema = z.object({
   showLensTypesInEntries: z
     .union([z.literal("on"), z.literal("true"), z.literal("1")])
     .optional(),
+  lensFirstPlatformCost: z.coerce
+    .number()
+    .min(0, "1st Platform Charges cannot be negative.")
+    .optional(),
+  lensSubsequentPlatformCost: z.coerce
+    .number()
+    .min(0, "Subsequent Platform Charges cannot be negative.")
+    .optional(),
   showAssetNamesInEntries: z
     .union([z.literal("on"), z.literal("true"), z.literal("1")])
     .optional(),
@@ -85,6 +93,9 @@ export async function createClientAction(
         formData.get("showAssetTypesInEntries") ?? undefined,
       showLensTypesInEntries:
         formData.get("showLensTypesInEntries") ?? undefined,
+      lensFirstPlatformCost: formData.get("lensFirstPlatformCost") ?? "0",
+      lensSubsequentPlatformCost:
+        formData.get("lensSubsequentPlatformCost") ?? "0",
       showAssetNamesInEntries:
         formData.get("showAssetNamesInEntries") ?? undefined,
       showLanguagesInEntries:
@@ -120,6 +131,14 @@ export async function createClientAction(
         showMoviesInEntries: Boolean(parsed.data.showMoviesInEntries),
         showAssetTypesInEntries: Boolean(parsed.data.showAssetTypesInEntries),
         showLensTypesInEntries: Boolean(parsed.data.showLensTypesInEntries),
+        lensFirstPlatformCost:
+          canViewCostData(user) && Boolean(parsed.data.showLensTypesInEntries)
+            ? (parsed.data.lensFirstPlatformCost ?? 0)
+            : 0,
+        lensSubsequentPlatformCost:
+          canViewCostData(user) && Boolean(parsed.data.showLensTypesInEntries)
+            ? (parsed.data.lensSubsequentPlatformCost ?? 0)
+            : 0,
         showAssetNamesInEntries: Boolean(parsed.data.showAssetNamesInEntries),
         showLanguagesInEntries: Boolean(parsed.data.showLanguagesInEntries),
         showNewslettersInEntries: Boolean(parsed.data.showNewslettersInEntries),
@@ -177,6 +196,9 @@ export async function updateClientAction(
         formData.get("showAssetTypesInEntries") ?? undefined,
       showLensTypesInEntries:
         formData.get("showLensTypesInEntries") ?? undefined,
+      lensFirstPlatformCost: formData.get("lensFirstPlatformCost") ?? "0",
+      lensSubsequentPlatformCost:
+        formData.get("lensSubsequentPlatformCost") ?? "0",
       showAssetNamesInEntries:
         formData.get("showAssetNamesInEntries") ?? undefined,
       showLanguagesInEntries:
@@ -205,6 +227,8 @@ export async function updateClientAction(
       select: {
         code: true,
         hourlyCost: true,
+        lensFirstPlatformCost: true,
+        lensSubsequentPlatformCost: true,
         sonyCoppaSiteCost: true,
         sonyUsEpkSiteCost: true,
         sonyGlobalEpkSiteCost: true,
@@ -231,6 +255,16 @@ export async function updateClientAction(
         showMoviesInEntries: Boolean(parsed.data.showMoviesInEntries),
         showAssetTypesInEntries: Boolean(parsed.data.showAssetTypesInEntries),
         showLensTypesInEntries: Boolean(parsed.data.showLensTypesInEntries),
+        lensFirstPlatformCost: !Boolean(parsed.data.showLensTypesInEntries)
+          ? 0
+          : canViewCostData(user)
+            ? (parsed.data.lensFirstPlatformCost ?? 0)
+            : existingClient.lensFirstPlatformCost,
+        lensSubsequentPlatformCost: !Boolean(parsed.data.showLensTypesInEntries)
+          ? 0
+          : canViewCostData(user)
+            ? (parsed.data.lensSubsequentPlatformCost ?? 0)
+            : existingClient.lensSubsequentPlatformCost,
         showAssetNamesInEntries: Boolean(parsed.data.showAssetNamesInEntries),
         showLanguagesInEntries: Boolean(parsed.data.showLanguagesInEntries),
         showNewslettersInEntries: Boolean(parsed.data.showNewslettersInEntries),

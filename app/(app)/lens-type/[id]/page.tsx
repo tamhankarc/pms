@@ -5,7 +5,7 @@ import { LensTypeForm } from "@/components/forms/lens-type-form";
 import { updateLensTypeAction } from "@/lib/actions/lens-type-actions";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { canManageLensTypes, canViewCostData } from "@/lib/permissions";
+import { canManageLensTypes } from "@/lib/permissions";
 
 export default async function EditLensTypePage({
   params,
@@ -21,7 +21,7 @@ export default async function EditLensTypePage({
     <div className="space-y-6">
       <PageHeader
         title={`Edit Lens Type · ${lensType.name}`}
-        description="Update Lens Type name, cost, and availability."
+        description="Update Lens Type name and availability."
         actions={
           <Link href="/lens-type" className="btn-secondary">
             Back to Lens Types
@@ -36,10 +36,8 @@ export default async function EditLensTypePage({
           initialValues={{
             id: lensType.id,
             name: lensType.name,
-            cost: lensType.cost.toString(),
             isActive: lensType.isActive,
           }}
-          canEditCosts={canViewCostData(currentUser)}
         />
       </div>
     </div>

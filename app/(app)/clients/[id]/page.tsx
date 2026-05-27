@@ -130,6 +130,12 @@ export default async function ClientEditPage({
             showMoviesInEntries: client.showMoviesInEntries,
             showAssetTypesInEntries: client.showAssetTypesInEntries,
             showLensTypesInEntries: client.showLensTypesInEntries,
+            lensFirstPlatformCost: Number(
+              client.lensFirstPlatformCost ?? 0,
+            ).toFixed(2),
+            lensSubsequentPlatformCost: Number(
+              client.lensSubsequentPlatformCost ?? 0,
+            ).toFixed(2),
             showAssetNamesInEntries: client.showAssetNamesInEntries,
             showLanguagesInEntries: client.showLanguagesInEntries,
             showNewslettersInEntries: client.showNewslettersInEntries,

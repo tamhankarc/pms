@@ -20,6 +20,8 @@ type ClientFormProps = {
     showMoviesInEntries?: boolean;
     showAssetTypesInEntries?: boolean;
     showLensTypesInEntries?: boolean;
+    lensFirstPlatformCost?: string | number;
+    lensSubsequentPlatformCost?: string | number;
     showAssetNamesInEntries?: boolean;
     showLanguagesInEntries?: boolean;
     showNewslettersInEntries?: boolean;
@@ -43,6 +45,9 @@ export function ClientForm({
 }: ClientFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [clientName, setClientName] = useState(initialValues?.name ?? "");
+  const [showLensTypesInEntries, setShowLensTypesInEntries] = useState(
+    initialValues?.showLensTypesInEntries ?? false,
+  );
   const isSonyPicturesClient =
     initialValues?.id === SONY_PICTURES_CLIENT_ID ||
     clientName.trim().toLowerCase() === SONY_PICTURES_CLIENT_NAME;
@@ -195,10 +200,58 @@ export function ClientForm({
           <input
             type="checkbox"
             name="showLensTypesInEntries"
-            defaultChecked={initialValues?.showLensTypesInEntries ?? false}
+            checked={showLensTypesInEntries}
+            onChange={(event) =>
+              setShowLensTypesInEntries(event.target.checked)
+            }
           />
           Show Lens Type dropdown in Time Entries and Estimates (optional)
         </label>
+
+        {canEditCosts && showLensTypesInEntries ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="mb-1 text-sm font-semibold text-slate-900">
+              Lens Type / platform charges
+            </p>
+            <p className="mb-4 text-xs text-slate-600">
+              Charges are calculated per market: first platform uses the first
+              platform charge and every additional platform in the same market
+              uses the subsequent platform charge.
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              {[
+                {
+                  id: "lensFirstPlatformCost",
+                  label: "1st Platform Charges (USD)",
+                  value: initialValues?.lensFirstPlatformCost,
+                },
+                {
+                  id: "lensSubsequentPlatformCost",
+                  label: "Subsequent Platform Charges (USD)",
+                  value: initialValues?.lensSubsequentPlatformCost,
+                },
+              ].map((field) => (
+                <div key={field.id}>
+                  <FormLabel htmlFor={field.id}>{field.label}</FormLabel>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">
+                      $
+                    </span>
+                    <input
+                      id={field.id}
+                      name={field.id}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="input currency-input"
+                      defaultValue={field.value ?? "0.00"}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
           <input

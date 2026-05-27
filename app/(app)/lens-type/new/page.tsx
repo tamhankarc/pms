@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { LensTypeForm } from "@/components/forms/lens-type-form";
 import { createLensTypeAction } from "@/lib/actions/lens-type-actions";
 import { requireUser } from "@/lib/auth";
-import { canManageLensTypes, canViewCostData } from "@/lib/permissions";
+import { canManageLensTypes } from "@/lib/permissions";
 
 export default async function NewLensTypePage() {
   const currentUser = await requireUser();
@@ -13,7 +13,7 @@ export default async function NewLensTypePage() {
     <div className="space-y-6">
       <PageHeader
         title="Create Lens Type"
-        description="Create a Lens Type with the USD cost used for billing calculations."
+        description="Create a Lens Type for selection in Time Entries and Estimates."
         actions={
           <Link href="/lens-type" className="btn-secondary">
             Back to Lens Types
@@ -25,7 +25,6 @@ export default async function NewLensTypePage() {
           action={createLensTypeAction}
           title="Create Lens Type"
           submitLabel="Create Lens Type"
-          canEditCosts={canViewCostData(currentUser)}
         />
       </div>
     </div>

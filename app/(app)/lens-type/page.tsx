@@ -6,21 +6,13 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { canManageLensTypes, canViewCostData } from "@/lib/permissions";
+import { canManageLensTypes } from "@/lib/permissions";
 import { toggleLensTypeStatusAction } from "@/lib/actions/lens-type-actions";
 import {
   DEFAULT_PAGE_SIZE,
   paginateItems,
   parsePageParam,
 } from "@/lib/pagination";
-
-function formatUsd(value: { toString: () => string } | number | string) {
-  const amount = Number(value.toString());
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(Number.isFinite(amount) ? amount : 0);
-}
 
 export default async function LensTypesPage({
   searchParams,
@@ -45,12 +37,11 @@ export default async function LensTypesPage({
     parsePageParam(params.page),
     DEFAULT_PAGE_SIZE,
   );
-  const canSeeCosts = canViewCostData(currentUser);
   return (
     <div>
       <PageHeader
         title="Lens Types"
-        description="Create and manage Lens Types and their USD costs for Time Entries, Estimates, and Billing Reports."
+        description="Create and manage Lens Types available in Time Entries and Estimates."
         actions={
           <Link href="/lens-type/new" className="btn-primary">
             Create Lens Type
@@ -88,7 +79,6 @@ export default async function LensTypesPage({
           <thead className="table-head">
             <tr>
               <th className="table-cell">Lens Type</th>
-              {canSeeCosts ? <th className="table-cell">Cost</th> : null}
               <th className="table-cell">Status</th>
               <th className="table-cell">Action</th>
             </tr>
@@ -99,11 +89,6 @@ export default async function LensTypesPage({
                 <td className="table-cell font-medium text-slate-900">
                   {row.name}
                 </td>
-                {canSeeCosts ? (
-                  <td className="table-cell font-medium text-slate-900">
-                    {formatUsd(row.cost)}
-                  </td>
-                ) : null}
                 <td className="table-cell">
                   <span
                     className={row.isActive ? "badge-emerald" : "badge-slate"}
@@ -132,7 +117,7 @@ export default async function LensTypesPage({
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={canSeeCosts ? 4 : 3}
+                  colSpan={3}
                   className="table-cell text-center text-sm text-slate-500"
                 >
                   No lens types found.

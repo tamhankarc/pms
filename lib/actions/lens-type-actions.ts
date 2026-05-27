@@ -4,14 +4,13 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
-import { canManageLensTypes, canViewCostData } from "@/lib/permissions";
+import { canManageLensTypes } from "@/lib/permissions";
 
 export type LensTypeFormState = { success?: boolean; error?: string };
 
 const schema = z.object({
   id: z.string().optional(),
   name: z.string().trim().min(2, "Lens Type name is required."),
-  cost: z.coerce.number().min(0, "Cost cannot be negative."),
   isActive: z
     .union([z.literal("on"), z.literal("true"), z.literal("1")])
     .optional(),
@@ -29,10 +28,9 @@ export async function createLensTypeAction(
   formData: FormData,
 ): Promise<LensTypeFormState> {
   try {
-    const user = await requireCanManageLensTypes();
+    await requireCanManageLensTypes();
     const parsed = schema.safeParse({
       name: formData.get("name"),
-      cost: formData.get("cost") ?? "0",
       isActive: formData.get("isActive") ?? "on",
     });
     if (!parsed.success)
@@ -43,7 +41,6 @@ export async function createLensTypeAction(
     await db.lensType.create({
       data: {
         name: parsed.data.name,
-        cost: canViewCostData(user) ? parsed.data.cost : 0,
         isActive: Boolean(parsed.data.isActive),
       },
     });
@@ -65,11 +62,10 @@ export async function updateLensTypeAction(
   formData: FormData,
 ): Promise<LensTypeFormState> {
   try {
-    const user = await requireCanManageLensTypes();
+    await requireCanManageLensTypes();
     const parsed = schema.safeParse({
       id: formData.get("id"),
       name: formData.get("name"),
-      cost: formData.get("cost") ?? "0",
       isActive: formData.get("isActive") ?? undefined,
     });
     if (!parsed.success || !parsed.data.id)
@@ -81,14 +77,13 @@ export async function updateLensTypeAction(
       };
     const existing = await db.lensType.findUnique({
       where: { id: parsed.data.id },
-      select: { cost: true },
+      select: { id: true },
     });
     if (!existing) return { success: false, error: "Lens Type not found." };
     await db.lensType.update({
       where: { id: parsed.data.id },
       data: {
         name: parsed.data.name,
-        cost: canViewCostData(user) ? parsed.data.cost : existing.cost,
         isActive: Boolean(parsed.data.isActive),
       },
     });
