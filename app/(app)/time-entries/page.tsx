@@ -54,7 +54,7 @@ export default async function TimeEntriesPage({
     user.userType === "ADMIN"
       ? db.user.findMany({
           where: { isActive: true, userType: { in: ["MANAGER", "TEAM_LEAD", "EMPLOYEE"] } },
-          select: { id: true, fullName: true, employeeCode: true, userType: true },
+          select: { id: true, fullName: true, employeeCode: true, userType: true, functionalRole: true, },
           orderBy: { fullName: "asc" },
         })
       : Promise.resolve([]),
@@ -181,7 +181,7 @@ export default async function TimeEntriesPage({
           selectedUserId={effectiveUserId}
           userOptions={adminUserOptions.map((option) => ({
             id: option.id,
-            name: `${option.fullName}${option.employeeCode ? ` (${option.employeeCode})` : ""} · ${option.userType.replaceAll("_", " ")}`,
+            name: `${option.fullName}${option.functionalRole ? ` (${option.functionalRole.replace("_", " ")})` : ""}`,
           }))}
         />
       </div>
