@@ -26,7 +26,7 @@ function buildToBoundary(value: string) {
 export default async function TimeEntriesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ clientId?: string; projectId?: string; fromDate?: string; toDate?: string; userId?: string; page?: string }>;
+  searchParams?: Promise<{ clientId?: string; projectId?: string; fromDate?: string; toDate?: string; userId?: string; search?: string; page?: string }>;
 }) {
   const user = await requireUser();
   if (!canAccessMenuItem(user, "time-entries")) redirect("/dashboard");
@@ -36,6 +36,7 @@ export default async function TimeEntriesPage({
   const selectedFromDate = normalizeDateInput(params.fromDate);
   const selectedToDate = normalizeDateInput(params.toDate);
   const selectedUserId = user.userType === "ADMIN" ? params.userId ?? "all" : "all";
+  const selectedTextSearch = user.userType === "ADMIN" ? (params.search ?? "").trim().slice(0, 200) : "";
   const page = parsePageParam(params.page);
 
   const [projects, countries, supervisorAssignments, adminUserOptions] = await Promise.all([
@@ -118,6 +119,18 @@ export default async function TimeEntriesPage({
               OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
               ...(hasWorkDateFilter ? { workDate: workDateFilter } : {}),
               ...(user.userType === "ADMIN" && effectiveUserId !== "all" ? { employeeId: effectiveUserId } : {}),
+              ...(selectedTextSearch
+                ? {
+                    AND: [
+                      {
+                        OR: [
+                          { taskName: { contains: selectedTextSearch } },
+                          { notes: { contains: selectedTextSearch } },
+                        ],
+                      },
+                    ],
+                  }
+                : {}),
             },
     include: {
       employee: true,
@@ -183,6 +196,10 @@ export default async function TimeEntriesPage({
             id: option.id,
             name: `${option.fullName}${option.functionalRole ? ` (${option.functionalRole.replace("_", " ")})` : ""}`,
           }))}
+          showTextSearch={user.userType === "ADMIN"}
+          selectedTextSearch={selectedTextSearch}
+          textSearchLabel="Task Name / Notes"
+          textSearchPlaceholder="Search task name or notes..."
         />
       </div>
 
@@ -343,6 +360,7 @@ export default async function TimeEntriesPage({
             fromDate: selectedFromDate || undefined,
             toDate: selectedToDate || undefined,
             userId: effectiveUserId !== "all" ? effectiveUserId : undefined,
+            search: selectedTextSearch || undefined,
           }}
         />
       </div>

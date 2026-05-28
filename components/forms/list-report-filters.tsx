@@ -32,6 +32,10 @@ type Props = {
   projectOptions: ProjectOption[];
   selectedUserId?: string;
   userOptions?: UserOption[];
+  showTextSearch?: boolean;
+  selectedTextSearch?: string;
+  textSearchLabel?: string;
+  textSearchPlaceholder?: string;
 };
 
 export function ListReportFilters({
@@ -44,6 +48,10 @@ export function ListReportFilters({
   projectOptions,
   selectedUserId = "all",
   userOptions = [],
+  showTextSearch = false,
+  selectedTextSearch = "",
+  textSearchLabel = "Search",
+  textSearchPlaceholder = "Search...",
 }: Props) {
   const [clientId, setClientId] = useState(selectedClientId);
   const [projectId, setProjectId] = useState(selectedProjectId);
@@ -58,6 +66,27 @@ export function ListReportFilters({
 
   return (
     <AutoSubmitFilterForm method="get" className="flex flex-wrap items-end gap-3">
+      {showTextSearch ? (
+        <div className="w-full min-w-0 sm:w-[260px] lg:w-[300px]">
+          <label
+            className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500"
+            htmlFor={`${basePath}-search`}
+          >
+            {textSearchLabel}
+          </label>
+          <input
+            id={`${basePath}-search`}
+            name="search"
+            type="search"
+            defaultValue={selectedTextSearch}
+            placeholder={textSearchPlaceholder}
+            autoComplete="off"
+            maxLength={200}
+            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+          />
+        </div>
+      ) : null}
+
       <div className="w-full sm:w-[180px]">
         <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor={`${basePath}-fromDate`}>
           Date from
