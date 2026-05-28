@@ -267,7 +267,7 @@ export function TimeEntryEditForm({
   const languageRequired = showLanguageField;
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} className="card p-6">
       {state?.error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {state.error}
@@ -283,7 +283,7 @@ export function TimeEntryEditForm({
       <input type="hidden" name="entryId" value={entry.id} />
       <input type="hidden" name="employeeId" value={entry.employeeId} />
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
           <FormLabel htmlFor="employeeName">Employee</FormLabel>
           <input
