@@ -2,6 +2,7 @@ import "server-only";
 import ExcelJS from "exceljs";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { getOrCreateLeaveYearProfile } from "@/lib/ems-queries";
 import {
   formatDateInIst,
   formatTimeInIst,
@@ -20,6 +21,8 @@ export type HRReportData = {
   title: string;
   fromDate: string;
   toDate: string;
+  periodLabel: string;
+  fileDatePart: string;
   headers: string[];
   rows: HRReportRow[];
 };
@@ -67,9 +70,81 @@ function statusLabel(value: string) {
 
 export async function getHRReportData(
   type: HRReportType,
-  fromDate: string,
-  toDate: string,
+  fromDate?: string,
+  toDate?: string,
 ): Promise<HRReportData> {
+  if (type === "leave-counts") {
+    const year = Number(getIstDateKey().slice(0, 4));
+    const { startUtc: yearStart } = getDayBoundsUtcFromIstDateKey(
+      `${year}-01-01`,
+    );
+    const { startUtc: nextYearStart } = getDayBoundsUtcFromIstDateKey(
+      `${year + 1}-01-01`,
+    );
+    const users = await db.user.findMany({
+      where: eligibleUserWhere,
+      select: {
+        id: true,
+        fullName: true,
+        userType: true,
+        functionalRole: true,
+      },
+      orderBy: { fullName: "asc" },
+    });
+    const unpaidTotals = users.length
+      ? await db.leaveRequest.groupBy({
+          by: ["userId"],
+          where: {
+            userId: { in: users.map((user) => user.id) },
+            status: "APPROVED",
+            startDate: { gte: yearStart, lt: nextYearStart },
+          },
+          _sum: { unpaidDaysUsed: true },
+        })
+      : [];
+    const unpaidDaysByUserId = new Map(
+      unpaidTotals.map((row) => [
+        row.userId,
+        Number(row._sum.unpaidDaysUsed ?? 0),
+      ]),
+    );
+    const rows = await Promise.all(
+      users.map(async (user) => {
+        const profile = await getOrCreateLeaveYearProfile(user.id, year);
+        return [
+          user.fullName,
+          formatUserTypeLabel(user.userType),
+          formatFunctionalRoleLabel(user.functionalRole),
+          Number(profile.casualLeaves),
+          Number(profile.earnedLeaves),
+          unpaidDaysByUserId.get(user.id) ?? 0,
+        ];
+      }),
+    );
+    return {
+      type,
+      title: "Casual, Earned & Unpaid Leave Counts",
+      fromDate: "",
+      toDate: "",
+      periodLabel: `Leave Year ${year}`,
+      fileDatePart: String(year),
+      headers: [
+        "Employee",
+        "User Type",
+        "Functional Role",
+        "Remaining Casual Leaves",
+        "Remaining Earned Leaves",
+        "Approved Unpaid Leaves",
+      ],
+      rows,
+    };
+  }
+
+  if (!fromDate || !toDate) {
+    throw new Error(
+      "Select both From Date and To Date before exporting an HR report.",
+    );
+  }
   const { startUtc } = getDayBoundsUtcFromIstDateKey(fromDate);
   const { endUtc } = getDayBoundsUtcFromIstDateKey(toDate);
 
@@ -149,6 +224,8 @@ export async function getHRReportData(
       title: "Per Day Attendance",
       fromDate,
       toDate,
+      periodLabel: `${fromDate} to ${toDate}`,
+      fileDatePart: `${fromDate}_to_${toDate}`,
       headers: [
         "Date",
         "Employee",
@@ -189,6 +266,8 @@ export async function getHRReportData(
       title: "Leaves with Status",
       fromDate,
       toDate,
+      periodLabel: `${fromDate} to ${toDate}`,
+      fileDatePart: `${fromDate}_to_${toDate}`,
       headers: [
         "Employee",
         "User Type",
@@ -220,61 +299,7 @@ export async function getHRReportData(
     };
   }
 
-  const users = await db.user.findMany({
-    where: eligibleUserWhere,
-    select: { id: true, fullName: true, userType: true, functionalRole: true },
-    orderBy: { fullName: "asc" },
-  });
-  const approved = requests.filter((row) => row.status === "APPROVED");
-  const byUser = new Map<
-    string,
-    { casual: number; earned: number; unpaid: number; total: number }
-  >();
-  for (const row of approved) {
-    const total = byUser.get(row.userId) ?? {
-      casual: 0,
-      earned: 0,
-      unpaid: 0,
-      total: 0,
-    };
-    total.casual += Number(row.casualDaysUsed ?? 0);
-    total.earned += Number(row.earnedDaysUsed ?? 0);
-    total.unpaid += Number(row.unpaidDaysUsed ?? 0);
-    total.total += Number(row.totalLeaveDays ?? 0);
-    byUser.set(row.userId, total);
-  }
-  return {
-    type,
-    title: "Casual, Earned & Unpaid Leave Counts",
-    fromDate,
-    toDate,
-    headers: [
-      "Employee",
-      "User Type",
-      "Functional Role",
-      "Approved Casual Leaves",
-      "Approved Earned Leaves",
-      "Approved Unpaid Leaves",
-      "Total Approved Leave Days",
-    ],
-    rows: users.map((user) => {
-      const total = byUser.get(user.id) ?? {
-        casual: 0,
-        earned: 0,
-        unpaid: 0,
-        total: 0,
-      };
-      return [
-        user.fullName,
-        formatUserTypeLabel(user.userType),
-        formatFunctionalRoleLabel(user.functionalRole),
-        total.casual,
-        total.earned,
-        total.unpaid,
-        total.total,
-      ];
-    }),
-  };
+  throw new Error("Unsupported HR report type.");
 }
 
 export async function buildHRReportWorkbook(data: HRReportData) {
@@ -282,7 +307,10 @@ export async function buildHRReportWorkbook(data: HRReportData) {
   workbook.creator = "PMS EMS";
   const sheet = workbook.addWorksheet(data.title.slice(0, 31));
   sheet.addRow([data.title]);
-  sheet.addRow(["Date Range", `${data.fromDate} to ${data.toDate}`]);
+  sheet.addRow([
+    data.type === "leave-counts" ? "Leave Year" : "Date Range",
+    data.periodLabel,
+  ]);
   sheet.addRow([]);
   sheet.addRow(data.headers);
   for (const row of data.rows) sheet.addRow(row);
@@ -306,7 +334,7 @@ function escapePdfText(value: string | number) {
 export function buildHRReportPdf(data: HRReportData) {
   const lines = [
     data.title,
-    `Date Range: ${data.fromDate} to ${data.toDate}`,
+    `${data.type === "leave-counts" ? "Leave Year" : "Date Range"}: ${data.periodLabel}`,
     "",
     data.headers.join(" | "),
     ...data.rows.map((row) => row.map(String).join(" | ")),
@@ -366,5 +394,5 @@ export function getHRReportFileName(
       : data.type === "leaves"
         ? "leaves_with_status"
         : "leave_counts";
-  return `${base}_${data.fromDate}_to_${data.toDate}.${extension}`;
+  return `${base}_${data.fileDatePart}.${extension}`;
 }
