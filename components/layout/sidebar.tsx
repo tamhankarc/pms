@@ -74,6 +74,7 @@ const iconByMenuKey: Record<
   "leave-requests": CalendarDays,
   "leave-approvals": CheckCheck,
   "leave-admin": CalendarDays,
+  "hr-reports": BarChart3,
   announcements: Bell,
   profile: UserCog,
   "change-password": KeyRound,
@@ -122,6 +123,7 @@ function withLeaveItems(
 
   if (isHR(user)) {
     pushIfMissing("leave-admin");
+    pushIfMissing("hr-reports");
   }
 
   return nextItems;
@@ -150,6 +152,7 @@ const fullItems: SidebarNavItem[] = getItemsByKeys([
   "team-lead-assignments",
   "reports",
   "billing-reports",
+  "hr-reports",
   "profile",
   "change-password",
 ]);
@@ -252,14 +255,17 @@ export function getSidebarItems(
   }
 
   if (user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) {
+    const scopedItems = filterAccess(teamLeadItems, user).filter(
+      (item) => !isMasterDataHref(item.href),
+    );
+    if (isRoleScopedManager(user)) {
+      const billingReportsItem = baseMenuItems.find(
+        (item) => item.key === "billing-reports",
+      );
+      if (billingReportsItem) scopedItems.push(billingReportsItem);
+    }
     return appendExtraMenus(
-      withLeaveItems(
-        filterAccess(teamLeadItems, user).filter(
-          (item) => !isMasterDataHref(item.href),
-        ),
-        user,
-        canAccessLeaveApprovals,
-      ),
+      withLeaveItems(scopedItems, user, canAccessLeaveApprovals),
       user,
     );
   }
@@ -275,7 +281,7 @@ export function getSidebarItems(
     );
   }
 
-  if (user.userType === "HR") {
+  if (isHR(user)) {
     return appendExtraMenus(
       getItemsByKeys([
         "dashboard",
@@ -283,7 +289,11 @@ export function getSidebarItems(
         "leave-requests",
         ...(canAccessLeaveApprovals ? (["leave-approvals"] as MenuKey[]) : []),
         "leave-admin",
+        "hr-reports",
         "announcements",
+        ...(user.userType === "MANAGER"
+          ? (["billing-reports"] as MenuKey[])
+          : []),
         "profile",
         "change-password",
       ]),

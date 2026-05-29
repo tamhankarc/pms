@@ -43,8 +43,12 @@ export function hasAnyExtraMenuAccess(user: UserLike, menuKeys: MenuKey[]) {
 export function canAccessMenuItem(user: UserLike, menuKey: MenuKey) {
   const userType = getUserType(user);
   if (!userType) return false;
+  const effectiveUserType =
+    userType === "MANAGER" && getFunctionalRole(user) === "GENERAL_MANAGER"
+      ? "HR"
+      : userType;
   return (
-    getBaseMenuKeysForUserType(userType).includes(menuKey) ||
+    getBaseMenuKeysForUserType(effectiveUserType).includes(menuKey) ||
     hasExtraMenuAccess(user, menuKey)
   );
 }
@@ -71,10 +75,14 @@ export function canViewCostData(user: UserLike) {
   return isAdmin(user);
 }
 export function canViewBillingReports(user: UserLike) {
-  return isAdmin(user) || isAccounts(user);
+  return isAdmin(user) || isAccounts(user) || isManager(user);
+}
+export function isGeneralManager(user: UserLike) {
+  return isManager(user) && getFunctionalRole(user) === "GENERAL_MANAGER";
 }
 export function isHR(user: UserLike) {
-  return getUserType(user) === "HR";
+  // Managers with the General Manager role inherit Administration/HR access.
+  return getUserType(user) === "HR" || isGeneralManager(user);
 }
 export function isOperations(user: UserLike) {
   return getUserType(user) === "OPERATIONS";
@@ -86,7 +94,11 @@ export function isAdminProjectManager(user: UserLike) {
   return isAdmin(user) && getFunctionalRole(user) === "PROJECT_MANAGER";
 }
 export function isRoleScopedManager(user: UserLike) {
-  return isManager(user) && getFunctionalRole(user) !== "PROJECT_MANAGER";
+  return (
+    isManager(user) &&
+    getFunctionalRole(user) !== "PROJECT_MANAGER" &&
+    getFunctionalRole(user) !== "GENERAL_MANAGER"
+  );
 }
 export function isAdminDirector(user: UserLike) {
   return isAdmin(user) && getFunctionalRole(user) === "DIRECTOR";
@@ -252,5 +264,8 @@ export function canAssignApprovers(user: UserLike) {
 }
 
 export function canViewLeaveApprovals(user: UserLike) {
+  return isAdmin(user) || isHR(user);
+}
+export function canViewHRReports(user: UserLike) {
   return isAdmin(user) || isHR(user);
 }

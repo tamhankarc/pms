@@ -73,7 +73,7 @@ async function getRequestEmployee(
     isHR(actor) && requestedForUserId ? requestedForUserId : actor.id;
   if (!isHR(actor) && targetUserId !== actor.id)
     throw new Error(
-      "Only HR can submit leave requests on behalf of another user.",
+      "Only Administration/HR can submit leave requests on behalf of another user.",
     );
   const target = await db.user.findUnique({
     where: { id: targetUserId },
@@ -148,20 +148,11 @@ function parseCustomDurations(
   }
 }
 
-async function computeLeaveBreakup(
-  startDateKey: string,
-  endDateKey: string,
-  userId: string,
+function getDurationByDate(
+  keys: string[],
   mode: DaySelectionMode,
   rawDayTypes?: string,
 ) {
-  const { profile, year, keys } = await getWorkingDateKeys(
-    startDateKey,
-    endDateKey,
-    userId,
-  );
-  if (!keys.length)
-    throw new Error("Selected range has no working leave days.");
   const custom = parseCustomDurations(rawDayTypes);
   const durationByDate: Record<string, DayDuration> = {};
   for (const key of keys) {
@@ -172,16 +163,88 @@ async function computeLeaveBreakup(
           ? custom[key] || "FULL_DAY"
           : "FULL_DAY";
   }
-  const totalLeaveDays = keys.reduce(
-    (total, key) => total + (durationByDate[key] === "HALF_DAY" ? 0.5 : 1),
+  return durationByDate;
+}
+
+function sumSelectedWorkingDays(durationByDate: Record<string, DayDuration>) {
+  return Object.values(durationByDate).reduce(
+    (total, type) => total + (type === "HALF_DAY" ? 0.5 : 1),
     0,
   );
-  const casualAvailable = Number(profile.casualLeaves);
-  const earnedAvailable = Number(profile.earnedLeaves);
-  const casualDaysUsed = Math.min(casualAvailable, totalLeaveDays);
-  const remainingAfterCasual = totalLeaveDays - casualDaysUsed;
+}
+
+async function computeRequestedLeaveDetails(
+  startDateKey: string,
+  endDateKey: string,
+  userId: string,
+  mode: DaySelectionMode,
+  rawDayTypes?: string,
+) {
+  const { year, keys } = await getWorkingDateKeys(
+    startDateKey,
+    endDateKey,
+    userId,
+  );
+  if (!keys.length)
+    throw new Error("Selected range has no working leave days.");
+  const durationByDate = getDurationByDate(keys, mode, rawDayTypes);
+  return {
+    year,
+    requestedLeaveDays: sumSelectedWorkingDays(durationByDate),
+    daySelectionMode: mode,
+    leaveDayTypesJson: JSON.stringify(durationByDate),
+  };
+}
+
+async function computeApprovedLeaveBreakup(
+  startDateKey: string,
+  endDateKey: string,
+  userId: string,
+  mode: DaySelectionMode,
+  rawDayTypes?: string,
+) {
+  const { profile, year, keys, holidayKeys } = await getWorkingDateKeys(
+    startDateKey,
+    endDateKey,
+    userId,
+  );
+  if (!keys.length)
+    throw new Error("Selected range has no working leave days.");
+
+  const durationByDate = getDurationByDate(keys, mode, rawDayTypes);
+  const workingLeaveDays = sumSelectedWorkingDays(durationByDate);
+  const unpaidOnly =
+    profile.employmentStatus === "PROBATION" ||
+    profile.employmentStatus === "CONSULTANT";
+  const casualAvailable = unpaidOnly ? 0 : Number(profile.casualLeaves);
+  const earnedAvailable = unpaidOnly ? 0 : Number(profile.earnedLeaves);
+  const casualDaysUsed = Math.min(casualAvailable, workingLeaveDays);
+  const remainingAfterCasual = workingLeaveDays - casualDaysUsed;
   const earnedDaysUsed = Math.min(earnedAvailable, remainingAfterCasual);
-  const unpaidDaysUsed = Math.max(0, remainingAfterCasual - earnedDaysUsed);
+  const workingUnpaidDaysUsed = Math.max(
+    0,
+    remainingAfterCasual - earnedDaysUsed,
+  );
+
+  // The sandwich rule is finalised only at approval time, using the
+  // employee's current remaining paid balance at that moment.
+  let sandwichUnpaidDaysUsed = 0;
+  if (workingUnpaidDaysUsed > 0) {
+    let cursor = startDateKey;
+    while (cursor <= endDateKey) {
+      const isInsideRange = cursor !== startDateKey && cursor !== endDateKey;
+      if (
+        isInsideRange &&
+        (isWeekendDateKey(cursor) || holidayKeys.has(cursor))
+      ) {
+        sandwichUnpaidDaysUsed += 1;
+      }
+      cursor = getIstDateKey(getDayBoundsUtcFromIstDateKey(cursor).endUtc);
+    }
+  }
+
+  const unpaidDaysUsed = workingUnpaidDaysUsed + sandwichUnpaidDaysUsed;
+  const totalLeaveDays = workingLeaveDays + sandwichUnpaidDaysUsed;
   const leaveType =
     casualDaysUsed > 0 ? "CASUAL" : earnedDaysUsed > 0 ? "EARNED" : "UNPAID";
   return {
@@ -271,7 +334,7 @@ export async function createLeaveRequestAction(
       parsed.data.startDate,
       parsed.data.endDate,
     );
-    const breakup = await computeLeaveBreakup(
+    const requestDetails = await computeRequestedLeaveDetails(
       parsed.data.startDate,
       parsed.data.endDate,
       employee.id,
@@ -281,17 +344,21 @@ export async function createLeaveRequestAction(
     const request = await db.leaveRequest.create({
       data: {
         userId: employee.id,
-        leaveType: breakup.leaveType,
+        // Final paid/unpaid allocation is computed only when approved. This
+        // required enum value is not displayed as a final breakup while pending.
+        leaveType: "UNPAID",
         startDate: start,
         endDate: end,
         reason: buildReason(parsed.data.reason, parsed.data.diwaliLeave),
         approverId: parsed.data.approverId,
-        daySelectionMode: breakup.daySelectionMode,
-        leaveDayTypesJson: breakup.leaveDayTypesJson,
-        totalLeaveDays: new Prisma.Decimal(breakup.totalLeaveDays.toFixed(2)),
-        casualDaysUsed: new Prisma.Decimal(breakup.casualDaysUsed.toFixed(2)),
-        earnedDaysUsed: new Prisma.Decimal(breakup.earnedDaysUsed.toFixed(2)),
-        unpaidDaysUsed: new Prisma.Decimal(breakup.unpaidDaysUsed.toFixed(2)),
+        daySelectionMode: requestDetails.daySelectionMode,
+        leaveDayTypesJson: requestDetails.leaveDayTypesJson,
+        totalLeaveDays: new Prisma.Decimal(
+          requestDetails.requestedLeaveDays.toFixed(2),
+        ),
+        casualDaysUsed: new Prisma.Decimal(0),
+        earnedDaysUsed: new Prisma.Decimal(0),
+        unpaidDaysUsed: new Prisma.Decimal(0),
       },
     });
     await sendSubmittedMailWithoutRollingBack(request.id, "new");
@@ -380,7 +447,7 @@ export async function updateLeaveRequestAction(
       parsed.data.startDate,
       parsed.data.endDate,
     );
-    const breakup = await computeLeaveBreakup(
+    const requestDetails = await computeRequestedLeaveDetails(
       parsed.data.startDate,
       parsed.data.endDate,
       employee.id,
@@ -390,7 +457,8 @@ export async function updateLeaveRequestAction(
     const request = await db.leaveRequest.update({
       where: { id: parsed.data.id },
       data: {
-        leaveType: breakup.leaveType,
+        // Final paid/unpaid allocation is recalculated only when approved.
+        leaveType: "UNPAID",
         startDate: start,
         endDate: end,
         reason: buildReason(parsed.data.reason, parsed.data.diwaliLeave),
@@ -399,12 +467,14 @@ export async function updateLeaveRequestAction(
         reconsiderNote: null,
         rejectedAt: null,
         reconsideredAt: new Date(),
-        daySelectionMode: breakup.daySelectionMode,
-        leaveDayTypesJson: breakup.leaveDayTypesJson,
-        totalLeaveDays: new Prisma.Decimal(breakup.totalLeaveDays.toFixed(2)),
-        casualDaysUsed: new Prisma.Decimal(breakup.casualDaysUsed.toFixed(2)),
-        earnedDaysUsed: new Prisma.Decimal(breakup.earnedDaysUsed.toFixed(2)),
-        unpaidDaysUsed: new Prisma.Decimal(breakup.unpaidDaysUsed.toFixed(2)),
+        daySelectionMode: requestDetails.daySelectionMode,
+        leaveDayTypesJson: requestDetails.leaveDayTypesJson,
+        totalLeaveDays: new Prisma.Decimal(
+          requestDetails.requestedLeaveDays.toFixed(2),
+        ),
+        casualDaysUsed: new Prisma.Decimal(0),
+        earnedDaysUsed: new Prisma.Decimal(0),
+        unpaidDaysUsed: new Prisma.Decimal(0),
       },
     });
     await sendSubmittedMailWithoutRollingBack(request.id, "updated");
@@ -488,6 +558,8 @@ export async function reviewLeaveRequestAction(formData: FormData) {
     throw new Error("Invalid leave review action.");
   const existing = await db.leaveRequest.findUnique({ where: { id } });
   if (!existing) throw new Error("Leave request not found.");
+  if (existing.status !== "PENDING")
+    throw new Error("Only pending leave requests can be reviewed.");
   const assigned = Boolean(
     await db.leaveApproverAssignment.findFirst({
       where: { approverId: user.id },
@@ -503,15 +575,35 @@ export async function reviewLeaveRequestAction(formData: FormData) {
       "Only the selected approver or an Admin user with functional role Project Manager who is included in the approver list can approve, reject, or reconsider this leave request.",
     );
   if (decision === "APPROVED") {
+    const approvedBreakup = await computeApprovedLeaveBreakup(
+      getIstDateKey(existing.startDate),
+      getIstDateKey(existing.endDate),
+      existing.userId,
+      existing.daySelectionMode as DaySelectionMode,
+      existing.leaveDayTypesJson ?? undefined,
+    );
     const profile = await getOrCreateLeaveYearProfile(
       existing.userId,
-      Number(getIstDateKey(existing.startDate).slice(0, 4)),
+      approvedBreakup.year,
     );
     await db.$transaction([
       db.leaveRequest.update({
         where: { id },
         data: {
           status: "APPROVED",
+          leaveType: approvedBreakup.leaveType,
+          totalLeaveDays: new Prisma.Decimal(
+            approvedBreakup.totalLeaveDays.toFixed(2),
+          ),
+          casualDaysUsed: new Prisma.Decimal(
+            approvedBreakup.casualDaysUsed.toFixed(2),
+          ),
+          earnedDaysUsed: new Prisma.Decimal(
+            approvedBreakup.earnedDaysUsed.toFixed(2),
+          ),
+          unpaidDaysUsed: new Prisma.Decimal(
+            approvedBreakup.unpaidDaysUsed.toFixed(2),
+          ),
           approverId: user.id,
           approverComment: comment || null,
           approvedAt: new Date(),
@@ -523,10 +615,14 @@ export async function reviewLeaveRequestAction(formData: FormData) {
         where: { id: profile.id },
         data: {
           casualLeaves: {
-            decrement: existing.casualDaysUsed ?? new Prisma.Decimal(0),
+            decrement: new Prisma.Decimal(
+              approvedBreakup.casualDaysUsed.toFixed(2),
+            ),
           },
           earnedLeaves: {
-            decrement: existing.earnedDaysUsed ?? new Prisma.Decimal(0),
+            decrement: new Prisma.Decimal(
+              approvedBreakup.earnedDaysUsed.toFixed(2),
+            ),
           },
         },
       }),

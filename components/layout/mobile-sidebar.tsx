@@ -5,7 +5,10 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { ChevronDown, Menu, X } from "lucide-react";
 import type { SessionUser } from "@/lib/auth";
-import { getSidebarItems, type BillingReportClientNavItem } from "@/components/layout/sidebar";
+import {
+  getSidebarItems,
+  type BillingReportClientNavItem,
+} from "@/components/layout/sidebar";
 
 export function MobileSidebar({
   user,
@@ -18,7 +21,14 @@ export function MobileSidebar({
 }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const items = getSidebarItems(user, canAccessLeaveApprovals);
+  const mobileAllowedMenuKeys = new Set([
+    "leave-requests",
+    "profile",
+    "change-password",
+  ]);
+  const items = getSidebarItems(user, canAccessLeaveApprovals).filter((item) =>
+    mobileAllowedMenuKeys.has(item.key),
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -26,15 +36,27 @@ export function MobileSidebar({
 
   const drawer = open ? (
     <div className="fixed inset-0 z-50 flex lg:hidden">
-      <button className="absolute inset-0 bg-slate-950/50" onClick={() => setOpen(false)} aria-label="Close menu" />
+      <button
+        className="absolute inset-0 bg-slate-950/50"
+        onClick={() => setOpen(false)}
+        aria-label="Close menu"
+      />
       <aside className="relative ml-auto flex h-full w-full max-w-xs flex-col bg-slate-950 text-slate-100 shadow-xl">
         <div className="flex items-start justify-between border-b border-slate-800 px-6 py-6">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Internal PMS + EMS</p>
-            <h2 className="mt-3 text-lg font-semibold">Project &amp; Employee Management</h2>
-            <p className="mt-2 text-sm font-medium text-slate-200">{user.fullName}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
+              Internal PMS + EMS
+            </p>
+            <h2 className="mt-3 text-lg font-semibold">
+              Project &amp; Employee Management
+            </h2>
+            <p className="mt-2 text-sm font-medium text-slate-200">
+              {user.fullName}
+            </p>
             <p className="text-xs text-slate-400">
-              {user.userType.replaceAll("_", " ")}
+              {user.userType === "HR"
+                ? "Administration/HR"
+                : user.userType.replaceAll("_", " ")}
               {user.designation ? ` · ${user.designation}` : ""}
             </p>
           </div>
@@ -61,16 +83,27 @@ export function MobileSidebar({
                     <ChevronDown className="h-4 w-4 shrink-0 transition group-open:rotate-180" />
                   </summary>
                   <div className="mt-1 space-y-1 pl-7">
-                    <Link href="/billing-reports" className="block rounded-lg px-3 py-2 text-xs font-medium text-slate-400 transition hover:bg-slate-900 hover:text-white" onClick={() => setOpen(false)}>
+                    <Link
+                      href="/billing-reports"
+                      className="block rounded-lg px-3 py-2 text-xs font-medium text-slate-400 transition hover:bg-slate-900 hover:text-white"
+                      onClick={() => setOpen(false)}
+                    >
                       All Clients
                     </Link>
                     {billingReportClients.map((client) => (
-                      <Link key={client.id} href={`/billing-reports/${client.id}`} className="block rounded-lg px-3 py-2 text-xs font-medium text-slate-400 transition hover:bg-slate-900 hover:text-white" onClick={() => setOpen(false)}>
+                      <Link
+                        key={client.id}
+                        href={`/billing-reports/${client.id}`}
+                        className="block rounded-lg px-3 py-2 text-xs font-medium text-slate-400 transition hover:bg-slate-900 hover:text-white"
+                        onClick={() => setOpen(false)}
+                      >
                         <span className="line-clamp-2">{client.name}</span>
                       </Link>
                     ))}
                     {billingReportClients.length === 0 ? (
-                      <span className="block rounded-lg px-3 py-2 text-xs text-slate-500">No clients available</span>
+                      <span className="block rounded-lg px-3 py-2 text-xs text-slate-500">
+                        No clients available
+                      </span>
                     ) : null}
                   </div>
                 </details>

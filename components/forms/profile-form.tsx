@@ -42,7 +42,9 @@ export function ProfileForm({
   };
 }) {
   const [state, formAction] = useActionState(updateProfileAction, initialState);
-  const [sameAsCurrent, setSameAsCurrent] = useState(user.permanentSameAsCurrent);
+  const [sameAsCurrent, setSameAsCurrent] = useState(
+    user.permanentSameAsCurrent,
+  );
   const [currentAddress, setCurrentAddress] = useState<AddressValue>({
     addressLine: user.currentAddressLine ?? "",
     city: user.currentCity ?? "",
@@ -68,7 +70,8 @@ export function ProfileForm({
     <form action={formAction} className="card p-6">
       <h2 className="section-title">Update profile</h2>
       <p className="section-subtitle">
-        You can update your phone numbers and address details here. Core user details are read-only.
+        You can update your phone numbers and address details here. Core user
+        details are read-only.
       </p>
 
       {state?.message ? (
@@ -86,17 +89,39 @@ export function ProfileForm({
       <div className="mt-5 grid gap-4 md:grid-cols-2">
         <div>
           <FormLabel htmlFor="fullName">Full name</FormLabel>
-          <input id="fullName" name="fullName" className="input bg-slate-50" defaultValue={user.fullName ?? ""} readOnly />
+          <input
+            id="fullName"
+            name="fullName"
+            className="input bg-slate-50"
+            defaultValue={user.fullName ?? ""}
+            readOnly
+          />
         </div>
 
         <div>
           <FormLabel htmlFor="email">Email</FormLabel>
-          <input id="email" className="input bg-slate-50" defaultValue={user.email ?? ""} disabled readOnly />
+          <input
+            id="email"
+            className="input bg-slate-50"
+            defaultValue={user.email ?? ""}
+            disabled
+            readOnly
+          />
         </div>
 
         <div>
           <FormLabel htmlFor="userType">User type</FormLabel>
-          <input id="userType" className="input bg-slate-50" defaultValue={user.userType.replaceAll("_", " ")} disabled readOnly />
+          <input
+            id="userType"
+            className="input bg-slate-50"
+            defaultValue={
+              user.userType === "HR"
+                ? "Administration/HR"
+                : user.userType.replaceAll("_", " ")
+            }
+            disabled
+            readOnly
+          />
         </div>
 
         <div>
@@ -104,7 +129,10 @@ export function ProfileForm({
           <input
             id="functionalRole"
             className="input bg-slate-50"
-            defaultValue={(user.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}
+            defaultValue={(user.functionalRole ?? "UNASSIGNED").replaceAll(
+              "_",
+              " ",
+            )}
             disabled
             readOnly
           />
@@ -112,12 +140,24 @@ export function ProfileForm({
 
         <div>
           <FormLabel htmlFor="employeeCode">Employee code</FormLabel>
-          <input id="employeeCode" className="input bg-slate-50" defaultValue={user.employeeCode ?? ""} disabled readOnly />
+          <input
+            id="employeeCode"
+            className="input bg-slate-50"
+            defaultValue={user.employeeCode ?? ""}
+            disabled
+            readOnly
+          />
         </div>
 
         <div>
           <FormLabel htmlFor="designation">Designation</FormLabel>
-          <input id="designation" className="input bg-slate-50" defaultValue={user.designation ?? ""} disabled readOnly />
+          <input
+            id="designation"
+            className="input bg-slate-50"
+            defaultValue={user.designation ?? ""}
+            disabled
+            readOnly
+          />
         </div>
 
         <div className="md:col-span-2">
@@ -125,7 +165,11 @@ export function ProfileForm({
           <input
             id="joiningDate"
             className="input bg-slate-50"
-            defaultValue={user.joiningDate ? new Date(user.joiningDate).toLocaleDateString() : ""}
+            defaultValue={
+              user.joiningDate
+                ? new Date(user.joiningDate).toLocaleDateString()
+                : ""
+            }
             disabled
             readOnly
           />
@@ -133,11 +177,18 @@ export function ProfileForm({
 
         <div>
           <FormLabel htmlFor="phoneNumber">Primary phone number</FormLabel>
-          <input id="phoneNumber" className="input" name="phoneNumber" defaultValue={user.phoneNumber ?? ""} />
+          <input
+            id="phoneNumber"
+            className="input"
+            name="phoneNumber"
+            defaultValue={user.phoneNumber ?? ""}
+          />
         </div>
 
         <div>
-          <FormLabel htmlFor="secondaryPhoneNumber">Secondary phone number</FormLabel>
+          <FormLabel htmlFor="secondaryPhoneNumber">
+            Secondary phone number
+          </FormLabel>
           <input
             id="secondaryPhoneNumber"
             className="input"
@@ -146,7 +197,12 @@ export function ProfileForm({
           />
         </div>
 
-        <AddressFields prefix="current" title="Current Address" value={currentAddress} onChange={setCurrentAddress} />
+        <AddressFields
+          prefix="current"
+          title="Current Address"
+          value={currentAddress}
+          onChange={setCurrentAddress}
+        />
 
         <div className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
           <input
@@ -160,11 +216,16 @@ export function ProfileForm({
               if (checked) {
                 setPermanentAddress(currentAddress);
               } else if (!permanentAddress.country) {
-                setPermanentAddress(createDefaultAddress(currentAddress.country));
+                setPermanentAddress(
+                  createDefaultAddress(currentAddress.country),
+                );
               }
             }}
           />
-          <label htmlFor="permanentSameAsCurrent" className="text-sm text-slate-700">
+          <label
+            htmlFor="permanentSameAsCurrent"
+            className="text-sm text-slate-700"
+          >
             Permanent address is same as current address
           </label>
         </div>

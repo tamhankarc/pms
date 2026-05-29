@@ -21,24 +21,46 @@ export function UserAssignmentForm({
   clients: { id: string; name: string }[];
   projects: { id: string; name: string; clientId: string }[];
   subProjects: { id: string; name: string; projectId: string }[];
-  users: { id: string; fullName: string; userType: string; functionalRole: string | null }[];
-  initialValues?: { clientId?: string; projectId?: string; subProjectId?: string; userIds?: string[] };
+  users: {
+    id: string;
+    fullName: string;
+    userType: string;
+    functionalRole: string | null;
+  }[];
+  initialValues?: {
+    clientId?: string;
+    projectId?: string;
+    subProjectId?: string;
+    userIds?: string[];
+  };
 }) {
   const router = useRouter();
-  const [state, formAction, pending] = useActionState(saveUserAssignmentAction, initialState);
+  const [state, formAction, pending] = useActionState(
+    saveUserAssignmentAction,
+    initialState,
+  );
 
   const [clientId, setClientId] = useState(initialValues?.clientId ?? "");
   const [projectId, setProjectId] = useState(initialValues?.projectId ?? "");
-  const [subProjectId, setSubProjectId] = useState(initialValues?.subProjectId ?? "");
+  const [subProjectId, setSubProjectId] = useState(
+    initialValues?.subProjectId ?? "",
+  );
   const [search, setSearch] = useState("");
-  const [selectedUserIds, setSelectedUserIds] = useState<string[]>(initialValues?.userIds ?? []);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>(
+    initialValues?.userIds ?? [],
+  );
 
   useEffect(() => {
     setClientId(initialValues?.clientId ?? "");
     setProjectId(initialValues?.projectId ?? "");
     setSubProjectId(initialValues?.subProjectId ?? "");
     setSelectedUserIds(initialValues?.userIds ?? []);
-  }, [initialValues?.clientId, initialValues?.projectId, initialValues?.subProjectId, initialValues?.userIds]);
+  }, [
+    initialValues?.clientId,
+    initialValues?.projectId,
+    initialValues?.subProjectId,
+    initialValues?.userIds,
+  ]);
 
   useEffect(() => {
     if (state?.success) {
@@ -48,32 +70,46 @@ export function UserAssignmentForm({
   }, [state?.success, router]);
 
   const filteredProjects = useMemo(
-    () => (clientId ? projects.filter((project) => project.clientId === clientId) : projects),
+    () =>
+      clientId
+        ? projects.filter((project) => project.clientId === clientId)
+        : projects,
     [projects, clientId],
   );
 
   const filteredSubProjects = useMemo(() => {
     if (projectId) {
-      return subProjects.filter((subProject) => subProject.projectId === projectId);
+      return subProjects.filter(
+        (subProject) => subProject.projectId === projectId,
+      );
     }
 
     if (clientId) {
-      const filteredProjectIds = new Set(filteredProjects.map((project) => project.id));
-      return subProjects.filter((subProject) => filteredProjectIds.has(subProject.projectId));
+      const filteredProjectIds = new Set(
+        filteredProjects.map((project) => project.id),
+      );
+      return subProjects.filter((subProject) =>
+        filteredProjectIds.has(subProject.projectId),
+      );
     }
 
     return subProjects;
   }, [subProjects, projectId, clientId, filteredProjects]);
 
-
   useEffect(() => {
-    if (projectId && !filteredProjects.some((project) => project.id === projectId)) {
+    if (
+      projectId &&
+      !filteredProjects.some((project) => project.id === projectId)
+    ) {
       setProjectId("");
     }
   }, [filteredProjects, projectId]);
 
   useEffect(() => {
-    if (subProjectId && !filteredSubProjects.some((subProject) => subProject.id === subProjectId)) {
+    if (
+      subProjectId &&
+      !filteredSubProjects.some((subProject) => subProject.id === subProjectId)
+    ) {
       setSubProjectId("");
     }
   }, [filteredSubProjects, subProjectId]);
@@ -130,7 +166,13 @@ export function UserAssignmentForm({
               setProjectId("");
               setSubProjectId("");
             }}
-            options={[{ value: "", label: "Select client" }, ...clients.map((client) => ({ value: client.id, label: client.name }))]}
+            options={[
+              { value: "", label: "Select client" },
+              ...clients.map((client) => ({
+                value: client.id,
+                label: client.name,
+              })),
+            ]}
             placeholder="Select client"
             searchPlaceholder="Search clients..."
             emptyLabel="No clients found."
@@ -153,7 +195,9 @@ export function UserAssignmentForm({
                 return;
               }
 
-              const nextProject = projects.find((project) => project.id === nextValue);
+              const nextProject = projects.find(
+                (project) => project.id === nextValue,
+              );
               if (nextProject && nextProject.clientId !== clientId) {
                 setClientId(nextProject.clientId);
               }
@@ -176,7 +220,13 @@ export function UserAssignmentForm({
             name="subProjectId"
             value={subProjectId}
             onValueChange={setSubProjectId}
-            options={[{ value: "", label: "Project-level assignment" }, ...filteredSubProjects.map((subProject) => ({ value: subProject.id, label: subProject.name }))]}
+            options={[
+              { value: "", label: "Project-level assignment" },
+              ...filteredSubProjects.map((subProject) => ({
+                value: subProject.id,
+                label: subProject.name,
+              })),
+            ]}
             placeholder="Project-level assignment"
             searchPlaceholder="Search sub projects..."
             emptyLabel="No sub projects found."
@@ -205,10 +255,16 @@ export function UserAssignmentForm({
                   onChange={(e) => toggleUser(user.id, e.target.checked)}
                 />
                 <span>
-                  <span className="font-medium text-slate-900">{user.fullName}</span>
+                  <span className="font-medium text-slate-900">
+                    {user.fullName}
+                  </span>
                   <span className="block text-xs text-slate-500">
-                    {user.userType.replaceAll("_", " ")}
-                    {user.functionalRole ? ` · ${user.functionalRole.replaceAll("_", " ")}` : ""}
+                    {user.userType === "HR"
+                      ? "Administration/HR"
+                      : user.userType.replaceAll("_", " ")}
+                    {user.functionalRole
+                      ? ` · ${user.functionalRole.replaceAll("_", " ")}`
+                      : ""}
                   </span>
                 </span>
               </label>

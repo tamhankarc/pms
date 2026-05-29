@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { getOrCreateLeaveYearProfile } from "@/lib/ems-queries";
 import { getIstDateKey } from "@/lib/ist";
 import { canAccessMenuItem, isHR } from "@/lib/permissions";
+import { formatUserTypeLabel } from "@/lib/display-labels";
 import { updateLeaveAdminUserAction } from "@/lib/actions/hr-leave-admin-actions";
 
 export default async function LeaveAdminUserPage({
@@ -17,7 +18,7 @@ export default async function LeaveAdminUserPage({
 }) {
   const user = await requireUser();
   if (!isHR(user) && !canAccessMenuItem(user, "leave-admin")) {
-    return <div className="space-y-6"><PageHeader title="Leave Administration" description="Only HR can access this page." /></div>;
+    return <div className="space-y-6"><PageHeader title="Leave Administration" description="Only Administration/HR can access this page." /></div>;
   }
   const routeParams = await params;
   const query = (await searchParams) ?? {};
@@ -31,7 +32,7 @@ export default async function LeaveAdminUserPage({
     <div className="space-y-6">
       <PageHeader
         title={`Leave Administration · ${target.fullName}`}
-        description="Update casual leaves, earned leaves, shift, and employment status."
+        description="Update leave balance, shift, and employment status. Probation and Consultant users always use unpaid leave."
         actions={<Link className="btn-secondary" href={returnTo}>Back to Leave Administration</Link>}
       />
 
@@ -46,7 +47,7 @@ export default async function LeaveAdminUserPage({
           </div>
           <div>
             <label className="label">Role</label>
-            <input className="input" value={`${target.userType.replaceAll("_", " ")} · ${(target.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}`} readOnly />
+            <input className="input" value={`${formatUserTypeLabel(target.userType)} · ${(target.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}`} readOnly />
           </div>
           <div>
             <label className="label" htmlFor="casualLeaves">Casual leaves</label>
@@ -62,7 +63,8 @@ export default async function LeaveAdminUserPage({
           </div>
           <div>
             <label className="label" htmlFor="employmentStatus">Employment status</label>
-            <select className="input" id="employmentStatus" name="employmentStatus" defaultValue={profile.employmentStatus}><option value="PROBATION">Probation</option><option value="PERMANENT">Permanent</option></select>
+            <select className="input" id="employmentStatus" name="employmentStatus" defaultValue={profile.employmentStatus}><option value="PROBATION">Probation</option><option value="PERMANENT">Permanent</option><option value="CONSULTANT">Consultant</option></select>
+            <p className="mt-1 text-xs text-slate-500">Probation and Consultant users always have 0 Casual and Earned leaves; approved leave is unpaid.</p>
           </div>
         </div>
         <button className="btn-primary" type="submit">Save details</button>

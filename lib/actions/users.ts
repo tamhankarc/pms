@@ -16,6 +16,7 @@ type FunctionalRole =
   | "DEVOPS"
   | "PROJECT_MANAGER"
   | "DIRECTOR"
+  | "GENERAL_MANAGER"
   | "BILLING"
   | "OTHER";
 

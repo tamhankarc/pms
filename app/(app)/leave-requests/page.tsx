@@ -10,11 +10,15 @@ import {
 import { getLeaveRequestsForUser } from "@/lib/ems-queries";
 
 function getLeaveBreakupLabel(row: {
+  status: string;
   casualDaysUsed?: unknown;
   earnedDaysUsed?: unknown;
   unpaidDaysUsed?: unknown;
   totalLeaveDays?: unknown;
 }) {
+  if (row.status === "PENDING" || row.status === "RECONSIDER")
+    return "Final breakup calculated on approval";
+  if (row.status === "REJECTED") return "No balance deducted";
   const casual = Number(row.casualDaysUsed ?? 0);
   const earned = Number(row.earnedDaysUsed ?? 0);
   const unpaid = Number(row.unpaidDaysUsed ?? 0);
@@ -90,18 +94,20 @@ export default async function LeaveRequestsPage() {
         <table className="table-base">
           <thead className="table-head">
             <tr>
-              <th className="table-cell">Leave breakup</th>
+              <th className="table-cell hidden md:table-cell">Leave breakup</th>
               <th className="table-cell">Date range</th>
-              <th className="table-cell">Approver</th>
+              <th className="table-cell hidden md:table-cell">Approver</th>
               <th className="table-cell">Status</th>
-              <th className="table-cell">Notes</th>
+              <th className="table-cell hidden md:table-cell">Notes</th>
               <th className="table-cell">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {data.current.map((row) => (
               <tr key={row.id} id={`leave-request-${row.id}`}>
-                <td className="table-cell">{getLeaveBreakupLabel(row)}</td>
+                <td className="table-cell hidden md:table-cell">
+                  {getLeaveBreakupLabel(row)}
+                </td>
                 <td className="table-cell">
                   {formatDateInIst(row.startDate)} -{" "}
                   {formatDateInIst(row.endDate)}
@@ -109,13 +115,15 @@ export default async function LeaveRequestsPage() {
                     {Number(row.totalLeaveDays ?? 0).toFixed(2)} day(s)
                   </div>
                 </td>
-                <td className="table-cell">{row.approver?.fullName || "—"}</td>
+                <td className="table-cell hidden md:table-cell">
+                  {row.approver?.fullName || "—"}
+                </td>
                 <td className="table-cell">
                   <span className="badge-blue">
                     {row.status.replaceAll("_", " ")}
                   </span>
                 </td>
-                <td className="table-cell whitespace-pre-line">
+                <td className="table-cell hidden whitespace-pre-line md:table-cell">
                   {row.reconsiderNote ||
                     row.approverComment ||
                     row.reason ||
@@ -176,17 +184,19 @@ export default async function LeaveRequestsPage() {
         <table className="table-base">
           <thead className="table-head">
             <tr>
-              <th className="table-cell">Leave breakup</th>
+              <th className="table-cell hidden md:table-cell">Leave breakup</th>
               <th className="table-cell">Date range</th>
-              <th className="table-cell">Approver</th>
+              <th className="table-cell hidden md:table-cell">Approver</th>
               <th className="table-cell">Status</th>
-              <th className="table-cell">Notes</th>
+              <th className="table-cell hidden md:table-cell">Notes</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {data.past.map((row) => (
               <tr key={row.id} id={`leave-request-${row.id}`}>
-                <td className="table-cell">{getLeaveBreakupLabel(row)}</td>
+                <td className="table-cell hidden md:table-cell">
+                  {getLeaveBreakupLabel(row)}
+                </td>
                 <td className="table-cell">
                   {formatDateInIst(row.startDate)} -{" "}
                   {formatDateInIst(row.endDate)}
@@ -194,13 +204,15 @@ export default async function LeaveRequestsPage() {
                     {Number(row.totalLeaveDays ?? 0).toFixed(2)} day(s)
                   </div>
                 </td>
-                <td className="table-cell">{row.approver?.fullName || "—"}</td>
+                <td className="table-cell hidden md:table-cell">
+                  {row.approver?.fullName || "—"}
+                </td>
                 <td className="table-cell">
                   <span className="badge-slate">
                     {row.status.replaceAll("_", " ")}
                   </span>
                 </td>
-                <td className="table-cell whitespace-pre-line">
+                <td className="table-cell hidden whitespace-pre-line md:table-cell">
                   {row.reconsiderNote ||
                     row.approverComment ||
                     row.reason ||

@@ -55,7 +55,7 @@ export default async function AnnouncementsPage() {
 
   const userOptions = eligibleUsers.map((row) => ({
     value: row.id,
-    label: `${row.fullName} (${row.userType.replaceAll("_", " ")}${
+    label: `${row.fullName} (${row.userType === "HR" ? "Administration/HR" : row.userType.replaceAll("_", " ")}${
       row.functionalRole ? ` - ${row.functionalRole.replaceAll("_", " ")}` : ""
     })`,
   }));

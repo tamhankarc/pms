@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { hashPassword, requireUserTypesForAction } from "@/lib/auth";
+import { hashPassword, requireUserForAction } from "@/lib/auth";
+import { isAdmin, isHR } from "@/lib/permissions";
 import { normalizeAddressCountry, toAddressSummary } from "@/lib/address";
 import { normalizeMenuKeys } from "@/lib/menu-access";
 
@@ -15,13 +16,11 @@ const operationalRoles = [
   "DEVOPS",
   "PROJECT_MANAGER",
   "DIRECTOR",
+  "GENERAL_MANAGER",
   "OTHER",
 ] as const;
 
-const functionalRoles = [
-  ...operationalRoles,
-  "BILLING",
-] as const;
+const functionalRoles = [...operationalRoles, "BILLING"] as const;
 
 const userTypes = [
   "ADMIN",
@@ -49,7 +48,10 @@ const baseSchema = z.object({
     .trim()
     .min(3, "Username must be at least 3 characters.")
     .max(50)
-    .regex(/^[a-z0-9._-]+$/i, "Username can only contain letters, numbers, dot, underscore, and hyphen."),
+    .regex(
+      /^[a-z0-9._-]+$/i,
+      "Username can only contain letters, numbers, dot, underscore, and hyphen.",
+    ),
   email: z.string().email(),
   password: z.string().min(6).optional(),
   userType: z.enum(userTypes),
@@ -64,21 +66,35 @@ const baseSchema = z.object({
   currentState: z.string().trim().max(120).optional().or(z.literal("")),
   currentCountry: z.enum(["IN", "US"]).optional(),
   currentPostalCode: z.string().trim().max(30).optional().or(z.literal("")),
-  permanentSameAsCurrent: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
-  permanentAddressLine: z.string().trim().max(2000).optional().or(z.literal("")),
+  permanentSameAsCurrent: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  permanentAddressLine: z
+    .string()
+    .trim()
+    .max(2000)
+    .optional()
+    .or(z.literal("")),
   permanentCity: z.string().trim().max(120).optional().or(z.literal("")),
   permanentState: z.string().trim().max(120).optional().or(z.literal("")),
   permanentCountry: z.enum(["IN", "US"]).optional(),
   permanentPostalCode: z.string().trim().max(30).optional().or(z.literal("")),
-  isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
+  isActive: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
 });
 
-function validateUserTypeRoleCombination(userType: typeof userTypes[number], functionalRole: FunctionalRole) {
+function validateUserTypeRoleCombination(
+  userType: (typeof userTypes)[number],
+  functionalRole: FunctionalRole,
+) {
   if (userType === "ACCOUNTS" && functionalRole !== "BILLING") {
     throw new Error("Accounts users must use the Billing functional role.");
   }
   if (userType !== "ACCOUNTS" && functionalRole === "BILLING") {
-    throw new Error("The Billing functional role can only be used with the Accounts user type.");
+    throw new Error(
+      "The Billing functional role can only be used with the Accounts user type.",
+    );
   }
 }
 
@@ -98,7 +114,9 @@ function buildAddressPayload(parsed: z.infer<typeof baseSchema>) {
         addressLine: parsed.permanentAddressLine?.trim() || "",
         city: parsed.permanentCity?.trim() || "",
         state: parsed.permanentState?.trim() || "",
-        country: normalizeAddressCountry(parsed.permanentCountry ?? parsed.currentCountry),
+        country: normalizeAddressCountry(
+          parsed.permanentCountry ?? parsed.currentCountry,
+        ),
         postalCode: parsed.permanentPostalCode?.trim() || "",
       };
 
@@ -118,7 +136,9 @@ export async function createUserAction(
   formData: FormData,
 ): Promise<UserFormState> {
   try {
-    const actor = await requireUserTypesForAction(["ADMIN", "HR"]);
+    const actor = await requireUserForAction();
+    if (!isAdmin(actor) && !isHR(actor))
+      throw new Error("You do not have permission to manage users.");
 
     const parsed = baseSchema.safeParse({
       fullName: formData.get("fullName"),
@@ -137,11 +157,15 @@ export async function createUserAction(
       currentState: formData.get("currentState") || "",
       currentCountry: formData.get("currentCountry") || "IN",
       currentPostalCode: formData.get("currentPostalCode") || "",
-      permanentSameAsCurrent: formData.get("permanentSameAsCurrent") ?? undefined,
+      permanentSameAsCurrent:
+        formData.get("permanentSameAsCurrent") ?? undefined,
       permanentAddressLine: formData.get("permanentAddressLine") || "",
       permanentCity: formData.get("permanentCity") || "",
       permanentState: formData.get("permanentState") || "",
-      permanentCountry: formData.get("permanentCountry") || formData.get("currentCountry") || "IN",
+      permanentCountry:
+        formData.get("permanentCountry") ||
+        formData.get("currentCountry") ||
+        "IN",
       permanentPostalCode: formData.get("permanentPostalCode") || "",
       isActive: formData.get("isActive") ?? "on",
     });
@@ -149,16 +173,31 @@ export async function createUserAction(
     if (!parsed.success || !parsed.data.password) {
       return {
         success: false,
-        error: parsed.success ? "Password is required." : parsed.error.issues[0]?.message,
+        error: parsed.success
+          ? "Password is required."
+          : parsed.error.issues[0]?.message,
       };
     }
 
-    if (actor.userType !== "ADMIN" && (parsed.data.userType === "MANAGER" || parsed.data.userType === "ADMIN" || parsed.data.userType === "HR" || parsed.data.userType === "OPERATIONS")) {
-      return { success: false, error: "Only Admin can create Manager, Admin, HR, or Operations users." };
+    if (
+      actor.userType !== "ADMIN" &&
+      (parsed.data.userType === "MANAGER" ||
+        parsed.data.userType === "ADMIN" ||
+        parsed.data.userType === "HR" ||
+        parsed.data.userType === "OPERATIONS")
+    ) {
+      return {
+        success: false,
+        error: "Only Admin can create Manager, Admin, HR, or Operations users.",
+      };
     }
 
-    validateUserTypeRoleCombination(parsed.data.userType, parsed.data.functionalRole);
-    const { currentAddress, permanentAddress, permanentSameAsCurrent } = buildAddressPayload(parsed.data);
+    validateUserTypeRoleCombination(
+      parsed.data.userType,
+      parsed.data.functionalRole,
+    );
+    const { currentAddress, permanentAddress, permanentSameAsCurrent } =
+      buildAddressPayload(parsed.data);
     const passwordHash = await hashPassword(parsed.data.password);
 
     await db.user.create({
@@ -171,7 +210,9 @@ export async function createUserAction(
         functionalRole: parsed.data.functionalRole,
         employeeCode: parsed.data.employeeCode?.trim() || null,
         designation: parsed.data.designation?.trim() || null,
-        joiningDate: parsed.data.joiningDate ? new Date(parsed.data.joiningDate) : null,
+        joiningDate: parsed.data.joiningDate
+          ? new Date(parsed.data.joiningDate)
+          : null,
         phoneNumber: parsed.data.phoneNumber?.trim() || null,
         secondaryPhoneNumber: parsed.data.secondaryPhoneNumber?.trim() || null,
         currentAddressLine: currentAddress.addressLine || null,
@@ -196,7 +237,10 @@ export async function createUserAction(
     revalidatePath("/team-lead-assignments");
     return { success: true };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Something went wrong.",
+    };
   }
 }
 
@@ -205,7 +249,9 @@ export async function updateUserAction(
   formData: FormData,
 ): Promise<UserFormState> {
   try {
-    const actor = await requireUserTypesForAction(["ADMIN", "HR"]);
+    const actor = await requireUserForAction();
+    if (!isAdmin(actor) && !isHR(actor))
+      throw new Error("You do not have permission to manage users.");
     const parsed = baseSchema.safeParse({
       id: formData.get("id"),
       fullName: formData.get("fullName"),
@@ -224,11 +270,15 @@ export async function updateUserAction(
       currentState: formData.get("currentState") || "",
       currentCountry: formData.get("currentCountry") || "IN",
       currentPostalCode: formData.get("currentPostalCode") || "",
-      permanentSameAsCurrent: formData.get("permanentSameAsCurrent") ?? undefined,
+      permanentSameAsCurrent:
+        formData.get("permanentSameAsCurrent") ?? undefined,
       permanentAddressLine: formData.get("permanentAddressLine") || "",
       permanentCity: formData.get("permanentCity") || "",
       permanentState: formData.get("permanentState") || "",
-      permanentCountry: formData.get("permanentCountry") || formData.get("currentCountry") || "IN",
+      permanentCountry:
+        formData.get("permanentCountry") ||
+        formData.get("currentCountry") ||
+        "IN",
       permanentPostalCode: formData.get("permanentPostalCode") || "",
       isActive: formData.get("isActive") ?? undefined,
     });
@@ -236,26 +286,57 @@ export async function updateUserAction(
     if (!parsed.success || !parsed.data.id) {
       return {
         success: false,
-        error: parsed.success ? "User is required." : parsed.error.issues[0]?.message,
+        error: parsed.success
+          ? "User is required."
+          : parsed.error.issues[0]?.message,
       };
     }
 
-    if (actor.userType !== "ADMIN" && (parsed.data.userType === "MANAGER" || parsed.data.userType === "ADMIN" || parsed.data.userType === "HR" || parsed.data.userType === "OPERATIONS")) {
-      return { success: false, error: "Only Admin can assign Manager, Admin, HR, or Operations user type." };
+    if (
+      actor.userType !== "ADMIN" &&
+      (parsed.data.userType === "MANAGER" ||
+        parsed.data.userType === "ADMIN" ||
+        parsed.data.userType === "HR" ||
+        parsed.data.userType === "OPERATIONS")
+    ) {
+      return {
+        success: false,
+        error:
+          "Only Admin can assign Manager, Admin, HR, or Operations user type.",
+      };
     }
 
-    const targetUser = await db.user.findUnique({ where: { id: parsed.data.id }, select: { userType: true } });
-    if (actor.userType !== "ADMIN" && (parsed.data.userType === "OPERATIONS" || targetUser?.userType === "OPERATIONS")) {
-      return { success: false, error: "Only Admin can manage Operations users." };
+    const targetUser = await db.user.findUnique({
+      where: { id: parsed.data.id },
+      select: { userType: true },
+    });
+    if (
+      actor.userType !== "ADMIN" &&
+      (parsed.data.userType === "OPERATIONS" ||
+        targetUser?.userType === "OPERATIONS")
+    ) {
+      return {
+        success: false,
+        error: "Only Admin can manage Operations users.",
+      };
     }
 
     if (parsed.data.password && actor.userType !== "ADMIN") {
-      return { success: false, error: "Only Admin can update passwords for users." };
+      return {
+        success: false,
+        error: "Only Admin can update passwords for users.",
+      };
     }
 
-    validateUserTypeRoleCombination(parsed.data.userType, parsed.data.functionalRole);
-    const { currentAddress, permanentAddress, permanentSameAsCurrent } = buildAddressPayload(parsed.data);
-    const passwordUpdate = parsed.data.password ? { passwordHash: await hashPassword(parsed.data.password) } : {};
+    validateUserTypeRoleCombination(
+      parsed.data.userType,
+      parsed.data.functionalRole,
+    );
+    const { currentAddress, permanentAddress, permanentSameAsCurrent } =
+      buildAddressPayload(parsed.data);
+    const passwordUpdate = parsed.data.password
+      ? { passwordHash: await hashPassword(parsed.data.password) }
+      : {};
 
     await db.user.update({
       where: { id: parsed.data.id },
@@ -268,7 +349,9 @@ export async function updateUserAction(
         functionalRole: parsed.data.functionalRole,
         employeeCode: parsed.data.employeeCode?.trim() || null,
         designation: parsed.data.designation?.trim() || null,
-        joiningDate: parsed.data.joiningDate ? new Date(parsed.data.joiningDate) : null,
+        joiningDate: parsed.data.joiningDate
+          ? new Date(parsed.data.joiningDate)
+          : null,
         phoneNumber: parsed.data.phoneNumber?.trim() || null,
         secondaryPhoneNumber: parsed.data.secondaryPhoneNumber?.trim() || null,
         currentAddressLine: currentAddress.addressLine || null,
@@ -294,18 +377,24 @@ export async function updateUserAction(
     revalidatePath("/team-lead-assignments");
     return { success: true };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Something went wrong.",
+    };
   }
 }
 
 export async function toggleUserStatusAction(formData: FormData) {
-  const actor = await requireUserTypesForAction(["ADMIN", "HR"]);
+  const actor = await requireUserForAction();
+  if (!isAdmin(actor) && !isHR(actor))
+    throw new Error("You do not have permission to manage users.");
   const userId = String(formData.get("userId") || "");
   if (!userId) throw new Error("User is required.");
 
   const user = await db.user.findUnique({ where: { id: userId } });
   if (!user) throw new Error("User not found.");
-  if (actor.userType !== "ADMIN" && user.userType === "OPERATIONS") throw new Error("Only Admin can manage Operations users.");
+  if (actor.userType !== "ADMIN" && user.userType === "OPERATIONS")
+    throw new Error("Only Admin can manage Operations users.");
 
   await db.user.update({
     where: { id: userId },
@@ -331,7 +420,9 @@ export async function assignTeamLeadAction(
   formData: FormData,
 ): Promise<TeamLeadAssignmentState> {
   try {
-    const actor = await requireUserTypesForAction(["ADMIN", "HR"]);
+    const actor = await requireUserForAction();
+    if (!isAdmin(actor) && !isHR(actor))
+      throw new Error("You do not have permission to manage users.");
 
     const parsed = teamLeadAssignmentSchema.safeParse({
       teamLeadId: formData.get("teamLeadId"),
@@ -339,7 +430,10 @@ export async function assignTeamLeadAction(
     });
 
     if (!parsed.success) {
-      return { success: false, error: parsed.error.issues[0]?.message || "Invalid assignment payload" };
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message || "Invalid assignment payload",
+      };
     }
 
     const employee = await db.user.findUnique({
@@ -358,15 +452,15 @@ export async function assignTeamLeadAction(
 
     const validSupervisor =
       supervisor &&
-      (
-        supervisor.userType === "TEAM_LEAD" ||
-        (supervisor.userType === "MANAGER" && supervisor.functionalRole === employee.functionalRole)
-      );
+      (supervisor.userType === "TEAM_LEAD" ||
+        (supervisor.userType === "MANAGER" &&
+          supervisor.functionalRole === employee.functionalRole));
 
     if (!validSupervisor) {
       return {
         success: false,
-        error: "Selected supervisor must be a Team Lead or a Manager with the same functional role as the employee.",
+        error:
+          "Selected supervisor must be a Team Lead or a Manager with the same functional role as the employee.",
       };
     }
 
@@ -392,6 +486,9 @@ export async function assignTeamLeadAction(
     revalidatePath("/dashboard");
     return { success: true };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Something went wrong.",
+    };
   }
 }

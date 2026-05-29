@@ -29,6 +29,7 @@ async function validateSupervisorIds(
     | "DEVOPS"
     | "PROJECT_MANAGER"
     | "DIRECTOR"
+    | "GENERAL_MANAGER"
     | "BILLING"
     | "OTHER"
     | null,

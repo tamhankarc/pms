@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { requireUser } from "@/lib/auth";
-import { canManageUsers } from "@/lib/permissions";
+import { canManageUsers, isHR } from "@/lib/permissions";
+import { formatUserTypeLabel } from "@/lib/display-labels";
 import { UserManageForm } from "@/components/forms/user-manage-form";
 import { createUserAction, toggleUserStatusAction } from "@/lib/actions/user-actions";
 import { db } from "@/lib/db";
@@ -68,7 +69,7 @@ export default async function UsersPage({
       ...(status === "active" ? { isActive: true } : {}),
       ...(status === "inactive" ? { isActive: false } : {}),
       ...(userType !== "all" ? { userType } : {}),
-      ...(currentUser.userType === "HR" ? { NOT: { userType: "OPERATIONS" } } : {}),
+      ...(isHR(currentUser) ? { NOT: { userType: "OPERATIONS" } } : {}),
     },
     include: {
       employeeSupervisors: { include: { teamLead: true } },
@@ -125,7 +126,7 @@ export default async function UsersPage({
               { value: "ADMIN", label: "Admin" },
               { value: "REPORT_VIEWER", label: "Report Viewer" },
               { value: "ACCOUNTS", label: "Accounts" },
-              { value: "HR", label: "HR" },
+              { value: "HR", label: "Administration/HR" },
               ...(currentUser.userType === "ADMIN" ? [{ value: "OPERATIONS", label: "Operations" }] : []),
             ]}
             placeholder="All user types"
@@ -160,7 +161,7 @@ export default async function UsersPage({
                   <div className="text-xs text-slate-500">{user.username}</div>
                   <div className="text-xs text-slate-500">{user.email}</div>
                 </td>
-                <td className="table-cell">{user.userType.replaceAll("_", " ")}</td>
+                <td className="table-cell">{formatUserTypeLabel(user.userType)}</td>
                 <td className="table-cell">{(user.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}</td>
                 <td className="table-cell">{user.employeeCode || "—"}</td>
                 <td className="table-cell">{user.designation || "—"}</td>
@@ -169,7 +170,7 @@ export default async function UsersPage({
                   {user.userType === "EMPLOYEE" ? (
                     <div className="mt-1 text-xs text-slate-600">
                       {user.employeeSupervisors
-                        .map((t) => `${t.teamLead.fullName} (${t.teamLead.userType.replaceAll("_", " ")})`)
+                        .map((t) => `${t.teamLead.fullName} (${formatUserTypeLabel(t.teamLead.userType)})`)
                         .join(", ") || "—"}
                     </div>
                   ) : user.userType === "ACCOUNTS" ? (

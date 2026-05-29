@@ -26,6 +26,7 @@ enum FunctionalRoleCode {
   DEVOPS
   PROJECT_MANAGER
   DIRECTOR
+  GENERAL_MANAGER
   OTHER
   BILLING
 }
@@ -137,6 +138,7 @@ enum HolidayShift {
 enum EmploymentStatus {
   PROBATION
   PERMANENT
+  CONSULTANT
 }
 
 model User {

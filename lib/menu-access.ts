@@ -58,6 +58,7 @@ export const menuItems = [
     label: "Leave Approvals",
   },
   { key: "leave-admin", href: "/leave-admin", label: "Leave Administration" },
+  { key: "hr-reports", href: "/hr-reports", label: "HR Reports" },
   { key: "announcements", href: "/announcements", label: "Announcements" },
   { key: "profile", href: "/profile", label: "My Profile" },
   {
@@ -123,6 +124,7 @@ export function getBaseMenuKeysForUserType(
         "leave-requests",
         "leave-approvals",
         "leave-admin",
+        "hr-reports",
         "announcements",
         "profile",
         "change-password",
@@ -155,6 +157,7 @@ export function getBaseMenuKeysForUserType(
         "estimates",
         "team-lead-assignments",
         "reports",
+        "billing-reports",
         "profile",
         "change-password",
       ];

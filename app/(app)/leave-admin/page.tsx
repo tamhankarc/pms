@@ -4,11 +4,12 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { requireUser } from "@/lib/auth";
 import { canAccessMenuItem, isHR } from "@/lib/permissions";
+import { formatUserTypeLabel } from "@/lib/display-labels";
 import { getLeaveAdminList } from "@/lib/ems-queries";
 import { createOfficialHolidayAction, deleteOfficialHolidayAction } from "@/lib/actions/hr-leave-admin-actions";
 import { formatDateInIst } from "@/lib/ist";
 
-const functionalRoleOptions = ["", "DEVELOPER", "QA", "DESIGNER", "LOCALIZATION", "DEVOPS", "PROJECT_MANAGER", "DIRECTOR", "OTHER", "BILLING"];
+const functionalRoleOptions = ["", "DEVELOPER", "QA", "DESIGNER", "LOCALIZATION", "DEVOPS", "PROJECT_MANAGER", "DIRECTOR", "GENERAL_MANAGER", "OTHER", "BILLING"];
 
 export default async function LeaveAdminPage({
   searchParams,
@@ -17,7 +18,7 @@ export default async function LeaveAdminPage({
 }) {
   const user = await requireUser();
   if (!isHR(user) && !canAccessMenuItem(user, "leave-admin")) {
-    return <div className="space-y-6"><PageHeader title="Leave Administration" description="Only HR can access this page." /></div>;
+    return <div className="space-y-6"><PageHeader title="Leave Administration" description="Only Administration/HR can access this page." /></div>;
   }
   const params = (await searchParams) ?? {};
   const page = Number(params.page || 1);
@@ -51,7 +52,7 @@ export default async function LeaveAdminPage({
       <section className="table-wrap" id="leave-admin-users-list">
         <div className="border-b border-slate-200 px-6 py-5">
           <h2 className="section-title">Leave allowed users</h2>
-          <p className="section-subtitle">Casual and earned leaves, shift, and employment status for year {data.year}.</p>
+          <p className="section-subtitle">Casual, earned and approved unpaid leaves, shift, and employment status for year {data.year}.</p>
         </div>
         <table className="table-base">
           <thead className="table-head">
@@ -61,6 +62,7 @@ export default async function LeaveAdminPage({
               <th className="table-cell">Functional role</th>
               <th className="table-cell">Casual leaves</th>
               <th className="table-cell">Earned leaves</th>
+              <th className="table-cell">Unpaid leaves</th>
               <th className="table-cell">Shift</th>
               <th className="table-cell">Employment status</th>
               <th className="table-cell">Action</th>
@@ -77,10 +79,11 @@ export default async function LeaveAdminPage({
               return (
               <tr key={row.id}>
                 <td className="table-cell font-medium text-slate-900">{row.fullName}</td>
-                <td className="table-cell">{row.userType.replaceAll("_", " ")}</td>
+                <td className="table-cell">{formatUserTypeLabel(row.userType)}</td>
                 <td className="table-cell">{(row.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}</td>
                 <td className="table-cell">{Number(row.profile.casualLeaves).toFixed(2)}</td>
                 <td className="table-cell">{Number(row.profile.earnedLeaves).toFixed(2)}</td>
+                <td className="table-cell">{Number(row.totalUnpaidLeaves).toFixed(2)}</td>
                 <td className="table-cell">{row.profile.shift}</td>
                 <td className="table-cell">{row.profile.employmentStatus}</td>
                 <td className="table-cell"><Link className="btn-secondary text-xs" href={`/leave-admin/${row.id}?returnTo=${encodeURIComponent(returnTo)}`}>Edit</Link></td>

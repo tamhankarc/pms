@@ -5,16 +5,26 @@ import { loginAction } from "@/lib/actions/auth-actions";
 
 export function LoginForm({ returnTo = "" }: { returnTo?: string }) {
   const [state, action, pending] = useActionState(loginAction, undefined);
-  const [geoState, setGeoState] = useState<"idle" | "loading" | "ready" | "blocked" | "unsupported">("idle");
+  const [geoState, setGeoState] = useState<
+    "idle" | "loading" | "ready" | "blocked" | "unsupported"
+  >("idle");
   const [geoError, setGeoError] = useState("");
-  const [coords, setCoords] = useState<{ latitude: string; longitude: string }>({ latitude: "", longitude: "" });
+  const [coords, setCoords] = useState<{ latitude: string; longitude: string }>(
+    { latitude: "", longitude: "" },
+  );
 
   const geoMessage = useMemo(() => {
-    if (geoState === "loading") return "Checking browser geolocation permission...";
+    if (geoState === "loading")
+      return "Checking browser geolocation permission...";
     if (geoState === "ready") return "Geolocation enabled. You can sign in.";
-    if (geoState === "blocked") return geoError || "Please allow browser geolocation to sign in.";
-    if (geoState === "unsupported") return "This browser does not support geolocation.";
-    return "Browser geolocation must be enabled before sign in.";
+    if (geoState === "blocked")
+      return (
+        geoError ||
+        "Geolocation is unavailable. Employee and Team Lead accounts must enable it before signing in."
+      );
+    if (geoState === "unsupported")
+      return "This browser does not support geolocation. Employee and Team Lead accounts require it to sign in.";
+    return "Checking geolocation for attendance-enabled accounts.";
   }, [geoError, geoState]);
 
   useEffect(() => {
@@ -28,10 +38,14 @@ export function LoginForm({ returnTo = "" }: { returnTo?: string }) {
       setGeoError("");
       try {
         if ("permissions" in navigator && navigator.permissions?.query) {
-          const permission = await navigator.permissions.query({ name: "geolocation" as PermissionName });
+          const permission = await navigator.permissions.query({
+            name: "geolocation" as PermissionName,
+          });
           if (permission.state === "denied") {
             setGeoState("blocked");
-            setGeoError("Geolocation permission is blocked. Please enable it in your browser settings.");
+            setGeoError(
+              "Geolocation permission is blocked. Please enable it in your browser settings.",
+            );
             return;
           }
         }
@@ -69,24 +83,32 @@ export function LoginForm({ returnTo = "" }: { returnTo?: string }) {
       <input type="hidden" name="returnTo" value={returnTo} />
 
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-brand-700">Internal EMS</p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight">Welcome back</h1>
+        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-brand-700">
+          Billing System
+        </p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight">Welcome</h1>
         <p className="mt-2 text-sm text-slate-500">
-          Sign in with your username or email and password. Browser geolocation must be enabled before you can access attendance.
+          Sign in with your username or email and password. Employee and Team
+          Lead accounts require browser geolocation; administration and
+          management accounts may sign in without it.
         </p>
       </div>
 
-      <div className={`mt-6 rounded-2xl border px-4 py-3 text-sm ${
-        geoState === "ready"
-          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-          : "border-amber-200 bg-amber-50 text-amber-800"
-      }`}>
+      <div
+        className={`mt-6 rounded-2xl border px-4 py-3 text-sm ${
+          geoState === "ready"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+            : "border-amber-200 bg-amber-50 text-amber-800"
+        }`}
+      >
         {geoMessage}
       </div>
 
       <div className="mt-8 space-y-5">
         <div>
-          <label className="label" htmlFor="usernameOrEmail">Username or Email</label>
+          <label className="label" htmlFor="usernameOrEmail">
+            Username or Email
+          </label>
           <input
             id="usernameOrEmail"
             name="usernameOrEmail"
@@ -98,7 +120,9 @@ export function LoginForm({ returnTo = "" }: { returnTo?: string }) {
         </div>
 
         <div>
-          <label className="label" htmlFor="password">Password</label>
+          <label className="label" htmlFor="password">
+            Password
+          </label>
           <input
             id="password"
             name="password"
@@ -110,10 +134,12 @@ export function LoginForm({ returnTo = "" }: { returnTo?: string }) {
         </div>
 
         {state && typeof state === "object" && "error" in state ? (
-          <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{state.error as string}</p>
+          <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
+            {state.error as string}
+          </p>
         ) : null}
 
-        <button className="btn-primary w-full" disabled={pending || geoState !== "ready"}>
+        <button className="btn-primary w-full" disabled={pending}>
           {pending ? "Signing in..." : "Sign in"}
         </button>
       </div>

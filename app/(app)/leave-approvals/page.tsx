@@ -56,7 +56,7 @@ export default async function LeaveApprovalsPage({
         description={
           canAct
             ? "Review leave requests assigned to you as a designated approver."
-            : "Admins and HR can view leave requests. Only the selected approver and Admin users with functional role Project Manager who are included in the approver list can take approval actions."
+            : "Admins and Administration/HR users can view leave requests. Only the selected approver and Admin users with functional role Project Manager who are included in the approver list can take approval actions."
         }
       />
 
@@ -67,7 +67,7 @@ export default async function LeaveApprovalsPage({
               <th className="table-cell">Employee</th>
               <th className="table-cell">User type</th>
               <th className="table-cell">Functional role</th>
-              <th className="table-cell">Leave type</th>
+              <th className="table-cell">Leave breakup</th>
               <th className="table-cell">Date range</th>
               <th className="table-cell">Days</th>
               <th className="table-cell">Status</th>
@@ -88,7 +88,7 @@ export default async function LeaveApprovalsPage({
                     {row.user.fullName}
                   </td>
                   <td className="table-cell">
-                    {row.user.userType.replaceAll("_", " ")}
+                    {row.user.userType === "HR" ? "Administration/HR" : row.user.userType.replaceAll("_", " ")}
                   </td>
                   <td className="table-cell">
                     {(row.user.functionalRole ?? "UNASSIGNED").replaceAll(
@@ -97,7 +97,11 @@ export default async function LeaveApprovalsPage({
                     )}
                   </td>
                   <td className="table-cell">
-                    {row.leaveType.replaceAll("_", " ")}
+                    {row.status === "APPROVED" || row.status === "CANCELLED"
+                      ? row.leaveType.replaceAll("_", " ")
+                      : row.status === "REJECTED"
+                        ? "No balance deducted"
+                        : "Calculated on approval"}
                   </td>
                   <td className="table-cell">
                     {formatDateInIst(row.startDate)} -{" "}

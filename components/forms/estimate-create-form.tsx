@@ -202,7 +202,7 @@ export function EstimateCreateForm({
   );
   const selectedEmployeeHasProjectAssignment = Boolean(
     selectedEmployeeId &&
-    selectedProjectOption?.assignedUserIds.includes(selectedEmployeeId),
+      selectedProjectOption?.assignedUserIds.includes(selectedEmployeeId),
   );
 
   const filteredSubProjects = useMemo(
@@ -282,33 +282,33 @@ export function EstimateCreateForm({
   );
   const showCountryField = Boolean(
     selectedProject?.showCountriesInTimeEntries &&
-    !selectedProject?.hideCountriesInEntries &&
-    !selectedSubProject?.hideCountriesInEntries,
+      !selectedProject?.hideCountriesInEntries &&
+      !selectedSubProject?.hideCountriesInEntries,
   );
   const showMovieField = Boolean(
     selectedProject?.showMoviesInEntries &&
-    !selectedProject?.hideMoviesInEntries &&
-    !selectedSubProject?.hideMoviesInEntries,
+      !selectedProject?.hideMoviesInEntries &&
+      !selectedSubProject?.hideMoviesInEntries,
   );
   const showAssetTypeField = Boolean(
     selectedProject?.showAssetTypesInEntries &&
-    !selectedProject?.hideAssetTypesInEntries &&
-    !selectedSubProject?.hideAssetTypesInEntries,
+      !selectedProject?.hideAssetTypesInEntries &&
+      !selectedSubProject?.hideAssetTypesInEntries,
   );
   const showLensTypeField = Boolean(
     selectedProject?.showLensTypesInEntries &&
-    !selectedProject?.hideLensTypesInEntries &&
-    !selectedSubProject?.hideLensTypesInEntries,
+      !selectedProject?.hideLensTypesInEntries &&
+      !selectedSubProject?.hideLensTypesInEntries,
   );
   const showAssetNameField = Boolean(
     selectedProject?.showAssetNamesInEntries &&
-    !selectedProject?.hideAssetNamesInEntries &&
-    !selectedSubProject?.hideAssetNamesInEntries,
+      !selectedProject?.hideAssetNamesInEntries &&
+      !selectedSubProject?.hideAssetNamesInEntries,
   );
   const showNewsletterField = Boolean(
     selectedProject?.showNewslettersInEntries &&
-    !selectedProject?.hideNewslettersInEntries &&
-    !selectedSubProject?.hideNewslettersInEntries,
+      !selectedProject?.hideNewslettersInEntries &&
+      !selectedSubProject?.hideNewslettersInEntries,
   );
   const showLanguageField = Boolean(selectedProject?.showLanguagesInEntries);
   const countryRequired = showCountryField;
@@ -344,7 +344,7 @@ export function EstimateCreateForm({
               }}
               options={assignableEmployees.map((employee) => ({
                 value: employee.id,
-                label: `${employee.fullName} · ${employee.userType.replaceAll("_", " ")}`,
+                label: `${employee.fullName} · ${employee.userType === "HR" ? "Administration/HR" : employee.userType.replaceAll("_", " ")}`,
               }))}
               placeholder="Select employee"
               searchPlaceholder="Search employees..."

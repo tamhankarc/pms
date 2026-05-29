@@ -95,7 +95,7 @@ export default async function TeamLeadAssignmentsPage({
                   <td className="table-cell font-medium text-slate-900">{assignment.employee.fullName}</td>
                   <td className="table-cell">{(assignment.employee.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}</td>
                   <td className="table-cell">
-                    {assignment.teamLead.fullName} · {assignment.teamLead.userType.replaceAll("_", " ")}
+                    {assignment.teamLead.fullName} · {assignment.teamLead.userType === "HR" ? "Administration/HR" : assignment.teamLead.userType.replaceAll("_", " ")}
                   </td>
                 </tr>
               ))}

@@ -13,6 +13,7 @@ const operationalFunctionalRoles = [
   "DEVOPS",
   "PROJECT_MANAGER",
   "DIRECTOR",
+  "GENERAL_MANAGER",
   "OTHER",
 ] as const;
 
@@ -38,7 +39,13 @@ function PasswordField() {
         Temporary password
       </FormLabel>
       <div className="relative">
-        <input id="password" className="input pr-24" name="password" type={visible ? "text" : "password"} required />
+        <input
+          id="password"
+          className="input pr-24"
+          name="password"
+          type={visible ? "text" : "password"}
+          required
+        />
         <button
           type="button"
           className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-600 hover:text-slate-900"
@@ -59,11 +66,16 @@ export function UserCreateForm({
   teamLeads: { id: string; fullName: string; email: string }[];
   action: (formData: FormData) => Promise<void>;
 }) {
-  const [userType, setUserType] = useState<(typeof userTypes)[number]>("EMPLOYEE");
-  const [functionalRole, setFunctionalRole] = useState<FunctionalRole>("DEVELOPER");
+  const [userType, setUserType] =
+    useState<(typeof userTypes)[number]>("EMPLOYEE");
+  const [functionalRole, setFunctionalRole] =
+    useState<FunctionalRole>("DEVELOPER");
   const [teamLeadIds, setTeamLeadIds] = useState<string[]>([]);
 
-  const availableFunctionalRoles = userType === "ACCOUNTS" ? (["BILLING"] as const) : operationalFunctionalRoles;
+  const availableFunctionalRoles =
+    userType === "ACCOUNTS"
+      ? (["BILLING"] as const)
+      : operationalFunctionalRoles;
   const showSupervisors = userType === "EMPLOYEE";
 
   const supervisorOptions = useMemo(
@@ -117,7 +129,13 @@ export function UserCreateForm({
           <FormLabel htmlFor="email" required>
             Email
           </FormLabel>
-          <input id="email" className="input" name="email" type="email" required />
+          <input
+            id="email"
+            className="input"
+            name="email"
+            type="email"
+            required
+          />
         </div>
 
         <PasswordField />
@@ -129,8 +147,14 @@ export function UserCreateForm({
           <SearchableCombobox
             id="userType"
             value={userType}
-            onValueChange={(value) => handleUserTypeChange(value as (typeof userTypes)[number])}
-            options={userTypes.map((type) => ({ value: type, label: type.replaceAll("_", " ") }))}
+            onValueChange={(value) =>
+              handleUserTypeChange(value as (typeof userTypes)[number])
+            }
+            options={userTypes.map((type) => ({
+              value: type,
+              label:
+                type === "HR" ? "Administration/HR" : type.replaceAll("_", " "),
+            }))}
             placeholder="Select user type"
             searchPlaceholder="Search user types..."
             emptyLabel="No user type found."
@@ -145,8 +169,13 @@ export function UserCreateForm({
           <SearchableCombobox
             id="functionalRole"
             value={functionalRole}
-            onValueChange={(value) => setFunctionalRole(value as FunctionalRole)}
-            options={availableFunctionalRoles.map((role) => ({ value: role, label: role.replaceAll("_", " ") }))}
+            onValueChange={(value) =>
+              setFunctionalRole(value as FunctionalRole)
+            }
+            options={availableFunctionalRoles.map((role) => ({
+              value: role,
+              label: role.replaceAll("_", " "),
+            }))}
             placeholder="Select functional role"
             searchPlaceholder="Search functional roles..."
             emptyLabel="No functional role found."
@@ -180,7 +209,8 @@ export function UserCreateForm({
 
         {userType === "ACCOUNTS" ? (
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Accounts users are not assigned to groups or supervisors and will access only the billing dashboard.
+            Accounts users are not assigned to groups or supervisors and will
+            access only the billing dashboard.
           </div>
         ) : null}
 

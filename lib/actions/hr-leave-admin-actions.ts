@@ -10,14 +10,21 @@ import { getIstDateKey } from "@/lib/ist";
 
 export async function updateLeaveAdminUserAction(formData: FormData) {
   const user = await requireUserForAction();
-  if (!isHR(user)) throw new Error("Only HR can update leave admin settings.");
+  if (!isHR(user))
+    throw new Error("Only Administration/HR can update leave admin settings.");
 
   const userId = String(formData.get("userId") || "");
   const year = Number(formData.get("year") || getIstDateKey().slice(0, 4));
   const casualLeaves = Number(formData.get("casualLeaves") || 0);
   const earnedLeaves = Number(formData.get("earnedLeaves") || 0);
   const shift = String(formData.get("shift") || "DAY");
-  const employmentStatus = String(formData.get("employmentStatus") || "PROBATION");
+  const employmentStatus = String(
+    formData.get("employmentStatus") || "PROBATION",
+  ) as "PROBATION" | "PERMANENT" | "CONSULTANT";
+  const unpaidOnly =
+    employmentStatus === "PROBATION" || employmentStatus === "CONSULTANT";
+  const savedCasualLeaves = unpaidOnly ? 0 : casualLeaves;
+  const savedEarnedLeaves = unpaidOnly ? 0 : earnedLeaves;
   const returnTo = String(formData.get("returnTo") || "/leave-admin").trim();
 
   if (!userId) throw new Error("User is required.");
@@ -25,38 +32,45 @@ export async function updateLeaveAdminUserAction(formData: FormData) {
   await db.leaveYearProfile.upsert({
     where: { userId_year: { userId, year } },
     update: {
-      casualLeaves: new Prisma.Decimal(casualLeaves.toFixed(2)),
-      earnedLeaves: new Prisma.Decimal(earnedLeaves.toFixed(2)),
+      casualLeaves: new Prisma.Decimal(savedCasualLeaves.toFixed(2)),
+      earnedLeaves: new Prisma.Decimal(savedEarnedLeaves.toFixed(2)),
       shift: shift as "DAY" | "NIGHT",
-      employmentStatus: employmentStatus as "PROBATION" | "PERMANENT",
+      employmentStatus,
     },
     create: {
       userId,
       year,
-      casualLeaves: new Prisma.Decimal(casualLeaves.toFixed(2)),
-      earnedLeaves: new Prisma.Decimal(earnedLeaves.toFixed(2)),
+      casualLeaves: new Prisma.Decimal(savedCasualLeaves.toFixed(2)),
+      earnedLeaves: new Prisma.Decimal(savedEarnedLeaves.toFixed(2)),
       shift: shift as "DAY" | "NIGHT",
-      employmentStatus: employmentStatus as "PROBATION" | "PERMANENT",
+      employmentStatus,
     },
   });
 
   revalidatePath("/leave-admin");
   revalidatePath(`/leave-admin/${userId}`);
   revalidatePath("/leave-requests");
-  const safeReturnTo = returnTo.startsWith("/leave-admin") ? returnTo : "/leave-admin";
+  const safeReturnTo = returnTo.startsWith("/leave-admin")
+    ? returnTo
+    : "/leave-admin";
   redirect(safeReturnTo);
 }
 
 export async function createOfficialHolidayAction(formData: FormData) {
   const user = await requireUserForAction();
-  if (!isHR(user)) throw new Error("Only HR can manage official holidays.");
+  if (!isHR(user))
+    throw new Error("Only Administration/HR can manage official holidays.");
 
   const name = String(formData.get("name") || "").trim();
   const holidayDate = String(formData.get("holidayDate") || "").trim();
-  const shiftValue = String(formData.get("shift") || "DAY").trim().toUpperCase();
-  const shift = shiftValue === "BOTH" ? "BOTH" : shiftValue === "NIGHT" ? "NIGHT" : "DAY";
+  const shiftValue = String(formData.get("shift") || "DAY")
+    .trim()
+    .toUpperCase();
+  const shift =
+    shiftValue === "BOTH" ? "BOTH" : shiftValue === "NIGHT" ? "NIGHT" : "DAY";
 
-  if (!name || !holidayDate) throw new Error("Holiday name and date are required.");
+  if (!name || !holidayDate)
+    throw new Error("Holiday name and date are required.");
 
   await db.officialHoliday.create({
     data: {
@@ -74,7 +88,8 @@ export async function createOfficialHolidayAction(formData: FormData) {
 
 export async function deleteOfficialHolidayAction(formData: FormData) {
   const user = await requireUserForAction();
-  if (!isHR(user)) throw new Error("Only HR can manage official holidays.");
+  if (!isHR(user))
+    throw new Error("Only Administration/HR can manage official holidays.");
 
   const id = String(formData.get("id") || "");
   if (!id) throw new Error("Holiday is required.");

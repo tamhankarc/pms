@@ -3,7 +3,10 @@
 import { useActionState, useState } from "react";
 import { FormLabel } from "@/components/ui/form-label";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
-import { assignTeamLeadAction, type TeamLeadAssignmentState } from "@/lib/actions/user-actions";
+import {
+  assignTeamLeadAction,
+  type TeamLeadAssignmentState,
+} from "@/lib/actions/user-actions";
 
 const initialState: TeamLeadAssignmentState = {};
 
@@ -23,7 +26,10 @@ export function TeamLeadAssignmentForm({
     functionalRole: string | null;
   }[];
 }) {
-  const [state, formAction, pending] = useActionState(assignTeamLeadAction, initialState);
+  const [state, formAction, pending] = useActionState(
+    assignTeamLeadAction,
+    initialState,
+  );
   const [teamLeadId, setTeamLeadId] = useState(supervisors[0]?.id ?? "");
   const [employeeId, setEmployeeId] = useState(employees[0]?.id ?? "");
 
@@ -38,7 +44,9 @@ export function TeamLeadAssignmentForm({
       </p>
 
       {state?.error ? (
-        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</div>
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {state.error}
+        </div>
       ) : null}
 
       {state?.success ? (
@@ -58,7 +66,7 @@ export function TeamLeadAssignmentForm({
             onValueChange={setTeamLeadId}
             options={supervisors.map((lead) => ({
               value: lead.id,
-              label: `${lead.fullName} · ${lead.userType.replaceAll("_", " ")}${
+              label: `${lead.fullName} · ${lead.userType === "HR" ? "Administration/HR" : lead.userType.replaceAll("_", " ")}${
                 lead.userType === "MANAGER" && lead.functionalRole
                   ? ` · ${lead.functionalRole.replaceAll("_", " ")}`
                   : ""
@@ -93,7 +101,8 @@ export function TeamLeadAssignmentForm({
         </div>
 
         <p className="text-xs text-slate-500">
-          Managers can be assigned only when their functional role matches the employee’s functional role.
+          Managers can be assigned only when their functional role matches the
+          employee’s functional role.
         </p>
 
         <button className="btn-primary w-full" disabled={pending}>

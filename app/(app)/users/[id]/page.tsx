@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { isHR } from "@/lib/permissions";
 import { notFound, redirect } from "next/navigation";
 import { UserManageForm } from "@/components/forms/user-manage-form";
 import { PageHeader } from "@/components/ui/page-header";
@@ -23,7 +24,7 @@ export default async function UserEditPage({
   });
 
   if (!user) notFound();
-  if (currentUser.userType === "HR" && user.userType === "OPERATIONS") redirect("/users");
+  if (isHR(currentUser) && user.userType === "OPERATIONS") redirect("/users");
 
   return (
     <div className="space-y-6">
@@ -56,6 +57,7 @@ export default async function UserEditPage({
             | "DEVOPS"
             | "PROJECT_MANAGER"
             | "DIRECTOR"
+            | "GENERAL_MANAGER"
             | "BILLING"
             | "OTHER",
           employeeCode: user.employeeCode,
