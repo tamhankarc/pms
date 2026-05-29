@@ -396,7 +396,7 @@ export function Sidebar({
       <div className="flex h-full flex-col">
         <div className="border-b border-slate-800 px-5 2xl:px-6 py-5 2xl:py-6">
           <p className="text-[11px] 2xl:text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
-            Internal PMS + EMS
+            Billing System
           </p>
           <h2 className="mt-3 text-base 2xl:text-lg font-semibold">
             Project &amp; Leave Management Suite

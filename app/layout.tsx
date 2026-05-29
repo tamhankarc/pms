@@ -2,7 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "PMS + EMS Internal Platform",
+  title: "Billing System",
   description: "Project management, billing, attendance, and leave management",
 };
 

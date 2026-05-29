@@ -45,7 +45,7 @@ export function MobileSidebar({
         <div className="flex items-start justify-between border-b border-slate-800 px-6 py-6">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
-              Internal PMS + EMS
+              Billing System
             </p>
             <h2 className="mt-3 text-lg font-semibold">
               Project &amp; Employee Management
