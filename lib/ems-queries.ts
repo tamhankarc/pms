@@ -601,6 +601,49 @@ export async function getAllowedLeaveRequestApproversForUser(userId: string) {
     return false;
   });
 
+  // A Team Lead can approve leave only for a requester working in the same
+  // shift. Resolve the effective shift from the latest profile applicable to
+  // the current year without creating profiles here; getLeaveRequestsForUser
+  // loads approvers and balance in parallel, so profile creation here could
+  // otherwise race with balance initialization.
+  const teamLeadCandidates = results.filter(
+    (candidate) => candidate.userType === "TEAM_LEAD",
+  );
+  if (teamLeadCandidates.length) {
+    const currentYear = Number(getIstDateKey().slice(0, 4));
+    const requesterProfile = await db.leaveYearProfile.findFirst({
+      where: { userId: requester.id, year: { lte: currentYear } },
+      orderBy: { year: "desc" },
+      select: { shift: true },
+    });
+    const requesterShift = requesterProfile?.shift ?? "DAY";
+
+    const teamLeadProfileRows = await Promise.all(
+      teamLeadCandidates.map(async (candidate) => ({
+        candidateId: candidate.id,
+        profile: await db.leaveYearProfile.findFirst({
+          where: { userId: candidate.id, year: { lte: currentYear } },
+          orderBy: { year: "desc" },
+          select: { shift: true },
+        }),
+      })),
+    );
+    const teamLeadShifts = new Map(
+      teamLeadProfileRows.map((row) => [
+        row.candidateId,
+        row.profile?.shift ?? "DAY",
+      ]),
+    );
+
+    return results
+      .filter(
+        (candidate) =>
+          candidate.userType !== "TEAM_LEAD" ||
+          teamLeadShifts.get(candidate.id) === requesterShift,
+      )
+      .sort((a, b) => a.fullName.localeCompare(b.fullName));
+  }
+
   return results.sort((a, b) => a.fullName.localeCompare(b.fullName));
 }
 
