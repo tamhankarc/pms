@@ -23,6 +23,11 @@ import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form
 import { ApproverAssignmentForm } from "@/components/ems/approver-assignment-form";
 import { DashboardBillingFilters } from "@/components/dashboard-billing-filters";
 import { TestMailPanel } from "@/components/dashboard/test-mail-panel";
+import {
+  sendMarkInReminderAction,
+  sendMarkOutReminderAction,
+} from "@/lib/actions/attendance-reminder-actions";
+import { getAttendanceReminderAvailability } from "@/lib/attendance-reminder-utils";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
@@ -325,6 +330,8 @@ export default async function DashboardPage({
   const showProjectOverviewSection = !userIsHR;
   const showApprovedLeaveSection = showApprovedLeaveBlock;
   const showSelectedAttendanceSection = showEMSAdminPanel;
+  const showAttendanceReminderMail =
+    user.userType === "ADMIN" && user.functionalRole === "OTHER";
   const showDashboardToggle =
     showApprovedLeaveSection && showSelectedAttendanceSection;
   const requestedDashboardSection =
@@ -457,6 +464,9 @@ export default async function DashboardPage({
     if (attendanceWeekend) search.set("weekend", "true");
     return `/dashboard/attendance-export?${search.toString()}`;
   })();
+  const attendanceReminderAvailability = showAttendanceReminderMail
+    ? getAttendanceReminderAvailability()
+    : { markInShift: null, markOutShift: null };
 
   return (
     <div className="space-y-8">
@@ -771,6 +781,53 @@ export default async function DashboardPage({
               approvedLeaveSelectedDate={approvedLeaveSelectedDate}
               dashboardSection={activeDashboardSection}
             />
+
+            {showAttendanceReminderMail ? (
+              <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold text-slate-900">
+                      Send reminder Mail
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Mark-In reminders are active for Day shift from 9:45 AM to
+                      10:45 AM IST and Night shift from 9:30 PM to 10:30 PM IST.
+                      Mark-Out reminders are active for Day shift from 9:00 PM
+                      to 10:00 PM IST and Night shift from 9:00 AM to 10:00 AM
+                      IST.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <form action={sendMarkInReminderAction}>
+                      <button
+                        className="btn-primary"
+                        disabled={!attendanceReminderAvailability.markInShift}
+                        title={
+                          attendanceReminderAvailability.markInShift
+                            ? `Send ${attendanceReminderAvailability.markInShift === "DAY" ? "Day" : "Night"} shift Mark-In reminder`
+                            : "Available only during configured Mark-In reminder windows"
+                        }
+                      >
+                        Mark-In Reminder
+                      </button>
+                    </form>
+                    <form action={sendMarkOutReminderAction}>
+                      <button
+                        className="btn-secondary"
+                        disabled={!attendanceReminderAvailability.markOutShift}
+                        title={
+                          attendanceReminderAvailability.markOutShift
+                            ? `Send ${attendanceReminderAvailability.markOutShift === "DAY" ? "Day" : "Night"} shift Mark-Out reminder`
+                            : "Available only during configured Mark-Out reminder windows"
+                        }
+                      >
+                        Mark-Out Reminder
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </section>
 
           <section className="table-wrap" id="attendance-list">

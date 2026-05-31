@@ -7,10 +7,17 @@ import { requireUser } from "@/lib/auth";
 import { canManageUsers, isHR } from "@/lib/permissions";
 import { formatUserTypeLabel } from "@/lib/display-labels";
 import { UserManageForm } from "@/components/forms/user-manage-form";
-import { createUserAction, toggleUserStatusAction } from "@/lib/actions/user-actions";
+import {
+  createUserAction,
+  toggleUserStatusAction,
+} from "@/lib/actions/user-actions";
 import { db } from "@/lib/db";
 import { PaginationControls } from "@/components/ui/pagination-controls";
-import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
+import {
+  DEFAULT_PAGE_SIZE,
+  paginateItems,
+  parsePageParam,
+} from "@/lib/pagination";
 
 type UserTypeFilter =
   | "all"
@@ -42,7 +49,13 @@ function toUserTypeFilter(value: string | undefined): UserTypeFilter {
 export default async function UsersPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ q?: string; status?: string; userType?: string; create?: string; page?: string }>;
+  searchParams?: Promise<{
+    q?: string;
+    status?: string;
+    userType?: string;
+    create?: string;
+    page?: string;
+  }>;
 }) {
   const currentUser = await requireUser();
   if (!canManageUsers(currentUser)) redirect("/dashboard");
@@ -77,7 +90,13 @@ export default async function UsersPage({
     orderBy: { createdAt: "desc" },
   });
 
-  const { items: paginatedUsers, currentPage, totalPages, totalItems, pageSize } = paginateItems(users, page, DEFAULT_PAGE_SIZE);
+  const {
+    items: paginatedUsers,
+    currentPage,
+    totalPages,
+    totalItems,
+    pageSize,
+  } = paginateItems(users, page, DEFAULT_PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -86,15 +105,26 @@ export default async function UsersPage({
         description="Create and manage users, roles, employee codes, designations, joining dates, contact details, addresses, and active status. Supervisor mapping is managed from Team Lead Assignments."
         actions={
           canManageUsers(currentUser) ? (
-            <Link className="btn-primary" href="/users?create=1">
-              Create user
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link className="btn-secondary" href="/users/export?format=xlsx">
+                Export XLSX
+              </Link>
+              <Link className="btn-secondary" href="/users/export?format=pdf">
+                Export PDF
+              </Link>
+              <Link className="btn-primary" href="/users?create=1">
+                Create user
+              </Link>
+            </div>
           ) : null
         }
       />
 
       <div className="card p-4">
-        <AutoSubmitFilterForm className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]" method="get">
+        <AutoSubmitFilterForm
+          className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]"
+          method="get"
+        >
           <input
             className="input"
             name="q"
@@ -127,7 +157,9 @@ export default async function UsersPage({
               { value: "REPORT_VIEWER", label: "Report Viewer" },
               { value: "ACCOUNTS", label: "Accounts" },
               { value: "HR", label: "Administration/HR" },
-              ...(currentUser.userType === "ADMIN" ? [{ value: "OPERATIONS", label: "Operations" }] : []),
+              ...(currentUser.userType === "ADMIN"
+                ? [{ value: "OPERATIONS", label: "Operations" }]
+                : []),
             ]}
             placeholder="All user types"
             searchPlaceholder="Search user types..."
@@ -136,7 +168,13 @@ export default async function UsersPage({
         </AutoSubmitFilterForm>
       </div>
 
-      {showCreate && canManageUsers(currentUser) ? <UserManageForm mode="create" action={createUserAction} allowOperationsUserType={currentUser.userType === "ADMIN"} /> : null}
+      {showCreate && canManageUsers(currentUser) ? (
+        <UserManageForm
+          mode="create"
+          action={createUserAction}
+          allowOperationsUserType={currentUser.userType === "ADMIN"}
+        />
+      ) : null}
 
       <div className="table-wrap">
         <table className="table-base">
@@ -157,39 +195,63 @@ export default async function UsersPage({
             {paginatedUsers.map((user) => (
               <tr key={user.id}>
                 <td className="table-cell">
-                  <div className="font-medium text-slate-900">{user.fullName}</div>
+                  <div className="font-medium text-slate-900">
+                    {user.fullName}
+                  </div>
                   <div className="text-xs text-slate-500">{user.username}</div>
                   <div className="text-xs text-slate-500">{user.email}</div>
                 </td>
-                <td className="table-cell">{formatUserTypeLabel(user.userType)}</td>
-                <td className="table-cell">{(user.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}</td>
+                <td className="table-cell">
+                  {formatUserTypeLabel(user.userType)}
+                </td>
+                <td className="table-cell">
+                  {(user.functionalRole ?? "UNASSIGNED").replaceAll("_", " ")}
+                </td>
                 <td className="table-cell">{user.employeeCode || "—"}</td>
                 <td className="table-cell">{user.designation || "—"}</td>
-                <td className="table-cell">{user.joiningDate ? new Date(user.joiningDate).toLocaleDateString() : "—"}</td>
+                <td className="table-cell">
+                  {user.joiningDate
+                    ? new Date(user.joiningDate).toLocaleDateString()
+                    : "—"}
+                </td>
                 <td className="table-cell">
                   {user.userType === "EMPLOYEE" ? (
                     <div className="mt-1 text-xs text-slate-600">
                       {user.employeeSupervisors
-                        .map((t) => `${t.teamLead.fullName} (${formatUserTypeLabel(t.teamLead.userType)})`)
+                        .map(
+                          (t) =>
+                            `${t.teamLead.fullName} (${formatUserTypeLabel(t.teamLead.userType)})`,
+                        )
                         .join(", ") || "—"}
                     </div>
                   ) : user.userType === "ACCOUNTS" ? (
-                    <div className="text-xs text-slate-600">No groups or supervisors</div>
+                    <div className="text-xs text-slate-600">
+                      No groups or supervisors
+                    </div>
                   ) : (
                     <div className="text-xs text-slate-600">—</div>
                   )}
                 </td>
                 <td className="table-cell">
-                  <span className={user.isActive ? "badge-emerald" : "badge-slate"}>{user.isActive ? "Active" : "Inactive"}</span>
+                  <span
+                    className={user.isActive ? "badge-emerald" : "badge-slate"}
+                  >
+                    {user.isActive ? "Active" : "Inactive"}
+                  </span>
                 </td>
                 <td className="table-cell">
                   <div className="flex gap-2">
-                    <Link className="btn-secondary text-xs" href={`/users/${user.id}`}>
+                    <Link
+                      className="btn-secondary text-xs"
+                      href={`/users/${user.id}`}
+                    >
                       Edit
                     </Link>
                     <form action={toggleUserStatusAction}>
                       <input type="hidden" name="userId" value={user.id} />
-                      <button className="btn-secondary text-xs">{user.isActive ? "Deactivate" : "Activate"}</button>
+                      <button className="btn-secondary text-xs">
+                        {user.isActive ? "Deactivate" : "Activate"}
+                      </button>
                     </form>
                   </div>
                 </td>
@@ -197,7 +259,10 @@ export default async function UsersPage({
             ))}
             {users.length === 0 ? (
               <tr>
-                <td colSpan={9} className="table-cell text-center text-sm text-slate-500">
+                <td
+                  colSpan={9}
+                  className="table-cell text-center text-sm text-slate-500"
+                >
                   No users found.
                 </td>
               </tr>
@@ -210,7 +275,12 @@ export default async function UsersPage({
           totalPages={totalPages}
           totalItems={totalItems}
           pageSize={pageSize}
-          searchParams={{ q, status, userType: userType === "all" ? undefined : userType, create: showCreate ? "1" : undefined }}
+          searchParams={{
+            q,
+            status,
+            userType: userType === "all" ? undefined : userType,
+            create: showCreate ? "1" : undefined,
+          }}
         />
       </div>
     </div>
