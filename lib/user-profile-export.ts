@@ -13,12 +13,9 @@ export type UserProfileExportFormat = "xlsx" | "pdf";
 type ExportRow = Array<string | number>;
 
 const headers = [
-  "User ID",
   "Full Name",
   "Username",
   "Email",
-  "User Type",
-  "Functional Role",
   "Employee Code",
   "Designation",
   "Joining Date",
@@ -50,14 +47,16 @@ export async function getUserProfileExportRows() {
   const users = await db.user.findMany({
     where: {
       userType: { in: ["MANAGER", "TEAM_LEAD", "EMPLOYEE"] },
+      OR: [
+        { functionalRole: null },
+        { functionalRole: { not: "GENERAL_MANAGER" } },
+      ],
     },
     select: {
       id: true,
       fullName: true,
       username: true,
       email: true,
-      userType: true,
-      functionalRole: true,
       employeeCode: true,
       designation: true,
       joiningDate: true,
@@ -84,12 +83,9 @@ export async function getUserProfileExportRows() {
     users.map(async (user) => {
       const profile = await getOrCreateLeaveYearProfile(user.id, year);
       return [
-        user.id,
         user.fullName,
         user.username,
         user.email,
-        formatUserTypeLabel(user.userType),
-        formatFunctionalRoleLabel(user.functionalRole),
         user.employeeCode || "—",
         user.designation || "—",
         user.joiningDate ? formatDateInIst(user.joiningDate) : "—",
