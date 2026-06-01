@@ -530,6 +530,11 @@ export async function getAllowedLeaveRequestApproversForUser(userId: string) {
     functionalRole: string | null;
   }) => user.userType === "ADMIN" && user.functionalRole === "PROJECT_MANAGER";
 
+  const isAdminDirector = (user: {
+    userType: string;
+    functionalRole: string | null;
+  }) => user.userType === "ADMIN" && user.functionalRole === "DIRECTOR";
+
   const isManagerProjectManager = (user: {
     userType: string;
     functionalRole: string | null;
@@ -554,11 +559,14 @@ export async function getAllowedLeaveRequestApproversForUser(userId: string) {
   const results = allCandidates.filter((candidate) => {
     if (!candidate.id || candidate.id === requester.id) return false;
 
+    if (isManagerProjectManager(requester)) {
+      return isAdminDirector(candidate) || isAdminProjectManager(candidate);
+    }
+
     if (
       requester.userType === "HR" ||
       isManagerGeneralManager(requester) ||
-      isAdminProjectManager(requester) ||
-      isManagerProjectManager(requester)
+      isAdminProjectManager(requester)
     ) {
       return isManagerGeneralManager(candidate);
     }
