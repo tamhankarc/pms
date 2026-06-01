@@ -105,6 +105,26 @@ async function getRequestCcAddresses(
   );
 }
 
+async function getStatusCcAddresses(
+  userEmail: string,
+  approverEmails: string[],
+) {
+  const rows = await db.user.findMany({
+    where: {
+      isActive: true,
+      OR: [
+        { userType: "HR" },
+        { userType: "ADMIN", functionalRole: "PROJECT_MANAGER" },
+      ],
+    },
+    select: { email: true },
+  });
+  return uniqueEmails(
+    [...approverEmails, ...rows.map((row) => row.email)],
+    userEmail,
+  );
+}
+
 export async function sendLeaveRequestSubmittedEmail(
   requestId: string,
   requestKind: "new" | "updated",
@@ -149,10 +169,15 @@ export async function sendLeaveRequestStatusEmail(
       ? "Reconsideration Requested"
       : decision.charAt(0) + decision.slice(1).toLowerCase();
   const link = employeeRequestLink(row.id);
+  const selectedApproverEmails = uniqueEmails(
+    row.selectedApprovers.map((item) => item.approver.email),
+  );
+  const cc = await getStatusCcAddresses(row.user.email, selectedApproverEmails);
   await sendAppEmail({
     fromEmail: LEAVE_STATUS_FROM_EMAIL,
     fromName: "Leave Request Status",
     to: row.user.email,
+    cc,
     subject: `Leave Request ${statusLabel} - ${row.user.fullName}`,
     html: `<div style="font-family:Arial,sans-serif;color:#0f172a;line-height:1.55"><p>Dear ${escapeHtml(row.user.fullName)},</p><p>Your leave request for <strong>${escapeHtml(formatDateInIst(row.startDate))} - ${escapeHtml(formatDateInIst(row.endDate))}</strong> has been marked as <strong>${escapeHtml(statusLabel)}</strong> by ${escapeHtml(actionedBy)}.</p>${row.approverComment ? `<p><strong>Comment:</strong> ${escapeHtml(row.approverComment)}</p>` : ""}<p><a href="${escapeHtml(link)}" style="display:inline-block;padding:10px 18px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px">View leave request</a></p><p>Regards,<br/>PMS Leave Management</p></div>`,
     text: `Dear ${row.user.fullName},\n\nYour leave request for ${formatDateInIst(row.startDate)} - ${formatDateInIst(row.endDate)} has been marked as ${statusLabel} by ${actionedBy}.${row.approverComment ? `\nComment: ${row.approverComment}` : ""}\n\nView leave request: ${link}\n\nRegards,\nPMS Leave Management`,

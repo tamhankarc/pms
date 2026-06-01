@@ -42,10 +42,16 @@ export async function getUserProfileExportRows() {
   const year = Number(getIstDateKey().slice(0, 4));
   const users = await db.user.findMany({
     where: {
-      userType: { in: ["MANAGER", "TEAM_LEAD", "EMPLOYEE"] },
       OR: [
-        { functionalRole: null },
-        { functionalRole: { not: "GENERAL_MANAGER" } },
+        { userType: { in: ["TEAM_LEAD", "EMPLOYEE"] } },
+        {
+          userType: "MANAGER",
+          OR: [
+            { functionalRole: null },
+            { functionalRole: { not: "GENERAL_MANAGER" } },
+          ],
+        },
+        { userType: "ADMIN", functionalRole: "PROJECT_MANAGER" },
       ],
     },
     select: {
