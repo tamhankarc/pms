@@ -18,15 +18,19 @@ function escapeHtml(value: string) {
 
 function uniqueEmails(
   values: Array<string | null | undefined>,
-  except?: string,
+  except?: string | string[],
 ) {
-  const excluded = except?.trim().toLowerCase();
+  const excluded = new Set(
+    (Array.isArray(except) ? except : except ? [except] : [])
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean),
+  );
   return Array.from(
     new Set(
       values
         .map((value) => value?.trim())
         .filter((value): value is string => Boolean(value))
-        .filter((value) => value.toLowerCase() !== excluded),
+        .filter((value) => !excluded.has(value.toLowerCase())),
     ),
   );
 }
@@ -73,13 +77,17 @@ async function getNotificationDetails(requestId: string) {
     include: {
       user: { select: { fullName: true, email: true } },
       approver: { select: { fullName: true, email: true } },
+      selectedApprovers: {
+        include: { approver: { select: { fullName: true, email: true } } },
+        orderBy: { approver: { fullName: "asc" } },
+      },
     },
   });
 }
 
 async function getRequestCcAddresses(
   userEmail: string,
-  approverEmail?: string | null,
+  approverEmails?: string[],
 ) {
   const rows = await db.user.findMany({
     where: {
@@ -93,7 +101,7 @@ async function getRequestCcAddresses(
   });
   return uniqueEmails(
     [userEmail, ...rows.map((row) => row.email)],
-    approverEmail ?? undefined,
+    approverEmails ?? undefined,
   );
 }
 
@@ -103,20 +111,28 @@ export async function sendLeaveRequestSubmittedEmail(
 ) {
   if (!isMailSendingEnabled()) return;
   const row = await getNotificationDetails(requestId);
-  if (!row?.approver?.email) return;
+  if (!row) return;
+  const approverEmails = uniqueEmails(
+    row.selectedApprovers.map((item) => item.approver.email),
+  );
+  if (!approverEmails.length) return;
+  const approverNames = row.selectedApprovers
+    .map((item) => item.approver.fullName)
+    .filter(Boolean)
+    .join(", ");
   const subject = `${requestKind === "new" ? "New" : "Updated"} Leave Request by ${row.user.fullName}`;
   const details = formatDaySelections(row.leaveDayTypesJson);
   const link = approvalRequestLink(row.id);
-  const cc = await getRequestCcAddresses(row.user.email, row.approver.email);
+  const cc = await getRequestCcAddresses(row.user.email, approverEmails);
   const reason = row.reason || "—";
   await sendAppEmail({
     fromEmail: LEAVE_REQUEST_FROM_EMAIL,
     fromName: "Leave Request",
-    to: row.approver.email,
+    to: approverEmails,
     cc,
     subject,
-    html: `<div style="font-family:Arial,sans-serif;color:#0f172a;line-height:1.55"><p>Dear ${escapeHtml(row.approver.fullName)},</p><p>${escapeHtml(row.user.fullName)} has ${requestKind === "new" ? "submitted a new" : "updated and resubmitted a"} leave request for your review.</p><table style="border-collapse:collapse;margin:16px 0"><tr><td style="padding:6px 18px 6px 0;font-weight:600">Employee</td><td>${escapeHtml(row.user.fullName)}</td></tr><tr><td style="padding:6px 18px 6px 0;font-weight:600">Date range</td><td>${escapeHtml(formatDateInIst(row.startDate))} - ${escapeHtml(formatDateInIst(row.endDate))}</td></tr><tr><td style="padding:6px 18px 6px 0;font-weight:600">Total leave days</td><td>${Number(row.totalLeaveDays ?? 0).toFixed(2)}</td></tr><tr><td style="padding:6px 18px 6px 0;font-weight:600">Duration breakup</td><td><pre style="font-family:Arial,sans-serif;margin:0;white-space:pre-wrap">${escapeHtml(details)}</pre></td></tr><tr><td style="padding:6px 18px 6px 0;font-weight:600">Reason</td><td><pre style="font-family:Arial,sans-serif;margin:0;white-space:pre-wrap">${escapeHtml(reason)}</pre></td></tr></table><p><a href="${escapeHtml(link)}" style="display:inline-block;padding:10px 18px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px">Review leave request</a></p><p>Regards,<br/>PMS Leave Management</p></div>`,
-    text: `Dear ${row.approver.fullName},\n\n${row.user.fullName} has ${requestKind === "new" ? "submitted a new" : "updated and resubmitted a"} leave request for your review.\n\nEmployee: ${row.user.fullName}\nDate range: ${formatDateInIst(row.startDate)} - ${formatDateInIst(row.endDate)}\nTotal leave days: ${Number(row.totalLeaveDays ?? 0).toFixed(2)}\nDuration breakup:\n${details}\nReason: ${reason}\n\nReview leave request: ${link}\n\nRegards,\nPMS Leave Management`,
+    html: `<div style="font-family:Arial,sans-serif;color:#0f172a;line-height:1.55"><p>Dear Approver,</p><p>${escapeHtml(row.user.fullName)} has ${requestKind === "new" ? "submitted a new" : "updated and resubmitted a"} leave request for your review.</p><table style="border-collapse:collapse;margin:16px 0"><tr><td style="padding:6px 18px 6px 0;font-weight:600">Employee</td><td>${escapeHtml(row.user.fullName)}</td></tr><tr><td style="padding:6px 18px 6px 0;font-weight:600">Selected approvers</td><td>${escapeHtml(approverNames || "—")}</td></tr><tr><td style="padding:6px 18px 6px 0;font-weight:600">Date range</td><td>${escapeHtml(formatDateInIst(row.startDate))} - ${escapeHtml(formatDateInIst(row.endDate))}</td></tr><tr><td style="padding:6px 18px 6px 0;font-weight:600">Total leave days</td><td>${Number(row.totalLeaveDays ?? 0).toFixed(2)}</td></tr><tr><td style="padding:6px 18px 6px 0;font-weight:600">Duration breakup</td><td><pre style="font-family:Arial,sans-serif;margin:0;white-space:pre-wrap">${escapeHtml(details)}</pre></td></tr><tr><td style="padding:6px 18px 6px 0;font-weight:600">Reason</td><td><pre style="font-family:Arial,sans-serif;margin:0;white-space:pre-wrap">${escapeHtml(reason)}</pre></td></tr></table><p><a href="${escapeHtml(link)}" style="display:inline-block;padding:10px 18px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px">Review leave request</a></p><p>Regards,<br/>PMS Leave Management</p></div>`,
+    text: `Dear Approver,\n\n${row.user.fullName} has ${requestKind === "new" ? "submitted a new" : "updated and resubmitted a"} leave request for your review.\n\nEmployee: ${row.user.fullName}\nDate range: ${formatDateInIst(row.startDate)} - ${formatDateInIst(row.endDate)}\nTotal leave days: ${Number(row.totalLeaveDays ?? 0).toFixed(2)}\nDuration breakup:\n${details}\nReason: ${reason}\n\nReview leave request: ${link}\n\nRegards,\nPMS Leave Management`,
   });
 }
 

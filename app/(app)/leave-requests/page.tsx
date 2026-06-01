@@ -116,7 +116,7 @@ export default async function LeaveRequestsPage() {
                   </div>
                 </td>
                 <td className="table-cell hidden md:table-cell">
-                  {row.approver?.fullName || "—"}
+                  {row.selectedApprovers?.length ? row.selectedApprovers.map((item) => item.approver.fullName).join(", ") : row.approver?.fullName || "—"}
                 </td>
                 <td className="table-cell">
                   <span className="badge-blue">
@@ -205,7 +205,7 @@ export default async function LeaveRequestsPage() {
                   </div>
                 </td>
                 <td className="table-cell hidden md:table-cell">
-                  {row.approver?.fullName || "—"}
+                  {row.selectedApprovers?.length ? row.selectedApprovers.map((item) => item.approver.fullName).join(", ") : row.approver?.fullName || "—"}
                 </td>
                 <td className="table-cell">
                   <span className="badge-slate">

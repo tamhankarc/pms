@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import type { LeaveFormState } from "@/lib/actions/leave-actions";
 
 const initialState: LeaveFormState = {};
@@ -77,6 +78,7 @@ export function LeaveRequestForm({
     endDate?: string;
     reason?: string | null;
     approverId?: string | null;
+    approverIds?: string[];
     diwaliLeave?: boolean;
     daySelectionMode?: SelectionMode;
     leaveDayTypesJson?: string | null;
@@ -98,7 +100,13 @@ export function LeaveRequestForm({
   const activeLeaveBalance = selectedContext?.leaveBalance ?? leaveBalance;
   const activeBlockedDates =
     selectedContext?.blockedDateKeys ?? blockedDateKeys;
-  const [approverId, setApproverId] = useState(initialValues?.approverId ?? "");
+  const [approverIds, setApproverIds] = useState<string[]>(
+    initialValues?.approverIds?.length
+      ? initialValues.approverIds
+      : initialValues?.approverId
+        ? [initialValues.approverId]
+        : [],
+  );
   const [diwaliLeave, setDiwaliLeave] = useState(
     Boolean(initialValues?.diwaliLeave),
   );
@@ -153,7 +161,7 @@ export function LeaveRequestForm({
 
   useEffect(() => {
     if (state?.success && mode === "create") {
-      setApproverId("");
+      setApproverIds([]);
       setDiwaliLeave(false);
       setStartDate(minDate);
       setEndDate(minDate);
@@ -165,12 +173,12 @@ export function LeaveRequestForm({
   }, [mode, state?.success, minDate]);
 
   useEffect(() => {
-    if (
-      approverId &&
-      !activeApprovers.some((approver) => approver.id === approverId)
-    )
-      setApproverId("");
-  }, [requestedForUserId, activeApprovers, approverId]);
+    const validApproverIds = new Set(activeApprovers.map((approver) => approver.id));
+    const filteredApproverIds = approverIds.filter((id) => validApproverIds.has(id));
+    if (filteredApproverIds.length !== approverIds.length) {
+      setApproverIds(filteredApproverIds);
+    }
+  }, [requestedForUserId, activeApprovers, approverIds]);
 
   function validateBoundary(nextDate: string, label: "Start" | "End") {
     if (!nextDate) {
@@ -197,7 +205,9 @@ export function LeaveRequestForm({
         name="requestedForUserId"
         value={requestedForUserId}
       />
-      <input type="hidden" name="approverId" value={approverId} />
+      {approverIds.map((approverId) => (
+        <input key={approverId} type="hidden" name="approverIds" value={approverId} />
+      ))}
       <input type="hidden" name="daySelectionMode" value={selectionMode} />
       <input
         type="hidden"
@@ -267,20 +277,21 @@ export function LeaveRequestForm({
           </p>
         </div>
         <div>
-          <label className="label" htmlFor="approverId">
-            Approver
+          <label className="label" htmlFor="approverIds">
+            Approvers
           </label>
-          <SearchableCombobox
-            id="approverId"
-            value={approverId}
-            onValueChange={setApproverId}
+          <SearchableMultiSelect
+            id="approverIds"
+            value={approverIds}
+            onValueChange={setApproverIds}
             options={activeApprovers.map((approver) => ({
               value: approver.id,
               label: approver.fullName,
             }))}
-            placeholder="Select approver"
+            placeholder="Select one or more approvers"
             searchPlaceholder="Search approvers..."
             emptyLabel="No approver found."
+            required
           />
         </div>
         <div>

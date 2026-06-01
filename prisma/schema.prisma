@@ -191,6 +191,7 @@ model User {
   attendanceLogs           AttendanceLog[]
   leaveRequests            LeaveRequest[]                   @relation("LeaveRequestEmployee")
   leaveRequestsToApprove   LeaveRequest[]                   @relation("LeaveRequestApprover")
+  selectedLeaveApprovals   LeaveRequestSelectedApprover[]   @relation("LeaveRequestSelectedApproverUser")
   leaveApproverAssignments LeaveApproverAssignment[]        @relation("LeaveApproverEmployee")
   approverForEmployees     LeaveApproverAssignment[]        @relation("LeaveApproverUser")
   leaveApprovalsAssignedBy LeaveApproverAssignment[]        @relation("LeaveApproverAssignedBy")
@@ -824,11 +825,25 @@ model LeaveRequest {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  user     User  @relation("LeaveRequestEmployee", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  approver User? @relation("LeaveRequestApprover", fields: [approverId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  user              User                            @relation("LeaveRequestEmployee", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  approver          User?                           @relation("LeaveRequestApprover", fields: [approverId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  selectedApprovers LeaveRequestSelectedApprover[]
 
   @@index([userId, startDate, endDate])
   @@index([status, approverId])
+}
+
+model LeaveRequestSelectedApprover {
+  id             String       @id @default(cuid())
+  leaveRequestId String
+  approverId     String
+  createdAt      DateTime     @default(now())
+
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  approver     User         @relation("LeaveRequestSelectedApproverUser", fields: [approverId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([leaveRequestId, approverId])
+  @@index([approverId])
 }
 
 model LeaveApproverAssignment {

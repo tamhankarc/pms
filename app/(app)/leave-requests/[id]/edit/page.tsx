@@ -45,7 +45,10 @@ export default async function EditLeaveRequestPage({
     );
   const editRequest = await db.leaveRequest.findUnique({
     where: { id: routeParams.id },
-    include: { user: { select: { id: true, fullName: true } } },
+    include: {
+      user: { select: { id: true, fullName: true } },
+      selectedApprovers: { select: { approverId: true } },
+    },
   });
   if (
     !editRequest ||
@@ -86,6 +89,11 @@ export default async function EditLeaveRequestPage({
           endDate: getIstDateKey(editRequest.endDate),
           reason: parsed.reason,
           approverId: editRequest.approverId,
+          approverIds: editRequest.selectedApprovers.length
+            ? editRequest.selectedApprovers.map((row) => row.approverId)
+            : editRequest.approverId
+              ? [editRequest.approverId]
+              : [],
           diwaliLeave: parsed.diwaliLeave,
           daySelectionMode: editRequest.daySelectionMode,
           leaveDayTypesJson: editRequest.leaveDayTypesJson,

@@ -3,10 +3,6 @@ import ExcelJS from "exceljs";
 import { db } from "@/lib/db";
 import { getOrCreateLeaveYearProfile } from "@/lib/ems-queries";
 import { formatDateInIst, getIstDateKey } from "@/lib/ist";
-import {
-  formatFunctionalRoleLabel,
-  formatUserTypeLabel,
-} from "@/lib/display-labels";
 
 export type UserProfileExportFormat = "xlsx" | "pdf";
 

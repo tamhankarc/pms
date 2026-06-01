@@ -80,7 +80,7 @@ export default async function LeaveApprovalsPage({
             {pagination.items.map((row) => {
               const showActions =
                 row.status === "PENDING" &&
-                (row.approverId === user.id || isAdminPmApprover);
+                ((row.selectedApprovers?.some((item) => item.approver.id === user.id) ?? false) || row.approverId === user.id || isAdminPmApprover);
 
               return (
                 <tr key={row.id}>
@@ -122,7 +122,7 @@ export default async function LeaveApprovalsPage({
                       "—"}
                   </td>
                   <td className="table-cell">
-                    {row.approver?.fullName || "—"}
+                    {row.selectedApprovers?.length ? row.selectedApprovers.map((item) => item.approver.fullName).join(", ") : row.approver?.fullName || "—"}
                   </td>
                   <td className="table-cell">
                     {showActions ? (

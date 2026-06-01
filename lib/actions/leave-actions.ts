@@ -20,7 +20,7 @@ import {
   getOfficialHolidayDateKeysForYear,
   getOrCreateLeaveYearProfile,
   isLeaveAllowedUser,
-  isValidLeaveRequestApproverForUser,
+  areValidLeaveRequestApproversForUser,
 } from "@/lib/ems-queries";
 import {
   sendLeaveRequestStatusEmail,
@@ -33,7 +33,7 @@ const leaveSchema = z.object({
   startDate: z.string().min(1),
   endDate: z.string().min(1),
   reason: z.string().trim().min(1, "Reason is required.").max(3000),
-  approverId: z.string().min(1, "Approver is required."),
+  approverIds: z.array(z.string().min(1)).min(1, "Select at least one approver."),
   diwaliLeave: z.enum(["true", "false"]).optional(),
   daySelectionMode: z
     .enum(["FULL_DAYS", "HALF_DAYS", "CUSTOM"])
@@ -300,7 +300,7 @@ export async function createLeaveRequestAction(
       startDate: formData.get("startDate"),
       endDate: formData.get("endDate"),
       reason: formData.get("reason") || "",
-      approverId: formData.get("approverId"),
+      approverIds: formData.getAll("approverIds").map(String).filter(Boolean),
       diwaliLeave: formData.get("diwaliLeave") === "on" ? "true" : "false",
       daySelectionMode: formData.get("daySelectionMode") || "FULL_DAYS",
       leaveDayTypesJson: formData.get("leaveDayTypesJson") || undefined,
@@ -315,14 +315,14 @@ export async function createLeaveRequestAction(
       parsed.data.requestedForUserId,
     );
     if (
-      !(await isValidLeaveRequestApproverForUser(
+      !(await areValidLeaveRequestApproversForUser(
         employee.id,
-        parsed.data.approverId,
+        parsed.data.approverIds,
       ))
     )
       return {
         success: false,
-        error: "Selected approver is not available for this employee.",
+        error: "One or more selected approvers are not available for this employee.",
       };
     validateStartDateNotInPast(parsed.data.startDate);
     await validateBoundaryDates(
@@ -350,7 +350,10 @@ export async function createLeaveRequestAction(
         startDate: start,
         endDate: end,
         reason: buildReason(parsed.data.reason, parsed.data.diwaliLeave),
-        approverId: parsed.data.approverId,
+        approverId: parsed.data.approverIds[0] ?? null,
+        selectedApprovers: {
+          create: parsed.data.approverIds.map((approverId) => ({ approverId })),
+        },
         daySelectionMode: requestDetails.daySelectionMode,
         leaveDayTypesJson: requestDetails.leaveDayTypesJson,
         totalLeaveDays: new Prisma.Decimal(
@@ -387,7 +390,7 @@ export async function updateLeaveRequestAction(
       startDate: formData.get("startDate"),
       endDate: formData.get("endDate"),
       reason: formData.get("reason") || "",
-      approverId: formData.get("approverId"),
+      approverIds: formData.getAll("approverIds").map(String).filter(Boolean),
       diwaliLeave: formData.get("diwaliLeave") === "on" ? "true" : "false",
       daySelectionMode: formData.get("daySelectionMode") || "FULL_DAYS",
       leaveDayTypesJson: formData.get("leaveDayTypesJson") || undefined,
@@ -428,14 +431,14 @@ export async function updateLeaveRequestAction(
         error: "Selected user is not eligible for leave requests.",
       };
     if (
-      !(await isValidLeaveRequestApproverForUser(
+      !(await areValidLeaveRequestApproversForUser(
         employee.id,
-        parsed.data.approverId,
+        parsed.data.approverIds,
       ))
     )
       return {
         success: false,
-        error: "Selected approver is not available for this employee.",
+        error: "One or more selected approvers are not available for this employee.",
       };
     validateStartDateNotInPast(parsed.data.startDate);
     await validateBoundaryDates(
@@ -462,7 +465,11 @@ export async function updateLeaveRequestAction(
         startDate: start,
         endDate: end,
         reason: buildReason(parsed.data.reason, parsed.data.diwaliLeave),
-        approverId: parsed.data.approverId,
+        approverId: parsed.data.approverIds[0] ?? null,
+        selectedApprovers: {
+          deleteMany: {},
+          create: parsed.data.approverIds.map((approverId) => ({ approverId })),
+        },
         status: "PENDING",
         reconsiderNote: null,
         rejectedAt: null,
@@ -556,7 +563,10 @@ export async function reviewLeaveRequestAction(formData: FormData) {
   if (!id) throw new Error("Leave request is required.");
   if (!["APPROVED", "REJECTED", "RECONSIDER"].includes(decision))
     throw new Error("Invalid leave review action.");
-  const existing = await db.leaveRequest.findUnique({ where: { id } });
+  const existing = await db.leaveRequest.findUnique({
+    where: { id },
+    include: { selectedApprovers: { select: { approverId: true } } },
+  });
   if (!existing) throw new Error("Leave request not found.");
   if (existing.status !== "PENDING")
     throw new Error("Only pending leave requests can be reviewed.");
@@ -570,9 +580,10 @@ export async function reviewLeaveRequestAction(formData: FormData) {
     user.userType === "ADMIN" &&
     user.functionalRole === "PROJECT_MANAGER" &&
     assigned;
-  if (!(existing.approverId === user.id || adminPmApprover))
+  const selectedApproverIds = existing.selectedApprovers.map((row) => row.approverId);
+  if (!(selectedApproverIds.includes(user.id) || existing.approverId === user.id || adminPmApprover))
     throw new Error(
-      "Only the selected approver or an Admin user with functional role Project Manager who is included in the approver list can approve, reject, or reconsider this leave request.",
+      "Only one of the selected approvers or an Admin user with functional role Project Manager who is included in the approver list can approve, reject, or reconsider this leave request.",
     );
   if (decision === "APPROVED") {
     const approvedBreakup = await computeApprovedLeaveBreakup(

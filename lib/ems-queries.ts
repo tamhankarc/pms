@@ -103,7 +103,10 @@ export async function getPendingLeaveApprovalInfoForUser(viewer: {
   const ownPendingCount = await db.leaveRequest.count({
     where: {
       status: "PENDING",
-      approverId: viewer.id,
+      OR: [
+        { approverId: viewer.id },
+        { selectedApprovers: { some: { approverId: viewer.id } } },
+      ],
     },
   });
 
@@ -591,58 +594,16 @@ export async function getAllowedLeaveRequestApproversForUser(userId: string) {
     if (
       (requester.userType === "EMPLOYEE" ||
         requester.userType === "TEAM_LEAD") &&
-      requester.functionalRole === "DEVELOPER"
+      (requester.functionalRole === "DEVELOPER" ||
+        requester.functionalRole === "DESIGNER")
     ) {
-      if (isManagerProjectManager(candidate)) {
+      if (isAssignedToEmployee(candidate.id) && isManagerProjectManager(candidate)) {
         return true;
       }
     }
 
     return false;
   });
-
-  // A Team Lead can approve leave only for a requester working in the same
-  // shift. Resolve the effective shift from the latest profile applicable to
-  // the current year without creating profiles here; getLeaveRequestsForUser
-  // loads approvers and balance in parallel, so profile creation here could
-  // otherwise race with balance initialization.
-  const teamLeadCandidates = results.filter(
-    (candidate) => candidate.userType === "TEAM_LEAD",
-  );
-  if (teamLeadCandidates.length) {
-    const currentYear = Number(getIstDateKey().slice(0, 4));
-    const requesterProfile = await db.leaveYearProfile.findFirst({
-      where: { userId: requester.id, year: { lte: currentYear } },
-      orderBy: { year: "desc" },
-      select: { shift: true },
-    });
-    const requesterShift = requesterProfile?.shift ?? "DAY";
-
-    const teamLeadProfileRows = await Promise.all(
-      teamLeadCandidates.map(async (candidate) => ({
-        candidateId: candidate.id,
-        profile: await db.leaveYearProfile.findFirst({
-          where: { userId: candidate.id, year: { lte: currentYear } },
-          orderBy: { year: "desc" },
-          select: { shift: true },
-        }),
-      })),
-    );
-    const teamLeadShifts = new Map(
-      teamLeadProfileRows.map((row) => [
-        row.candidateId,
-        row.profile?.shift ?? "DAY",
-      ]),
-    );
-
-    return results
-      .filter(
-        (candidate) =>
-          candidate.userType !== "TEAM_LEAD" ||
-          teamLeadShifts.get(candidate.id) === requesterShift,
-      )
-      .sort((a, b) => a.fullName.localeCompare(b.fullName));
-  }
 
   return results.sort((a, b) => a.fullName.localeCompare(b.fullName));
 }
@@ -654,6 +615,17 @@ export async function isValidLeaveRequestApproverForUser(
   if (!approverId) return false;
   const approvers = await getAllowedLeaveRequestApproversForUser(userId);
   return approvers.some((approver) => approver.id === approverId);
+}
+
+export async function areValidLeaveRequestApproversForUser(
+  userId: string,
+  approverIds: string[],
+) {
+  const uniqueApproverIds = Array.from(new Set(approverIds.filter(Boolean)));
+  if (!uniqueApproverIds.length) return false;
+  const approvers = await getAllowedLeaveRequestApproversForUser(userId);
+  const allowed = new Set(approvers.map((approver) => approver.id));
+  return uniqueApproverIds.every((approverId) => allowed.has(approverId));
 }
 
 export async function getLeaveBalanceForUser(userId: string, year: number) {
@@ -682,6 +654,10 @@ export async function getLeaveRequestsForUser(
       approver: {
         select: { fullName: true, userType: true },
       },
+      selectedApprovers: {
+        include: { approver: { select: { id: true, fullName: true, userType: true } } },
+        orderBy: { approver: { fullName: "asc" } },
+      },
     },
     orderBy: [{ startDate: "asc" }, { createdAt: "desc" }],
   });
@@ -694,6 +670,10 @@ export async function getLeaveRequestsForUser(
     include: {
       approver: {
         select: { fullName: true, userType: true },
+      },
+      selectedApprovers: {
+        include: { approver: { select: { id: true, fullName: true, userType: true } } },
+        orderBy: { approver: { fullName: "asc" } },
       },
     },
     orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
@@ -719,6 +699,7 @@ export async function getLeaveApprovalsForUser(
     ? {
         OR: [
           { approverId: viewerId },
+          { selectedApprovers: { some: { approverId: viewerId } } },
           {
             user: {
               leaveApproverAssignments: { some: { approverId: viewerId } },
@@ -743,6 +724,10 @@ export async function getLeaveApprovalsForUser(
           fullName: true,
           userType: true,
         },
+      },
+      selectedApprovers: {
+        include: { approver: { select: { id: true, fullName: true, userType: true } } },
+        orderBy: { approver: { fullName: "asc" } },
       },
     },
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
