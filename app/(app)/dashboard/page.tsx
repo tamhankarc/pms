@@ -22,7 +22,6 @@ import { AttendanceSelectedDateFilters } from "@/components/ems/attendance-selec
 import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import { ApproverAssignmentForm } from "@/components/ems/approver-assignment-form";
 import { DashboardBillingFilters } from "@/components/dashboard-billing-filters";
-import { TestMailPanel } from "@/components/dashboard/test-mail-panel";
 import {
   sendMarkInReminderAction,
   sendMarkOutReminderAction,
@@ -67,7 +66,6 @@ import {
   parsePageParam,
 } from "@/lib/pagination";
 import { formatMinutes } from "@/lib/utils";
-import { getSesFromEmailOptions, isMailSendingEnabled } from "@/lib/mail/ses";
 
 function toDateInputValue(value: Date) {
   const year = value.getFullYear();
@@ -317,9 +315,6 @@ export default async function DashboardPage({
   const isManager = user.userType === "MANAGER";
 
   const showBillingDashboard = canSeeBillingDashboard(user);
-  const showTestMailPanel = isAdmin(user);
-  const mailSendingEnabled = showTestMailPanel ? isMailSendingEnabled() : false;
-  const testMailFromOptions = showTestMailPanel ? getSesFromEmailOptions() : [];
   const showAttendanceCard = canMarkAttendance(user);
   const showEMSAdminPanel = canViewEMSAdminDashboard(user);
   const userIsHR = isHR(user);
@@ -998,13 +993,6 @@ export default async function DashboardPage({
             billingData={billingData}
           />
         </div>
-      ) : null}
-
-      {showTestMailPanel ? (
-        <TestMailPanel
-          mailEnabled={mailSendingEnabled}
-          fromEmailOptions={testMailFromOptions}
-        />
       ) : null}
 
       {isAdmin(user) ? (

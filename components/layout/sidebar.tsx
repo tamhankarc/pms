@@ -205,6 +205,10 @@ const operationsItems: SidebarNavItem[] = getItemsByKeys([
 ]);
 
 const accountsItems: SidebarNavItem[] = getItemsByKeys(["billing-reports"]);
+const accountsBillingItems: SidebarNavItem[] = getItemsByKeys([
+  "billing-reports",
+  "change-password",
+]);
 
 function isMasterDataHref(href: string) {
   return [
@@ -276,7 +280,11 @@ export function getSidebarItems(
 
   if (user.userType === "ACCOUNTS") {
     return appendExtraMenus(
-      withLeaveItems(accountsItems, user, canAccessLeaveApprovals),
+      withLeaveItems(
+        user.functionalRole === "BILLING" ? accountsBillingItems : accountsItems,
+        user,
+        canAccessLeaveApprovals,
+      ),
       user,
     );
   }
