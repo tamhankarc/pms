@@ -573,7 +573,7 @@ export async function getAllowedLeaveRequestApproversForUser(userId: string) {
       }
     }
 
-    if (requester.userType === "EMPLOYEE") {
+    if (requester.userType === "EMPLOYEE" || requester.userType === "TEAM_LEAD") {
       const sameRoleAssignedRsm =
         isAssignedToEmployee(candidate.id) &&
         isRoleScopedManager(candidate) &&
@@ -581,6 +581,7 @@ export async function getAllowedLeaveRequestApproversForUser(userId: string) {
           (requester.functionalRole ?? null);
 
       const sameRoleAssignedTl =
+        requester.userType === "EMPLOYEE" &&
         isAssignedToEmployee(candidate.id) &&
         candidate.userType === "TEAM_LEAD" &&
         (candidate.functionalRole ?? null) ===
