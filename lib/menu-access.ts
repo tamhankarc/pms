@@ -2,6 +2,11 @@ import type { UserType } from "@prisma/client";
 
 export const menuItems = [
   { key: "dashboard", href: "/dashboard", label: "Dashboard" },
+  {
+    key: "billing-reports",
+    href: "/billing-reports",
+    label: "Billing Reports",
+  },
   { key: "clients", href: "/clients", label: "Clients" },
   { key: "movies", href: "/movies", label: "Movies" },
   { key: "newsletters", href: "/newsletters", label: "Newsletters" },
@@ -46,11 +51,6 @@ export const menuItems = [
     label: "Team Lead Assignments",
   },
   { key: "reports", href: "/reports", label: "Reports" },
-  {
-    key: "billing-reports",
-    href: "/billing-reports",
-    label: "Billing Reports",
-  },
   { key: "leave-requests", href: "/leave-requests", label: "Leave Requests" },
   {
     key: "leave-approvals",
@@ -58,6 +58,11 @@ export const menuItems = [
     label: "Leave Approvals",
   },
   { key: "leave-admin", href: "/leave-admin", label: "Leave Administration" },
+  {
+    key: "attendance-history",
+    href: "/attendance-history",
+    label: "Attendance History",
+  },
   { key: "hr-reports", href: "/hr-reports", label: "HR Reports" },
   { key: "announcements", href: "/announcements", label: "Announcements" },
   { key: "profile", href: "/profile", label: "My Profile" },
@@ -130,7 +135,7 @@ export function getBaseMenuKeysForUserType(
         "change-password",
       ];
     case "ACCOUNTS":
-      return ["billing-reports"];
+      return ["billing-reports", "change-password"];
     case "EMPLOYEE":
       return [
         "dashboard",
@@ -157,7 +162,6 @@ export function getBaseMenuKeysForUserType(
         "estimates",
         "team-lead-assignments",
         "reports",
-        "billing-reports",
         "profile",
         "change-password",
       ];

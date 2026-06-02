@@ -18,3 +18,13 @@ Sent to shubhamd@sycamoresol.com. MessageId: 0100019e817234b6-e8e81ddc-db69-4383
 Sent to snehald@sycamoresol.com. MessageId: 0100019e81723535-a5a4f784-e05b-4ad3-9f8a-43abeef38509-000000
 Sent to vedangw@sycamoresol.com. MessageId: 0100019e817235b4-365d21c4-b6c4-4700-b669-f7d91a6f56d4-000000
 Completed. Sent: 17, skipped: 0, failed: 0.
+Running NIGHT Mark-In reminder for attendance date 2026-06-01. Dry run: no
+Users requiring reminder: 3
+Sent to adityad@sycamoresol.com. MessageId: 0100019e843c4140-05976b71-bf02-41df-9695-e7c79cd770e8-000000
+Sent to aniketj@sycamoresol.com. MessageId: 0100019e843c41fd-ff724bd7-a354-4c94-93fc-ba0efe9f0b41-000000
+Sent to hrishikeshs@sycamoresol.com. MessageId: 0100019e843c42a0-f3047993-b7b5-4ca2-a4f1-972b5a5fa221-000000
+Completed. Sent: 3, skipped: 0, failed: 0.
+Running DAY Mark-In reminder for attendance date 2026-06-02. Dry run: no
+Users requiring reminder: 1
+Sent to snehald@sycamoresol.com. MessageId: 0100019e86988488-e1e68b39-144d-42aa-b536-27aa149de1fe-000000
+Completed. Sent: 1, skipped: 0, failed: 0.

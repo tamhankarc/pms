@@ -75,7 +75,7 @@ export function canViewCostData(user: UserLike) {
   return isAdmin(user);
 }
 export function canViewBillingReports(user: UserLike) {
-  return isAdmin(user) || isAccounts(user) || isManager(user);
+  return isAdmin(user) || isAccounts(user);
 }
 export function isGeneralManager(user: UserLike) {
   return isManager(user) && getFunctionalRole(user) === "GENERAL_MANAGER";
@@ -242,8 +242,7 @@ export function canManageMovieBillingHeads(user: UserLike) {
 export function canSeeBillingDashboard(user: UserLike) {
   return (
     isAdmin(user) ||
-    (isManager(user) && getFunctionalRole(user) === "PROJECT_MANAGER") ||
-    (isAccounts(user) && getFunctionalRole(user) === "BILLING")
+    (isManager(user) && getFunctionalRole(user) === "PROJECT_MANAGER")
   );
 }
 
@@ -257,6 +256,10 @@ export function canMarkAttendance(user: UserLike) {
 
 export function canAccessLeaveRequests(user: UserLike) {
   return canMarkAttendance(user) || isPmLike(user) || isHR(user);
+}
+
+export function canManageManualAttendance(user: UserLike) {
+  return isAdmin(user) && getFunctionalRole(user) === "OTHER";
 }
 
 export function canAssignApprovers(user: UserLike) {

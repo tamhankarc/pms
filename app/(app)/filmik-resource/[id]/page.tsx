@@ -18,9 +18,9 @@ export default async function FilmikResourceEditPage({ params }: { params: Promi
 
   return (
     <div className="space-y-6">
-      <PageHeader title={`Edit Filmik Resource · ${resource.name}`} description="Update Filmik resource type and per-resource monthly cost." actions={<Link href="/filmik-resource" className="btn-secondary">Back to Filmik Resources</Link>} />
+      <PageHeader title={`Edit Filmik Resource · ${resource.name}`} description="Update Filmik resource type and per-resource client/vendor monthly costs." actions={<Link href="/filmik-resource" className="btn-secondary">Back to Filmik Resources</Link>} />
       <div className="max-w-3xl">
-        <FilmikResourceForm action={updateFilmikResourceAction} title={`Edit Filmik Resource: ${resource.name}`} submitLabel="Save changes" initialValues={{ id: resource.id, name: resource.name, cost: resource.cost.toString(), isActive: resource.isActive }} canEditCosts={canViewCostData(currentUser)} />
+        <FilmikResourceForm action={updateFilmikResourceAction} title={`Edit Filmik Resource: ${resource.name}`} submitLabel="Save changes" initialValues={{ id: resource.id, name: resource.name, cost: resource.cost.toString(), perResourceVendorCost: resource.perResourceVendorCost.toString(), isActive: resource.isActive }} canEditCosts={canViewCostData(currentUser)} />
       </div>
     </div>
   );

@@ -12,15 +12,18 @@ export type FilmikResourceReportRow = {
   resourceTypeId: string;
   resourceTypeName: string;
   count: number;
-  perResourceCost: number;
-  cost: number;
+  perResourceClientCost: number;
+  perResourceVendorCost: number;
+  clientCost: number;
+  vendorCost: number;
 };
 
 export type FilmikCombinedReportRow = {
   key: string;
   name: string;
   quantity: number;
-  cost: number;
+  clientCost: number;
+  vendorCost: number;
   contactPerson: string;
 };
 
@@ -29,10 +32,12 @@ export type FilmikBillingReportData = {
   filters: FilmikBillingReportFilters;
   resourceRows: FilmikResourceReportRow[];
   resourceTotalCount: number;
-  resourceTotalCost: number;
+  resourceTotalClientCost: number;
+  resourceTotalVendorCost: number;
   projectRows: FilmikCombinedReportRow[];
   combinedRows: FilmikCombinedReportRow[];
-  combinedTotalCost: number;
+  combinedTotalClientCost: number;
+  combinedTotalVendorCost: number;
   reportTitle: string;
 };
 
@@ -129,7 +134,7 @@ export async function getFilmikBillingReportData(
   const [resourceTypes, countHistory, projectTimeGroups] = await Promise.all([
     db.filmikResourceType.findMany({
       where: { clientId: FILMIK_CLIENT_ID, isActive: true },
-      select: { id: true, name: true, cost: true },
+      select: { id: true, name: true, cost: true, perResourceVendorCost: true },
       orderBy: { name: "asc" },
     }),
     db.projectFilmikResourceCount.findMany({
@@ -172,13 +177,16 @@ export async function getFilmikBillingReportData(
   const resourceRows = resourceTypes
     .map((resource) => {
       const count = countByResource.get(resource.id) ?? 0;
-      const perResourceCost = Number(resource.cost ?? 0);
+      const perResourceClientCost = Number(resource.cost ?? 0);
+      const perResourceVendorCost = Number(resource.perResourceVendorCost ?? 0);
       return {
         resourceTypeId: resource.id,
         resourceTypeName: resource.name,
         count,
-        perResourceCost,
-        cost: count * perResourceCost,
+        perResourceClientCost,
+        perResourceVendorCost,
+        clientCost: count * perResourceClientCost,
+        vendorCost: count * perResourceVendorCost,
       } satisfies FilmikResourceReportRow;
     })
     .filter((row) => row.count > 0);
@@ -187,8 +195,12 @@ export async function getFilmikBillingReportData(
     (sum, row) => sum + row.count,
     0,
   );
-  const resourceTotalCost = resourceRows.reduce(
-    (sum, row) => sum + row.cost,
+  const resourceTotalClientCost = resourceRows.reduce(
+    (sum, row) => sum + row.clientCost,
+    0,
+  );
+  const resourceTotalVendorCost = resourceRows.reduce(
+    (sum, row) => sum + row.vendorCost,
     0,
   );
   const minutesByProject = new Map(
@@ -214,7 +226,8 @@ export async function getFilmikBillingReportData(
           ? `${project.name} (${lens.lensNames.join(", ")})`
           : project.name,
         quantity: hours,
-        cost: lens ? lens.cost : hours * hourlyCost,
+        clientCost: lens ? lens.cost : hours * hourlyCost,
+        vendorCost: 0,
         contactPerson: buildContactPersonLabel(project.contactPersons),
       } satisfies FilmikCombinedReportRow;
     })
@@ -225,13 +238,18 @@ export async function getFilmikBillingReportData(
       key: "resource-cost",
       name: "Resource Cost",
       quantity: resourceTotalCount,
-      cost: resourceTotalCost,
+      clientCost: resourceTotalClientCost,
+      vendorCost: resourceTotalVendorCost,
       contactPerson: "-",
     },
     ...projectRows,
   ];
-  const combinedTotalCost = combinedRows.reduce(
-    (sum, row) => sum + row.cost,
+  const combinedTotalClientCost = combinedRows.reduce(
+    (sum, row) => sum + row.clientCost,
+    0,
+  );
+  const combinedTotalVendorCost = combinedRows.reduce(
+    (sum, row) => sum + row.vendorCost,
     0,
   );
 
@@ -240,10 +258,12 @@ export async function getFilmikBillingReportData(
     filters,
     resourceRows,
     resourceTotalCount,
-    resourceTotalCost,
+    resourceTotalClientCost,
+    resourceTotalVendorCost,
     projectRows,
     combinedRows,
-    combinedTotalCost,
+    combinedTotalClientCost,
+    combinedTotalVendorCost,
     reportTitle: "Filmik Billing",
   };
 }

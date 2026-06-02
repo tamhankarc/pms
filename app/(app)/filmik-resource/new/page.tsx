@@ -12,7 +12,7 @@ export default async function NewFilmikResourcePage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Create Filmik Resource" description="Create a Filmik resource type with per-resource monthly cost." actions={<Link href="/filmik-resource" className="btn-secondary">Back to Filmik Resources</Link>} />
+      <PageHeader title="Create Filmik Resource" description="Create a Filmik resource type with per-resource client/vendor monthly costs." actions={<Link href="/filmik-resource" className="btn-secondary">Back to Filmik Resources</Link>} />
       <div className="max-w-3xl"><FilmikResourceForm action={createFilmikResourceAction} title="Create Filmik Resource" submitLabel="Create Resource Type" canEditCosts={canViewCostData(currentUser)} /></div>
     </div>
   );

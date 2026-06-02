@@ -31,6 +31,7 @@ import {
   canAccessLeaveRequests,
   canManageCountries,
   canManageLanguages,
+  canManageManualAttendance,
   canManageUsers,
   isHR,
   isOperations,
@@ -74,6 +75,7 @@ const iconByMenuKey: Record<
   "leave-requests": CalendarDays,
   "leave-approvals": CheckCheck,
   "leave-admin": CalendarDays,
+  "attendance-history": TimerReset,
   "hr-reports": BarChart3,
   announcements: Bell,
   profile: UserCog,
@@ -131,6 +133,7 @@ function withLeaveItems(
 
 const fullItems: SidebarNavItem[] = getItemsByKeys([
   "dashboard",
+  "billing-reports",
   "clients",
   "movies",
   "newsletters",
@@ -151,8 +154,8 @@ const fullItems: SidebarNavItem[] = getItemsByKeys([
   "estimates",
   "team-lead-assignments",
   "reports",
-  "billing-reports",
   "hr-reports",
+  "attendance-history",
   "profile",
   "change-password",
 ]);
@@ -204,11 +207,11 @@ const operationsItems: SidebarNavItem[] = getItemsByKeys([
   "change-password",
 ]);
 
-const accountsItems: SidebarNavItem[] = getItemsByKeys(["billing-reports"]);
-const accountsBillingItems: SidebarNavItem[] = getItemsByKeys([
+const accountsItems: SidebarNavItem[] = getItemsByKeys([
   "billing-reports",
   "change-password",
 ]);
+const accountsBillingItems = accountsItems;
 
 function isMasterDataHref(href: string) {
   return [
@@ -262,12 +265,6 @@ export function getSidebarItems(
     const scopedItems = filterAccess(teamLeadItems, user).filter(
       (item) => !isMasterDataHref(item.href),
     );
-    if (isRoleScopedManager(user)) {
-      const billingReportsItem = baseMenuItems.find(
-        (item) => item.key === "billing-reports",
-      );
-      if (billingReportsItem) scopedItems.push(billingReportsItem);
-    }
     return appendExtraMenus(
       withLeaveItems(scopedItems, user, canAccessLeaveApprovals),
       user,
@@ -299,9 +296,6 @@ export function getSidebarItems(
         "leave-admin",
         "hr-reports",
         "announcements",
-        ...(user.userType === "MANAGER"
-          ? (["billing-reports"] as MenuKey[])
-          : []),
         "profile",
         "change-password",
       ]),
@@ -319,6 +313,12 @@ export function getSidebarItems(
       isMasterDataHref(item.href) &&
       user.userType !== "ADMIN" &&
       user.userType !== "OPERATIONS"
+    )
+      return false;
+    if (
+      item.href === "/billing-reports" &&
+      user.userType !== "ADMIN" &&
+      user.userType !== "ACCOUNTS"
     )
       return false;
     if (item.href === "/users" && !canManageUsers(user)) return false;
@@ -340,6 +340,9 @@ export function getSidebarItems(
       user.userType !== "OPERATIONS"
     )
       return false;
+    if (item.href === "/attendance-history" && !canManageManualAttendance(user)) {
+      return false;
+    }
     return true;
   });
 

@@ -40,10 +40,11 @@ function toCsv(rows: string[][]) {
   return rows.map((row) => row.map((cell) => escapeCsvValue(cell)).join(",")).join("\n");
 }
 
-function buildFileName(mode: "present" | "absent", attendanceDate: string) {
+function buildFileName(mode: "present" | "absent", attendanceDate: string, shift: "DAY" | "NIGHT" | "BOTH") {
   const weekendSegment = isWeekendDateKey(attendanceDate) ? "_weekend_working" : "";
   const modeSegment = mode === "absent" ? "absentee_list" : "presentee_list";
-  return `${sanitizeFileSegment(modeSegment)}${weekendSegment}_${attendanceDate}_${getTimestamp()}.csv`;
+  const shiftSegment = shift === "BOTH" ? "both_shifts" : shift === "NIGHT" ? "night_shift" : "day_shift";
+  return `${sanitizeFileSegment(modeSegment)}_${shiftSegment}${weekendSegment}_${attendanceDate}_${getTimestamp()}.csv`;
 }
 
 export async function GET(request: Request) {
@@ -55,17 +56,26 @@ export async function GET(request: Request) {
   const attendanceDate = normalizeDateInput(searchParams.get("attendanceDate"));
   if (!attendanceDate) return new Response("Invalid attendanceDate", { status: 400 });
   const attendanceMode = searchParams.get("attendanceMode") === "absent" ? "absent" : "present";
+  const attendanceShift =
+    searchParams.get("attendanceShift") === "DAY"
+      ? "DAY"
+      : searchParams.get("attendanceShift") === "NIGHT"
+        ? "NIGHT"
+        : "BOTH";
 
   const dashboardData = await getAdminDashboardData(attendanceDate);
-  const rows = dashboardData.attendanceRows.filter((row) =>
-    attendanceMode === "present" ? Boolean(row.markIn) : !row.markIn,
-  );
+  const rows = dashboardData.attendanceRows
+    .filter((row) => attendanceShift === "BOTH" || row.shift === attendanceShift)
+    .filter((row) =>
+      attendanceMode === "present" ? Boolean(row.markIn) : !row.markIn,
+    );
 
   const csvRows: string[][] = [
-    ["Employee", "Functional Role", "In-Time", "Out-Time", "City"],
+    ["Employee", "Functional Role", "Shift", "In-Time", "Out-Time", "City"],
     ...rows.map((row) => [
       row.fullName,
       (row.functionalRole ?? "UNASSIGNED").replaceAll("_", " "),
+      row.shift === "NIGHT" ? "Night" : "Day",
       formatTimeInIst(row.markIn?.markedAt ?? null),
       formatTimeInIst(row.markOut?.markedAt ?? null),
       row.city || "—",
@@ -76,7 +86,7 @@ export async function GET(request: Request) {
   return new Response(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${buildFileName(attendanceMode, attendanceDate)}"`,
+      "Content-Disposition": `attachment; filename="${buildFileName(attendanceMode, attendanceDate, attendanceShift)}"`,
     },
   });
 }

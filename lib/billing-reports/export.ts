@@ -2040,14 +2040,38 @@ export function buildFilmikBillingReportExcel(data: FilmikBillingReportData) {
     excelRow(["Client", data.client.name]),
     excelRow(["Month", getFilmikBillingReportMonthLabel(data)]),
     excelRow([]),
-    excelRow(["Resource Type", "Count", "Cost (USD)"]),
+    excelRow([
+      "Resource Type",
+      "Count",
+      "Per Resource Client Cost (USD)",
+      "Per Resource Vendor Cost (USD)",
+      "Client Cost (USD)",
+      "Vendor Cost (USD)",
+    ]),
     ...data.resourceRows.map((row) =>
-      excelRow([row.resourceTypeName, row.count, row.cost], [1, 2]),
+      excelRow(
+        [
+          row.resourceTypeName,
+          row.count,
+          row.perResourceClientCost,
+          row.perResourceVendorCost,
+          row.clientCost,
+          row.vendorCost,
+        ],
+        [1, 2, 3, 4, 5],
+      ),
     ),
     excelRow([]),
     excelRow(
-      ["Total", data.resourceTotalCount, data.resourceTotalCost],
-      [1, 2],
+      [
+        "Total",
+        data.resourceTotalCount,
+        "",
+        "",
+        data.resourceTotalClientCost,
+        data.resourceTotalVendorCost,
+      ],
+      [1, 4, 5],
     ),
   ];
 
@@ -2059,7 +2083,8 @@ export function buildFilmikBillingReportExcel(data: FilmikBillingReportData) {
     excelRow([
       "Project / Resource",
       "Resources / Hours",
-      "Cost (USD)",
+      "Client Cost (USD)",
+      "Vendor Cost (USD)",
       "Contact Person",
     ]),
     ...data.combinedRows.map((row) =>
@@ -2069,14 +2094,18 @@ export function buildFilmikBillingReportExcel(data: FilmikBillingReportData) {
           row.key === "resource-cost"
             ? row.quantity
             : `${row.quantity.toFixed(2)}h`,
-          row.cost,
+          row.clientCost,
+          row.vendorCost,
           row.contactPerson,
         ],
-        [2],
+        [2, 3],
       ),
     ),
     excelRow([]),
-    excelRow(["Total", "", data.combinedTotalCost, "-"], [2]),
+    excelRow(
+      ["Total", "", data.combinedTotalClientCost, data.combinedTotalVendorCost, "-"],
+      [2, 3],
+    ),
   ];
 
   return `<?xml version="1.0"?>
@@ -2109,16 +2138,33 @@ function buildFilmikBillingReportPdfPages(data: FilmikBillingReportData) {
     textCommand("Resource Cost", MARGIN_X, TOP_Y - 62, 12, true),
   );
   const resourceColumns: PdfTableColumn[] = [
-    { header: "Resource Type", width: 360 },
-    { header: "Count", width: 120, align: "right" },
-    { header: "Cost", width: 150, align: "right" },
+    { header: "Resource Type", width: 210 },
+    { header: "Count", width: 70, align: "right" },
+    { header: "Client/Res", width: 105, align: "right" },
+    { header: "Vendor/Res", width: 105, align: "right" },
+    { header: "Client Cost", width: 110, align: "right" },
+    { header: "Vendor Cost", width: 110, align: "right" },
   ];
   const resourceRows: PdfTableRow[] = [
     ...data.resourceRows.map(
       (row) =>
-        [row.resourceTypeName, row.count, formatUsd(row.cost)] as PdfTableRow,
+        [
+          row.resourceTypeName,
+          row.count,
+          formatUsd(row.perResourceClientCost),
+          formatUsd(row.perResourceVendorCost),
+          formatUsd(row.clientCost),
+          formatUsd(row.vendorCost),
+        ] as PdfTableRow,
     ),
-    ["Total", data.resourceTotalCount, formatUsd(data.resourceTotalCost)],
+    [
+      "Total",
+      data.resourceTotalCount,
+      "-",
+      "-",
+      formatUsd(data.resourceTotalClientCost),
+      formatUsd(data.resourceTotalVendorCost),
+    ],
   ];
   drawTableHeader(resourceCommands, resourceColumns, MARGIN_X, TOP_Y - 88);
   let resourceY = TOP_Y - 88 - HEADER_HEIGHT;
@@ -2148,10 +2194,11 @@ function buildFilmikBillingReportPdfPages(data: FilmikBillingReportData) {
   pageStreams.push(resourceCommands.join("\n"));
 
   const combinedColumns: PdfTableColumn[] = [
-    { header: "Project / Resource", width: 260 },
-    { header: "Resources / Hours", width: 120, align: "right" },
-    { header: "Cost", width: 130, align: "right" },
-    { header: "Contact Person", width: 250 },
+    { header: "Project / Resource", width: 230 },
+    { header: "Resources / Hours", width: 115, align: "right" },
+    { header: "Client Cost", width: 115, align: "right" },
+    { header: "Vendor Cost", width: 115, align: "right" },
+    { header: "Contact Person", width: 185 },
   ];
   const combinedRows: PdfTableRow[] = [
     ...data.combinedRows.map(
@@ -2161,11 +2208,18 @@ function buildFilmikBillingReportPdfPages(data: FilmikBillingReportData) {
           row.key === "resource-cost"
             ? row.quantity
             : `${row.quantity.toFixed(2)}h`,
-          formatUsd(row.cost),
+          formatUsd(row.clientCost),
+          row.vendorCost > 0 ? formatUsd(row.vendorCost) : "-",
           row.contactPerson,
         ] as PdfTableRow,
     ),
-    ["Total", "", formatUsd(data.combinedTotalCost), "-"],
+    [
+      "Total",
+      "",
+      formatUsd(data.combinedTotalClientCost),
+      formatUsd(data.combinedTotalVendorCost),
+      "-",
+    ],
   ];
   let rowIndex = 0;
   let pageNo = 2;

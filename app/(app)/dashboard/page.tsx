@@ -250,6 +250,7 @@ export default async function DashboardPage({
     month?: string;
     attendanceDate?: string;
     attendanceMode?: string;
+    attendanceShift?: string;
     attendancePage?: string;
     approvedLeaveSelectedDate?: string;
     dashboardSection?: string;
@@ -272,6 +273,12 @@ export default async function DashboardPage({
       : todayKey;
   const attendanceMode =
     params.attendanceMode === "absent" ? "absent" : "present";
+  const attendanceShift =
+    params.attendanceShift === "DAY"
+      ? "DAY"
+      : params.attendanceShift === "NIGHT"
+        ? "NIGHT"
+        : "BOTH";
   const attendancePage = parsePageParam(params.attendancePage);
   const approvedLeaveSelectedDate =
     params.approvedLeaveSelectedDate &&
@@ -443,9 +450,11 @@ export default async function DashboardPage({
     ? hasMarkIn && !hasMarkOut && isMarkOutWindow(new Date(), shift)
     : false;
 
-  const attendanceRows = (adminDashboardData?.attendanceRows ?? []).filter(
-    (row) => (attendanceMode === "present" ? Boolean(row.markIn) : !row.markIn),
-  );
+  const attendanceRows = (adminDashboardData?.attendanceRows ?? [])
+    .filter((row) => attendanceShift === "BOTH" || row.shift === attendanceShift)
+    .filter((row) =>
+      attendanceMode === "present" ? Boolean(row.markIn) : !row.markIn,
+    );
   const attendancePagination = paginateItems(
     attendanceRows,
     attendancePage,
@@ -455,6 +464,7 @@ export default async function DashboardPage({
     const search = new URLSearchParams({
       attendanceDate,
       attendanceMode,
+      attendanceShift,
     });
     if (attendanceWeekend) search.set("weekend", "true");
     return `/dashboard/attendance-export?${search.toString()}`;
@@ -540,6 +550,7 @@ export default async function DashboardPage({
                 month: params.month,
                 attendanceDate,
                 attendanceMode,
+                attendanceShift,
                 attendancePage: params.attendancePage,
                 billingStartDate,
                 billingEndDate,
@@ -564,6 +575,7 @@ export default async function DashboardPage({
                 month: params.month,
                 attendanceDate,
                 attendanceMode,
+                attendanceShift,
                 attendancePage: params.attendancePage,
                 billingStartDate,
                 billingEndDate,
@@ -729,6 +741,7 @@ export default async function DashboardPage({
             month: params.month,
             attendanceDate,
             attendanceMode,
+            attendanceShift,
             attendancePage: params.attendancePage,
             approvedLeaveSelectedDate,
             dashboardSection: activeDashboardSection,
@@ -766,6 +779,7 @@ export default async function DashboardPage({
             <AttendanceSelectedDateFilters
               attendanceDate={attendanceDate}
               attendanceMode={attendanceMode}
+              attendanceShift={attendanceShift}
               leaveMonth={leaveMonth}
               month={params.month}
               billingStartDate={billingStartDate}
@@ -831,6 +845,7 @@ export default async function DashboardPage({
                 <tr>
                   <th className="table-cell">Employee</th>
                   <th className="table-cell">Functional role</th>
+                  <th className="table-cell">Shift</th>
                   <th className="table-cell">In-Time</th>
                   <th className="table-cell">Out-Time</th>
                   <th className="table-cell">City</th>
@@ -849,6 +864,9 @@ export default async function DashboardPage({
                       )}
                     </td>
                     <td className="table-cell">
+                      {row.shift === "NIGHT" ? "Night" : "Day"}
+                    </td>
+                    <td className="table-cell">
                       {formatTimeInIst(row.markIn?.markedAt ?? null)}
                     </td>
                     <td className="table-cell">
@@ -860,7 +878,7 @@ export default async function DashboardPage({
                 {attendancePagination.totalItems === 0 ? (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="table-cell text-center text-sm text-slate-500"
                     >
                       No{" "}
@@ -880,6 +898,7 @@ export default async function DashboardPage({
               searchParams={{
                 attendanceDate,
                 attendanceMode,
+                attendanceShift,
                 leaveMonth,
                 month: params.month,
                 attendancePage: params.attendancePage,

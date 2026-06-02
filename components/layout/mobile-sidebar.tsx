@@ -23,6 +23,7 @@ export function MobileSidebar({
   const [mounted, setMounted] = useState(false);
   const mobileAllowedMenuKeys = new Set([
     "leave-requests",
+    "attendance-history",
     "profile",
     "change-password",
   ]);

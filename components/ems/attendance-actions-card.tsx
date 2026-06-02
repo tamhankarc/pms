@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { markAttendanceAction } from "@/lib/actions/attendance-actions";
 
 type Props = {
@@ -21,6 +22,7 @@ function isDesktopLikeDevice() {
 }
 
 export function AttendanceActionsCard({ canMarkIn, canMarkOut, markInAt, markOutAt, city, shift }: Props) {
+  const router = useRouter();
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const [pendingAction, setPendingAction] = useState<"MARK_IN" | "MARK_OUT" | null>(null);
@@ -60,12 +62,18 @@ export function AttendanceActionsCard({ canMarkIn, canMarkOut, markInAt, markOut
         setPendingAction(actionType);
         startTransition(async () => {
           try {
-            await markAttendanceAction(formData);
+            const result = await markAttendanceAction(formData);
+            if (!result.success) {
+              const message = result.error || "Unable to mark attendance.";
+              setError(message);
+              if (message.includes("signed out")) {
+                window.location.href = "/login";
+              }
+              return;
+            }
+            router.refresh();
           } catch (err) {
             setError(err instanceof Error ? err.message : "Unable to mark attendance.");
-            if ((err instanceof Error ? err.message : "").includes("signed out")) {
-              window.location.href = "/login";
-            }
           } finally {
             setPendingAction(null);
           }

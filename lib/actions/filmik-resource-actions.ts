@@ -12,7 +12,8 @@ export type FilmikResourceFormState = { success?: boolean; error?: string };
 const filmikResourceSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(2, "Resource type name is required."),
-  cost: z.coerce.number().min(0, "Per resource cost cannot be negative."),
+  cost: z.coerce.number().min(0, "Per resource client cost cannot be negative."),
+  perResourceVendorCost: z.coerce.number().min(0, "Per resource vendor cost cannot be negative."),
   isActive: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
 });
 
@@ -28,6 +29,7 @@ export async function createFilmikResourceAction(_prevState: FilmikResourceFormS
     const parsed = filmikResourceSchema.safeParse({
       name: formData.get("name"),
       cost: formData.get("cost") ?? "0",
+      perResourceVendorCost: formData.get("perResourceVendorCost") ?? "0",
       isActive: formData.get("isActive") ?? "on",
     });
     if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message || "Invalid resource payload." };
@@ -37,6 +39,7 @@ export async function createFilmikResourceAction(_prevState: FilmikResourceFormS
         clientId: FILMIK_CLIENT_ID,
         name: parsed.data.name.trim(),
         cost: canViewCostData(user) ? parsed.data.cost : 0,
+        perResourceVendorCost: canViewCostData(user) ? parsed.data.perResourceVendorCost : 0,
         isActive: Boolean(parsed.data.isActive),
       },
     });
@@ -57,6 +60,7 @@ export async function updateFilmikResourceAction(_prevState: FilmikResourceFormS
       id: formData.get("id"),
       name: formData.get("name"),
       cost: formData.get("cost") ?? "0",
+      perResourceVendorCost: formData.get("perResourceVendorCost") ?? "0",
       isActive: formData.get("isActive") ?? undefined,
     });
     if (!parsed.success || !parsed.data.id) return { success: false, error: parsed.success ? "Resource type is required." : parsed.error.issues[0]?.message };
@@ -69,6 +73,9 @@ export async function updateFilmikResourceAction(_prevState: FilmikResourceFormS
       data: {
         name: parsed.data.name.trim(),
         cost: canViewCostData(user) ? parsed.data.cost : existing.cost,
+        perResourceVendorCost: canViewCostData(user)
+          ? parsed.data.perResourceVendorCost
+          : existing.perResourceVendorCost,
         isActive: Boolean(parsed.data.isActive),
       },
     });

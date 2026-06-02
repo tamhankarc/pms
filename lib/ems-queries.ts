@@ -171,6 +171,7 @@ export async function getAdminDashboardData(
   leaveEndDateKey?: string,
 ) {
   const attendanceBounds = getDayBoundsUtcFromIstDateKey(attendanceDateKey);
+  const attendanceYear = Number(attendanceDateKey.slice(0, 4));
   const rangeStartKey = leaveStartDateKey || attendanceDateKey;
   const rangeEndKey = leaveEndDateKey || attendanceDateKey;
   const leaveStartBounds = getDayBoundsUtcFromIstDateKey(rangeStartKey);
@@ -193,6 +194,11 @@ export async function getAdminDashboardData(
       fullName: true,
       userType: true,
       functionalRole: true,
+      leaveYearProfiles: {
+        where: { year: attendanceYear },
+        select: { shift: true },
+        take: 1,
+      },
       attendanceLogs: {
         where: {
           attendanceDate: {
@@ -255,6 +261,7 @@ export async function getAdminDashboardData(
         fullName: employee.fullName,
         userType: employee.userType,
         functionalRole: employee.functionalRole,
+        shift: employee.leaveYearProfiles[0]?.shift ?? "DAY",
         markIn,
         markOut,
         city: markOut?.city || markIn?.city || null,

@@ -408,10 +408,11 @@ model MovieBillingHeadAssignment {
 }
 
 model FilmikResourceType {
-  id        String   @id @default(cuid())
-  clientId  String
-  name      String
-  cost      Decimal  @default(0) @db.Decimal(12, 2)
+  id                    String   @id @default(cuid())
+  clientId              String
+  name                  String
+  cost                  Decimal  @default(0) @db.Decimal(12, 2)
+  perResourceVendorCost Decimal  @default(0) @db.Decimal(12, 2)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

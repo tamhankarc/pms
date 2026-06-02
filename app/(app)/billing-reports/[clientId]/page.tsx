@@ -986,10 +986,15 @@ function WarnerDeliverableFilters({
           label: movie.title,
         })),
       ]}
-      countryOptions={data.countryOptions.map((country) => ({
-        value: country.id,
-        label: country.name,
-      }))}
+      countryOptions={[
+        ...(data.reportType === "other-deliverable" && data.countryOptions.length > 1
+          ? [{ value: "", label: "All Countries" }]
+          : []),
+        ...data.countryOptions.map((country) => ({
+          value: country.id,
+          label: country.name,
+        })),
+      ]}
       hasCountryFilter={hasCountryFilter}
       movieEmptyLabel={movieEmptyLabel}
     />
@@ -1007,7 +1012,9 @@ function WarnerDomesticTable({
 }) {
   const canShowRows = Boolean(
     data.selectedMovie &&
-    (data.reportType !== "other-deliverable" || data.selectedCountry),
+      (data.reportType !== "other-deliverable" ||
+        data.selectedCountry ||
+        data.filters.countryId === ""),
   );
 
   return (
@@ -1032,13 +1039,14 @@ function WarnerDomesticTable({
           ) : null}
           {data.reportType === "other-deliverable" &&
           data.selectedMovie &&
-          !data.selectedCountry ? (
+          !data.selectedCountry &&
+          data.filters.countryId !== "" ? (
             <tr>
               <td
                 colSpan={2}
                 className="table-cell text-center text-sm text-slate-500"
               >
-                Select a country with time entries for the selected title to
+                Select a country with time entries for the selected title, or choose All Countries, to
                 view deliverables.
               </td>
             </tr>
@@ -1089,7 +1097,9 @@ function WarnerDeliverableWorkspace({
   const subtitle = requiresCountry
     ? data.selectedMovie && data.selectedCountry
       ? `Deliverable billing for ${data.selectedMovie.title} / ${data.selectedCountry.name}.`
-      : "Select a title and country to view deliverable billing."
+      : data.selectedMovie && data.filters.countryId === ""
+        ? `Deliverable billing for ${data.selectedMovie.title} / All Countries.`
+        : "Select a title and country to view deliverable billing."
     : data.selectedMovie
       ? `Deliverable billing for ${data.selectedMovie.title}.`
       : "Select a title to view deliverable billing.";
@@ -1803,7 +1813,10 @@ function FilmikResourceCostBlock({ data }: { data: FilmikBillingReportData }) {
           <tr>
             <th className="table-cell">Resource Type</th>
             <th className="table-cell">Count</th>
-            <th className="table-cell">Cost</th>
+            <th className="table-cell">Per Resource Client Cost</th>
+            <th className="table-cell">Per Resource Vendor Cost</th>
+            <th className="table-cell">Client Cost</th>
+            <th className="table-cell">Vendor Cost</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -1816,7 +1829,16 @@ function FilmikResourceCostBlock({ data }: { data: FilmikBillingReportData }) {
                 {row.count}
               </td>
               <td className="table-cell whitespace-nowrap font-medium text-slate-900">
-                {formatFilmikUsd(row.cost)}
+                {formatFilmikUsd(row.perResourceClientCost)}
+              </td>
+              <td className="table-cell whitespace-nowrap font-medium text-slate-900">
+                {formatFilmikUsd(row.perResourceVendorCost)}
+              </td>
+              <td className="table-cell whitespace-nowrap font-medium text-slate-900">
+                {formatFilmikUsd(row.clientCost)}
+              </td>
+              <td className="table-cell whitespace-nowrap font-medium text-slate-900">
+                {formatFilmikUsd(row.vendorCost)}
               </td>
             </tr>
           ))}
@@ -1825,8 +1847,13 @@ function FilmikResourceCostBlock({ data }: { data: FilmikBillingReportData }) {
             <td className="table-cell font-semibold text-slate-900">
               {data.resourceTotalCount}
             </td>
+            <td className="table-cell">-</td>
+            <td className="table-cell">-</td>
             <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
-              {formatFilmikUsd(data.resourceTotalCost)}
+              {formatFilmikUsd(data.resourceTotalClientCost)}
+            </td>
+            <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
+              {formatFilmikUsd(data.resourceTotalVendorCost)}
             </td>
           </tr>
         </tbody>
@@ -1843,7 +1870,8 @@ function FilmikCombinedCostBlock({ data }: { data: FilmikBillingReportData }) {
           <tr>
             <th className="table-cell">Project / Resource</th>
             <th className="table-cell">Resources / Hours</th>
-            <th className="table-cell">Cost</th>
+            <th className="table-cell">Client Cost</th>
+            <th className="table-cell">Vendor Cost</th>
             <th className="table-cell">Contact Person</th>
           </tr>
         </thead>
@@ -1859,7 +1887,10 @@ function FilmikCombinedCostBlock({ data }: { data: FilmikBillingReportData }) {
                   : `${row.quantity.toFixed(2)}h`}
               </td>
               <td className="table-cell whitespace-nowrap font-medium text-slate-900">
-                {formatFilmikUsd(row.cost)}
+                {formatFilmikUsd(row.clientCost)}
+              </td>
+              <td className="table-cell whitespace-nowrap font-medium text-slate-900">
+                {row.vendorCost > 0 ? formatFilmikUsd(row.vendorCost) : "-"}
               </td>
               <td className="table-cell">{row.contactPerson}</td>
             </tr>
@@ -1869,7 +1900,10 @@ function FilmikCombinedCostBlock({ data }: { data: FilmikBillingReportData }) {
               Total
             </td>
             <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
-              {formatFilmikUsd(data.combinedTotalCost)}
+              {formatFilmikUsd(data.combinedTotalClientCost)}
+            </td>
+            <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
+              {formatFilmikUsd(data.combinedTotalVendorCost)}
             </td>
             <td className="table-cell">-</td>
           </tr>

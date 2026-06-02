@@ -1370,6 +1370,7 @@ async function getWarnerDeliverableData({
 
   let countryOptions: WarnerDomesticDeliverableData["countryOptions"] = [];
   let selectedCountry: WarnerDomesticDeliverableData["selectedCountry"] = null;
+  let aggregateOtherCountries = false;
 
   if (!isDomestic) {
     const countryEntries = await db.timeEntry.findMany({
@@ -1405,14 +1406,18 @@ async function getWarnerDeliverableData({
     );
 
     if (isOther) {
-      const selectedCountryId =
-        filters.countryId || countryOptions[0]?.id || "";
+      aggregateOtherCountries = Boolean(
+        !filters.countryId && selectedMovie.billingOther && countryOptions.length > 1,
+      );
+      const selectedCountryId = aggregateOtherCountries
+        ? ""
+        : filters.countryId || countryOptions[0]?.id || "";
       selectedCountry = selectedCountryId
         ? (countryOptions.find((country) => country.id === selectedCountryId) ??
           null)
         : null;
 
-      if (!selectedCountry) {
+      if (!aggregateOtherCountries && !selectedCountry) {
         return {
           client,
           reportType,
@@ -1443,15 +1448,7 @@ async function getWarnerDeliverableData({
     : isOther
       ? "other"
       : "intl";
-  const useIntlCanadaBilling = Boolean(
-    isOther &&
-    selectedCountry &&
-    isCanadaCountry(selectedCountry) &&
-    selectedMovie.billingIntl &&
-    !selectedMovie.billingOther,
-  );
-  const billingHeadRegion: "domestic" | "intl" | "intl-canada" | "other" =
-    useIntlCanadaBilling ? "intl-canada" : billingRegion;
+  const billingHeadRegion: "domestic" | "intl" | "other" = billingRegion;
   const unitsByHeadId = getMovieBillingUnits(selectedMovie);
 
   function getHeadCost(head: {
@@ -1462,8 +1459,6 @@ async function getWarnerDeliverableData({
   }) {
     if (billingHeadRegion === "domestic") return head.domesticCost;
     if (billingHeadRegion === "other") return head.otherCost ?? 0;
-    if (billingHeadRegion === "intl-canada")
-      return head.intlCanadaCost ?? head.intlCost;
     return head.intlCost;
   }
   const rows: WarnerDomesticDeliverableLine[] = [];
@@ -1506,47 +1501,55 @@ async function getWarnerDeliverableData({
     });
   }
 
-  const optionalAssignmentWhere = isIntl
-    ? {
-        clientId,
-        movieId: selectedMovie.id,
-        isActive: true,
-        countryId: { in: countryOptions.map((country) => country.id) },
-        billingHead: {
-          is: {
-            isActive: true,
-            intlActive: true,
-            intlCompulsionType: "FIXED_OPTIONAL" as const,
-          },
-        },
-      }
-    : {
-        clientId,
-        movieId: selectedMovie.id,
-        isActive: true,
-        ...(isDomestic
-          ? { country: { is: { isoCode: "US" } } }
-          : { countryId: selectedCountry?.id ?? "" }),
-        billingHead: {
-          is: {
-            isActive: true,
-            ...(billingHeadRegion === "domestic"
-              ? {
-                  domesticActive: true,
-                  domesticCompulsionType: "FIXED_OPTIONAL" as const,
-                }
-              : billingHeadRegion === "other"
+  const optionalAssignmentWhere =
+    isIntl || aggregateOtherCountries
+      ? {
+          clientId,
+          movieId: selectedMovie.id,
+          isActive: true,
+          countryId: { in: countryOptions.map((country) => country.id) },
+          billingHead: {
+            is: {
+              isActive: true,
+              ...(isIntl
                 ? {
-                    otherActive: true,
-                    otherCompulsionType: "FIXED_OPTIONAL" as const,
-                  }
-                : {
                     intlActive: true,
                     intlCompulsionType: "FIXED_OPTIONAL" as const,
+                  }
+                : {
+                    otherActive: true,
+                    otherCompulsionType: "FIXED_OPTIONAL" as const,
                   }),
+            },
           },
-        },
-      };
+        }
+      : {
+          clientId,
+          movieId: selectedMovie.id,
+          isActive: true,
+          ...(isDomestic
+            ? { country: { is: { isoCode: "US" } } }
+            : { countryId: selectedCountry?.id ?? "" }),
+          billingHead: {
+            is: {
+              isActive: true,
+              ...(billingHeadRegion === "domestic"
+                ? {
+                    domesticActive: true,
+                    domesticCompulsionType: "FIXED_OPTIONAL" as const,
+                  }
+                : billingHeadRegion === "other"
+                  ? {
+                      otherActive: true,
+                      otherCompulsionType: "FIXED_OPTIONAL" as const,
+                    }
+                  : {
+                      intlActive: true,
+                      intlCompulsionType: "FIXED_OPTIONAL" as const,
+                    }),
+            },
+          },
+        };
 
   const optionalAssignments = await db.movieBillingHeadAssignment.findMany({
     where: optionalAssignmentWhere,
@@ -1557,7 +1560,7 @@ async function getWarnerDeliverableData({
     orderBy: { billingHead: { name: "asc" } },
   });
 
-  if (isIntl) {
+  if (isIntl || aggregateOtherCountries) {
     const assignmentsByHead = new Map<string, typeof optionalAssignments>();
     for (const assignment of optionalAssignments) {
       const current = assignmentsByHead.get(assignment.billingHeadId) ?? [];
@@ -1588,7 +1591,9 @@ async function getWarnerDeliverableData({
           sum +
           calculateBillingHeadCost(
             assignment.billingHead.costType,
-            assignment.billingHead.intlCost,
+            aggregateOtherCountries
+              ? getHeadCost(assignment.billingHead)
+              : assignment.billingHead.intlCost,
             units,
           )
         );
@@ -1636,7 +1641,9 @@ async function getWarnerDeliverableData({
                     in: countryOptions.map((country) => country.id),
                   },
                 }
-              : { countryId: selectedCountry?.id ?? "" }),
+              : aggregateOtherCountries
+                ? { countryId: { in: countryOptions.map((country) => country.id) } }
+                : { countryId: selectedCountry?.id ?? "" }),
         },
       },
     },
@@ -1653,7 +1660,7 @@ async function getWarnerDeliverableData({
   const lensAdjustments = await getLensBillingAdjustments({
     projectIds: fixedFullProjects.map((project) => project.id),
     movieId: selectedMovie.id,
-    ...(isIntl
+    ...(isIntl || aggregateOtherCountries
       ? { countryIds: countryOptions.map((country) => country.id) }
       : isDomestic
         ? {}

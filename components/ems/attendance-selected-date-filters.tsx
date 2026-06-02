@@ -8,6 +8,7 @@ import type { BillingModel } from "@prisma/client";
 type Props = {
   attendanceDate: string;
   attendanceMode: "present" | "absent";
+  attendanceShift: "DAY" | "NIGHT" | "BOTH";
   leaveMonth: string;
   month?: string;
   billingStartDate?: string;
@@ -37,6 +38,7 @@ function readApprovedLeaveSelectedDate() {
 export function AttendanceSelectedDateFilters({
   attendanceDate,
   attendanceMode,
+  attendanceShift,
   leaveMonth,
   month,
   billingStartDate,
@@ -49,11 +51,12 @@ export function AttendanceSelectedDateFilters({
 }: Props) {
   const [selectedDate, setSelectedDate] = useState(attendanceDate);
   const [selectedMode, setSelectedMode] = useState<"present" | "absent">(attendanceMode);
+  const [selectedShift, setSelectedShift] = useState<"DAY" | "NIGHT" | "BOTH">(attendanceShift);
   const approvedLeaveInputRef = useRef<HTMLInputElement | null>(null);
 
   return (
     <AutoSubmitFilterForm
-      className="mt-4 grid gap-3 lg:grid-cols-[minmax(320px,1fr)_auto_auto]"
+      className="mt-4 grid gap-3 lg:grid-cols-[minmax(220px,1fr)_minmax(180px,auto)_auto]"
       method="get"
       action="/dashboard#attendance-selected-date"
       onSubmit={() => {
@@ -70,6 +73,23 @@ export function AttendanceSelectedDateFilters({
         value={selectedDate}
         onChange={(event) => setSelectedDate(event.target.value)}
       />
+
+      <div>
+        <label className="label" htmlFor="attendanceShift">
+          Shift
+        </label>
+        <select
+          className="input"
+          id="attendanceShift"
+          name="attendanceShift"
+          value={selectedShift}
+          onChange={(event) => setSelectedShift(event.target.value as "DAY" | "NIGHT" | "BOTH")}
+        >
+          <option value="DAY">Day</option>
+          <option value="NIGHT">Night</option>
+          <option value="BOTH">Both</option>
+        </select>
+      </div>
 
       <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
         <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">

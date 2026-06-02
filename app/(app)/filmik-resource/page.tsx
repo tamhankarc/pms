@@ -44,7 +44,7 @@ export default async function FilmikResourcesPage({
     <div>
       <PageHeader
         title="Filmik Resources"
-        description="Create and manage Filmik resource types and their per-resource monthly costs."
+        description="Create and manage Filmik resource types and their per-resource client/vendor monthly costs."
         actions={<Link href="/filmik-resource/new" className="btn-primary">Create Resource Type</Link>}
       />
       <div className="mb-6 card p-4">
@@ -66,7 +66,8 @@ export default async function FilmikResourcesPage({
           <thead className="table-head">
             <tr>
               <th className="table-cell">Resource Type</th>
-              {canSeeCosts ? <th className="table-cell">Per Resource Cost</th> : null}
+              {canSeeCosts ? <th className="table-cell">Per Resource Client Cost</th> : null}
+              {canSeeCosts ? <th className="table-cell">Per Resource Vendor Cost</th> : null}
               <th className="table-cell">Status</th>
               <th className="table-cell">Action</th>
             </tr>
@@ -76,6 +77,7 @@ export default async function FilmikResourcesPage({
               <tr key={resource.id}>
                 <td className="table-cell"><div className="font-medium text-slate-900">{resource.name}</div></td>
                 {canSeeCosts ? <td className="table-cell font-medium text-slate-900">{formatUsd(resource.cost)}</td> : null}
+                {canSeeCosts ? <td className="table-cell font-medium text-slate-900">{formatUsd(resource.perResourceVendorCost)}</td> : null}
                 <td className="table-cell"><span className={resource.isActive ? "badge-emerald" : "badge-slate"}>{resource.isActive ? "Active" : "Inactive"}</span></td>
                 <td className="table-cell">
                   <div className="flex gap-2">
@@ -88,7 +90,7 @@ export default async function FilmikResourcesPage({
                 </td>
               </tr>
             ))}
-            {resources.length === 0 ? <tr><td colSpan={canSeeCosts ? 4 : 3} className="table-cell text-center text-sm text-slate-500">No Filmik resource types found.</td></tr> : null}
+            {resources.length === 0 ? <tr><td colSpan={canSeeCosts ? 5 : 3} className="table-cell text-center text-sm text-slate-500">No Filmik resource types found.</td></tr> : null}
           </tbody>
         </table>
         <PaginationControls basePath="/filmik-resource" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, status }} />
