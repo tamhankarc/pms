@@ -98,7 +98,7 @@ type TaskDetailRow = {
   totalMinutes: number;
 };
 
-type MovieMinutesRow = {
+type TitleMinutesRow = {
   movieName: string;
   clientName: string;
   projectName: string;
@@ -229,7 +229,7 @@ const REPORT_TABS = [
   { slug: "client-wise-minutes", label: "Client-wise minutes", anchor: "#client-wise-hours" },
   { slug: "project-wise-minutes", label: "Project / Sub-Project-wise minutes", anchor: "#project-wise-hours" },
   { slug: "task-wise-minutes", label: "Task-wise detailed minutes", anchor: "#task-wise-hours" },
-  { slug: "movie-wise-minutes", label: "Movie-wise minutes", anchor: "#movie-wise-minutes" },
+  { slug: "movie-wise-minutes", label: "Title-wise minutes", anchor: "#movie-wise-minutes" },
   { slug: "day-wise-minutes", label: "Day-wise minutes", anchor: "#day-wise-minutes" },
   { slug: "country-wise-minutes", label: "Country-wise minutes", anchor: "#country-wise-minutes" },
 ] as const;
@@ -637,7 +637,7 @@ export default async function ReportsPage({
 
   const clientMap = new Map<string, ClientHoursRow>();
   const projectMap = new Map<string, ProjectHoursRow>();
-  const movieMap = new Map<string, MovieMinutesRow>();
+  const movieMap = new Map<string, TitleMinutesRow>();
   const dayMap = new Map<string, DayMinutesRow>();
   const countryMap = new Map<string, CountryMinutesRow>();
 
@@ -845,7 +845,7 @@ export default async function ReportsPage({
   const paginatedClientRows = paginateItems(clientRows, clientPage, DEFAULT_PAGE_SIZE);
   const paginatedProjectRows = paginateItems(projectRows, projectPage, DEFAULT_PAGE_SIZE);
   const paginatedTaskRows = paginateItems(taskRows, taskPage, DEFAULT_PAGE_SIZE);
-  const paginatedMovieRows = paginateItems(movieRows, moviePage, DEFAULT_PAGE_SIZE);
+  const paginatedTitleRows = paginateItems(movieRows, moviePage, DEFAULT_PAGE_SIZE);
   const paginatedDayRows = paginateItems(dayRows, dayPage, DEFAULT_PAGE_SIZE);
   const paginatedCountryRows = paginateItems(countryRows, countryPage, DEFAULT_PAGE_SIZE);
 
@@ -1205,7 +1205,7 @@ export default async function ReportsPage({
               <SortableHeader label="Sub-Project Name" sortBy="subProjectName" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "subProjectName", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
               <SortableHeader className="table-cell max-w-48 break-normal" label="Task Name" sortBy="taskName" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "taskName", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
               <th className="table-cell max-w-48 break-all">Task Details</th>
-              <SortableHeader label="Movie" sortBy="movieName" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "movieName", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
+              <SortableHeader label="Title" sortBy="movieName" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "movieName", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
               <SortableHeader label="Country" sortBy="countryCode" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "countryCode", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
               <SortableHeader label="Employee Role" sortBy="employeeRole" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "employeeRole", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
               <SortableHeader label="Mins" sortBy="totalMinutes" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "totalMinutes", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
@@ -1228,7 +1228,7 @@ export default async function ReportsPage({
       <section id="movie-wise-minutes" className="table-wrap">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4">
           <div>
-            <h2 className="section-title">Movie-wise minutes</h2>
+            <h2 className="section-title">Title-wise minutes</h2>
             <p className="section-subtitle">Grouped by movie, client, project, sub-project, and country for movie-enabled time-entry combinations only.</p>
           </div>
           <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("movie", movieSearch)}>
@@ -1241,7 +1241,7 @@ export default async function ReportsPage({
         <div className="overflow-x-auto">
           <table className="table-base">
             <thead className="table-head"><tr>
-              <SortableHeader label="Movie Name" sortBy="movieName" currentSortBy={movieSortBy} currentSortDir={movieSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "movieSortBy", sortDirParam: "movieSortDir", pageParam: "moviePage", sortBy: "movieName", currentSortBy: movieSortBy, currentSortDir: movieSortDir, anchor: "#movie-wise-minutes" })} />
+              <SortableHeader label="Title Name" sortBy="movieName" currentSortBy={movieSortBy} currentSortDir={movieSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "movieSortBy", sortDirParam: "movieSortDir", pageParam: "moviePage", sortBy: "movieName", currentSortBy: movieSortBy, currentSortDir: movieSortDir, anchor: "#movie-wise-minutes" })} />
               <SortableHeader label="Client Name" sortBy="clientName" currentSortBy={movieSortBy} currentSortDir={movieSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "movieSortBy", sortDirParam: "movieSortDir", pageParam: "moviePage", sortBy: "clientName", currentSortBy: movieSortBy, currentSortDir: movieSortDir, anchor: "#movie-wise-minutes" })} />
               <SortableHeader label="Project Name" sortBy="projectName" currentSortBy={movieSortBy} currentSortDir={movieSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "movieSortBy", sortDirParam: "movieSortDir", pageParam: "moviePage", sortBy: "projectName", currentSortBy: movieSortBy, currentSortDir: movieSortDir, anchor: "#movie-wise-minutes" })} />
               <SortableHeader label="Sub-Project Name" sortBy="subProjectName" currentSortBy={movieSortBy} currentSortDir={movieSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "movieSortBy", sortDirParam: "movieSortDir", pageParam: "moviePage", sortBy: "subProjectName", currentSortBy: movieSortBy, currentSortDir: movieSortDir, anchor: "#movie-wise-minutes" })} />
@@ -1249,7 +1249,7 @@ export default async function ReportsPage({
               <SortableHeader label="Mins" sortBy="totalMinutes" currentSortBy={movieSortBy} currentSortDir={movieSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "movieSortBy", sortDirParam: "movieSortDir", pageParam: "moviePage", sortBy: "totalMinutes", currentSortBy: movieSortBy, currentSortDir: movieSortDir, anchor: "#movie-wise-minutes" })} />
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {paginatedMovieRows.items.map((row) => (
+              {paginatedTitleRows.items.map((row) => (
                 <tr key={`${row.movieName}-${row.clientName}-${row.projectName}-${row.subProjectName}-${row.countryCode}`}>
                   <td className="table-cell">{row.movieName}</td>
                   <td className="table-cell">{row.clientName}</td>
@@ -1264,7 +1264,7 @@ export default async function ReportsPage({
           </table>
         </div>
         <div className="border-t border-slate-100 px-4 py-4 text-right text-sm font-semibold text-slate-700">Total Time: <span className="text-slate-900">{formatMinutes(movieTotalMinutes)}</span></div>
-        <PaginationControls basePath={reportsBasePath} currentPage={paginatedMovieRows.currentPage} totalPages={paginatedMovieRows.totalPages} totalItems={paginatedMovieRows.totalItems} pageSize={paginatedMovieRows.pageSize} searchParams={allReportSearch} pageParam="moviePage" anchor="#movie-wise-minutes" />
+        <PaginationControls basePath={reportsBasePath} currentPage={paginatedTitleRows.currentPage} totalPages={paginatedTitleRows.totalPages} totalItems={paginatedTitleRows.totalItems} pageSize={paginatedTitleRows.pageSize} searchParams={allReportSearch} pageParam="moviePage" anchor="#movie-wise-minutes" />
       </section>
       ) : null}
 
@@ -1289,7 +1289,7 @@ export default async function ReportsPage({
               <SortableHeader label="Client" sortBy="clientName" currentSortBy={daySortBy} currentSortDir={daySortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "daySortBy", sortDirParam: "daySortDir", pageParam: "dayPage", sortBy: "clientName", currentSortBy: daySortBy, currentSortDir: daySortDir, anchor: "#day-wise-minutes" })} />
               <SortableHeader label="Project" sortBy="projectName" currentSortBy={daySortBy} currentSortDir={daySortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "daySortBy", sortDirParam: "daySortDir", pageParam: "dayPage", sortBy: "projectName", currentSortBy: daySortBy, currentSortDir: daySortDir, anchor: "#day-wise-minutes" })} />
               <SortableHeader label="Sub-Project" sortBy="subProjectName" currentSortBy={daySortBy} currentSortDir={daySortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "daySortBy", sortDirParam: "daySortDir", pageParam: "dayPage", sortBy: "subProjectName", currentSortBy: daySortBy, currentSortDir: daySortDir, anchor: "#day-wise-minutes" })} />
-              <SortableHeader label="Movie" sortBy="movieName" currentSortBy={daySortBy} currentSortDir={daySortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "daySortBy", sortDirParam: "daySortDir", pageParam: "dayPage", sortBy: "movieName", currentSortBy: daySortBy, currentSortDir: daySortDir, anchor: "#day-wise-minutes" })} />
+              <SortableHeader label="Title" sortBy="movieName" currentSortBy={daySortBy} currentSortDir={daySortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "daySortBy", sortDirParam: "daySortDir", pageParam: "dayPage", sortBy: "movieName", currentSortBy: daySortBy, currentSortDir: daySortDir, anchor: "#day-wise-minutes" })} />
               <SortableHeader label="Country" sortBy="countryCode" currentSortBy={daySortBy} currentSortDir={daySortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "daySortBy", sortDirParam: "daySortDir", pageParam: "dayPage", sortBy: "countryCode", currentSortBy: daySortBy, currentSortDir: daySortDir, anchor: "#day-wise-minutes" })} />
               <SortableHeader label="Mins" sortBy="totalMinutes" currentSortBy={daySortBy} currentSortDir={daySortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "daySortBy", sortDirParam: "daySortDir", pageParam: "dayPage", sortBy: "totalMinutes", currentSortBy: daySortBy, currentSortDir: daySortDir, anchor: "#day-wise-minutes" })} />
             </tr></thead>
@@ -1332,7 +1332,7 @@ export default async function ReportsPage({
           <table className="table-base">
             <thead className="table-head"><tr>
               <SortableHeader label="Country" sortBy="countryCode" currentSortBy={countrySortBy} currentSortDir={countrySortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "countrySortBy", sortDirParam: "countrySortDir", pageParam: "countryPage", sortBy: "countryCode", currentSortBy: countrySortBy, currentSortDir: countrySortDir, anchor: "#country-wise-minutes" })} />
-              <SortableHeader label="Movie" sortBy="movieName" currentSortBy={countrySortBy} currentSortDir={countrySortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "countrySortBy", sortDirParam: "countrySortDir", pageParam: "countryPage", sortBy: "movieName", currentSortBy: countrySortBy, currentSortDir: countrySortDir, anchor: "#country-wise-minutes" })} />
+              <SortableHeader label="Title" sortBy="movieName" currentSortBy={countrySortBy} currentSortDir={countrySortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "countrySortBy", sortDirParam: "countrySortDir", pageParam: "countryPage", sortBy: "movieName", currentSortBy: countrySortBy, currentSortDir: countrySortDir, anchor: "#country-wise-minutes" })} />
               <SortableHeader label="Client" sortBy="clientName" currentSortBy={countrySortBy} currentSortDir={countrySortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "countrySortBy", sortDirParam: "countrySortDir", pageParam: "countryPage", sortBy: "clientName", currentSortBy: countrySortBy, currentSortDir: countrySortDir, anchor: "#country-wise-minutes" })} />
               <SortableHeader label="Project" sortBy="projectName" currentSortBy={countrySortBy} currentSortDir={countrySortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "countrySortBy", sortDirParam: "countrySortDir", pageParam: "countryPage", sortBy: "projectName", currentSortBy: countrySortBy, currentSortDir: countrySortDir, anchor: "#country-wise-minutes" })} />
               <SortableHeader label="Sub-Project" sortBy="subProjectName" currentSortBy={countrySortBy} currentSortDir={countrySortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "countrySortBy", sortDirParam: "countrySortDir", pageParam: "countryPage", sortBy: "subProjectName", currentSortBy: countrySortBy, currentSortDir: countrySortDir, anchor: "#country-wise-minutes" })} />

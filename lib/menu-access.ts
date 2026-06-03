@@ -8,7 +8,7 @@ export const menuItems = [
     label: "Billing Reports",
   },
   { key: "clients", href: "/clients", label: "Clients" },
-  { key: "movies", href: "/movies", label: "Movies" },
+  { key: "movies", href: "/movies", label: "Titles" },
   { key: "newsletters", href: "/newsletters", label: "Newsletters" },
   {
     key: "client-billing-heads",
@@ -18,7 +18,7 @@ export const menuItems = [
   {
     key: "movie-billing-heads",
     href: "/movie-billing-heads",
-    label: "Movie Billing Heads",
+    label: "Title Billing Heads",
   },
   { key: "asset-type", href: "/asset-type", label: "Asset Types" },
   { key: "lens-type", href: "/lens-type", label: "Lens Types" },
@@ -43,6 +43,7 @@ export const menuItems = [
     href: "/contact-persons",
     label: "Contact Persons",
   },
+  { key: "purchase-orders", href: "/purchase-orders", label: "Purchase Orders" },
   { key: "time-entries", href: "/time-entries", label: "Time Entries" },
   { key: "estimates", href: "/estimates", label: "Estimates" },
   {
@@ -119,6 +120,7 @@ export function getBaseMenuKeysForUserType(
         "sub-project",
         "user-assignments",
         "contact-persons",
+        "purchase-orders",
         "profile",
         "change-password",
       ];

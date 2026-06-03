@@ -2,6 +2,7 @@
 
 
 import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { useRef, useState } from "react";
 import type { BillingModel } from "@prisma/client";
 
@@ -78,17 +79,20 @@ export function AttendanceSelectedDateFilters({
         <label className="label" htmlFor="attendanceShift">
           Shift
         </label>
-        <select
-          className="input"
+        <SearchableCombobox
           id="attendanceShift"
           name="attendanceShift"
           value={selectedShift}
-          onChange={(event) => setSelectedShift(event.target.value as "DAY" | "NIGHT" | "BOTH")}
-        >
-          <option value="DAY">Day</option>
-          <option value="NIGHT">Night</option>
-          <option value="BOTH">Both</option>
-        </select>
+          onValueChange={(value) => setSelectedShift(value as "DAY" | "NIGHT" | "BOTH")}
+          options={[
+            { value: "DAY", label: "Day" },
+            { value: "NIGHT", label: "Night" },
+            { value: "BOTH", label: "Both" },
+          ]}
+          placeholder="Select shift"
+          searchPlaceholder="Search shifts..."
+          emptyLabel="No shift found."
+        />
       </div>
 
       <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">

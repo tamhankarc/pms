@@ -33,7 +33,7 @@ export function WarnerDeliverableFiltersClient({
 }: Props) {
   const formRef = useRef<HTMLFormElement | null>(null);
   const countryInputRef = useRef<HTMLInputElement | null>(null);
-  const shouldSubmitAfterMovieChangeRef = useRef(false);
+  const shouldSubmitAfterTitleChangeRef = useRef(false);
   const [selectedMovieId, setSelectedMovieId] = useState(movieId);
   const [selectedCountryId, setSelectedCountryId] = useState(countryId);
 
@@ -46,18 +46,18 @@ export function WarnerDeliverableFiltersClient({
   }, [countryId]);
 
   useEffect(() => {
-    if (!shouldSubmitAfterMovieChangeRef.current) return;
-    shouldSubmitAfterMovieChangeRef.current = false;
+    if (!shouldSubmitAfterTitleChangeRef.current) return;
+    shouldSubmitAfterTitleChangeRef.current = false;
     formRef.current?.requestSubmit();
   }, [selectedMovieId]);
 
-  function handleMovieChange(nextMovieId: string) {
-    setSelectedMovieId(nextMovieId);
+  function handleTitleChange(nextTitleId: string) {
+    setSelectedMovieId(nextTitleId);
     setSelectedCountryId("");
     if (countryInputRef.current) {
       countryInputRef.current.value = "";
     }
-    shouldSubmitAfterMovieChangeRef.current = true;
+    shouldSubmitAfterTitleChangeRef.current = true;
   }
 
   function handleCountryChange(nextCountryId: string) {
@@ -76,10 +76,10 @@ export function WarnerDeliverableFiltersClient({
             id="movieId"
             name="movieId"
             value={selectedMovieId}
-            onValueChange={handleMovieChange}
+            onValueChange={handleTitleChange}
             options={movieOptions}
-            placeholder="Select movie"
-            searchPlaceholder="Search movies..."
+            placeholder="Select title"
+            searchPlaceholder="Search titles..."
             emptyLabel={movieEmptyLabel}
           />
         </div>

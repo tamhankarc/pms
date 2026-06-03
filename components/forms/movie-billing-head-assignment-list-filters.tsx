@@ -6,7 +6,7 @@ import { useMemo, useRef, useState } from "react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
 type Client = { id: string; name: string };
-type Movie = { id: string; clientId: string; title: string };
+type Title = { id: string; clientId: string; title: string };
 
 export function MovieBillingHeadAssignmentListFilters({
   q,
@@ -21,7 +21,7 @@ export function MovieBillingHeadAssignmentListFilters({
   movieId: string;
   status: string;
   clients: Client[];
-  movies: Movie[];
+  movies: Title[];
 }) {
   const formRef = useRef<HTMLFormElement | null>(null);
   const [selectedClientId, setSelectedClientId] = useState(clientId);
@@ -30,7 +30,7 @@ export function MovieBillingHeadAssignmentListFilters({
 
   const movieOptions = useMemo(() => {
     const filtered = selectedClientId === "all" ? movies : movies.filter((movie) => movie.clientId === selectedClientId);
-    return [{ value: "all", label: "All movies" }, ...filtered.map((movie) => ({ value: movie.id, label: movie.title }))];
+    return [{ value: "all", label: "All titles" }, ...filtered.map((movie) => ({ value: movie.id, label: movie.title }))];
   }, [movies, selectedClientId]);
 
   function submitSoon() {
@@ -64,9 +64,9 @@ export function MovieBillingHeadAssignmentListFilters({
           submitSoon();
         }}
         options={movieOptions}
-        placeholder="All movies"
-        searchPlaceholder="Search movies..."
-        emptyLabel="No movie found."
+        placeholder="All titles"
+        searchPlaceholder="Search titles..."
+        emptyLabel="No title found."
       />
       <SearchableCombobox
         id="status"

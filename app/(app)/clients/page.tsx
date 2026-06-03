@@ -54,7 +54,7 @@ export default async function ClientsPage({
     <div>
       <PageHeader
         title="Clients"
-        description="Create and maintain client masters and control whether Movies, Asset Types, Countries, Languages, and Project Types are used in downstream forms."
+        description="Create and maintain client masters and control whether Titles, Asset Types, Countries, Languages, and Project Types are used in downstream forms."
         actions={
           <Link href="/clients/new" className="btn-primary">
             Create client
@@ -95,10 +95,11 @@ export default async function ClientsPage({
             <tr>
               <th className="table-cell">Client</th>
               <th className="table-cell">Projects</th>
-              <th className="table-cell">Movies</th>
+              <th className="table-cell">Titles</th>
               <th className="table-cell">Asset Types</th>
               <th className="table-cell">Project Types</th>
               <th className="table-cell">Entry fields</th>
+              <th className="table-cell">PO Assignment</th>
               <th className="table-cell">Status</th>
               <th className="table-cell">Action</th>
             </tr>
@@ -132,7 +133,7 @@ export default async function ClientsPage({
                     {client.showLanguagesInEntries ? "Required" : "Hidden"}
                   </div>
                   <div className="text-xs text-slate-600">
-                    Movies: {client.showMoviesInEntries ? "Optional" : "Hidden"}
+                    Titles: {client.showMoviesInEntries ? "Optional" : "Hidden"}
                   </div>
                   <div className="text-xs text-slate-600">
                     Asset Types:{" "}
@@ -142,6 +143,19 @@ export default async function ClientsPage({
                     Lens Types:{" "}
                     {client.showLensTypesInEntries ? "Optional" : "Hidden"}
                   </div>
+                </td>
+                <td className="table-cell">
+                  <span className="text-xs font-medium text-slate-700">
+                    {client.poAssignmentMode === "NOT_REQUIRED"
+                      ? "Not Required"
+                      : client.poAssignmentMode === "TITLE"
+                        ? "Title"
+                        : client.poAssignmentMode === "TITLE_BILLING_REPORT"
+                          ? "Title + Billing Report"
+                          : client.poAssignmentMode === "TITLE_PROJECT"
+                            ? "Title + Project"
+                            : "Project"}
+                  </span>
                 </td>
                 <td className="table-cell">
                   <span
@@ -174,7 +188,7 @@ export default async function ClientsPage({
             {allClients.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="table-cell text-center text-sm text-slate-500"
                 >
                   No clients found.

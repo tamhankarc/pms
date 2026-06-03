@@ -48,16 +48,28 @@ export default async function AssetNamesPage({ searchParams }: { searchParams?: 
           id="movieId"
           name="movieId"
           defaultValue={effectiveMovieId}
-          options={[{ value: "all", label: "All movies" }, ...movies.map((movie) => ({ value: movie.id, label: movie.title }))]}
-          placeholder="Select movie"
-          searchPlaceholder="Search movies..."
-          emptyLabel="No movie found."
+          options={[{ value: "all", label: "All titles" }, ...movies.map((movie) => ({ value: movie.id, label: movie.title }))]}
+          placeholder="Select title"
+          searchPlaceholder="Search titles..."
+          emptyLabel="No title found."
         />
-        <select className="input" name="status" defaultValue={status}><option value="all">All statuses</option><option value="active">Active only</option><option value="inactive">Inactive only</option></select>
+        <SearchableCombobox
+          id="status"
+          name="status"
+          defaultValue={status}
+          options={[
+            { value: "all", label: "All statuses" },
+            { value: "active", label: "Active only" },
+            { value: "inactive", label: "Inactive only" },
+          ]}
+          placeholder="All statuses"
+          searchPlaceholder="Search statuses..."
+          emptyLabel="No status found."
+        />
       </AutoSubmitFilterForm>
     </div>
     <div className="table-wrap">
-      <table className="table-base"><thead className="table-head"><tr><th className="table-cell">Asset Name</th><th className="table-cell">Movie</th><th className="table-cell">Client</th><th className="table-cell">Status</th><th className="table-cell">Action</th></tr></thead><tbody className="divide-y divide-slate-100">
+      <table className="table-base"><thead className="table-head"><tr><th className="table-cell">Asset Name</th><th className="table-cell">Title</th><th className="table-cell">Client</th><th className="table-cell">Status</th><th className="table-cell">Action</th></tr></thead><tbody className="divide-y divide-slate-100">
         {items.map((assetName) => (<tr key={assetName.id}><td className="table-cell font-medium text-slate-900">{assetName.name}</td><td className="table-cell">{assetName.movie.title}</td><td className="table-cell">Universal Pictures International</td><td className="table-cell"><span className={assetName.isActive ? "badge-emerald" : "badge-slate"}>{assetName.isActive ? "Active" : "Inactive"}</span></td><td className="table-cell"><div className="flex gap-2"><Link href={`/asset-names/${assetName.id}`} className="btn-secondary text-xs">Edit</Link><form action={toggleAssetNameStatusAction}><input type="hidden" name="assetNameId" value={assetName.id} /><button className="btn-secondary text-xs">{assetName.isActive ? "Deactivate" : "Activate"}</button></form></div></td></tr>))}
         {assetNames.length === 0 ? <tr><td colSpan={5} className="table-cell text-center text-sm text-slate-500">No asset names found.</td></tr> : null}
       </tbody></table>

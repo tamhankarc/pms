@@ -479,7 +479,7 @@ export function UserManageForm({
           </div>
         ) : userType === "OPERATIONS" ? (
           <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Operations users can manage Clients, Movies, Asset Types, Countries,
+            Operations users can manage Clients, Titles, Asset Types, Countries,
             Languages, Projects, Sub Projects, User Assignments, and Contact
             Persons.
           </div>

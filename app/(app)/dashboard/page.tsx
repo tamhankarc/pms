@@ -14,6 +14,7 @@ import {
 import type { BillingModel } from "@prisma/client";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { ApprovedLeaveCalendar } from "@/components/ems/approved-leave-calendar";
 import { AttendanceActionsCard } from "@/components/ems/attendance-actions-card";
@@ -1033,36 +1034,36 @@ export default async function DashboardPage({
               <label className="label" htmlFor="holidayYear">
                 Year
               </label>
-              <select
-                className="input"
+              <SearchableCombobox
                 id="holidayYear"
                 name="holidayYear"
                 defaultValue={String(dashboardHolidayYear)}
-              >
-                {Array.from(
+                options={Array.from(
                   { length: 7 },
                   (_, index) => Number(todayKey.slice(0, 4)) - 3 + index,
-                ).map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
+                ).map((year) => ({ value: String(year), label: String(year) }))}
+                placeholder="Select year"
+                searchPlaceholder="Search years..."
+                emptyLabel="No year found."
+              />
             </div>
             <div>
               <label className="label" htmlFor="holidayShift">
                 Shift
               </label>
-              <select
-                className="input"
+              <SearchableCombobox
                 id="holidayShift"
                 name="holidayShift"
                 defaultValue={dashboardHolidayShift}
-              >
-                <option value="DAY">Day shift</option>
-                <option value="NIGHT">Night shift</option>
-                <option value="BOTH">Both shifts</option>
-              </select>
+                options={[
+                  { value: "DAY", label: "Day shift" },
+                  { value: "NIGHT", label: "Night shift" },
+                  { value: "BOTH", label: "Both shifts" },
+                ]}
+                placeholder="Select shift"
+                searchPlaceholder="Search shifts..."
+                emptyLabel="No shift found."
+              />
             </div>
             <div className="flex items-end">
               <Link

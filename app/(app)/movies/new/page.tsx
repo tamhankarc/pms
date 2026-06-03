@@ -7,7 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canManageMovies, canViewCostData } from "@/lib/permissions";
 
-export default async function NewMoviePage() {
+export default async function NewTitlePage() {
   const currentUser = await requireUser();
   if (!canManageMovies(currentUser)) redirect("/dashboard");
 
@@ -31,7 +31,7 @@ export default async function NewMoviePage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Create Movie" description="Add a new movie and configure its billing region, status, and client-specific billing fields." actions={<Link className="btn-secondary" href="/movies">Back to Movies</Link>} />
+      <PageHeader title="Create Title" description="Add a new movie and configure its billing region, status, and client-specific billing fields." actions={<Link className="btn-secondary" href="/movies">Back to Titles</Link>} />
       <MovieForm clients={clients} countries={countries} action={createMovieAction} title="Create movie" submitLabel="Create movie" canEditCosts={canViewCostData(currentUser)} />
     </div>
   );

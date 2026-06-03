@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Download } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { requireUser } from "@/lib/auth";
 import { canViewHRReports } from "@/lib/permissions";
 import {
@@ -55,13 +56,19 @@ export default async function HRReportsPage({
             <label className="label" htmlFor="type">
               Report
             </label>
-            <select className="input" id="type" name="type" defaultValue={type}>
-              <option value="attendance">Per Day Attendance</option>
-              <option value="leaves">Leaves with Status</option>
-              <option value="leave-counts">
-                Casual, Earned &amp; Unpaid Leave Counts
-              </option>
-            </select>
+            <SearchableCombobox
+              id="type"
+              name="type"
+              defaultValue={type}
+              options={[
+                { value: "attendance", label: "Per Day Attendance" },
+                { value: "leaves", label: "Leaves with Status" },
+                { value: "leave-counts", label: "Casual, Earned & Unpaid Leave Counts" },
+              ]}
+              placeholder="Select report"
+              searchPlaceholder="Search reports..."
+              emptyLabel="No report found."
+            />
           </div>
           <div>
             <label className="label" htmlFor="fromDate">

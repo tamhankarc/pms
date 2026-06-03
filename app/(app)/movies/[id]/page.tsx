@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { updateMovieAction } from "@/lib/actions/movie-actions";
 import { MovieForm } from "@/components/forms/movie-form";
 
-export default async function MovieEditPage({
+export default async function TitleEditPage({
 
   params,
 }: {

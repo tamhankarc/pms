@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getOrCreateLeaveYearProfile } from "@/lib/ems-queries";
@@ -59,11 +60,34 @@ export default async function LeaveAdminUserPage({
           </div>
           <div>
             <label className="label" htmlFor="shift">Shift</label>
-            <select className="input" id="shift" name="shift" defaultValue={profile.shift}><option value="DAY">Day</option><option value="NIGHT">Night</option></select>
+            <SearchableCombobox
+              id="shift"
+              name="shift"
+              defaultValue={profile.shift}
+              options={[
+                { value: "DAY", label: "Day" },
+                { value: "NIGHT", label: "Night" },
+              ]}
+              placeholder="Select shift"
+              searchPlaceholder="Search shifts..."
+              emptyLabel="No shift found."
+            />
           </div>
           <div>
             <label className="label" htmlFor="employmentStatus">Employment status</label>
-            <select className="input" id="employmentStatus" name="employmentStatus" defaultValue={profile.employmentStatus}><option value="PROBATION">Probation</option><option value="PERMANENT">Permanent</option><option value="CONSULTANT">Consultant</option></select>
+            <SearchableCombobox
+              id="employmentStatus"
+              name="employmentStatus"
+              defaultValue={profile.employmentStatus}
+              options={[
+                { value: "PROBATION", label: "Probation" },
+                { value: "PERMANENT", label: "Permanent" },
+                { value: "CONSULTANT", label: "Consultant" },
+              ]}
+              placeholder="Select employment status"
+              searchPlaceholder="Search employment statuses..."
+              emptyLabel="No employment status found."
+            />
             <p className="mt-1 text-xs text-slate-500">Probation and Consultant users always have 0 Casual and Earned leaves; approved leave is unpaid.</p>
           </div>
         </div>

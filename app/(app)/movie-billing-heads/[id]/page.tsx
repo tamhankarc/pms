@@ -28,7 +28,7 @@ export default async function EditMovieBillingHeadPage({
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <PageHeader title={`Edit Movie Billing Head · ${row.billingHead.name}`} description="Update the Fixed - Optional billing head selected for this client movie." actions={<Link href="/movie-billing-heads" className="btn-secondary">Back to Movie Billing Heads</Link>} />
+      <PageHeader title={`Edit Title Billing Head · ${row.billingHead.name}`} description="Update the Fixed - Optional billing head selected for this client movie." actions={<Link href="/movie-billing-heads" className="btn-secondary">Back to Title Billing Heads</Link>} />
       {row.movie.status === "COMPLETED_BILLED" ? (
         <div className="card p-6">
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">

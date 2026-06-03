@@ -32,7 +32,7 @@ type CountryOption = {
   isoCode: string;
 };
 
-type MovieOption = {
+type TitleOption = {
   id: string;
   title: string;
   clientId: string;
@@ -177,7 +177,7 @@ export function TaskDetailFilterForm({
   projectOptions: ProjectOption[];
   subProjectOptions: SubProjectOption[];
   countryOptions: CountryOption[];
-  movieOptions?: MovieOption[];
+  movieOptions?: TitleOption[];
   countryEligibleClientOptions?: ClientOption[];
   countryEligibleProjectOptions?: ProjectOption[];
   countryEligibleSubProjectOptions?: SubProjectOption[];
@@ -193,17 +193,17 @@ export function TaskDetailFilterForm({
   const [selectedMovieId, setSelectedMovieId] = useState(movieId);
 
   const useCountryEligibleOptions = selectedCountryId !== "all";
-  const useMovieEligibleOptions = selectedMovieId !== "all";
+  const useTitleEligibleOptions = selectedMovieId !== "all";
 
   const allowedClientIds = new Set<string>();
   if (useCountryEligibleOptions) countryEligibleClientOptions.forEach((client) => allowedClientIds.add(client.id));
-  if (useMovieEligibleOptions) movieEligibleClientOptions.forEach((client) => allowedClientIds.add(client.id));
+  if (useTitleEligibleOptions) movieEligibleClientOptions.forEach((client) => allowedClientIds.add(client.id));
 
-  const activeClientOptions = useCountryEligibleOptions && useMovieEligibleOptions
+  const activeClientOptions = useCountryEligibleOptions && useTitleEligibleOptions
     ? clientOptions.filter((client) => countryEligibleClientOptions.some((item) => item.id === client.id) && movieEligibleClientOptions.some((item) => item.id === client.id))
     : useCountryEligibleOptions
       ? countryEligibleClientOptions
-      : useMovieEligibleOptions
+      : useTitleEligibleOptions
         ? movieEligibleClientOptions
         : clientOptions;
 
@@ -212,20 +212,20 @@ export function TaskDetailFilterForm({
     const movieIds = new Set(movieEligibleProjectOptions.map((project) => project.id));
     return projectOptions.filter((project) => {
       if (useCountryEligibleOptions && !countryIds.has(project.id)) return false;
-      if (useMovieEligibleOptions && !movieIds.has(project.id)) return false;
+      if (useTitleEligibleOptions && !movieIds.has(project.id)) return false;
       return true;
     });
-  }, [projectOptions, countryEligibleProjectOptions, movieEligibleProjectOptions, useCountryEligibleOptions, useMovieEligibleOptions]);
+  }, [projectOptions, countryEligibleProjectOptions, movieEligibleProjectOptions, useCountryEligibleOptions, useTitleEligibleOptions]);
 
   const activeSubProjectOptions = useMemo(() => {
     const countryIds = new Set(countryEligibleSubProjectOptions.map((subProject) => subProject.id));
     const movieIds = new Set(movieEligibleSubProjectOptions.map((subProject) => subProject.id));
     return subProjectOptions.filter((subProject) => {
       if (useCountryEligibleOptions && !countryIds.has(subProject.id)) return false;
-      if (useMovieEligibleOptions && !movieIds.has(subProject.id)) return false;
+      if (useTitleEligibleOptions && !movieIds.has(subProject.id)) return false;
       return true;
     });
-  }, [subProjectOptions, countryEligibleSubProjectOptions, movieEligibleSubProjectOptions, useCountryEligibleOptions, useMovieEligibleOptions]);
+  }, [subProjectOptions, countryEligibleSubProjectOptions, movieEligibleSubProjectOptions, useCountryEligibleOptions, useTitleEligibleOptions]);
 
   const selectedClientAllowsCountry =
     selectedClientId === "all" || countryEligibleClientOptions.some((client) => client.id === selectedClientId);
@@ -237,21 +237,21 @@ export function TaskDetailFilterForm({
     selectedCountryId !== "all" ||
     (selectedClientAllowsCountry && selectedProjectAllowsCountry && selectedSubProjectAllowsCountry);
 
-  const selectedClientAllowsMovie =
+  const selectedClientAllowsTitle =
     selectedClientId === "all" || movieEligibleClientOptions.some((client) => client.id === selectedClientId);
-  const selectedProjectAllowsMovie =
+  const selectedProjectAllowsTitle =
     selectedProjectId === "all" || movieEligibleProjectOptions.some((project) => project.id === selectedProjectId);
-  const selectedSubProjectAllowsMovie =
+  const selectedSubProjectAllowsTitle =
     selectedSubProjectId === "all" || movieEligibleSubProjectOptions.some((subProject) => subProject.id === selectedSubProjectId);
   const movieDropdownEnabled =
     selectedMovieId !== "all" ||
-    (selectedClientAllowsMovie && selectedProjectAllowsMovie && selectedSubProjectAllowsMovie);
+    (selectedClientAllowsTitle && selectedProjectAllowsTitle && selectedSubProjectAllowsTitle);
 
-  const filteredMovies = useMemo(
+  const filteredTitles = useMemo(
     () => movieOptions.filter((movie) => (selectedClientId === "all" ? true : movie.clientId === selectedClientId)),
     [movieOptions, selectedClientId],
   );
-  const effectiveMovieId = movieDropdownEnabled && (selectedMovieId === "all" || filteredMovies.some((movie) => movie.id === selectedMovieId))
+  const effectiveMovieId = movieDropdownEnabled && (selectedMovieId === "all" || filteredTitles.some((movie) => movie.id === selectedMovieId))
     ? selectedMovieId
     : "all";
 
@@ -354,9 +354,9 @@ export function TaskDetailFilterForm({
           onValueChange={(value) => {
             setSelectedMovieId(value);
             if (value !== "all") {
-              const nextMovie = movieOptions.find((movie) => movie.id === value);
-              if (nextMovie && selectedClientId !== "all" && nextMovie.clientId !== selectedClientId) {
-                setSelectedClientId(nextMovie.clientId);
+              const nextTitle = movieOptions.find((movie) => movie.id === value);
+              if (nextTitle && selectedClientId !== "all" && nextTitle.clientId !== selectedClientId) {
+                setSelectedClientId(nextTitle.clientId);
                 setSelectedProjectId("all");
                 setSelectedSubProjectId("all");
               }
@@ -364,10 +364,10 @@ export function TaskDetailFilterForm({
           }}
           disabled={!movieDropdownEnabled}
           buttonClassName={!movieDropdownEnabled ? "border-dashed border-slate-300 bg-slate-50 text-slate-400" : undefined}
-          options={[{ value: "all", label: "All movies" }, ...filteredMovies.map((movie) => ({ value: movie.id, label: movie.title, keywords: `${movie.title} ${movie.clientName}` }))]}
-          placeholder="All movies"
-          searchPlaceholder="Search movies..."
-          emptyLabel="No movies found."
+          options={[{ value: "all", label: "All titles" }, ...filteredTitles.map((movie) => ({ value: movie.id, label: movie.title, keywords: `${movie.title} ${movie.clientName}` }))]}
+          placeholder="All titles"
+          searchPlaceholder="Search titles..."
+          emptyLabel="No titles found."
         />
       </div>
       <div className="w-full sm:w-[220px] md:w-[240px] lg:w-[260px]">
@@ -429,7 +429,7 @@ export function ScopedMinutesFilterForm({
   projectOptions: ProjectOption[];
   subProjectOptions: SubProjectOption[];
   countryOptions: CountryOption[];
-  movieOptions?: MovieOption[];
+  movieOptions?: TitleOption[];
   countryEligibleClientOptions?: ClientOption[];
   countryEligibleProjectOptions?: ProjectOption[];
   countryEligibleSubProjectOptions?: SubProjectOption[];
@@ -445,31 +445,31 @@ export function ScopedMinutesFilterForm({
   const [selectedMovieId, setSelectedMovieId] = useState(movieId);
 
   const useCountryEligibleOptions = selectedCountryId !== "all";
-  const useMovieEligibleOptions = selectedMovieId !== "all";
+  const useTitleEligibleOptions = selectedMovieId !== "all";
 
   const activeClientOptions = useMemo(() => {
     return clientOptions.filter((client) => {
       if (useCountryEligibleOptions && !countryEligibleClientOptions.some((item) => item.id === client.id)) return false;
-      if (useMovieEligibleOptions && !movieEligibleClientOptions.some((item) => item.id === client.id)) return false;
+      if (useTitleEligibleOptions && !movieEligibleClientOptions.some((item) => item.id === client.id)) return false;
       return true;
     });
-  }, [clientOptions, countryEligibleClientOptions, movieEligibleClientOptions, useCountryEligibleOptions, useMovieEligibleOptions]);
+  }, [clientOptions, countryEligibleClientOptions, movieEligibleClientOptions, useCountryEligibleOptions, useTitleEligibleOptions]);
 
   const activeProjectOptions = useMemo(() => {
     return projectOptions.filter((project) => {
       if (useCountryEligibleOptions && !countryEligibleProjectOptions.some((item) => item.id === project.id)) return false;
-      if (useMovieEligibleOptions && !movieEligibleProjectOptions.some((item) => item.id === project.id)) return false;
+      if (useTitleEligibleOptions && !movieEligibleProjectOptions.some((item) => item.id === project.id)) return false;
       return true;
     });
-  }, [projectOptions, countryEligibleProjectOptions, movieEligibleProjectOptions, useCountryEligibleOptions, useMovieEligibleOptions]);
+  }, [projectOptions, countryEligibleProjectOptions, movieEligibleProjectOptions, useCountryEligibleOptions, useTitleEligibleOptions]);
 
   const activeSubProjectOptions = useMemo(() => {
     return subProjectOptions.filter((subProject) => {
       if (useCountryEligibleOptions && !countryEligibleSubProjectOptions.some((item) => item.id === subProject.id)) return false;
-      if (useMovieEligibleOptions && !movieEligibleSubProjectOptions.some((item) => item.id === subProject.id)) return false;
+      if (useTitleEligibleOptions && !movieEligibleSubProjectOptions.some((item) => item.id === subProject.id)) return false;
       return true;
     });
-  }, [subProjectOptions, countryEligibleSubProjectOptions, movieEligibleSubProjectOptions, useCountryEligibleOptions, useMovieEligibleOptions]);
+  }, [subProjectOptions, countryEligibleSubProjectOptions, movieEligibleSubProjectOptions, useCountryEligibleOptions, useTitleEligibleOptions]);
 
   const selectedClientAllowsCountry =
     selectedClientId === "all" || countryEligibleClientOptions.some((client) => client.id === selectedClientId);
@@ -481,21 +481,21 @@ export function ScopedMinutesFilterForm({
     selectedCountryId !== "all" ||
     (selectedClientAllowsCountry && selectedProjectAllowsCountry && selectedSubProjectAllowsCountry);
 
-  const selectedClientAllowsMovie =
+  const selectedClientAllowsTitle =
     selectedClientId === "all" || movieEligibleClientOptions.some((client) => client.id === selectedClientId);
-  const selectedProjectAllowsMovie =
+  const selectedProjectAllowsTitle =
     selectedProjectId === "all" || movieEligibleProjectOptions.some((project) => project.id === selectedProjectId);
-  const selectedSubProjectAllowsMovie =
+  const selectedSubProjectAllowsTitle =
     selectedSubProjectId === "all" || movieEligibleSubProjectOptions.some((subProject) => subProject.id === selectedSubProjectId);
   const movieDropdownEnabled =
     selectedMovieId !== "all" ||
-    (selectedClientAllowsMovie && selectedProjectAllowsMovie && selectedSubProjectAllowsMovie);
+    (selectedClientAllowsTitle && selectedProjectAllowsTitle && selectedSubProjectAllowsTitle);
 
-  const filteredMovies = useMemo(
+  const filteredTitles = useMemo(
     () => movieOptions.filter((movie) => (selectedClientId === "all" ? true : movie.clientId === selectedClientId)),
     [movieOptions, selectedClientId],
   );
-  const effectiveMovieId = movieDropdownEnabled && (selectedMovieId === "all" || filteredMovies.some((movie) => movie.id === selectedMovieId))
+  const effectiveMovieId = movieDropdownEnabled && (selectedMovieId === "all" || filteredTitles.some((movie) => movie.id === selectedMovieId))
     ? selectedMovieId
     : "all";
 
@@ -594,15 +594,15 @@ export function ScopedMinutesFilterForm({
       </div>
       <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
         <SearchableCombobox
-          id={`${prefix}MovieId`}
-          name={`${prefix}MovieId`}
+          id={`${prefix}TitleId`}
+          name={`${prefix}TitleId`}
           value={movieDropdownEnabled ? effectiveMovieId : "all"}
           onValueChange={(value) => {
             setSelectedMovieId(value);
             if (value !== "all") {
-              const nextMovie = movieOptions.find((movie) => movie.id === value);
-              if (nextMovie && selectedClientId !== "all" && nextMovie.clientId !== selectedClientId) {
-                setSelectedClientId(nextMovie.clientId);
+              const nextTitle = movieOptions.find((movie) => movie.id === value);
+              if (nextTitle && selectedClientId !== "all" && nextTitle.clientId !== selectedClientId) {
+                setSelectedClientId(nextTitle.clientId);
                 setSelectedProjectId("all");
                 setSelectedSubProjectId("all");
               }
@@ -610,10 +610,10 @@ export function ScopedMinutesFilterForm({
           }}
           disabled={!movieDropdownEnabled}
           buttonClassName={!movieDropdownEnabled ? "border-dashed border-slate-300 bg-slate-50 text-slate-400" : undefined}
-          options={[{ value: "all", label: "All movies" }, ...filteredMovies.map((movie) => ({ value: movie.id, label: movie.title, keywords: `${movie.title} ${movie.clientName}` }))]}
-          placeholder="All movies"
-          searchPlaceholder="Search movies..."
-          emptyLabel="No movies found."
+          options={[{ value: "all", label: "All titles" }, ...filteredTitles.map((movie) => ({ value: movie.id, label: movie.title, keywords: `${movie.title} ${movie.clientName}` }))]}
+          placeholder="All titles"
+          searchPlaceholder="Search titles..."
+          emptyLabel="No titles found."
         />
       </div>
       <div className="w-full sm:w-[220px] md:w-[240px] lg:w-[260px]">
@@ -663,7 +663,7 @@ export function MovieMinutesFilterForm({
   projectId: string;
   subProjectId: string;
   countryId: string;
-  movieOptions: MovieOption[];
+  movieOptions: TitleOption[];
   clientOptions: ClientOption[];
   projectOptions: ProjectOption[];
   subProjectOptions: SubProjectOption[];
@@ -676,13 +676,13 @@ export function MovieMinutesFilterForm({
   const [selectedSubProjectId, setSelectedSubProjectId] = useState(subProjectId);
   const [selectedCountryId, setSelectedCountryId] = useState(countryId);
 
-  const filteredMovies = useMemo(
+  const filteredTitles = useMemo(
     () => movieOptions.filter((movie) => (selectedClientId === "all" ? true : movie.clientId === selectedClientId)),
     [movieOptions, selectedClientId],
   );
 
   const effectiveMovieId =
-    selectedMovieId === "all" || filteredMovies.some((movie) => movie.id === selectedMovieId)
+    selectedMovieId === "all" || filteredTitles.some((movie) => movie.id === selectedMovieId)
       ? selectedMovieId
       : "all";
 
@@ -723,16 +723,16 @@ export function MovieMinutesFilterForm({
           onValueChange={(value) => {
             setSelectedMovieId(value);
             if (value === "all") return;
-            const nextMovie = movieOptions.find((movie) => movie.id === value);
-            if (!nextMovie) return;
-            setSelectedClientId(nextMovie.clientId);
+            const nextTitle = movieOptions.find((movie) => movie.id === value);
+            if (!nextTitle) return;
+            setSelectedClientId(nextTitle.clientId);
             setSelectedProjectId("all");
             setSelectedSubProjectId("all");
           }}
-          options={[{ value: "all", label: "All movies" }, ...filteredMovies.map((movie) => ({ value: movie.id, label: movie.title, keywords: movie.clientName }))]}
-          placeholder="All movies"
-          searchPlaceholder="Search movies..."
-          emptyLabel="No movies found."
+          options={[{ value: "all", label: "All titles" }, ...filteredTitles.map((movie) => ({ value: movie.id, label: movie.title, keywords: movie.clientName }))]}
+          placeholder="All titles"
+          searchPlaceholder="Search titles..."
+          emptyLabel="No titles found."
         />
       </div>
       <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
@@ -747,8 +747,8 @@ export function MovieMinutesFilterForm({
               setSelectedProjectId("all");
               setSelectedSubProjectId("all");
             }
-            const currentMovie = movieOptions.find((movie) => movie.id === selectedMovieId);
-            if (currentMovie && value !== "all" && currentMovie.clientId !== value) {
+            const currentTitle = movieOptions.find((movie) => movie.id === selectedMovieId);
+            if (currentTitle && value !== "all" && currentTitle.clientId !== value) {
               setSelectedMovieId("all");
             }
           }}

@@ -11,30 +11,29 @@ export type ContactPersonFormState = { success?: boolean; error?: string };
 const contactPersonSchema = z.object({
   id: z.string().optional(),
   clientId: z.string().min(1, "Client is required."),
-  assignmentMode: z.enum(["project", "movie"]),
-  projectId: z.string().optional(),
+  assignmentMode: z.enum(["movie", "purchaseOrder"]),
   movieId: z.string().optional(),
+  purchaseOrderId: z.string().optional(),
   name: z.string().trim().min(2, "Name is required."),
   email: z.string().trim().email("Valid email is required."),
   contactNumber: z.string().trim().optional(),
 });
 
-async function validateAssignment(clientId: string, assignmentMode: "project" | "movie", projectId?: string, movieId?: string) {
-  const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, showMoviesInEntries: true } });
+async function validateAssignment(clientId: string, assignmentMode: "movie" | "purchaseOrder", movieId?: string, purchaseOrderId?: string) {
+  const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true } });
   if (!client) throw new Error("Selected client was not found.");
 
   if (assignmentMode === "movie") {
-    if (!client.showMoviesInEntries) throw new Error("Movie-specific contact persons are only available for clients with Movie dropdown enabled.");
-    if (!movieId) throw new Error("Movie is required.");
+    if (!movieId) throw new Error("Title is required.");
     const movie = await db.movie.findFirst({ where: { id: movieId, clientId }, select: { id: true } });
-    if (!movie) throw new Error("Selected movie does not belong to selected client.");
-    return { projectId: null, movieId };
+    if (!movie) throw new Error("Selected title does not belong to selected client.");
+    return { projectId: null, movieId, purchaseOrderId: null };
   }
 
-  if (!projectId) throw new Error("Project is required.");
-  const project = await db.project.findFirst({ where: { id: projectId, clientId }, select: { id: true } });
-  if (!project) throw new Error("Selected project does not belong to selected client.");
-  return { projectId, movieId: null };
+  if (!purchaseOrderId) throw new Error("Purchase Order is required.");
+  const purchaseOrder = await db.purchaseOrder.findFirst({ where: { id: purchaseOrderId, clientId }, select: { id: true } });
+  if (!purchaseOrder) throw new Error("Selected Purchase Order does not belong to selected client.");
+  return { projectId: null, movieId: null, purchaseOrderId };
 }
 
 async function requireCanManageContactPersons() {
@@ -43,25 +42,31 @@ async function requireCanManageContactPersons() {
   return user;
 }
 
+function parsePayload(formData: FormData) {
+  return contactPersonSchema.safeParse({
+    id: String(formData.get("id") ?? "") || undefined,
+    clientId: String(formData.get("clientId") ?? ""),
+    assignmentMode: String(formData.get("assignmentMode") ?? "movie"),
+    movieId: String(formData.get("movieId") ?? ""),
+    purchaseOrderId: String(formData.get("purchaseOrderId") ?? ""),
+    name: String(formData.get("name") ?? ""),
+    email: String(formData.get("email") ?? ""),
+    contactNumber: String(formData.get("contactNumber") ?? ""),
+  });
+}
+
 export async function createContactPersonAction(_prevState: ContactPersonFormState, formData: FormData): Promise<ContactPersonFormState> {
   try {
     await requireCanManageContactPersons();
-    const parsed = contactPersonSchema.safeParse({
-      clientId: String(formData.get("clientId") ?? ""),
-      assignmentMode: String(formData.get("assignmentMode") ?? "project"),
-      projectId: String(formData.get("projectId") ?? ""),
-      movieId: String(formData.get("movieId") ?? ""),
-      name: String(formData.get("name") ?? ""),
-      email: String(formData.get("email") ?? ""),
-      contactNumber: String(formData.get("contactNumber") ?? ""),
-    });
+    const parsed = parsePayload(formData);
     if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message || "Invalid contact person payload." };
-    const assignment = await validateAssignment(parsed.data.clientId, parsed.data.assignmentMode, parsed.data.projectId, parsed.data.movieId);
+    const assignment = await validateAssignment(parsed.data.clientId, parsed.data.assignmentMode, parsed.data.movieId, parsed.data.purchaseOrderId);
     await db.contactPerson.create({
       data: {
         clientId: parsed.data.clientId,
         projectId: assignment.projectId,
         movieId: assignment.movieId,
+        purchaseOrderId: assignment.purchaseOrderId,
         name: parsed.data.name,
         email: parsed.data.email.toLowerCase(),
         contactNumber: parsed.data.contactNumber || null,
@@ -77,18 +82,9 @@ export async function createContactPersonAction(_prevState: ContactPersonFormSta
 export async function updateContactPersonAction(_prevState: ContactPersonFormState, formData: FormData): Promise<ContactPersonFormState> {
   try {
     await requireCanManageContactPersons();
-    const parsed = contactPersonSchema.safeParse({
-      id: String(formData.get("id") ?? ""),
-      clientId: String(formData.get("clientId") ?? ""),
-      assignmentMode: String(formData.get("assignmentMode") ?? "project"),
-      projectId: String(formData.get("projectId") ?? ""),
-      movieId: String(formData.get("movieId") ?? ""),
-      name: String(formData.get("name") ?? ""),
-      email: String(formData.get("email") ?? ""),
-      contactNumber: String(formData.get("contactNumber") ?? ""),
-    });
+    const parsed = parsePayload(formData);
     if (!parsed.success || !parsed.data.id) return { success: false, error: parsed.success ? "Contact Person is required." : parsed.error.issues[0]?.message };
-    const assignment = await validateAssignment(parsed.data.clientId, parsed.data.assignmentMode, parsed.data.projectId, parsed.data.movieId);
+    const assignment = await validateAssignment(parsed.data.clientId, parsed.data.assignmentMode, parsed.data.movieId, parsed.data.purchaseOrderId);
     const existing = await db.contactPerson.findUnique({ where: { id: parsed.data.id }, select: { id: true } });
     if (!existing) return { success: false, error: "Contact Person not found." };
     await db.contactPerson.update({
@@ -97,6 +93,7 @@ export async function updateContactPersonAction(_prevState: ContactPersonFormSta
         clientId: parsed.data.clientId,
         projectId: assignment.projectId,
         movieId: assignment.movieId,
+        purchaseOrderId: assignment.purchaseOrderId,
         name: parsed.data.name,
         email: parsed.data.email.toLowerCase(),
         contactNumber: parsed.data.contactNumber || null,

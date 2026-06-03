@@ -286,10 +286,21 @@ export default async function AttendanceHistoryPage({
             <label htmlFor="actionType" className="form-label">
               Action
             </label>
-            <select id="actionType" name="actionType" required className="input-field" disabled={!selectedUser} defaultValue="MARK_IN">
-              <option value="MARK_IN">Mark-In</option>
-              <option value="MARK_OUT">Mark-Out</option>
-            </select>
+            <SearchableCombobox
+              id="actionType"
+              name="actionType"
+              required
+              disabled={!selectedUser}
+              defaultValue="MARK_IN"
+              options={[
+                { value: "MARK_IN", label: "Mark-In" },
+                { value: "MARK_OUT", label: "Mark-Out" },
+              ]}
+              placeholder="Select action"
+              searchPlaceholder="Search actions..."
+              emptyLabel="No action found."
+              buttonClassName="input-field"
+            />
           </div>
 
           <div>

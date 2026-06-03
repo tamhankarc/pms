@@ -89,6 +89,7 @@ function buildQueryString(values: Record<string, string>) {
 }
 
 const BILLING_REPORT_DETAIL_PAGE_SIZE = 20;
+const FLYHOUSE_CLIENT_ID = "cmnh8c2c00000l2044e37c8rg";
 
 type BillingReportPageSearchParams = Record<
   string,
@@ -430,7 +431,6 @@ function TimeEntryReportDetailsTable({
                 <th className="table-cell">Asset Type</th>
               ) : null}
               {showCost ? <th className="table-cell">Cost</th> : null}
-              <th className="table-cell">Contact Person</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -452,8 +452,7 @@ function TimeEntryReportDetailsTable({
                     {formatUsd(row.cost)}
                   </td>
                 ) : null}
-                <td className="table-cell">{row.contactPerson}</td>
-              </tr>
+                </tr>
             ))}
             {rows.length === 0 ? (
               <tr>
@@ -598,7 +597,7 @@ function TimeEntryReportSummaryTable({
           {data.summaryRows.length === 0 ? (
             <tr>
               <td
-                colSpan={3}
+                colSpan={2}
                 className="table-cell text-center text-sm text-slate-500"
               >
                 No summary available.
@@ -965,7 +964,7 @@ function WarnerDeliverableFilters({
   clientId: string;
   data: WarnerDomesticDeliverableData;
 }) {
-  const hasCountryFilter = data.reportType === "other-deliverable";
+  const hasCountryFilter = false;
   const movieEmptyLabel =
     data.reportType === "domestic-deliverable"
       ? "No active Working/Completed Domestic titles found."
@@ -986,15 +985,7 @@ function WarnerDeliverableFilters({
           label: movie.title,
         })),
       ]}
-      countryOptions={[
-        ...(data.reportType === "other-deliverable" && data.countryOptions.length > 1
-          ? [{ value: "", label: "All Countries" }]
-          : []),
-        ...data.countryOptions.map((country) => ({
-          value: country.id,
-          label: country.name,
-        })),
-      ]}
+      countryOptions={[]}
       hasCountryFilter={hasCountryFilter}
       movieEmptyLabel={movieEmptyLabel}
     />
@@ -1093,7 +1084,7 @@ function WarnerDeliverableWorkspace({
   activeReport: AmazonReportType;
   data: WarnerDomesticDeliverableData;
 }) {
-  const requiresCountry = data.reportType === "other-deliverable";
+  const requiresCountry = false;
   const subtitle = requiresCountry
     ? data.selectedMovie && data.selectedCountry
       ? `Deliverable billing for ${data.selectedMovie.title} / ${data.selectedCountry.name}.`
@@ -1122,7 +1113,6 @@ function WarnerDeliverableWorkspace({
             reportType={data.reportType}
             filters={{
               movieId: data.filters.movieId,
-              countryId: data.filters.countryId,
             }}
           />
           {data.selectedMovie &&
@@ -1136,7 +1126,7 @@ function WarnerDeliverableWorkspace({
               data.selectedMovie.billingOther)) ? (
             <BillingDoneButton
               movieId={data.selectedMovie.id}
-              returnTo={`/billing-reports/${clientId}?report=${data.reportType}&movieId=${data.filters.movieId}&countryId=${data.filters.countryId}`}
+              returnTo={`/billing-reports/${clientId}?report=${data.reportType}&movieId=${data.filters.movieId}`}
             />
           ) : null}
         </div>
@@ -1262,7 +1252,6 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
         <thead className="table-head">
           <tr>
             <th className="table-cell">Billing Header / Project</th>
-            <th className="table-cell">Contact Person</th>
             <th className="table-cell">Cost</th>
           </tr>
         </thead>
@@ -1270,7 +1259,7 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
           {!data.selectedMovie ? (
             <tr>
               <td
-                colSpan={3}
+                colSpan={2}
                 className="table-cell text-center text-sm text-slate-500"
               >
                 Select a title to view billing records.
@@ -1280,7 +1269,7 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
           {data.selectedMovie && data.projectRows.length === 0 ? (
             <tr>
               <td
-                colSpan={3}
+                colSpan={2}
                 className="table-cell text-center text-sm text-slate-500"
               >
                 No valid billing headers are available for the selected title.
@@ -1308,7 +1297,6 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
                   </div>
                 ) : null}
               </td>
-              <td className="table-cell">{row.contactPerson}</td>
               <td className="table-cell whitespace-nowrap font-medium text-slate-900">
                 {formatSonyUsd(row.cost)}
               </td>
@@ -1317,7 +1305,7 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
           {data.chargeRows.length ? (
             <tr className="bg-slate-50">
               <td
-                colSpan={3}
+                colSpan={2}
                 className="table-cell text-xs font-semibold uppercase tracking-[0.2em] text-slate-600"
               >
                 Title Charges
@@ -1510,20 +1498,17 @@ function SonyBillingSummaryHistoryWorkspace({
               <label className="label" htmlFor="sonyHistoryYear">
                 Year
               </label>
-              <select
+              <SearchableCombobox
                 id="sonyHistoryYear"
                 name="year"
-                className="input"
                 defaultValue={data.filters.year}
-              >
-                {Array.from({ length: 7 }, (_, index) =>
+                options={Array.from({ length: 7 }, (_, index) =>
                   String(new Date().getFullYear() - index),
-                ).map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
+                ).map((year) => ({ value: year, label: year }))}
+                placeholder="Select year"
+                searchPlaceholder="Search years..."
+                emptyLabel="No year found."
+              />
             </AutoSubmitFilterForm>
           </div>
         </div>
@@ -1548,7 +1533,7 @@ function SonyBillingSummaryHistoryWorkspace({
             {data.historyRows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={3}
+                  colSpan={2}
                   className="table-cell text-center text-sm text-slate-500"
                 >
                   No billed titles found for {data.filters.year}.
@@ -1650,7 +1635,7 @@ function SonyNewsletterBillingTable({
           {!data.project ? (
             <tr>
               <td
-                colSpan={3}
+                colSpan={2}
                 className="table-cell text-center text-sm text-slate-500"
               >
                 Newsletter project was not found for this client.
@@ -1660,7 +1645,7 @@ function SonyNewsletterBillingTable({
           {data.project && data.rows.length === 0 ? (
             <tr>
               <td
-                colSpan={3}
+                colSpan={2}
                 className="table-cell text-center text-sm text-slate-500"
               >
                 No newsletter Time Entries found for the selected month.
@@ -1872,7 +1857,6 @@ function FilmikCombinedCostBlock({ data }: { data: FilmikBillingReportData }) {
             <th className="table-cell">Resources / Hours</th>
             <th className="table-cell">Client Cost</th>
             <th className="table-cell">Vendor Cost</th>
-            <th className="table-cell">Contact Person</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -1892,7 +1876,6 @@ function FilmikCombinedCostBlock({ data }: { data: FilmikBillingReportData }) {
               <td className="table-cell whitespace-nowrap font-medium text-slate-900">
                 {row.vendorCost > 0 ? formatFilmikUsd(row.vendorCost) : "-"}
               </td>
-              <td className="table-cell">{row.contactPerson}</td>
             </tr>
           ))}
           <tr className="bg-slate-50">
@@ -2012,7 +1995,7 @@ function BillingHistoryTable({ data }: { data: BillingHistoryData }) {
             <th className="table-cell">Billing Region</th>
             <th className="table-cell">Billing Date</th>
             <th className="table-cell">Time Entries</th>
-            <th className="table-cell">Movie Billing Heads</th>
+            <th className="table-cell">Title Billing Heads</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -2253,7 +2236,6 @@ function RoyalBillingReportTable({ data }: { data: RoyalBillingData }) {
         <thead className="table-head">
           <tr>
             <th className="table-cell">Billing Header / Project</th>
-            <th className="table-cell">Contact Person</th>
             <th className="table-cell">Cost Type</th>
             <th className="table-cell">Project Hours</th>
             <th className="table-cell">Fixed Monthly Hours</th>
@@ -2270,7 +2252,6 @@ function RoyalBillingReportTable({ data }: { data: RoyalBillingData }) {
               <td className="table-cell font-medium text-slate-900">
                 {row.projectName}
               </td>
-              <td className="table-cell">{row.contactPerson}</td>
               <td className="table-cell">
                 <span className="badge-blue">{row.billingModel}</span>
               </td>
@@ -2525,10 +2506,13 @@ function GenericExportButtons({
 
 function GenericBillingModelBlock({
   block,
+  showTotalHoursColumn = false,
 }: {
   block: GenericBillingReportBlock;
+  showTotalHoursColumn?: boolean;
 }) {
   const isCountryBlock = block.key === "fixedPerCountry";
+  const showTotalHours = showTotalHoursColumn && block.rows.some((row) => row.totalHours !== undefined);
   const totalDeveloperCost = block.rows.reduce(
     (sum, row) => sum + Number(row.developerCost ?? 0),
     0,
@@ -2546,12 +2530,12 @@ function GenericBillingModelBlock({
         <thead className="table-head">
           <tr>
             <th className="table-cell">Project</th>
-            <th className="table-cell">Contact Person</th>
             {isCountryBlock ? (
               <th className="table-cell">Lens Type / Country List</th>
             ) : (
               <th className="table-cell">Status</th>
             )}
+            {showTotalHours ? <th className="table-cell">Total Hours</th> : null}
             {block.showDeveloperCost ? (
               <th className="table-cell">Developer Cost</th>
             ) : null}
@@ -2579,7 +2563,6 @@ function GenericBillingModelBlock({
                   </div>
                 ) : null}
               </td>
-              <td className="table-cell">{row.contactPerson}</td>
               {isCountryBlock ? (
                 <td className="table-cell">
                   {row.lensDetails?.length ? (
@@ -2595,6 +2578,7 @@ function GenericBillingModelBlock({
                   <span className="badge-blue">{row.status}</span>
                 </td>
               )}
+              {showTotalHours ? <td className="table-cell whitespace-nowrap">{Number(row.totalHours ?? 0).toFixed(2)}</td> : null}
               {block.showDeveloperCost ? (
                 <td className="table-cell whitespace-nowrap font-medium text-slate-900">
                   {row.developerCost !== undefined
@@ -2619,6 +2603,7 @@ function GenericBillingModelBlock({
             >
               Total
             </td>
+            {showTotalHours ? <td className="table-cell whitespace-nowrap font-semibold text-slate-900">{block.rows.reduce((sum, row) => sum + Number(row.totalHours ?? 0), 0).toFixed(2)}</td> : null}
             {block.showDeveloperCost ? (
               <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
                 {formatGenericUsd(totalDeveloperCost)}
@@ -2725,20 +2710,17 @@ function GenericBillingSummaryHistoryWorkspace({
               <label className="label" htmlFor="genericHistoryYear">
                 Year
               </label>
-              <select
+              <SearchableCombobox
                 id="genericHistoryYear"
                 name="year"
-                className="input"
                 defaultValue={data.filters.year}
-              >
-                {Array.from({ length: 7 }, (_, index) =>
+                options={Array.from({ length: 7 }, (_, index) =>
                   String(new Date().getFullYear() - index),
-                ).map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
+                ).map((year) => ({ value: year, label: year }))}
+                placeholder="Select year"
+                searchPlaceholder="Search years..."
+                emptyLabel="No year found."
+              />
             </AutoSubmitFilterForm>
           </div>
         </div>
@@ -2763,7 +2745,7 @@ function GenericBillingSummaryHistoryWorkspace({
             {data.historyRows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={3}
+                  colSpan={2}
                   className="table-cell text-center text-sm text-slate-500"
                 >
                   No billed titles found for {data.filters.year}.
@@ -2851,6 +2833,7 @@ function GenericBillingReportWorkspace({
                   <GenericBillingModelBlock
                     key={`${titleBlock.movie.id}-${block.key}`}
                     block={block}
+                    showTotalHoursColumn={data.client.id === FLYHOUSE_CLIENT_ID}
                   />
                 ))}
               </div>
@@ -2859,7 +2842,7 @@ function GenericBillingReportWorkspace({
         </div>
       ) : data.blocks.length ? (
         data.blocks.map((block) => (
-          <GenericBillingModelBlock key={block.key} block={block} />
+          <GenericBillingModelBlock key={block.key} block={block} showTotalHoursColumn={data.client.id === FLYHOUSE_CLIENT_ID} />
         ))
       ) : (
         <div className="card p-6 text-sm text-slate-600">

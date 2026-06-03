@@ -8,6 +8,8 @@ import {
 } from "@/lib/billing-reports/amazon";
 import { getLensBillingAdjustments } from "@/lib/billing-reports/lens";
 
+const FOCUS_FEATURES_CLIENT_ID = "cmpuqhyhc002in22ivx3w9vvk";
+
 export type GenericBillingReportFilters = {
   fromDate: string;
   toDate: string;
@@ -28,6 +30,7 @@ export type GenericBillingReportRow = {
   projectCost: number;
   cost: number;
   developerCost?: number;
+  totalHours?: number;
   countryList?: string;
   lensDetails?: string[];
 };
@@ -482,6 +485,22 @@ export async function getGenericBillingReportData({
   const fromBoundary = filters.fromDate ? toStartOfDay(filters.fromDate) : null;
   const toBoundary = filters.toDate ? toEndOfDay(filters.toDate) : null;
 
+  const totalMinutesByProject = new Map<string, number>();
+  if (eligibleProjectIds.length) {
+    const totalGroups = await db.timeEntry.groupBy({
+      by: ["projectId"],
+      where: {
+        projectId: { in: eligibleProjectIds },
+        ...(fromBoundary || toBoundary
+          ? { workDate: { ...(fromBoundary ? { gte: fromBoundary } : {}), ...(toBoundary ? { lte: toBoundary } : {}) } }
+          : {}),
+        ...(movieSpecific && selectedMovieId && selectedMovieId !== "all" ? { movieId: selectedMovieId } : {}),
+      },
+      _sum: { minutesSpent: true },
+    });
+    for (const group of totalGroups) totalMinutesByProject.set(group.projectId, group._sum.minutesSpent ?? 0);
+  }
+
   const hourlyMinutesByProject = new Map<string, number>();
   if (hourlyProjectIds.length) {
     const hourlyGroups = await db.timeEntry.groupBy({
@@ -524,6 +543,7 @@ export async function getGenericBillingReportData({
             projectName: project.name,
             contactPerson: getProjectContactPerson(project),
             status: formatProjectStatus(project.status),
+            totalHours: (totalMinutesByProject.get(project.id) ?? 0) / 60,
             ...developer,
           } satisfies GenericBillingReportRow,
           project,
@@ -536,7 +556,7 @@ export async function getGenericBillingReportData({
       .filter(
         (project) =>
           project.billingModel === "FIXED_FULL" &&
-          project.status === "COMPLETED",
+          (project.status === "COMPLETED" || client.id === FOCUS_FEATURES_CLIENT_ID),
       )
       .map((project) => {
         const developer = addDeveloperCost(
@@ -552,6 +572,7 @@ export async function getGenericBillingReportData({
             projectName: project.name,
             contactPerson: getProjectContactPerson(project),
             status: formatProjectStatus(project.status),
+            totalHours: (totalMinutesByProject.get(project.id) ?? 0) / 60,
             ...developer,
           } satisfies GenericBillingReportRow,
           project,
@@ -574,6 +595,7 @@ export async function getGenericBillingReportData({
             projectName: project.name,
             contactPerson: getProjectContactPerson(project),
             status: formatProjectStatus(project.status),
+            totalHours: (totalMinutesByProject.get(project.id) ?? 0) / 60,
             ...developer,
           } satisfies GenericBillingReportRow,
           project,
@@ -596,6 +618,7 @@ export async function getGenericBillingReportData({
             projectName: project.name,
             contactPerson: getProjectContactPerson(project),
             status: formatProjectStatus(project.status),
+            totalHours: (totalMinutesByProject.get(project.id) ?? 0) / 60,
             ...developer,
           } satisfies GenericBillingReportRow,
           project,
@@ -656,6 +679,7 @@ export async function getGenericBillingReportData({
               projectName: project.name,
               contactPerson: getProjectContactPerson(project),
               status: formatProjectStatus(project.status),
+              totalHours: (totalMinutesByProject.get(project.id) ?? 0) / 60,
               countryList: countries.join(", "),
               ...developer,
             } satisfies GenericBillingReportRow,

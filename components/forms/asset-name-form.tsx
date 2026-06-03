@@ -7,7 +7,7 @@ import type { AssetNameFormState } from "@/lib/actions/asset-name-actions";
 
 const initialState: AssetNameFormState = {};
 
-type MovieOption = {
+type TitleOption = {
   id: string;
   title: string;
 };
@@ -15,7 +15,7 @@ type MovieOption = {
 export function AssetNameForm({ action, initialValues, movies, title, submitLabel }: {
   action: (state: AssetNameFormState, formData: FormData) => Promise<AssetNameFormState>;
   initialValues?: { id?: string; movieId: string; name: string; isActive: boolean };
-  movies: MovieOption[];
+  movies: TitleOption[];
   title: string;
   submitLabel: string;
 }) {
@@ -29,15 +29,15 @@ export function AssetNameForm({ action, initialValues, movies, title, submitLabe
       {state?.success ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Asset name saved successfully.</div> : null}
       <div className="mt-5 space-y-4">
         <div>
-          <FormLabel htmlFor="movieId" required>Movie</FormLabel>
+          <FormLabel htmlFor="movieId" required>Title</FormLabel>
           <SearchableCombobox
             id="movieId"
             name="movieId"
             defaultValue={initialValues?.movieId ?? ""}
             options={movies.map((movie) => ({ value: movie.id, label: movie.title }))}
-            placeholder="Select movie"
-            searchPlaceholder="Search movies..."
-            emptyLabel="No movies found."
+            placeholder="Select title"
+            searchPlaceholder="Search titles..."
+            emptyLabel="No titles found."
             required
           />
         </div>

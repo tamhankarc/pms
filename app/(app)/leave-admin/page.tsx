@@ -1,4 +1,5 @@
 import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -32,16 +33,30 @@ export default async function LeaveAdminPage({
         <AutoSubmitFilterForm className="grid gap-4 md:grid-cols-3">
           <div>
             <label className="label" htmlFor="functionalRole">Functional role</label>
-            <select className="input" id="functionalRole" name="functionalRole" defaultValue={params.functionalRole || ""}>
-              {functionalRoleOptions.map((role) => <option key={role || "all"} value={role}>{role ? role.replaceAll("_", " ") : "All functional roles"}</option>)}
-            </select>
+            <SearchableCombobox
+              id="functionalRole"
+              name="functionalRole"
+              defaultValue={params.functionalRole || ""}
+              options={functionalRoleOptions.map((role) => ({
+                value: role,
+                label: role ? role.replaceAll("_", " ") : "All functional roles",
+              }))}
+              placeholder="All functional roles"
+              searchPlaceholder="Search functional roles..."
+              emptyLabel="No functional role found."
+            />
           </div>
           <div>
             <label className="label" htmlFor="userId">User</label>
-            <select className="input" id="userId" name="userId" defaultValue={params.userId || ""}>
-              <option value="">All users</option>
-              {data.nameOptions.map((row) => <option key={row.id} value={row.id}>{row.fullName}</option>)}
-            </select>
+            <SearchableCombobox
+              id="userId"
+              name="userId"
+              defaultValue={params.userId || ""}
+              options={[{ value: "", label: "All users" }, ...data.nameOptions.map((row) => ({ value: row.id, label: row.fullName }))]}
+              placeholder="All users"
+              searchPlaceholder="Search users..."
+              emptyLabel="No user found."
+            />
           </div>
           <div className="flex items-end gap-3">
             <Link className="btn-secondary" href="/leave-admin">Reset</Link>
@@ -108,11 +123,19 @@ export default async function LeaveAdminPage({
         <p className="section-subtitle">Add official holidays for year {data.year}. These days are excluded from paid leave calculation.</p>
         <form action={createOfficialHolidayAction} className="mt-4 grid gap-4 md:grid-cols-[1fr_180px_220px_auto]">
           <input className="input" name="name" placeholder="Holiday name" required />
-          <select className="input" name="shift" defaultValue="DAY" aria-label="Holiday shift">
-            <option value="DAY">Day shift</option>
-            <option value="NIGHT">Night shift</option>
-            <option value="BOTH">Both shifts</option>
-          </select>
+          <SearchableCombobox
+            id="holidayShift"
+            name="shift"
+            defaultValue="DAY"
+            options={[
+              { value: "DAY", label: "Day shift" },
+              { value: "NIGHT", label: "Night shift" },
+              { value: "BOTH", label: "Both shifts" },
+            ]}
+            placeholder="Select holiday shift"
+            searchPlaceholder="Search shifts..."
+            emptyLabel="No shift found."
+          />
           <input className="input" name="holidayDate" type="date" min={`${data.year}-01-01`} max={`${data.year}-12-31`} required />
           <button className="btn-primary" type="submit">Add holiday</button>
         </form>

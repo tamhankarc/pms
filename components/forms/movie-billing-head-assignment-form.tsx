@@ -10,7 +10,7 @@ const initialState: MovieBillingHeadAssignmentFormState = {};
 
 type Client = { id: string; name: string };
 type Country = { id: string; name: string; isoCode: string | null };
-type Movie = {
+type Title = {
   id: string;
   clientId: string;
   title: string;
@@ -74,7 +74,7 @@ export function MovieBillingHeadAssignmentForm({
 }: {
   clients: Client[];
   countries: Country[];
-  movies: Movie[];
+  movies: Title[];
   billingHeads: BillingHead[];
   action: (state: MovieBillingHeadAssignmentFormState, formData: FormData) => Promise<MovieBillingHeadAssignmentFormState>;
   initialValues?: InitialValues;
@@ -84,7 +84,7 @@ export function MovieBillingHeadAssignmentForm({
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [clientId, setClientId] = useState(initialValues?.clientId ?? "");
-  const [movieId, setMovieId] = useState(initialValues?.movieId ?? "");
+  const [movieId, setTitleId] = useState(initialValues?.movieId ?? "");
   const [billingHeadId, setBillingHeadId] = useState(initialValues?.billingHeadId ?? "");
   const [countryIds, setCountryIds] = useState<string[]>(initialValues?.countryIds ?? (initialValues?.countryId ? [initialValues.countryId] : []));
   const [useDomestic, setUseDomestic] = useState(() => {
@@ -138,14 +138,14 @@ export function MovieBillingHeadAssignmentForm({
 
   function handleClientChange(value: string) {
     setClientId(value);
-    setMovieId("");
+    setTitleId("");
     setBillingHeadId("");
     setCountryIds([]);
     setUseDomestic(false);
   }
 
-  function handleMovieChange(value: string) {
-    setMovieId(value);
+  function handleTitleChange(value: string) {
+    setTitleId(value);
     setBillingHeadId("");
     setCountryIds([]);
     setUseDomestic(false);
@@ -166,17 +166,17 @@ export function MovieBillingHeadAssignmentForm({
       <input type="hidden" name="billingHeadId" value={billingHeadId} />
       {effectiveCountryIds.map((id) => <input key={id} type="hidden" name="countryIds" value={id} />)}
       <h2 className="section-title">{title}</h2>
-      <p className="section-subtitle">Select Client and Movie first. Billing Head is filtered by the selected movie&apos;s billing region. Country becomes available after Billing Head is selected.</p>
+      <p className="section-subtitle">Select Client and Title first. Billing Head is filtered by the selected movie&apos;s billing region. Country becomes available after Billing Head is selected.</p>
       {state?.error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</div> : null}
-      {state?.success ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Movie billing head saved successfully.</div> : null}
+      {state?.success ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Title billing head saved successfully.</div> : null}
       <div className="mt-5 grid gap-4 md:grid-cols-2">
         <div>
           <FormLabel htmlFor="clientId" required>Client</FormLabel>
           <SearchableCombobox id="clientId" value={clientId} onValueChange={handleClientChange} options={clientOptions} placeholder="Select client" searchPlaceholder="Search clients..." emptyLabel="No client found." required />
         </div>
         <div className={!clientId ? "opacity-60" : ""}>
-          <FormLabel htmlFor="movieId" required>Movie</FormLabel>
-          <SearchableCombobox id="movieId" value={movieId} onValueChange={handleMovieChange} options={movieOptions} placeholder={clientId ? "Select Working movie" : "Select client first"} searchPlaceholder="Search movies..." emptyLabel="No Working movies found." disabled={!clientId} required />
+          <FormLabel htmlFor="movieId" required>Title</FormLabel>
+          <SearchableCombobox id="movieId" value={movieId} onValueChange={handleTitleChange} options={movieOptions} placeholder={clientId ? "Select Working movie" : "Select client first"} searchPlaceholder="Search titles..." emptyLabel="No Working titles found." disabled={!clientId} required />
         </div>
         <div className={!movieId ? "opacity-60" : ""}>
           <FormLabel htmlFor="billingHeadId" required>Billing Head</FormLabel>

@@ -430,7 +430,7 @@ export function formatUsd(value: number) {
 export function buildAmazonBillingReportFilters(
   searchParams: URLSearchParams | Record<string, string | string[] | undefined>,
 ) {
-  // const defaults = getDefaultMonthRange();
+  const defaults = getDefaultMonthRange();
   const getValue = (key: string) => {
     if (searchParams instanceof URLSearchParams)
       return searchParams.get(key) ?? undefined;
@@ -443,8 +443,8 @@ export function buildAmazonBillingReportFilters(
 
   return {
     fromDate:
-      monthRange?.fromDate ?? normalizeDateInput(getValue("fromDate"), ""),
-    toDate: monthRange?.toDate ?? normalizeDateInput(getValue("toDate"), ""),
+      monthRange?.fromDate ?? normalizeDateInput(getValue("fromDate"), defaults.fromDate),
+    toDate: monthRange?.toDate ?? normalizeDateInput(getValue("toDate"), defaults.toDate),
     movieId: getValue("movieId") || "all",
     assetTypeId: getValue("assetTypeId") || "all",
     assetNameId: getValue("assetNameId") || getValue("assetTypeId") || "all",

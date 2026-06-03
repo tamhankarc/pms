@@ -25,7 +25,7 @@ export default async function NewMovieBillingHeadPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <PageHeader title="Create Movie Billing Head" description="Assign a Fixed - Optional billing head to a Working movie for the selected country." actions={<Link href="/movie-billing-heads" className="btn-secondary">Back to Movie Billing Heads</Link>} />
+      <PageHeader title="Create Title Billing Head" description="Assign a Fixed - Optional billing head to a Working movie for the selected country." actions={<Link href="/movie-billing-heads" className="btn-secondary">Back to Title Billing Heads</Link>} />
       <MovieBillingHeadAssignmentForm clients={clients} countries={countries} movies={movies} billingHeads={billingHeads} action={createMovieBillingHeadAssignmentAction} title="Create movie billing head" submitLabel="Create movie billing head" canEditCosts={canViewCostData(currentUser)} />
     </div>
   );

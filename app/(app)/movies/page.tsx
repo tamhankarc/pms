@@ -10,13 +10,13 @@ import { toggleMovieStatusAction } from "@/lib/actions/movie-actions";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 
-function formatMovieWorkflowStatus(status: string) {
+function formatTitleWorkflowStatus(status: string) {
   if (status === "COMPLETED_BILLED") return "Completed & Billed";
   if (status === "COMPLETED") return "Completed";
   return "Working";
 }
 
-export default async function MoviesPage({
+export default async function TitlesPage({
 
   searchParams,
 }: {
@@ -48,14 +48,14 @@ export default async function MoviesPage({
     }),
   ]);
 
-  const { items: paginatedMovies, currentPage, totalPages, totalItems, pageSize } = paginateItems(movies, page, DEFAULT_PAGE_SIZE);
+  const { items: paginatedTitles, currentPage, totalPages, totalItems, pageSize } = paginateItems(movies, page, DEFAULT_PAGE_SIZE);
 
   return (
     <div>
       <PageHeader
-        title="Movies"
-        description="Manage movies. Each movie belongs to exactly one client. Movie code is generated automatically."
-        actions={<Link className="btn-primary" href="/movies/new">Create Movie</Link>}
+        title="Titles"
+        description="Manage movies. Each movie belongs to exactly one client. Title code is generated automatically."
+        actions={<Link className="btn-primary" href="/movies/new">Create Title</Link>}
       />
 
       <div className="mb-6 card p-4">
@@ -93,23 +93,23 @@ export default async function MoviesPage({
           <table className="table-base">
             <thead className="table-head">
               <tr>
-                <th className="table-cell">Movie</th>
+                <th className="table-cell">Title</th>
                 <th className="table-cell">Client</th>
                 <th className="table-cell">Billing Region</th>
-                <th className="table-cell">Movie Status</th>
+                <th className="table-cell">Title Status</th>
                 <th className="table-cell">Status</th>
                 <th className="table-cell">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {paginatedMovies.map((movie) => (
+              {paginatedTitles.map((movie) => (
                 <tr key={movie.id}>
                   <td className="table-cell">
                     <div className="font-medium text-slate-900">{movie.title}</div>
                   </td>
                   <td className="table-cell">{movie.client.name}</td>
                   <td className="table-cell">{[movie.billingDomestic ? "Domestic" : null, movie.billingIntl ? "INTL" : null, movie.billingOther ? "Other" : null, movie.billingSocial ? "Social" : null].filter(Boolean).join(", ") || "—"}</td>
-                  <td className="table-cell"><span className="badge-blue">{formatMovieWorkflowStatus(movie.status)}</span></td>
+                  <td className="table-cell"><span className="badge-blue">{formatTitleWorkflowStatus(movie.status)}</span></td>
                   <td className="table-cell">
                     <span className={movie.isActive ? "badge-emerald" : "badge-slate"}>
                       {movie.isActive ? "Active" : "Inactive"}
@@ -133,7 +133,7 @@ export default async function MoviesPage({
               {movies.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="table-cell text-center text-sm text-slate-500">
-                    No movies found.
+                    No titles found.
                   </td>
                 </tr>
               ) : null}

@@ -60,7 +60,7 @@ export function NewProjectForm({
   const [projectTypeId, setProjectTypeId] = useState("");
   const [status, setStatus] = useState<ProjectStatus>("DRAFT");
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(false);
-  const [hideMoviesInEntries, setHideMoviesInEntries] = useState(false);
+  const [hideMoviesInEntries, setHideTitlesInEntries] = useState(false);
   const [hideAssetTypesInEntries, setHideAssetTypesInEntries] = useState(false);
   const [hideLensTypesInEntries, setHideLensTypesInEntries] = useState(false);
   const [hideAssetNamesInEntries, setHideAssetNamesInEntries] = useState(false);
@@ -142,7 +142,7 @@ export function NewProjectForm({
               setClientId(value);
               setProjectTypeId("");
               setHideCountriesInEntries(false);
-              setHideMoviesInEntries(false);
+              setHideTitlesInEntries(false);
               setHideAssetTypesInEntries(false);
               setHideLensTypesInEntries(false);
               setHideAssetNamesInEntries(false);
@@ -249,7 +249,7 @@ export function NewProjectForm({
             <input
               type="checkbox"
               checked={hideMoviesInEntries}
-              onChange={(event) => setHideMoviesInEntries(event.target.checked)}
+              onChange={(event) => setHideTitlesInEntries(event.target.checked)}
             />
             Hide movie dropdown in Time Entries and Estimates for this project
           </label>
@@ -386,7 +386,7 @@ export function NewProjectForm({
         {isAdmin && isSonyPicturesClient ? (
           <div className="md:col-span-2">
             <FormLabel htmlFor="projectCostOtherMovieBillingRegion">
-              Project Cost - Other Movie Billing Region (USD)
+              Project Cost - Other Title Billing Region (USD)
             </FormLabel>
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">

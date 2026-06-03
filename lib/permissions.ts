@@ -225,6 +225,10 @@ export function canManageSubProjects(user: UserLike) {
     hasExtraMenuAccess(user, "sub-project")
   );
 }
+export function canManagePurchaseOrders(user: UserLike) {
+  return isAdmin(user) || isAccounts(user) || hasExtraMenuAccess(user, "purchase-orders");
+}
+
 export function canManageContactPersons(user: UserLike) {
   return (
     isAdmin(user) ||

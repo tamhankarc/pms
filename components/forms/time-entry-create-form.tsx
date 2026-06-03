@@ -48,7 +48,7 @@ type TimeEntryEmployeeOption = {
   userType: string;
 };
 
-type MovieOption = {
+type TitleOption = {
   id: string;
   title: string;
   clientId: string;
@@ -111,7 +111,7 @@ export function TimeEntryCreateForm({
   projects: TimeEntryProjectOption[];
   subProjects: TimeEntrySubProjectOption[];
   countries: { id: string; name: string }[];
-  movies: MovieOption[];
+  movies: TitleOption[];
   assetTypes: AssetTypeOption[];
   lensTypes: LensTypeOption[];
   assetNames: AssetNameOption[];
@@ -233,7 +233,7 @@ export function TimeEntryCreateForm({
     }
   }, [filteredProjects, selectedProjectId]);
 
-  const filteredMovies = useMemo(
+  const filteredTitles = useMemo(
     () => movies.filter((movie) => movie.clientId === selectedClientId),
     [movies, selectedClientId],
   );
@@ -274,7 +274,7 @@ export function TimeEntryCreateForm({
       !selectedProject?.hideCountriesInEntries &&
       !selectedSubProject?.hideCountriesInEntries,
   );
-  const showMovieField = Boolean(
+  const showTitleField = Boolean(
     selectedProject?.showMoviesInEntries &&
       !selectedProject?.hideMoviesInEntries &&
       !selectedSubProject?.hideMoviesInEntries,
@@ -441,9 +441,9 @@ export function TimeEntryCreateForm({
           </div>
         ) : null}
 
-        {showMovieField ? (
+        {showTitleField ? (
           <div>
-            <FormLabel htmlFor="movieId">Movie</FormLabel>
+            <FormLabel htmlFor="movieId">Title</FormLabel>
             <SearchableCombobox
               id="movieId"
               name="movieId"
@@ -451,14 +451,14 @@ export function TimeEntryCreateForm({
               onValueChange={setSelectedMovieId}
               options={[
                 { value: "", label: "No specific movie" },
-                ...filteredMovies.map((movie) => ({
+                ...filteredTitles.map((movie) => ({
                   value: movie.id,
                   label: movie.title,
                 })),
               ]}
               placeholder="No specific movie"
-              searchPlaceholder="Search movies..."
-              emptyLabel="No movies found."
+              searchPlaceholder="Search titles..."
+              emptyLabel="No titles found."
             />
           </div>
         ) : null}
@@ -497,7 +497,7 @@ export function TimeEntryCreateForm({
                   value: "",
                   label: selectedMovieId
                     ? "No specific asset name"
-                    : "Select movie first",
+                    : "Select title first",
                 },
                 ...filteredAssetNames.map((assetName) => ({
                   value: assetName.id,
@@ -507,7 +507,7 @@ export function TimeEntryCreateForm({
               placeholder={
                 selectedMovieId
                   ? "No specific asset name"
-                  : "Select movie first"
+                  : "Select title first"
               }
               searchPlaceholder="Search asset names..."
               emptyLabel={

@@ -54,13 +54,13 @@ export default async function MovieBillingHeadsPage({
 
   return (
     <div>
-      <PageHeader title="Movie Billing Heads" description="Assign Fixed - Optional billing heads to Working movies by client and country." actions={<Link href="/movie-billing-heads/new" className="btn-primary">Create Movie Billing Head</Link>} />
+      <PageHeader title="Title Billing Heads" description="Assign Fixed - Optional billing heads to Working movies by client and country." actions={<Link href="/movie-billing-heads/new" className="btn-primary">Create Title Billing Head</Link>} />
       <div className="mb-6 card p-4">
         <MovieBillingHeadAssignmentListFilters q={q} clientId={clientId} movieId={movieId} status={status} clients={clients} movies={movies} />
       </div>
       <div className="table-wrap">
         <table className="table-base">
-          <thead className="table-head"><tr><th className="table-cell">Client</th><th className="table-cell">Country</th><th className="table-cell">Movie</th><th className="table-cell">Billing Head</th>{canSeeCosts ? <th className="table-cell">Cost Type</th> : null}{canSeeCosts ? <th className="table-cell">Cost</th> : null}{canSeeCosts ? <th className="table-cell">Units</th> : null}<th className="table-cell">Status</th><th className="table-cell">Action</th></tr></thead>
+          <thead className="table-head"><tr><th className="table-cell">Client</th><th className="table-cell">Country</th><th className="table-cell">Title</th><th className="table-cell">Billing Head</th>{canSeeCosts ? <th className="table-cell">Cost Type</th> : null}{canSeeCosts ? <th className="table-cell">Cost</th> : null}{canSeeCosts ? <th className="table-cell">Units</th> : null}<th className="table-cell">Status</th><th className="table-cell">Action</th></tr></thead>
           <tbody className="divide-y divide-slate-100">
             {items.map((row) => (
               <tr key={row.id}>
@@ -87,7 +87,7 @@ export default async function MovieBillingHeadsPage({
                 </td>
               </tr>
             ))}
-            {rows.length === 0 ? <tr><td colSpan={canSeeCosts ? 9 : 6} className="table-cell text-center text-sm text-slate-500">No movie billing heads found.</td></tr> : null}
+            {rows.length === 0 ? <tr><td colSpan={canSeeCosts ? 9 : 6} className="table-cell text-center text-sm text-slate-500">No title billing heads found.</td></tr> : null}
           </tbody>
         </table>
         <PaginationControls basePath="/movie-billing-heads" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, clientId, movieId, status }} />

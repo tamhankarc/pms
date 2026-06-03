@@ -349,20 +349,21 @@ export function LeaveRequestForm({
           <label className="label" htmlFor="daySelectionMode">
             Leave duration
           </label>
-          <select
+          <SearchableCombobox
             id="daySelectionMode"
-            className="input"
             value={selectionMode}
-            onChange={(event) =>
-              setSelectionMode(event.target.value as SelectionMode)
-            }
-          >
-            <option value="FULL_DAYS">All working days - Full day</option>
-            <option value="HALF_DAYS">All working days - Half day</option>
-            {workingDateKeys.length > 1 ? (
-              <option value="CUSTOM">Customize each day</option>
-            ) : null}
-          </select>
+            onValueChange={(value) => setSelectionMode(value as SelectionMode)}
+            options={[
+              { value: "FULL_DAYS", label: "All working days - Full day" },
+              { value: "HALF_DAYS", label: "All working days - Half day" },
+              ...(workingDateKeys.length > 1
+                ? [{ value: "CUSTOM", label: "Customize each day" }]
+                : []),
+            ]}
+            placeholder="Select leave duration"
+            searchPlaceholder="Search leave durations..."
+            emptyLabel="No leave duration found."
+          />
           <p className="mt-2 text-sm text-slate-500">
             Total selected leave:{" "}
             <span className="font-semibold text-slate-900">
@@ -382,19 +383,26 @@ export function LeaveRequestForm({
                   className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
                 >
                   <span>{date}</span>
-                  <select
-                    className="input max-w-36"
-                    value={customDurations[date] ?? "FULL_DAY"}
-                    onChange={(event) =>
-                      setCustomDurations((current) => ({
-                        ...current,
-                        [date]: event.target.value as Duration,
-                      }))
-                    }
-                  >
-                    <option value="FULL_DAY">Full day</option>
-                    <option value="HALF_DAY">Half day</option>
-                  </select>
+                  <div className="max-w-36">
+                    <SearchableCombobox
+                      id={`customDuration-${date}`}
+                      value={customDurations[date] ?? "FULL_DAY"}
+                      onValueChange={(value) =>
+                        setCustomDurations((current) => ({
+                          ...current,
+                          [date]: value as Duration,
+                        }))
+                      }
+                      options={[
+                        { value: "FULL_DAY", label: "Full day" },
+                        { value: "HALF_DAY", label: "Half day" },
+                      ]}
+                      placeholder="Select duration"
+                      searchPlaceholder="Search durations..."
+                      emptyLabel="No duration found."
+                      buttonClassName="max-w-36"
+                    />
+                  </div>
                 </label>
               ))}
             </div>

@@ -68,7 +68,7 @@ export default async function ClientEditPage({
 
             <div>
               <div className="text-xs uppercase tracking-wide text-slate-500">
-                Movies
+                Titles
               </div>
               <div className="mt-2 space-y-2">
                 {client.movies.length > 0 ? (
@@ -82,7 +82,7 @@ export default async function ClientEditPage({
                   ))
                 ) : (
                   <div className="text-sm text-slate-500">
-                    No linked movies.
+                    No linked titles.
                   </div>
                 )}
               </div>
@@ -146,6 +146,7 @@ export default async function ClientEditPage({
             sonyGlobalEpkSiteCost: Number(
               client.sonyGlobalEpkSiteCost ?? 0,
             ).toFixed(2),
+            poAssignmentMode: client.poAssignmentMode,
           }}
         />
       </div>

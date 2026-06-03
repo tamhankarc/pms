@@ -66,6 +66,7 @@ const clientSchema = z.object({
     .number()
     .min(0, "Global EPK Site cost cannot be negative.")
     .optional(),
+  poAssignmentMode: z.enum(["NOT_REQUIRED", "TITLE", "TITLE_BILLING_REPORT", "TITLE_PROJECT", "PROJECT"]).default("NOT_REQUIRED"),
   isActive: z
     .union([z.literal("on"), z.literal("true"), z.literal("1")])
     .optional(),
@@ -107,6 +108,7 @@ export async function createClientAction(
       sonyCoppaSiteCost: formData.get("sonyCoppaSiteCost") ?? "0",
       sonyUsEpkSiteCost: formData.get("sonyUsEpkSiteCost") ?? "0",
       sonyGlobalEpkSiteCost: formData.get("sonyGlobalEpkSiteCost") ?? "0",
+      poAssignmentMode: formData.get("poAssignmentMode") ?? "NOT_REQUIRED",
       isActive: formData.get("isActive") ?? "on",
     });
 
@@ -156,6 +158,7 @@ export async function createClientAction(
           canViewCostData(user) && isSonyPicturesClient
             ? (parsed.data.sonyGlobalEpkSiteCost ?? 0)
             : 0,
+        poAssignmentMode: parsed.data.poAssignmentMode,
         isActive: Boolean(parsed.data.isActive),
       },
     });
@@ -210,6 +213,7 @@ export async function updateClientAction(
       sonyCoppaSiteCost: formData.get("sonyCoppaSiteCost") ?? "0",
       sonyUsEpkSiteCost: formData.get("sonyUsEpkSiteCost") ?? "0",
       sonyGlobalEpkSiteCost: formData.get("sonyGlobalEpkSiteCost") ?? "0",
+      poAssignmentMode: formData.get("poAssignmentMode") ?? "NOT_REQUIRED",
       isActive: formData.get("isActive") ?? undefined,
     });
 
@@ -284,6 +288,7 @@ export async function updateClientAction(
           canViewCostData(user) && isSonyPicturesClient
             ? (parsed.data.sonyGlobalEpkSiteCost ?? 0)
             : existingClient.sonyGlobalEpkSiteCost,
+        poAssignmentMode: parsed.data.poAssignmentMode,
         isActive: Boolean(parsed.data.isActive),
       },
     });

@@ -66,12 +66,12 @@ export function MovieForm({ clients, countries = [], action, initialValues, subm
         <input type="hidden" name="billingDomestic" value="on" />
       )}
       <h2 className="section-title">{title}</h2>
-      <p className="section-subtitle">Fields marked <span className="text-red-600">*</span> are required. Movie code is generated automatically.</p>
+      <p className="section-subtitle">Fields marked <span className="text-red-600">*</span> are required. Title code is generated automatically.</p>
       {state?.error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</div> : null}
-      {state?.success ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Movie saved successfully.</div> : null}
+      {state?.success ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Title saved successfully.</div> : null}
       <div className="mt-5 space-y-4">
         <div><FormLabel htmlFor="clientId" required>Client</FormLabel><SearchableCombobox id="clientId" options={clientOptions} value={selectedClientId} onValueChange={(value) => { setSelectedClientId(value); if (value !== SONY_CLIENT_ID) { setSonyCoppaSite(false); setSonyGlobalEpkSite(false); } }} placeholder="Select client" searchPlaceholder="Search clients..." emptyLabel="No client found." /></div>
-        <div><FormLabel htmlFor="title" required>Movie title</FormLabel><input id="title" name="title" className="input" defaultValue={initialValues?.title ?? ""} required /></div>
+        <div><FormLabel htmlFor="title" required>Title title</FormLabel><input id="title" name="title" className="input" defaultValue={initialValues?.title ?? ""} required /></div>
         <div><FormLabel htmlFor="status" required>Status</FormLabel><SearchableCombobox id="status" options={movieStatusOptions} value={movieStatus} onValueChange={(value) => setMovieStatus(value as MovieStatus)} placeholder="Select status" searchPlaceholder="Search statuses..." emptyLabel="No status found." required /></div>
         {showBillingRegion ? (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">

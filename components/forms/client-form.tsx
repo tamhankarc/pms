@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { FormLabel } from "@/components/ui/form-label";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import type { ClientFormState } from "@/lib/actions/client-actions";
 
 type ClientFormProps = {
@@ -30,6 +31,7 @@ type ClientFormProps = {
     sonyCoppaSiteCost?: string | number;
     sonyUsEpkSiteCost?: string | number;
     sonyGlobalEpkSiteCost?: string | number;
+    poAssignmentMode?: string;
   };
 };
 
@@ -91,6 +93,26 @@ export function ClientForm({
             onChange={(event) => setClientName(event.target.value)}
             required
           />
+        </div>
+
+        <div>
+          <FormLabel htmlFor="poAssignmentMode">PO Assignment Mode</FormLabel>
+          <SearchableCombobox
+            id="poAssignmentMode"
+            name="poAssignmentMode"
+            defaultValue={initialValues?.poAssignmentMode ?? "NOT_REQUIRED"}
+            options={[
+              { value: "NOT_REQUIRED", label: "Not Required" },
+              { value: "TITLE", label: "Title" },
+              { value: "TITLE_BILLING_REPORT", label: "Title + Billing Report" },
+              { value: "TITLE_PROJECT", label: "Title + Project" },
+              { value: "PROJECT", label: "Project" },
+            ]}
+            placeholder="Select PO assignment mode"
+            searchPlaceholder="Search PO assignment modes..."
+            emptyLabel="No PO assignment mode found."
+          />
+          <p className="mt-1 text-xs text-slate-500">Controls where PO is assigned and resolved for this client.</p>
         </div>
 
         {canEditCosts ? (
@@ -184,7 +206,7 @@ export function ClientForm({
             name="showMoviesInEntries"
             defaultChecked={initialValues?.showMoviesInEntries ?? false}
           />
-          Show Movie dropdown in Time Entries and Estimates (optional)
+          Show Title dropdown in Time Entries and Estimates (optional)
         </label>
 
         <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">

@@ -98,7 +98,7 @@ export function ProjectEditForm({
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(
     initialValues.hideCountriesInEntries,
   );
-  const [hideMoviesInEntries, setHideMoviesInEntries] = useState(
+  const [hideMoviesInEntries, setHideTitlesInEntries] = useState(
     initialValues.hideMoviesInEntries,
   );
   const [hideAssetTypesInEntries, setHideAssetTypesInEntries] = useState(
@@ -283,7 +283,7 @@ export function ProjectEditForm({
             <input
               type="checkbox"
               checked={hideMoviesInEntries}
-              onChange={(event) => setHideMoviesInEntries(event.target.checked)}
+              onChange={(event) => setHideTitlesInEntries(event.target.checked)}
             />
             Hide movie dropdown in Time Entries and Estimates for this project
           </label>
@@ -420,7 +420,7 @@ export function ProjectEditForm({
         {isAdmin && isSonyPicturesClient ? (
           <div className="md:col-span-2">
             <FormLabel htmlFor="projectCostOtherMovieBillingRegion">
-              Project Cost - Other Movie Billing Region (USD)
+              Project Cost - Other Title Billing Region (USD)
             </FormLabel>
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">

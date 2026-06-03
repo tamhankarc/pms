@@ -62,7 +62,6 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
           "Territory/Variant",
           ...(isUniversalLocalization ? [] : ["Asset Type"]),
           ...(showCost ? ["Cost (USD)"] : []),
-          "Contact Person",
         ]
       : [
           "Date",
@@ -70,7 +69,6 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
           "Asset Name",
           "Asset Type",
           ...(showCost ? ["Cost (USD)"] : []),
-          "Contact Person",
         ];
 
   const uniqueAssetCount = (rows: typeof data.rows) =>
@@ -95,7 +93,6 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
         row.territoryVariant ?? "-",
         ...(isUniversalLocalization ? [] : [row.assetType]),
         ...(showCost ? [row.cost] : []),
-        row.contactPerson,
       ];
       return excelRow(values, showCost ? [values.length - 2] : []);
     }
@@ -105,8 +102,7 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
       row.assetName,
       row.assetType,
       ...(showCost ? [row.cost] : []),
-      row.contactPerson,
-    ];
+          ];
     return excelRow(values, showCost ? [values.length - 2] : []);
   };
 
@@ -283,8 +279,8 @@ function escapePdfText(value: string | number) {
 function sanitizePdfText(value: string | number) {
   return String(value)
     .replace(/[\r\n\t]+/g, " ")
-    .replace(/[Ã¢ÂÂ¹]/g, "Rs.")
-    .replace(/[Ã¢ÂÂÃ¢ÂÂ]/g, "-")
+    .replace(/[ÃÂ¢ÃÂÃÂ¹]/g, "Rs.")
+    .replace(/[ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ]/g, "-")
     .trim();
 }
 
@@ -539,7 +535,6 @@ function buildDetailColumns(data: AmazonBillingReportData): PdfTableColumn[] {
           { header: "Title Name", width: 150 },
           { header: "Asset Name", width: 180 },
           { header: "Territory / Variant", width: 150 },
-          { header: "Contact Person", width: 270 },
         ]
       : [
           { header: "Date", width: 64 },
@@ -548,7 +543,6 @@ function buildDetailColumns(data: AmazonBillingReportData): PdfTableColumn[] {
           { header: "Territory / Variant", width: 92 },
           { header: "Asset Type", width: 110 },
           { header: "Cost", width: 66, align: "right" },
-          { header: "Contact Person", width: 228 },
         ];
   }
 
@@ -558,7 +552,6 @@ function buildDetailColumns(data: AmazonBillingReportData): PdfTableColumn[] {
         { header: "Title Name", width: 160 },
         { header: "Asset Name", width: 210 },
         { header: "Asset Type", width: 140 },
-        { header: "Contact Person", width: 240 },
       ]
     : [
         { header: "Date", width: 68 },
@@ -566,7 +559,6 @@ function buildDetailColumns(data: AmazonBillingReportData): PdfTableColumn[] {
         { header: "Asset Name", width: 190 },
         { header: "Asset Type", width: 130 },
         { header: "Cost", width: 72, align: "right" },
-        { header: "Contact Person", width: 228 },
       ];
 }
 
@@ -583,8 +575,7 @@ function buildDetailRows(data: AmazonBillingReportData): PdfTableRow[] {
             row.titleName,
             row.assetName,
             row.territoryVariant ?? "-",
-            row.contactPerson,
-          ]
+              ]
         : [
             row.date,
             row.titleName,
@@ -592,8 +583,7 @@ function buildDetailRows(data: AmazonBillingReportData): PdfTableRow[] {
             row.territoryVariant ?? "-",
             row.assetType,
             formatUsd(row.cost),
-            row.contactPerson,
-          ];
+              ];
     }
 
     return isUniversalSocial
@@ -602,16 +592,14 @@ function buildDetailRows(data: AmazonBillingReportData): PdfTableRow[] {
           row.titleName,
           row.assetName,
           row.assetType,
-          row.contactPerson,
-        ]
+          ]
       : [
           row.date,
           row.titleName,
           row.assetName,
           row.assetType,
           formatUsd(row.cost),
-          row.contactPerson,
-        ];
+          ];
   });
 }
 
@@ -1132,8 +1120,7 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
         block.key === "fixedPerCountry"
           ? [
               "Project",
-              "Contact Person",
-              "Lens Type / Country List",
+                  "Lens Type / Country List",
               ...(block.showDeveloperCost
                 ? [
                     "Developer Cost (USD)",
@@ -1144,8 +1131,7 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
             ]
           : [
               "Project",
-              "Contact Person",
-              "Status",
+                  "Status",
               ...(block.showDeveloperCost
                 ? [
                     "Developer Cost (USD)",
@@ -1177,8 +1163,7 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
             block.key === "fixedPerCountry"
               ? [
                   formatGenericProjectDisplay(row),
-                  row.contactPerson,
-                  formatGenericCountryDisplay(row),
+                            formatGenericCountryDisplay(row),
                   ...(block.showDeveloperCost
                     ? [
                         Number(row.developerCost ?? 0),
@@ -1189,8 +1174,7 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
                 ]
               : [
                   formatGenericProjectDisplay(row),
-                  row.contactPerson,
-                  row.status,
+                            row.status,
                   ...(block.showDeveloperCost
                     ? [
                         Number(row.developerCost ?? 0),
@@ -1275,8 +1259,7 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
       block.key === "fixedPerCountry"
         ? [
             "Project",
-            "Contact Person",
-            "Lens Type / Country List",
+              "Lens Type / Country List",
             ...(block.showDeveloperCost
               ? [
                   "Developer Cost (USD)",
@@ -1287,8 +1270,7 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
           ]
         : [
             "Project",
-            "Contact Person",
-            "Status",
+              "Status",
             ...(block.showDeveloperCost
               ? [
                   "Developer Cost (USD)",
@@ -1322,16 +1304,14 @@ export function buildGenericBillingReportExcel(data: GenericBillingReportData) {
           block.key === "fixedPerCountry"
             ? [
                 formatGenericProjectDisplay(row),
-                row.contactPerson,
-                formatGenericCountryDisplay(row),
+                        formatGenericCountryDisplay(row),
                 ...(block.showDeveloperCost
                   ? [Number(row.developerCost ?? 0), row.projectCost, row.cost]
                   : [row.cost]),
               ]
             : [
                 formatGenericProjectDisplay(row),
-                row.contactPerson,
-                row.status,
+                        row.status,
                 ...(block.showDeveloperCost
                   ? [Number(row.developerCost ?? 0), row.projectCost, row.cost]
                   : [row.cost]),
@@ -1626,7 +1606,6 @@ function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
     const columns: PdfTableColumn[] = isCountryBlock
       ? [
           { header: "Project", width: 145 },
-          { header: "Contact Person", width: 150 },
           {
             header: "Lens Type / Country List",
             width: block.showDeveloperCost ? 195 : 300,
@@ -1644,11 +1623,7 @@ function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
             : [{ header: "Cost", width: 90, align: "right" as const }]),
         ]
       : [
-          { header: "Project", width: block.showDeveloperCost ? 180 : 250 },
-          {
-            header: "Contact Person",
-            width: block.showDeveloperCost ? 170 : 210,
-          },
+          { header: "Project", width: block.showDeveloperCost ? 270 : 400 },
           { header: "Status", width: 90 },
           ...(block.showDeveloperCost
             ? [
@@ -1666,8 +1641,7 @@ function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
       isCountryBlock
         ? [
             formatGenericProjectDisplay(row),
-            row.contactPerson,
-            formatGenericCountryDisplay(row),
+                formatGenericCountryDisplay(row),
             ...(block.showDeveloperCost
               ? [
                   formatUsd(Number(row.developerCost ?? 0)),
@@ -1678,8 +1652,7 @@ function buildGenericBillingReportPdfPages(data: GenericBillingReportData) {
           ]
         : [
             formatGenericProjectDisplay(row),
-            row.contactPerson,
-            row.status,
+                row.status,
             ...(block.showDeveloperCost
               ? [
                   formatUsd(Number(row.developerCost ?? 0)),
@@ -1816,10 +1789,9 @@ export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
         ? [
             "Billing Header / Project",
             "Countries / Lens Type Countries",
-            "Contact Person",
-            "Cost (USD)",
+              "Cost (USD)",
           ]
-        : ["Billing Header / Project", "Contact Person", "Cost (USD)"],
+        : ["Billing Header / Project", "Cost (USD)"],
     ),
     ...projectRows.map((row) =>
       excelRow(
@@ -1829,10 +1801,9 @@ export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
               row.lensDetails?.length
                 ? row.lensDetails.join("\n")
                 : row.countryList || "-",
-              row.contactPerson,
-              row.cost,
+                    row.cost,
             ]
-          : [row.projectName, row.contactPerson, row.cost],
+          : [row.projectName,  row.cost],
         data.showCountryList ? [3] : [2],
       ),
     ),
@@ -1910,7 +1881,6 @@ function buildSonyPicturesReportPdfPages(
   const columns: PdfTableColumn[] = [
     { header: "Billing Header / Project", width: 250 },
     { header: "Countries / Lens Type Countries", width: 230 },
-    { header: "Contact Person", width: 195 },
     { header: "Cost", width: 80, align: "right" },
   ];
   const rows: PdfTableRow[] = [
@@ -1921,8 +1891,7 @@ function buildSonyPicturesReportPdfPages(
           row.lensDetails?.length
             ? row.lensDetails.join("; ")
             : row.countryList || "-",
-          row.contactPerson,
-          formatUsd(row.cost),
+            formatUsd(row.cost),
         ] as PdfTableRow,
     ),
     ...(data.chargeRows.length
@@ -2085,8 +2054,7 @@ export function buildFilmikBillingReportExcel(data: FilmikBillingReportData) {
       "Resources / Hours",
       "Client Cost (USD)",
       "Vendor Cost (USD)",
-      "Contact Person",
-    ]),
+          ]),
     ...data.combinedRows.map((row) =>
       excelRow(
         [
@@ -2096,8 +2064,7 @@ export function buildFilmikBillingReportExcel(data: FilmikBillingReportData) {
             : `${row.quantity.toFixed(2)}h`,
           row.clientCost,
           row.vendorCost,
-          row.contactPerson,
-        ],
+          ],
         [2, 3],
       ),
     ),
@@ -2198,7 +2165,6 @@ function buildFilmikBillingReportPdfPages(data: FilmikBillingReportData) {
     { header: "Resources / Hours", width: 115, align: "right" },
     { header: "Client Cost", width: 115, align: "right" },
     { header: "Vendor Cost", width: 115, align: "right" },
-    { header: "Contact Person", width: 185 },
   ];
   const combinedRows: PdfTableRow[] = [
     ...data.combinedRows.map(
@@ -2210,8 +2176,7 @@ function buildFilmikBillingReportPdfPages(data: FilmikBillingReportData) {
             : `${row.quantity.toFixed(2)}h`,
           formatUsd(row.clientCost),
           row.vendorCost > 0 ? formatUsd(row.vendorCost) : "-",
-          row.contactPerson,
-        ] as PdfTableRow,
+          ] as PdfTableRow,
     ),
     [
       "Total",
@@ -2374,8 +2339,7 @@ export function buildRoyalBillingReportExcel(data: RoyalBillingData) {
     excelRow([]),
     excelRow([
       "Project",
-      "Contact Person",
-      "Billing Model",
+            "Billing Model",
       "Project Hours",
       "Fixed Monthly Hours",
       "Additional Hours",
@@ -2388,8 +2352,7 @@ export function buildRoyalBillingReportExcel(data: RoyalBillingData) {
       excelRow(
         [
           row.projectName,
-          row.contactPerson,
-          row.billingModel,
+            row.billingModel,
           row.projectHours,
           row.fixedMonthlyHours ?? "-",
           row.additionalHours ?? "-",
@@ -2431,7 +2394,6 @@ export function buildRoyalBillingReportExcel(data: RoyalBillingData) {
 export function buildRoyalBillingReportPdf(data: RoyalBillingData) {
   const columns: PdfTableColumn[] = [
     { header: "Project", width: 150 },
-    { header: "Contact Person", width: 150 },
     { header: "Billing Model", width: 78 },
     { header: "Hours", width: 55, align: "right" },
     { header: "Addl Hrs", width: 55, align: "right" },
@@ -2445,8 +2407,7 @@ export function buildRoyalBillingReportPdf(data: RoyalBillingData) {
       (row) =>
         [
           row.projectName,
-          row.contactPerson,
-          row.billingModel,
+            row.billingModel,
           row.projectHours.toFixed(2),
           row.additionalHours == null ? "-" : row.additionalHours.toFixed(2),
           row.projectCost == null ? "-" : formatUsd(row.projectCost),

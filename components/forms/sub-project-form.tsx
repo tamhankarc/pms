@@ -67,7 +67,7 @@ export function SubProjectForm({
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(
     initialValues?.hideCountriesInEntries ?? false,
   );
-  const [hideMoviesInEntries, setHideMoviesInEntries] = useState(
+  const [hideMoviesInEntries, setHideTitlesInEntries] = useState(
     initialValues?.hideMoviesInEntries ?? false,
   );
   const [hideAssetTypesInEntries, setHideAssetTypesInEntries] = useState(
@@ -107,7 +107,7 @@ export function SubProjectForm({
   const canOverrideCountries = Boolean(
     selectedProject?.clientShowsCountriesInEntries,
   );
-  const canOverrideMovies = Boolean(
+  const canOverrideTitles = Boolean(
     selectedProject?.clientShowsMoviesInEntries,
   );
   const canOverrideAssetTypes = Boolean(
@@ -125,7 +125,7 @@ export function SubProjectForm({
   const projectAlreadyHidesCountries = Boolean(
     selectedProject?.hideCountriesInEntries,
   );
-  const projectAlreadyHidesMovies = Boolean(
+  const projectAlreadyHidesTitles = Boolean(
     selectedProject?.hideMoviesInEntries,
   );
   const projectAlreadyHidesAssetTypes = Boolean(
@@ -148,10 +148,10 @@ export function SubProjectForm({
   }, [canOverrideCountries, projectAlreadyHidesCountries]);
 
   useEffect(() => {
-    if (!canOverrideMovies || projectAlreadyHidesMovies) {
-      setHideMoviesInEntries(false);
+    if (!canOverrideTitles || projectAlreadyHidesTitles) {
+      setHideTitlesInEntries(false);
     }
-  }, [canOverrideMovies, projectAlreadyHidesMovies]);
+  }, [canOverrideTitles, projectAlreadyHidesTitles]);
 
   useEffect(() => {
     if (!canOverrideAssetTypes || projectAlreadyHidesAssetTypes) {
@@ -234,7 +234,7 @@ export function SubProjectForm({
               setClientId(value);
               setProjectId("");
               setHideCountriesInEntries(false);
-              setHideMoviesInEntries(false);
+              setHideTitlesInEntries(false);
               setHideAssetTypesInEntries(false);
               setHideAssetNamesInEntries(false);
               setHideNewslettersInEntries(false);
@@ -264,7 +264,7 @@ export function SubProjectForm({
             onValueChange={(value) => {
               setProjectId(value);
               setHideCountriesInEntries(false);
-              setHideMoviesInEntries(false);
+              setHideTitlesInEntries(false);
               setHideAssetTypesInEntries(false);
               setHideAssetNamesInEntries(false);
               setHideNewslettersInEntries(false);
@@ -317,25 +317,25 @@ export function SubProjectForm({
           </>
         ) : null}
 
-        {canOverrideMovies ? (
+        {canOverrideTitles ? (
           <>
             <label
-              className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${projectAlreadyHidesMovies ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-slate-50 text-slate-700"}`}
+              className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${projectAlreadyHidesTitles ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-slate-50 text-slate-700"}`}
             >
               <input
                 type="checkbox"
                 checked={hideMoviesInEntries}
                 onChange={(event) =>
-                  setHideMoviesInEntries(event.target.checked)
+                  setHideTitlesInEntries(event.target.checked)
                 }
-                disabled={projectAlreadyHidesMovies}
+                disabled={projectAlreadyHidesTitles}
               />
               Hide movie dropdown in Time Entries and Estimates for this sub
               project
             </label>
-            {projectAlreadyHidesMovies ? (
+            {projectAlreadyHidesTitles ? (
               <p className="text-sm text-amber-700">
-                Movies are already hidden for this project, so the sub-project
+                Titles are already hidden for this project, so the sub-project
                 override is not needed.
               </p>
             ) : null}

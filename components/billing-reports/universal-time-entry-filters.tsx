@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import type { AmazonBillingReportData, AmazonReportType } from "@/lib/billing-reports/amazon";
 
-type OptionWithMovies = {
+type OptionWithTitles = {
   id: string;
   name: string;
   movieIds?: string[];
@@ -18,35 +18,35 @@ type Props = {
   data: AmazonBillingReportData;
 };
 
-function optionIsValidForMovie(option: OptionWithMovies, movieId: string) {
+function optionIsValidForTitle(option: OptionWithTitles, movieId: string) {
   if (movieId === "all") return true;
   return option.movieIds?.includes(movieId) ?? false;
 }
 
 export function UniversalTimeEntryFilters({ clientId, reportType, data }: Props) {
-  const [movieId, setMovieId] = useState(data.filters.movieId || "all");
+  const [movieId, setTitleId] = useState(data.filters.movieId || "all");
   const [assetNameId, setAssetNameId] = useState(data.filters.assetNameId || "all");
   const [countryId, setCountryId] = useState(data.filters.countryId || "all");
 
   const assetNameOptions = useMemo(
-    () => data.assetTypeOptions.filter((option) => optionIsValidForMovie(option, movieId)),
+    () => data.assetTypeOptions.filter((option) => optionIsValidForTitle(option, movieId)),
     [data.assetTypeOptions, movieId],
   );
 
   const countryOptions = useMemo(
-    () => data.countryOptions.filter((option) => optionIsValidForMovie(option, movieId)),
+    () => data.countryOptions.filter((option) => optionIsValidForTitle(option, movieId)),
     [data.countryOptions, movieId],
   );
 
-  function handleMovieChange(nextMovieId: string) {
-    setMovieId(nextMovieId);
+  function handleTitleChange(nextTitleId: string) {
+    setTitleId(nextTitleId);
 
-    const nextAssetNameOptions = data.assetTypeOptions.filter((option) => optionIsValidForMovie(option, nextMovieId));
+    const nextAssetNameOptions = data.assetTypeOptions.filter((option) => optionIsValidForTitle(option, nextTitleId));
     if (assetNameId !== "all" && !nextAssetNameOptions.some((option) => option.id === assetNameId)) {
       setAssetNameId("all");
     }
 
-    const nextCountryOptions = data.countryOptions.filter((option) => optionIsValidForMovie(option, nextMovieId));
+    const nextCountryOptions = data.countryOptions.filter((option) => optionIsValidForTitle(option, nextTitleId));
     if (countryId !== "all" && !nextCountryOptions.some((option) => option.id === countryId)) {
       setCountryId("all");
     }
@@ -72,7 +72,7 @@ export function UniversalTimeEntryFilters({ clientId, reportType, data }: Props)
             id="movieId"
             name="movieId"
             value={movieId}
-            onValueChange={handleMovieChange}
+            onValueChange={handleTitleChange}
             options={[{ value: "all", label: "All titles" }, ...data.movieOptions.map((movie) => ({ value: movie.id, label: movie.title }))]}
             placeholder="All titles"
             searchPlaceholder="Search titles..."
