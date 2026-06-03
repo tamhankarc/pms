@@ -2,27 +2,45 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Download } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { requireUser } from "@/lib/auth";
 import { canViewHRReports } from "@/lib/permissions";
 import {
   getHRReportData,
+  normalizeHRReportShift,
   normalizeHRReportType,
   validateReportDateRange,
 } from "@/lib/hr-reports";
+import { getIstDateKey } from "@/lib/ist";
 
 export default async function HRReportsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ type?: string; fromDate?: string; toDate?: string }>;
+  searchParams?: Promise<{
+    type?: string;
+    fromDate?: string;
+    toDate?: string;
+    shift?: string;
+    page?: string;
+  }>;
 }) {
   const user = await requireUser();
   if (!canViewHRReports(user)) redirect("/dashboard");
 
   const params = (await searchParams) ?? {};
   const type = normalizeHRReportType(params.type);
+  const todayKey = getIstDateKey();
+  const shift = normalizeHRReportShift(params.shift);
+  const isAttendanceReport = type === "attendance";
   const isLeaveCountsReport = type === "leave-counts";
+  const effectiveFromDate = isLeaveCountsReport
+    ? ""
+    : params.fromDate || todayKey;
+  const effectiveToDate = isLeaveCountsReport ? "" : params.toDate || todayKey;
+  const pageSize = 20;
+  const requestedPage = Math.max(1, Number(params.page ?? "1") || 1);
   let error = "";
   let data: Awaited<ReturnType<typeof getHRReportData>> | null = null;
 
@@ -30,19 +48,42 @@ export default async function HRReportsPage({
     if (isLeaveCountsReport) {
       data = await getHRReportData(type);
     } else {
-      const range = validateReportDateRange(params.fromDate, params.toDate);
-      data = await getHRReportData(type, range.fromDate, range.toDate);
+      const range = validateReportDateRange(
+        effectiveFromDate,
+        effectiveToDate,
+      );
+      data = await getHRReportData(
+        type,
+        range.fromDate,
+        range.toDate,
+        isAttendanceReport ? shift : "BOTH",
+      );
     }
   } catch (caught) {
     error =
       caught instanceof Error ? caught.message : "Select a valid date range.";
   }
 
+  const totalItems = data?.rows.length ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const currentPage = Math.min(requestedPage, totalPages);
+  const paginatedRows = data
+    ? data.rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+    : [];
+
   const exportParams = new URLSearchParams({ type });
   if (!isLeaveCountsReport) {
-    exportParams.set("fromDate", params.fromDate ?? "");
-    exportParams.set("toDate", params.toDate ?? "");
+    exportParams.set("fromDate", effectiveFromDate);
+    exportParams.set("toDate", effectiveToDate);
   }
+  if (isAttendanceReport) exportParams.set("shift", shift);
+
+  const paginationSearchParams = {
+    type,
+    fromDate: isLeaveCountsReport ? undefined : effectiveFromDate,
+    toDate: isLeaveCountsReport ? undefined : effectiveToDate,
+    shift: isAttendanceReport ? shift : undefined,
+  };
 
   return (
     <div className="space-y-6">
@@ -51,7 +92,7 @@ export default async function HRReportsPage({
         description="Export attendance and leave reports for all leave-eligible employees."
       />
       <section className="card p-5">
-        <AutoSubmitFilterForm className="grid gap-4 md:grid-cols-3" method="get">
+        <AutoSubmitFilterForm className="grid gap-4 md:grid-cols-4" method="get">
           <div>
             <label className="label" htmlFor="type">
               Report
@@ -80,7 +121,7 @@ export default async function HRReportsPage({
               id="fromDate"
               name="fromDate"
               type="date"
-              defaultValue={isLeaveCountsReport ? "" : (params.fromDate ?? "")}
+              defaultValue={isLeaveCountsReport ? "" : effectiveFromDate}
             />
           </div>
           <div>
@@ -93,7 +134,26 @@ export default async function HRReportsPage({
               id="toDate"
               name="toDate"
               type="date"
-              defaultValue={isLeaveCountsReport ? "" : (params.toDate ?? "")}
+              defaultValue={isLeaveCountsReport ? "" : effectiveToDate}
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="shift">
+              Shift
+            </label>
+            <SearchableCombobox
+              id="shift"
+              name="shift"
+              defaultValue={isAttendanceReport ? shift : "BOTH"}
+              disabled={!isAttendanceReport}
+              options={[
+                { value: "BOTH", label: "All shifts" },
+                { value: "DAY", label: "Day shift" },
+                { value: "NIGHT", label: "Night shift" },
+              ]}
+              placeholder="Select shift"
+              searchPlaceholder="Search shifts..."
+              emptyLabel="No shift found."
             />
           </div>
         </AutoSubmitFilterForm>
@@ -146,7 +206,7 @@ export default async function HRReportsPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {data.rows.slice(0, 20).map((row, rowIndex) => (
+                {paginatedRows.map((row, rowIndex) => (
                   <tr key={rowIndex}>
                     {row.map((cell, cellIndex) => (
                       <td
@@ -171,12 +231,14 @@ export default async function HRReportsPage({
               </tbody>
             </table>
           </div>
-          {data.rows.length > 20 ? (
-            <p className="border-t border-slate-200 px-6 py-3 text-sm text-slate-500">
-              Preview shows the first 20 records. The exported report includes
-              all records.
-            </p>
-          ) : null}
+          <PaginationControls
+            basePath="/hr-reports"
+            currentPage={currentPage}
+            pageSize={pageSize}
+            searchParams={paginationSearchParams}
+            totalItems={data.rows.length}
+            totalPages={totalPages}
+          />
         </section>
       ) : null}
     </div>
