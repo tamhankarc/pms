@@ -467,7 +467,7 @@ function TimeEntryReportDetailsTable({
             {isUniversalSocial && rows.length > 0 ? (
               <tr className="bg-slate-100">
                 <td
-                  colSpan={4}
+                  colSpan={3}
                   className="table-cell font-semibold text-slate-900"
                 >
                   Total Unique Assets
@@ -481,7 +481,7 @@ function TimeEntryReportDetailsTable({
               <>
                 <tr className="bg-slate-100">
                   <td
-                    colSpan={4}
+                    colSpan={3}
                     className="table-cell font-semibold text-slate-900"
                   >
                     Total Unique Assets
@@ -492,7 +492,7 @@ function TimeEntryReportDetailsTable({
                 </tr>
                 <tr className="bg-slate-100">
                   <td
-                    colSpan={4}
+                    colSpan={3}
                     className="table-cell font-semibold text-slate-900"
                   >
                     Total Unique Territory/Variant
@@ -1327,7 +1327,6 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
             <tr className="bg-slate-100">
               <td
                 className="table-cell font-semibold text-slate-900"
-                colSpan={2}
               >
                 Total
               </td>
@@ -1888,7 +1887,6 @@ function FilmikCombinedCostBlock({ data }: { data: FilmikBillingReportData }) {
             <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
               {formatFilmikUsd(data.combinedTotalVendorCost)}
             </td>
-            <td className="table-cell">-</td>
           </tr>
         </tbody>
       </table>
@@ -1994,7 +1992,6 @@ function BillingHistoryTable({ data }: { data: BillingHistoryData }) {
             <th className="table-cell">Title</th>
             <th className="table-cell">Billing Region</th>
             <th className="table-cell">Billing Date</th>
-            <th className="table-cell">Time Entries</th>
             <th className="table-cell">Title Billing Heads</th>
           </tr>
         </thead>
@@ -2006,7 +2003,6 @@ function BillingHistoryTable({ data }: { data: BillingHistoryData }) {
               </td>
               <td className="table-cell">{row.billingRegion}</td>
               <td className="table-cell">{row.billingDate}</td>
-              <td className="table-cell">{row.timeEntryCount}</td>
               <td className="table-cell">{row.movieBillingHeadCount}</td>
             </tr>
           ))}
@@ -2285,7 +2281,7 @@ function RoyalBillingReportTable({ data }: { data: RoyalBillingData }) {
             </tr>
           ))}
           <tr className="bg-slate-50">
-            <td className="table-cell font-semibold text-slate-900" colSpan={6}>
+            <td className="table-cell font-semibold text-slate-900" colSpan={5}>
               Total
             </td>
             <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
@@ -2522,7 +2518,8 @@ function GenericBillingModelBlock({
     0,
   );
   const totalCost = block.rows.reduce((sum, row) => sum + row.cost, 0);
-  const totalLabelColSpan = 3;
+  let totalLabelColSpan = 2;
+  if(block.showDeveloperCost) totalLabelColSpan += 2;
 
   return (
     <section className="table-wrap">
@@ -2530,11 +2527,7 @@ function GenericBillingModelBlock({
         <thead className="table-head">
           <tr>
             <th className="table-cell">Project</th>
-            {isCountryBlock ? (
-              <th className="table-cell">Lens Type / Country List</th>
-            ) : (
-              <th className="table-cell">Status</th>
-            )}
+            <th className="table-cell">Status</th>
             {showTotalHours ? <th className="table-cell">Total Hours</th> : null}
             {block.showDeveloperCost ? (
               <th className="table-cell">Developer Cost</th>
@@ -2561,23 +2554,18 @@ function GenericBillingModelBlock({
                       <div key={detail}>{detail}</div>
                     ))}
                   </div>
-                ) : null}
+                ) : (
+                  row.countryList && (<div className="mt-1 space-y-1 text-xs font-normal text-slate-500">
+                    <div className="font-medium text-slate-600">
+                      Countries
+                    </div>
+                      {row.countryList || "-"}
+                  </div>)
+                )}
               </td>
-              {isCountryBlock ? (
-                <td className="table-cell">
-                  {row.lensDetails?.length ? (
-                    <span className="text-slate-500">
-                      See Lens Type breakdown
-                    </span>
-                  ) : (
-                    row.countryList || "-"
-                  )}
-                </td>
-              ) : (
-                <td className="table-cell">
-                  <span className="badge-blue">{row.status}</span>
-                </td>
-              )}
+              <td className="table-cell">
+                <div className="badge-blue">{row.status}</div>
+              </td>
               {showTotalHours ? <td className="table-cell whitespace-nowrap">{Number(row.totalHours ?? 0).toFixed(2)}</td> : null}
               {block.showDeveloperCost ? (
                 <td className="table-cell whitespace-nowrap font-medium text-slate-900">

@@ -24,6 +24,7 @@ const HR_ALLOWED_PATHS = [
   "/leave-requests",
   "/leave-approvals",
   "/announcements",
+  "/hr-reports",
   "/leave-admin",
   "/profile",
   "/change-password",
