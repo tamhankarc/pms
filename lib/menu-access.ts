@@ -14,6 +14,11 @@ export const menuItems = [
     label: "Contact Persons",
   },
   {
+    key: "billing-contacts",
+    href: "/billing-contacts",
+    label: "Billing Contacts",
+  },
+  {
     key: "client-billing-heads",
     href: "/client-billing-heads",
     label: "Billing Heads",
@@ -120,6 +125,7 @@ export function getBaseMenuKeysForUserType(
         "sub-project",
         "user-assignments",
         "contact-persons",
+        "billing-contacts",
         "purchase-orders",
         "profile",
         "change-password",

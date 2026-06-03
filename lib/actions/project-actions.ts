@@ -13,6 +13,7 @@ export type ProjectFormState = { success?: boolean; error?: string };
 const baseSchema = z.object({
   clientId: z.string().optional(),
   projectTypeId: z.string().optional().nullable(),
+  contactPersonId: z.string().optional().nullable(),
   name: z.string().min(2, "Project name is required."),
   billingModel: z.enum([
     "HOURLY",
@@ -179,7 +180,7 @@ async function saveFilmikResourceCounts(
         },
         select: { id: true },
       })
-    ).map((resource) => resource.id),
+    ).map((resource: { id: string }) => resource.id),
   );
 
   for (const row of rows) {
@@ -212,6 +213,7 @@ export async function createProjectAction(
     const parsed = baseSchema.safeParse({
       clientId: String(formData.get("clientId") ?? ""),
       projectTypeId: String(formData.get("projectTypeId") ?? "") || null,
+      contactPersonId: String(formData.get("contactPersonId") ?? "") || null,
       name: String(formData.get("name") ?? ""),
       billingModel: formData.get("billingModel"),
       fixedContractHours: formData.get("fixedContractHours") || 0,
@@ -282,11 +284,17 @@ export async function createProjectAction(
         error: "Selected project type is invalid for the chosen client.",
       };
 
+    if (parsed.data.contactPersonId) {
+      const contactPerson = await db.contactPerson.findFirst({ where: { id: parsed.data.contactPersonId, clientId: client.id }, select: { id: true } });
+      if (!contactPerson) return { success: false, error: "Selected contact person does not belong to selected client." };
+    }
+
     const isAdminUser = user.userType === "ADMIN";
     const projectCode = await generateProjectCode(client.id);
     const project = await db.project.create({
       data: {
         clientId: client.id,
+        contactPersonId: parsed.data.contactPersonId || null,
         projectTypeId: parsed.data.projectTypeId || null,
         name: parsed.data.name.trim(),
         code: projectCode,
@@ -405,6 +413,7 @@ export async function updateProjectAction(
 
     const parsed = projectUpdateSchema.safeParse({
       projectTypeId: String(formData.get("projectTypeId") ?? "") || null,
+      contactPersonId: String(formData.get("contactPersonId") ?? "") || null,
       name: String(formData.get("name") ?? ""),
       billingModel: formData.get("billingModel"),
       fixedContractHours: formData.get("fixedContractHours") || 0,
@@ -472,12 +481,18 @@ export async function updateProjectAction(
         error: "Selected project type is invalid for the chosen client.",
       };
 
+    if (parsed.data.contactPersonId) {
+      const contactPerson = await db.contactPerson.findFirst({ where: { id: parsed.data.contactPersonId, clientId: client.id }, select: { id: true } });
+      if (!contactPerson) return { success: false, error: "Selected contact person does not belong to selected client." };
+    }
+
     const isAdminUser = user.userType === "ADMIN";
 
     await db.project.update({
       where: { id: projectId },
       data: {
         projectTypeId: parsed.data.projectTypeId || null,
+        contactPersonId: parsed.data.contactPersonId || null,
         name: parsed.data.name.trim(),
         billingModel: parsed.data.billingModel,
         fixedContractHours:

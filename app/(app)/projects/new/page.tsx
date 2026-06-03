@@ -8,7 +8,7 @@ export default async function NewProjectPage() {
   const currentUser = await requireUser();
   if (!canCreateOrEditProject(currentUser)) redirect("/dashboard");
 
-  const [clients, projectTypes, filmikResourceTypes] = await Promise.all([
+  const [clients, projectTypes, filmikResourceTypes, contactPersons] = await Promise.all([
     db.client.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
@@ -34,6 +34,7 @@ export default async function NewProjectPage() {
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
+    db.contactPerson.findMany({ where: { client: { isActive: true } }, orderBy: [{ client: { name: "asc" } }, { name: "asc" }], select: { id: true, clientId: true, name: true, email: true } }),
   ]);
   return (
     <div className="space-y-6">
@@ -45,6 +46,7 @@ export default async function NewProjectPage() {
         clients={clients}
         projectTypes={projectTypes}
         filmikResourceTypes={filmikResourceTypes}
+        contactPersons={contactPersons}
         isAdmin={currentUser.userType === "ADMIN"}
       />
     </div>

@@ -8,6 +8,7 @@ import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 
 type Client = { id: string; name: string };
 type Country = { id: string; name: string };
+type ContactPerson = { id: string; name: string; email: string; clientId: string };
 type MovieStatus = "WORKING" | "COMPLETED" | "COMPLETED_BILLED";
 const SONY_CLIENT_ID = "cmn66d3q40002l104n6wvefvl";
 const WARNER_CLIENT_ID = "cmn66av4j0001l104077m5vxz";
@@ -19,17 +20,19 @@ const movieStatusOptions = [
   { value: "COMPLETED_BILLED", label: "Completed & Billed" },
 ];
 
-export function MovieForm({ clients, countries = [], action, initialValues, submitLabel, title, canEditCosts = false }: {
+export function MovieForm({ clients, countries = [], contactPersons = [], action, initialValues, submitLabel, title, canEditCosts = false }: {
   clients: Client[];
   countries?: Country[];
+  contactPersons?: ContactPerson[];
   action: (state: MovieFormState, formData: FormData) => Promise<MovieFormState>;
-  initialValues?: { id?: string; clientId: string; title: string; description: string | null; status?: MovieStatus; isActive: boolean; billingDomestic?: boolean; billingIntl?: boolean; billingOther?: boolean; billingSocial?: boolean; otherCountryIds?: string[]; billingUnits?: Record<string, number>; sonyTicketingBannerCost?: number | null; sonyEmailTicketingBannerCost?: number | null; sonyCoppaSite?: boolean; sonyGlobalEpkSite?: boolean };
+  initialValues?: { id?: string; clientId: string; contactPersonId?: string | null; title: string; description: string | null; status?: MovieStatus; isActive: boolean; billingDomestic?: boolean; billingIntl?: boolean; billingOther?: boolean; billingSocial?: boolean; otherCountryIds?: string[]; billingUnits?: Record<string, number>; sonyTicketingBannerCost?: number | null; sonyEmailTicketingBannerCost?: number | null; sonyCoppaSite?: boolean; sonyGlobalEpkSite?: boolean };
   submitLabel: string;
   title: string;
   canEditCosts?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [selectedClientId, setSelectedClientId] = useState(initialValues?.clientId ?? "");
+  const [contactPersonId, setContactPersonId] = useState(initialValues?.contactPersonId ?? "");
   const [movieStatus, setMovieStatus] = useState<MovieStatus>(initialValues?.status ?? "WORKING");
   const [billingDomestic, setBillingDomestic] = useState(initialValues?.billingDomestic ?? true);
   const [billingIntl, setBillingIntl] = useState(initialValues?.billingIntl ?? false);
@@ -40,6 +43,7 @@ export function MovieForm({ clients, countries = [], action, initialValues, subm
   const [otherCountryIds, setOtherCountryIds] = useState<string[]>(initialValues?.otherCountryIds ?? []);
   const clientOptions = useMemo(() => clients.map((client) => ({ value: client.id, label: client.name })), [clients]);
   const countryOptions = useMemo(() => countries.map((country) => ({ value: country.id, label: country.name })), [countries]);
+  const contactPersonOptions = useMemo(() => contactPersons.filter((person) => selectedClientId && person.clientId === selectedClientId).map((person) => ({ value: person.id, label: person.name, keywords: person.email })), [contactPersons, selectedClientId]);
   const isSonyClient = selectedClientId === SONY_CLIENT_ID;
   const showSonyCosts = canEditCosts && isSonyClient;
   const showBillingRegion = selectedClientId === WARNER_CLIENT_ID || selectedClientId === SONY_CLIENT_ID;
@@ -52,6 +56,7 @@ export function MovieForm({ clients, countries = [], action, initialValues, subm
       {initialValues?.id ? <input type="hidden" name="id" value={initialValues.id} /> : null}
       <input type="hidden" name="clientId" value={selectedClientId} />
       <input type="hidden" name="status" value={movieStatus} />
+      <input type="hidden" name="contactPersonId" value={contactPersonId} />
       {isSonyClient && sonyCoppaSite ? <input type="hidden" name="sonyCoppaSite" value="on" /> : null}
       {isSonyClient && sonyGlobalEpkSite ? <input type="hidden" name="sonyGlobalEpkSite" value="on" /> : null}
       {showBillingRegion ? (
@@ -70,8 +75,9 @@ export function MovieForm({ clients, countries = [], action, initialValues, subm
       {state?.error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</div> : null}
       {state?.success ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Title saved successfully.</div> : null}
       <div className="mt-5 space-y-4">
-        <div><FormLabel htmlFor="clientId" required>Client</FormLabel><SearchableCombobox id="clientId" options={clientOptions} value={selectedClientId} onValueChange={(value) => { setSelectedClientId(value); if (value !== SONY_CLIENT_ID) { setSonyCoppaSite(false); setSonyGlobalEpkSite(false); } }} placeholder="Select client" searchPlaceholder="Search clients..." emptyLabel="No client found." /></div>
+        <div><FormLabel htmlFor="clientId" required>Client</FormLabel><SearchableCombobox id="clientId" options={clientOptions} value={selectedClientId} onValueChange={(value) => { setSelectedClientId(value); setContactPersonId(""); if (value !== SONY_CLIENT_ID) { setSonyCoppaSite(false); setSonyGlobalEpkSite(false); } }} placeholder="Select client" searchPlaceholder="Search clients..." emptyLabel="No client found." /></div>
         <div><FormLabel htmlFor="title" required>Title title</FormLabel><input id="title" name="title" className="input" defaultValue={initialValues?.title ?? ""} required /></div>
+        <div><FormLabel htmlFor="contactPersonId">Contact Person</FormLabel><SearchableCombobox id="contactPersonId" options={contactPersonOptions} value={contactPersonId} onValueChange={setContactPersonId} placeholder={selectedClientId ? "Select contact person" : "Select client first"} searchPlaceholder="Search contact persons..." emptyLabel="No contact person found." disabled={!selectedClientId} /></div>
         <div><FormLabel htmlFor="status" required>Status</FormLabel><SearchableCombobox id="status" options={movieStatusOptions} value={movieStatus} onValueChange={(value) => setMovieStatus(value as MovieStatus)} placeholder="Select status" searchPlaceholder="Search statuses..." emptyLabel="No status found." required /></div>
         {showBillingRegion ? (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">

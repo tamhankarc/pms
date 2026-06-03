@@ -18,7 +18,7 @@ export default async function TitleEditPage({
 
   const { id } = await params;
 
-  const [clients, countries, movie] = await Promise.all([
+  const [clients, countries, contactPersons, movie] = await Promise.all([
     db.client.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
@@ -34,6 +34,7 @@ export default async function TitleEditPage({
       },
     }),
     db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.contactPerson.findMany({ where: { client: { isActive: true } }, orderBy: [{ client: { name: "asc" } }, { name: "asc" }], select: { id: true, clientId: true, name: true, email: true } }),
     db.movie.findUnique({
       where: { id },
       include: {
@@ -60,6 +61,7 @@ export default async function TitleEditPage({
         <MovieForm
           clients={clients}
           countries={countries}
+          contactPersons={contactPersons}
           action={updateMovieAction}
           title={`Edit movie: ${movie.title}`}
           submitLabel="Save changes"
@@ -67,6 +69,7 @@ export default async function TitleEditPage({
           initialValues={{
             id: movie.id,
             clientId: movie.clientId,
+            contactPersonId: movie.contactPersonId,
             title: movie.title,
             description: movie.description,
             status: movie.status,

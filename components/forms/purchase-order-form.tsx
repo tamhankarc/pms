@@ -6,13 +6,14 @@ import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import type { PurchaseOrderFormState } from "@/lib/actions/purchase-order-actions";
 
-type Client = { id: string; name: string; poAssignmentMode?: string };
+type Client = { id: string; name: string; poAssignmentMode?: string; showMoviesInEntries?: boolean };
 type Title = { id: string; title: string; clientId: string; clientName?: string };
-type Project = { id: string; name: string; clientId: string; clientName?: string };
-type AssignmentMode = "TITLE" | "TITLE_BILLING_REPORT" | "TITLE_PROJECT" | "PROJECT";
+type Project = { id: string; name: string; clientId: string; clientName?: string; newsletterType?: string | null };
+type BillingReportOption = { value: string; label: string; clientIds?: string[] };
+type AssignmentMode = "TITLE" | "TITLE_BILLING_REPORT" | "TITLE_PROJECT" | "PROJECT" | "BILLING_REPORT";
 
 const initialState: PurchaseOrderFormState = {};
-const reportTypeOptions = [
+const defaultReportTypeOptions: BillingReportOption[] = [
   { value: "social-assets", label: "Social Assets" },
   { value: "localization", label: "Localization" },
   { value: "domestic-deliverable", label: "Domestic Deliverable" },
@@ -26,6 +27,7 @@ export function PurchaseOrderForm({
   clients,
   titles,
   projects,
+  billingReports = defaultReportTypeOptions,
   action,
   submitLabel,
   title,
@@ -34,6 +36,7 @@ export function PurchaseOrderForm({
   clients: Client[];
   titles: Title[];
   projects: Project[];
+  billingReports?: BillingReportOption[];
   action: (state: PurchaseOrderFormState, formData: FormData) => Promise<PurchaseOrderFormState>;
   submitLabel: string;
   title: string;
@@ -63,14 +66,22 @@ export function PurchaseOrderForm({
   const [billingReportType, setBillingReportType] = useState(initialValues?.billingReportType ?? "");
 
   const clientOptions = useMemo(() => clients.map((client) => ({ value: client.id, label: client.name })), [clients]);
+  const selectedClient = clients.find((client) => client.id === clientId);
+  const clientUsesTitleDropdown = selectedClient?.showMoviesInEntries ?? true;
   const titleOptions = useMemo(() => titles.filter((movie) => !clientId || movie.clientId === clientId).map((movie) => ({ value: movie.id, label: movie.title, keywords: movie.clientName ?? "" })), [titles, clientId]);
-  const projectOptions = useMemo(() => projects.filter((project) => !clientId || project.clientId === clientId).map((project) => ({ value: project.id, label: project.name, keywords: project.clientName ?? "" })), [projects, clientId]);
+  const projectOptions = useMemo(() => projects.filter((project) => !clientId || project.clientId === clientId).map((project) => ({ value: project.id, label: clientId === "cmn66d3q40002l104n6wvefvl" && project.id === "cmnijd30h0001l404y6i8tb2y" && project.newsletterType ? `Newsletters - ${project.newsletterType}` : project.name, keywords: project.clientName ?? "" })), [projects, clientId]);
+  const billingReportOptions = useMemo(() => billingReports.filter((report) => !report.clientIds?.length || report.clientIds.includes(clientId)).map((report) => ({ value: report.value, label: report.label })), [billingReports, clientId]);
   const poKindLabel = assignmentMode === "TITLE" && movieIds.length > 1 ? "Residual" : assignmentMode === "TITLE" && movieIds.length === 1 ? "Normal" : "Configured by selected mode";
 
   function handleClientChange(nextClientId: string) {
     setClientId(nextClientId);
     setTitleIds([]);
     setProjectId("");
+    setBillingReportType("");
+    if (nextClientId) {
+      const nextClient = clients.find((client) => client.id === nextClientId);
+      if (nextClient && nextClient.showMoviesInEntries === false && ["TITLE", "TITLE_BILLING_REPORT", "TITLE_PROJECT"].includes(assignmentMode)) setAssignmentMode("PROJECT");
+    }
   }
 
   return (
@@ -122,14 +133,13 @@ export function PurchaseOrderForm({
         <div className="rounded-xl border border-slate-200 p-4">
           <FormLabel htmlFor="assignmentMode" required>PO Assignment</FormLabel>
           <div className="mt-2 grid gap-3 md:grid-cols-4">
-            {[
-              ["TITLE", "Title"],
-              ["TITLE_BILLING_REPORT", "Title + Billing Report"],
-              ["TITLE_PROJECT", "Title + Project"],
+            {([
+              ...(clientUsesTitleDropdown ? [["TITLE", "Title"], ["TITLE_BILLING_REPORT", "Title + Billing Report"], ["TITLE_PROJECT", "Title + Project"]] : []),
               ["PROJECT", "Project"],
-            ].map(([value, label]) => (
+              ["BILLING_REPORT", "Billing Report"],
+            ] as [AssignmentMode, string][]).map(([value, label]) => (
               <label key={value} className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm ${assignmentMode === value ? "border-brand-500 bg-brand-50 text-brand-900" : "border-slate-200 bg-white text-slate-700"}`}>
-                <input type="radio" checked={assignmentMode === value} onChange={() => setAssignmentMode(value as AssignmentMode)} />
+                <input type="radio" checked={assignmentMode === value} onChange={() => { setAssignmentMode(value); if (value !== "BILLING_REPORT" && value !== "TITLE_BILLING_REPORT") setBillingReportType(""); }} />
                 <span className="font-medium">{label}</span>
               </label>
             ))}
@@ -137,8 +147,8 @@ export function PurchaseOrderForm({
           <p className="mt-2 text-xs text-slate-500">Title mode labels itself automatically: 1 PO + 1 Title = Normal, 1 PO + multiple Titles = Residual. Current: <strong>{poKindLabel}</strong>.</p>
         </div>
 
-        {assignmentMode !== "PROJECT" ? <div><FormLabel htmlFor="movieIds" required>Title(s)</FormLabel><SearchableMultiSelect id="movieIds" name="movieIds" options={titleOptions} value={movieIds} onValueChange={setTitleIds} placeholder={clientId ? "Select title(s)" : "Select client first"} searchPlaceholder="Search titles..." emptyLabel="No titles found." disabled={!clientId} required /></div> : null}
-        {assignmentMode === "TITLE_BILLING_REPORT" ? <div><FormLabel htmlFor="billingReportType" required>Billing Report</FormLabel><SearchableCombobox id="billingReportType" options={reportTypeOptions} value={billingReportType} onValueChange={setBillingReportType} placeholder="Select billing report" searchPlaceholder="Search reports..." emptyLabel="No billing report found." /></div> : null}
+        {assignmentMode !== "PROJECT" && assignmentMode !== "BILLING_REPORT" ? <div><FormLabel htmlFor="movieIds" required>Title(s)</FormLabel><SearchableMultiSelect id="movieIds" name="movieIds" options={titleOptions} value={movieIds} onValueChange={setTitleIds} placeholder={clientId ? "Select title(s)" : "Select client first"} searchPlaceholder="Search titles..." emptyLabel="No titles found." disabled={!clientId} required /></div> : null}
+        {(assignmentMode === "TITLE_BILLING_REPORT" || assignmentMode === "BILLING_REPORT") ? <div><FormLabel htmlFor="billingReportType" required>Billing Report</FormLabel><SearchableCombobox id="billingReportType" options={billingReportOptions} value={billingReportType} onValueChange={setBillingReportType} placeholder={clientId ? "Select billing report" : "Select client first"} searchPlaceholder="Search reports..." emptyLabel="No billing report found." disabled={!clientId} /></div> : null}
         {(assignmentMode === "TITLE_PROJECT" || assignmentMode === "PROJECT") ? <div><FormLabel htmlFor="projectId" required>Project</FormLabel><SearchableCombobox id="projectId" options={projectOptions} value={projectId} onValueChange={setProjectId} placeholder={clientId ? "Select project" : "Select client first"} searchPlaceholder="Search projects..." emptyLabel="No project found." disabled={!clientId} /></div> : null}
 
         <button className="btn-primary w-full" disabled={pending}>{pending ? "Saving..." : submitLabel}</button>

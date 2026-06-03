@@ -21,6 +21,8 @@ type FilmikResourceType = {
   latestMonth: string;
 };
 
+type ContactPerson = { id: string; name: string; email: string; clientId: string };
+
 type BillingModel =
   | "HOURLY"
   | "FIXED_FULL"
@@ -47,6 +49,7 @@ export function ProjectEditForm({
   clientShowsNewslettersInEntries,
   initialValues,
   filmikResourceTypes,
+  contactPersons = [],
   monthlyAdditionalHours = [],
   isAdmin = false,
 }: {
@@ -62,9 +65,11 @@ export function ProjectEditForm({
   clientShowsAssetNamesInEntries: boolean;
   clientShowsNewslettersInEntries: boolean;
   filmikResourceTypes: FilmikResourceType[];
+  contactPersons?: ContactPerson[];
   monthlyAdditionalHours?: { month: string; hours: number }[];
   initialValues: {
     projectTypeId: string | null;
+    contactPersonId: string | null;
     name: string;
     billingModel: BillingModel;
     fixedContractHours: number | null;
@@ -94,6 +99,7 @@ export function ProjectEditForm({
   const [projectTypeId, setProjectTypeId] = useState(
     initialValues.projectTypeId ?? "",
   );
+  const [contactPersonId, setContactPersonId] = useState(initialValues.contactPersonId ?? "");
   const [status, setStatus] = useState<ProjectStatus>(initialValues.status);
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(
     initialValues.hideCountriesInEntries,
@@ -114,6 +120,7 @@ export function ProjectEditForm({
     initialValues.hideNewslettersInEntries,
   );
   const [addToBilling, setAddToBilling] = useState(initialValues.addToBilling);
+  const contactPersonOptions = contactPersons.filter((person) => person.clientId === clientId).map((person) => ({ value: person.id, label: person.name, keywords: person.email }));
   const isFilmikClient = clientId === FILMIK_CLIENT_ID;
   const isSonyPicturesClient = clientId === SONY_PICTURES_CLIENT_ID;
   const currentMonth = new Date().toISOString().slice(0, 7);
@@ -134,6 +141,7 @@ export function ProjectEditForm({
   return (
     <form action={formAction} className="card p-6">
       <input type="hidden" name="projectTypeId" value={projectTypeId} />
+      <input type="hidden" name="contactPersonId" value={contactPersonId} />
       <input type="hidden" name="billingModel" value={billingModel} />
       <input type="hidden" name="status" value={status} />
       {hideCountriesInEntries ? (
@@ -185,6 +193,11 @@ export function ProjectEditForm({
             value={lockedClientName}
             readOnly
           />
+        </div>
+
+        <div className="md:col-span-2">
+          <FormLabel htmlFor="contactPersonId">Contact Person</FormLabel>
+          <SearchableCombobox id="contactPersonId" value={contactPersonId} onValueChange={setContactPersonId} options={contactPersonOptions} placeholder="Select contact person" searchPlaceholder="Search contact persons..." emptyLabel="No contact person found." />
         </div>
 
         {clientUsesProjectTypes ? (

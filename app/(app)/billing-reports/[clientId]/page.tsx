@@ -89,6 +89,32 @@ function buildQueryString(values: Record<string, string>) {
 }
 
 const BILLING_REPORT_DETAIL_PAGE_SIZE = 20;
+
+type BillingContactNotice = {
+  id: string;
+  assignmentLevel: string;
+  billingReportType: string | null;
+  project: { id: string; name: string } | null;
+  contactPerson: { name: string; email: string };
+};
+
+function formatBillTo(contact: { name: string; email: string }) {
+  return `Bill To: ${contact.name} (${contact.email})`;
+}
+
+function BillingContactNotices({ contacts, activeReport }: { contacts: BillingContactNotice[]; activeReport: string }) {
+  const clientContacts = contacts.filter((item) => item.assignmentLevel === "CLIENT");
+  const reportContacts = contacts.filter((item) => item.assignmentLevel === "CLIENT_BILLING_REPORT" && item.billingReportType === activeReport);
+  const projectContacts = contacts.filter((item) => item.assignmentLevel === "CLIENT_PROJECT" && item.project);
+  if (!clientContacts.length && !reportContacts.length && !projectContacts.length) return null;
+  return (
+    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+      {[...clientContacts, ...reportContacts].map((item) => <div key={item.id} className="font-medium text-slate-900">{formatBillTo(item.contactPerson)}</div>)}
+      {projectContacts.length ? <div className="mt-2 space-y-1">{projectContacts.map((item) => <div key={item.id}><span className="font-semibold">{item.project?.name}:</span> {formatBillTo(item.contactPerson)}</div>)}</div> : null}
+    </div>
+  );
+}
+
 const FLYHOUSE_CLIENT_ID = "cmnh8c2c00000l2044e37c8rg";
 
 type BillingReportPageSearchParams = Record<
@@ -3051,6 +3077,12 @@ export default async function ClientBillingReportPage({
         movieId: getSearchParamValue(resolvedSearchParams, "movieId") ?? "all",
       }
     : genericFilters;
+  const billingContactNotices = await db.billingContactAssignment.findMany({
+    where: { clientId },
+    select: { id: true, assignmentLevel: true, billingReportType: true, project: { select: { id: true, name: true } }, contactPerson: { select: { name: true, email: true } } },
+    orderBy: [{ assignmentLevel: "asc" }, { updatedAt: "desc" }],
+  });
+
   const genericBillingReportData =
     !reportCatalog || genericBillingOptions
       ? await getGenericBillingReportData({
@@ -3075,6 +3107,7 @@ export default async function ClientBillingReportPage({
           </Link>
         }
       />
+      <BillingContactNotices contacts={billingContactNotices} activeReport={activeReport} />
       {timeEntryReportData ? (
         <TimeEntryReportsWorkspace
           clientId={clientId}

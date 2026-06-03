@@ -147,6 +147,13 @@ enum PurchaseOrderAssignmentMode {
   TITLE_BILLING_REPORT
   TITLE_PROJECT
   PROJECT
+  BILLING_REPORT
+}
+
+enum BillingContactAssignmentLevel {
+  CLIENT
+  CLIENT_PROJECT
+  CLIENT_BILLING_REPORT
 }
 
 enum PurchaseOrderStatus {
@@ -253,6 +260,7 @@ model Client {
   monthlyBillings             ClientMonthlyBilling[]
   purchaseOrders              PurchaseOrder[]
   purchaseOrderAssignments    PurchaseOrderAssignment[]
+  billingContactAssignments   BillingContactAssignment[]
 
   @@index([isActive])
 }
@@ -274,6 +282,9 @@ model ContactPerson {
   movie     Movie?   @relation(fields: [movieId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   country   Country? @relation(fields: [countryId], references: [id])
+  primaryForMovies Movie[] @relation("MoviePrimaryContactPerson")
+  primaryForProjects Project[] @relation("ProjectPrimaryContactPerson")
+  billingContactAssignments BillingContactAssignment[]
   countryId String?
 
   @@index([clientId])
@@ -349,6 +360,7 @@ model ProjectType {
 model Movie {
   id                           String             @id @default(cuid())
   clientId                     String
+  contactPersonId              String?
   title                        String
   code                         String?            @unique
   description                  String?            @db.Text
@@ -370,6 +382,7 @@ model Movie {
   updatedAt                    DateTime           @updatedAt
 
   client                      Client                       @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  primaryContactPerson        ContactPerson?                @relation("MoviePrimaryContactPerson", fields: [contactPersonId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   estimates                   Estimate[]
   timeEntries                 TimeEntry[]
   contactPersons              ContactPerson[]
@@ -378,6 +391,7 @@ model Movie {
   purchaseOrderAssignments    PurchaseOrderAssignment[]
 
   @@index([clientId, isActive])
+  @@index([contactPersonId])
   @@index([billingSocial])
   @@index([title])
 }
@@ -581,6 +595,7 @@ model Country {
 model Project {
   id                      String        @id @default(cuid())
   clientId                String
+  contactPersonId         String?
   projectTypeId           String?
   code                    String?       @unique
   name                    String
@@ -612,6 +627,7 @@ model Project {
   addToBilling            Boolean       @default(false)
 
   client      Client       @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  primaryContactPerson ContactPerson? @relation("ProjectPrimaryContactPerson", fields: [contactPersonId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   projectType ProjectType? @relation(fields: [projectTypeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   createdBy   User?        @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   updatedBy   User?        @relation("ProjectUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -625,13 +641,35 @@ model Project {
   monthlyAdditionalHours ProjectMonthlyAdditionalHours[]
   newsletters Newsletter[]
   purchaseOrderAssignments PurchaseOrderAssignment[]
+  billingContactAssignments BillingContactAssignment[]
 
   @@index([clientId, isActive])
+  @@index([contactPersonId])
   @@index([projectTypeId])
   @@index([status])
   @@index([billingModel])
   @@index([createdById])
   @@index([updatedById])
+}
+
+model BillingContactAssignment {
+  id                String                        @id @default(cuid())
+  clientId          String
+  contactPersonId   String
+  assignmentLevel   BillingContactAssignmentLevel
+  projectId         String?
+  billingReportType String?
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
+
+  client        Client        @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  contactPerson ContactPerson @relation(fields: [contactPersonId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  project       Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([clientId, assignmentLevel])
+  @@index([contactPersonId])
+  @@index([projectId])
+  @@index([billingReportType])
 }
 
 model ProjectMonthlyAdditionalHours {

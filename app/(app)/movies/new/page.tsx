@@ -11,7 +11,7 @@ export default async function NewTitlePage() {
   const currentUser = await requireUser();
   if (!canManageMovies(currentUser)) redirect("/dashboard");
 
-  const [clients, countries] = await Promise.all([
+  const [clients, countries, contactPersons] = await Promise.all([
     db.client.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
@@ -27,12 +27,13 @@ export default async function NewTitlePage() {
       },
     }),
     db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.contactPerson.findMany({ where: { client: { isActive: true } }, orderBy: [{ client: { name: "asc" } }, { name: "asc" }], select: { id: true, clientId: true, name: true, email: true } }),
   ]);
 
   return (
     <div className="space-y-6">
       <PageHeader title="Create Title" description="Add a new movie and configure its billing region, status, and client-specific billing fields." actions={<Link className="btn-secondary" href="/movies">Back to Titles</Link>} />
-      <MovieForm clients={clients} countries={countries} action={createMovieAction} title="Create movie" submitLabel="Create movie" canEditCosts={canViewCostData(currentUser)} />
+      <MovieForm clients={clients} countries={countries} contactPersons={contactPersons} action={createMovieAction} title="Create movie" submitLabel="Create movie" canEditCosts={canViewCostData(currentUser)} />
     </div>
   );
 }

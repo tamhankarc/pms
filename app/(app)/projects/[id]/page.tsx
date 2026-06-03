@@ -24,7 +24,7 @@ export default async function ProjectDetailPage({
   });
   if (!project) notFound();
 
-  const [projectTypes, filmikResourceTypesRaw] = await Promise.all([
+  const [projectTypes, filmikResourceTypesRaw, contactPersons] = await Promise.all([
     db.projectType.findMany({
       where: { clientId: project.clientId, isActive: true },
       orderBy: { name: "asc" },
@@ -51,6 +51,7 @@ export default async function ProjectDetailPage({
           orderBy: { name: "asc" },
         })
       : Promise.resolve([]),
+    db.contactPerson.findMany({ where: { clientId: project.clientId }, orderBy: { name: "asc" }, select: { id: true, clientId: true, name: true, email: true } }),
   ]);
   const filmikResourceTypes = filmikResourceTypesRaw.map((resource) => ({
     id: resource.id,
@@ -89,6 +90,7 @@ export default async function ProjectDetailPage({
           project.client.showNewslettersInEntries
         }
         filmikResourceTypes={filmikResourceTypes}
+        contactPersons={contactPersons}
         monthlyAdditionalHours={project.monthlyAdditionalHours.map((row) => ({
           month: row.month.toISOString().slice(0, 7),
           hours: Number(row.hours ?? 0),
@@ -96,6 +98,7 @@ export default async function ProjectDetailPage({
         isAdmin={currentUser.userType === "ADMIN"}
         initialValues={{
           projectTypeId: project.projectTypeId,
+          contactPersonId: project.contactPersonId,
           name: project.name,
           billingModel: project.billingModel,
           fixedContractHours:

@@ -23,6 +23,7 @@ const movieSchema = z.object({
   id: z.string().optional(),
   clientId: z.string().min(1, "Client is required."),
   title: z.string().min(2, "Movie title is required."),
+  contactPersonId: z.string().optional(),
   description: z.string().optional(),
   status: z.enum(["WORKING", "COMPLETED", "COMPLETED_BILLED"]).default("WORKING"),
   billingDomestic: z.union([z.literal("on"), z.literal("true"), z.literal("1")]).optional(),
@@ -53,6 +54,7 @@ export async function createMovieAction(
     const parsed = movieSchema.safeParse({
       clientId: formData.get("clientId"),
       title: formData.get("title"),
+      contactPersonId: String(formData.get("contactPersonId") ?? ""),
       description: formData.get("description") || "",
       status: formData.get("status") ?? "WORKING",
       billingDomestic: formData.get("billingDomestic") ?? undefined,
@@ -85,11 +87,17 @@ export async function createMovieAction(
     if (!billingDomestic && !billingIntl && !billingOther && !billingSocial) return { success: false, error: "Select at least one movie billing region." };
     if (billingOther && !otherCountryIds.length) return { success: false, error: "Select one or more countries for Other billing region." };
 
+    if (parsed.data.contactPersonId) {
+      const contactPerson = await db.contactPerson.findFirst({ where: { id: parsed.data.contactPersonId, clientId: parsed.data.clientId }, select: { id: true } });
+      if (!contactPerson) return { success: false, error: "Selected contact person does not belong to selected client." };
+    }
+
     const generatedCode = await generateMovieCode(parsed.data.clientId, parsed.data.title);
 
     await db.movie.create({
       data: {
         clientId: parsed.data.clientId,
+        contactPersonId: parsed.data.contactPersonId || null,
         title: parsed.data.title.trim(),
         code: generatedCode,
         description: parsed.data.description?.trim() || null,
@@ -188,12 +196,18 @@ export async function updateMovieAction(
     if (!billingDomestic && !billingIntl && !billingOther && !billingSocial) return { success: false, error: "Select at least one movie billing region." };
     if (billingOther && !otherCountryIds.length) return { success: false, error: "Select one or more countries for Other billing region." };
 
+    if (parsed.data.contactPersonId) {
+      const contactPerson = await db.contactPerson.findFirst({ where: { id: parsed.data.contactPersonId, clientId: parsed.data.clientId }, select: { id: true } });
+      if (!contactPerson) return { success: false, error: "Selected contact person does not belong to selected client." };
+    }
+
     const code = existingMovie.code?.trim() || (await generateMovieCode(parsed.data.clientId, parsed.data.title));
 
     await db.movie.update({
       where: { id: parsed.data.id },
       data: {
         clientId: parsed.data.clientId,
+        contactPersonId: parsed.data.contactPersonId || null,
         title: parsed.data.title.trim(),
         code,
         description: parsed.data.description?.trim() || null,

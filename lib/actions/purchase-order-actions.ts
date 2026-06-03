@@ -20,7 +20,7 @@ const purchaseOrderSchema = z.object({
   status: z.enum(["ACTIVE", "EXHAUSTED", "EXPIRED", "CANCELLED"]),
   documentUrl: z.string().trim().optional(),
   notes: z.string().trim().optional(),
-  assignmentMode: z.enum(["TITLE", "TITLE_BILLING_REPORT", "TITLE_PROJECT", "PROJECT"]),
+  assignmentMode: z.enum(["TITLE", "TITLE_BILLING_REPORT", "TITLE_PROJECT", "PROJECT", "BILLING_REPORT"]),
   movieIds: z.array(z.string()).optional(),
   projectId: z.string().optional(),
   billingReportType: z.string().optional(),
@@ -67,7 +67,7 @@ async function validateAssignmentPayload(data: z.infer<typeof purchaseOrderSchem
     if (movies.length !== data.movieIds.length) throw new Error("One or more selected Titles do not belong to selected client.");
   }
 
-  if (data.assignmentMode === "TITLE_BILLING_REPORT" && !data.billingReportType) throw new Error("Billing report type is required.");
+  if ((data.assignmentMode === "TITLE_BILLING_REPORT" || data.assignmentMode === "BILLING_REPORT") && !data.billingReportType) throw new Error("Billing report type is required.");
 
   if (data.assignmentMode === "TITLE_PROJECT" || data.assignmentMode === "PROJECT") {
     if (!data.projectId) throw new Error("Project is required.");
@@ -100,15 +100,15 @@ async function savePurchaseOrder(formData: FormData, mode: "create" | "update") 
     : await db.purchaseOrder.update({ where: { id: parsed.data.id }, data: poData, select: { id: true } });
 
   await db.purchaseOrderAssignment.deleteMany({ where: { purchaseOrderId: purchaseOrder.id } });
-  const movieIds = parsed.data.assignmentMode === "PROJECT" ? [null] : (parsed.data.movieIds ?? []);
+  const movieIds = parsed.data.assignmentMode === "PROJECT" || parsed.data.assignmentMode === "BILLING_REPORT" ? [null] : (parsed.data.movieIds ?? []);
   await db.purchaseOrderAssignment.createMany({
     data: movieIds.map((movieId) => ({
       clientId: parsed.data.clientId,
       purchaseOrderId: purchaseOrder.id,
       assignmentMode: parsed.data.assignmentMode,
       movieId,
-      projectId: parsed.data.assignmentMode === "TITLE" || parsed.data.assignmentMode === "TITLE_BILLING_REPORT" ? null : (parsed.data.projectId || null),
-      billingReportType: parsed.data.assignmentMode === "TITLE_BILLING_REPORT" ? parsed.data.billingReportType || null : null,
+      projectId: parsed.data.assignmentMode === "TITLE" || parsed.data.assignmentMode === "TITLE_BILLING_REPORT" || parsed.data.assignmentMode === "BILLING_REPORT" ? null : (parsed.data.projectId || null),
+      billingReportType: parsed.data.assignmentMode === "TITLE_BILLING_REPORT" || parsed.data.assignmentMode === "BILLING_REPORT" ? parsed.data.billingReportType || null : null,
     })),
   });
 
