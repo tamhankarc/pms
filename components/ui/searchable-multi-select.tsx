@@ -43,6 +43,7 @@ export function SearchableMultiSelect({
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const lastAutoSubmittedValueRef = useRef(defaultValue.join("\u001F"));
 
   useEffect(() => {
     if (!isOpen) return;
@@ -104,11 +105,36 @@ export function SearchableMultiSelect({
     [options, selectedValues],
   );
 
+  useEffect(() => {
+    if (isOpen) return;
+
+    const selectedKey = selectedValues.join("\u001F");
+    if (selectedKey === lastAutoSubmittedValueRef.current) return;
+    requestAutoSubmit(selectedValues);
+  }, [isOpen, selectedValues]);
+
+  function requestAutoSubmit(nextValues: string[]) {
+    lastAutoSubmittedValueRef.current = nextValues.join("\u001F");
+    window.setTimeout(() => {
+      const form = wrapperRef.current?.closest("form");
+      if (
+        form instanceof HTMLFormElement &&
+        form.dataset.autoSubmitFilter === "true"
+      ) {
+        form.requestSubmit();
+      }
+    }, 0);
+  }
+
   function updateValues(nextValues: string[]) {
     if (!isControlled) {
       setInternalValue(nextValues);
     }
     onValueChange?.(nextValues);
+
+    if (!isOpen) {
+      requestAutoSubmit(nextValues);
+    }
   }
 
   function toggleValue(nextValue: string) {

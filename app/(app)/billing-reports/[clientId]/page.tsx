@@ -2507,7 +2507,7 @@ function GenericBillingModelBlock({
   block: GenericBillingReportBlock;
   showTotalHoursColumn?: boolean;
 }) {
-  const isCountryBlock = block.key === "fixedPerCountry";
+  // const isCountryBlock = block.key === "fixedPerCountry";
   const showTotalHours = showTotalHoursColumn && block.rows.some((row) => row.totalHours !== undefined);
   const totalDeveloperCost = block.rows.reduce(
     (sum, row) => sum + Number(row.developerCost ?? 0),

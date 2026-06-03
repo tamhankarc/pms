@@ -21,6 +21,21 @@ export function normalizeHRReportShift(
   return value === "DAY" || value === "NIGHT" ? value : "BOTH";
 }
 
+export function normalizeHRReportUserIds(value?: string | string[] | null) {
+  const values = Array.isArray(value) ? value : value ? [value] : [];
+  return Array.from(
+    new Set(
+      values
+        .map((item) => item.trim())
+        .filter((item) => item && item !== "ALL"),
+    ),
+  );
+}
+
+export function normalizeHRReportUserId(value?: string | null) {
+  return normalizeHRReportUserIds(value)[0];
+}
+
 function shiftLabel(value?: ShiftType | HRReportShiftFilter | null) {
   return value === "NIGHT" ? "Night" : value === "BOTH" ? "Both" : "Day";
 }
@@ -69,6 +84,25 @@ const eligibleUserWhere: Prisma.UserWhereInput = {
   isActive: true,
   userType: { notIn: ["ADMIN", "OPERATIONS", "REPORT_VIEWER", "ACCOUNTS"] },
 };
+
+function buildEligibleUserWhere(userIds: string[] = []): Prisma.UserWhereInput {
+  return userIds.length
+    ? { AND: [eligibleUserWhere, { id: { in: userIds } }] }
+    : eligibleUserWhere;
+}
+
+export async function getHRReportUserOptions() {
+  return db.user.findMany({
+    where: eligibleUserWhere,
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      employeeCode: true,
+    },
+    orderBy: { fullName: "asc" },
+  });
+}
 
 export function normalizeHRReportType(value?: string | null): HRReportType {
   return value === "leaves" || value === "leave-counts" ? value : "attendance";
@@ -131,7 +165,9 @@ export async function getHRReportData(
   fromDate?: string,
   toDate?: string,
   shiftFilter: HRReportShiftFilter = "BOTH",
+  userIds: string[] = [],
 ): Promise<HRReportData> {
+  const userWhere = buildEligibleUserWhere(userIds);
   if (type === "leave-counts") {
     const year = Number(getIstDateKey().slice(0, 4));
     const { startUtc: yearStart } = getDayBoundsUtcFromIstDateKey(
@@ -141,7 +177,7 @@ export async function getHRReportData(
       `${year + 1}-01-01`,
     );
     const users = await db.user.findMany({
-      where: eligibleUserWhere,
+      where: userWhere,
       select: {
         id: true,
         fullName: true,
@@ -210,7 +246,7 @@ export async function getHRReportData(
     );
     const [users, logs, approvedLeaves] = await Promise.all([
       db.user.findMany({
-        where: eligibleUserWhere,
+        where: userWhere,
         select: {
           id: true,
           fullName: true,
@@ -353,7 +389,7 @@ export async function getHRReportData(
 
   const requests = await db.leaveRequest.findMany({
     where: {
-      user: eligibleUserWhere,
+      user: userWhere,
       startDate: { lt: endUtc },
       endDate: { gte: startUtc },
     },

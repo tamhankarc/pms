@@ -5,12 +5,15 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import { requireUser } from "@/lib/auth";
 import { canViewHRReports } from "@/lib/permissions";
 import {
   getHRReportData,
+  getHRReportUserOptions,
   normalizeHRReportShift,
   normalizeHRReportType,
+  normalizeHRReportUserIds,
   validateReportDateRange,
 } from "@/lib/hr-reports";
 import { getIstDateKey } from "@/lib/ist";
@@ -23,6 +26,7 @@ export default async function HRReportsPage({
     fromDate?: string;
     toDate?: string;
     shift?: string;
+    userId?: string | string[];
     page?: string;
   }>;
 }) {
@@ -33,6 +37,7 @@ export default async function HRReportsPage({
   const type = normalizeHRReportType(params.type);
   const todayKey = getIstDateKey();
   const shift = normalizeHRReportShift(params.shift);
+  const selectedUserIds = normalizeHRReportUserIds(params.userId);
   const isAttendanceReport = type === "attendance";
   const isLeaveCountsReport = type === "leave-counts";
   const effectiveFromDate = isLeaveCountsReport
@@ -43,10 +48,11 @@ export default async function HRReportsPage({
   const requestedPage = Math.max(1, Number(params.page ?? "1") || 1);
   let error = "";
   let data: Awaited<ReturnType<typeof getHRReportData>> | null = null;
+  const userOptions = await getHRReportUserOptions();
 
   try {
     if (isLeaveCountsReport) {
-      data = await getHRReportData(type);
+      data = await getHRReportData(type, undefined, undefined, "BOTH", selectedUserIds);
     } else {
       const range = validateReportDateRange(
         effectiveFromDate,
@@ -57,6 +63,7 @@ export default async function HRReportsPage({
         range.fromDate,
         range.toDate,
         isAttendanceReport ? shift : "BOTH",
+        selectedUserIds,
       );
     }
   } catch (caught) {
@@ -77,12 +84,14 @@ export default async function HRReportsPage({
     exportParams.set("toDate", effectiveToDate);
   }
   if (isAttendanceReport) exportParams.set("shift", shift);
+  for (const selectedUserId of selectedUserIds) exportParams.append("userId", selectedUserId);
 
   const paginationSearchParams = {
     type,
     fromDate: isLeaveCountsReport ? undefined : effectiveFromDate,
     toDate: isLeaveCountsReport ? undefined : effectiveToDate,
     shift: isAttendanceReport ? shift : undefined,
+    userId: selectedUserIds.length ? selectedUserIds : undefined,
   };
 
   return (
@@ -92,7 +101,7 @@ export default async function HRReportsPage({
         description="Export attendance and leave reports for all leave-eligible employees."
       />
       <section className="card p-5">
-        <AutoSubmitFilterForm className="grid gap-4 md:grid-cols-4" method="get">
+        <AutoSubmitFilterForm className="grid gap-4 md:grid-cols-5" method="get">
           <div>
             <label className="label" htmlFor="type">
               Report
@@ -154,6 +163,26 @@ export default async function HRReportsPage({
               placeholder="Select shift"
               searchPlaceholder="Search shifts..."
               emptyLabel="No shift found."
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="userId">
+              User
+            </label>
+            <SearchableMultiSelect
+              id="userId"
+              name="userId"
+              defaultValue={selectedUserIds}
+              options={userOptions.map((option) => ({
+                value: option.id,
+                label: option.employeeCode
+                  ? `${option.fullName} (${option.employeeCode})`
+                  : option.fullName,
+                keywords: `${option.email ?? ""} ${option.employeeCode ?? ""}`,
+              }))}
+              placeholder="All users"
+              searchPlaceholder="Search users..."
+              emptyLabel="No user found."
             />
           </div>
         </AutoSubmitFilterForm>

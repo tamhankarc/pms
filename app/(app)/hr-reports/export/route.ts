@@ -7,6 +7,7 @@ import {
   getHRReportFileName,
   normalizeHRReportShift,
   normalizeHRReportType,
+  normalizeHRReportUserIds,
   validateReportDateRange,
 } from "@/lib/hr-reports";
 
@@ -20,9 +21,10 @@ export async function GET(request: Request) {
     const type = normalizeHRReportType(params.get("type"));
     const format = params.get("format") === "pdf" ? "pdf" : "xlsx";
     const shift = normalizeHRReportShift(params.get("shift"));
+    const userIds = normalizeHRReportUserIds(params.getAll("userId"));
     let data;
     if (type === "leave-counts") {
-      data = await getHRReportData(type);
+      data = await getHRReportData(type, undefined, undefined, "BOTH", userIds);
     } else {
       const { fromDate, toDate } = validateReportDateRange(
         params.get("fromDate"),
@@ -33,6 +35,7 @@ export async function GET(request: Request) {
         fromDate,
         toDate,
         type === "attendance" ? shift : "BOTH",
+        userIds,
       );
     }
 

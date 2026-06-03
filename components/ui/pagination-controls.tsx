@@ -2,7 +2,7 @@ import Link from "next/link";
 
 function buildHref(
   basePath: string,
-  searchParams: Record<string, string | undefined>,
+  searchParams: Record<string, string | string[] | undefined>,
   page: number,
   pageParam: string,
   anchor?: string,
@@ -11,7 +11,13 @@ function buildHref(
 
   Object.entries(searchParams).forEach(([key, value]) => {
     if (value && key !== pageParam) {
-      params.set(key, value);
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (item) params.append(key, item);
+        }
+      } else {
+        params.set(key, value);
+      }
     }
   });
 
@@ -66,7 +72,7 @@ export function PaginationControls({
   totalPages: number;
   totalItems: number;
   pageSize: number;
-  searchParams: Record<string, string | undefined>;
+  searchParams: Record<string, string | string[] | undefined>;
   pageParam?: string;
   anchor?: string;
 }) {
