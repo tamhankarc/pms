@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
@@ -89,4 +90,45 @@ export async function updateContactPersonAction(_prevState: ContactPersonFormSta
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
   }
+}
+
+
+export async function deleteContactPersonAction(formData: FormData) {
+  let redirectTo = "/contact-persons";
+
+  try {
+    await requireCanManageContactPersons();
+    const id = String(formData.get("id") ?? "");
+
+    if (!id) {
+      throw new Error("Contact Person is required.");
+    }
+
+    const billingContactCount = await db.billingContactAssignment.count({
+      where: {
+        contactPersonId: id,
+      },
+    });
+
+    if (billingContactCount > 0) {
+      throw new Error(
+        "This contact person is assigned as a billing contact. Remove the billing contact assignment first.",
+      );
+    }
+
+    await db.contactPerson.delete({
+      where: {
+        id,
+      },
+    });
+
+    revalidatePath("/contact-persons");
+    revalidatePath("/billing-contacts");
+    redirectTo = "/contact-persons?deleteSuccess=Contact%20person%20deleted.";
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to delete contact person.";
+    redirectTo = `/contact-persons?deleteError=${encodeURIComponent(message)}`;
+  }
+
+  redirect(redirectTo);
 }

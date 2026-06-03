@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
@@ -68,9 +69,42 @@ export async function saveBillingContactAction(_prevState: BillingContactFormSta
 }
 
 export async function deleteBillingContactAction(formData: FormData) {
-  await requireCanManageBillingContacts();
-  const id = String(formData.get("id") ?? "");
-  if (!id) throw new Error("Billing contact is required.");
-  await db.billingContactAssignment.delete({ where: { id } });
-  revalidatePath("/billing-contacts");
+  let redirectTo = "/billing-contacts";
+
+  try {
+    await requireCanManageBillingContacts();
+    const id = String(formData.get("id") ?? "");
+
+    if (!id) {
+      throw new Error("Billing contact is required.");
+    }
+
+    const assignment = await db.billingContactAssignment.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        clientId: true,
+      },
+    });
+
+    if (!assignment) {
+      throw new Error("Billing contact assignment was not found.");
+    }
+
+    await db.billingContactAssignment.delete({
+      where: {
+        id,
+      },
+    });
+
+    revalidatePath("/billing-contacts");
+    revalidatePath(`/billing-reports/${assignment.clientId}`);
+    redirectTo = "/billing-contacts?deleteSuccess=Billing%20contact%20deleted.";
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to delete billing contact.";
+    redirectTo = `/billing-contacts?deleteError=${encodeURIComponent(message)}`;
+  }
+
+  redirect(redirectTo);
 }

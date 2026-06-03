@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
@@ -125,4 +126,32 @@ export async function createPurchaseOrderAction(_prevState: PurchaseOrderFormSta
 export async function updatePurchaseOrderAction(_prevState: PurchaseOrderFormState, formData: FormData): Promise<PurchaseOrderFormState> {
   try { return await savePurchaseOrder(formData, "update"); }
   catch (error) { return { success: false, error: error instanceof Error ? error.message : "Something went wrong." }; }
+}
+
+
+export async function deletePurchaseOrderAction(formData: FormData) {
+  let redirectTo = "/purchase-orders";
+
+  try {
+    await requireCanManagePurchaseOrders();
+    const id = String(formData.get("id") ?? "");
+
+    if (!id) {
+      throw new Error("Purchase Order is required.");
+    }
+
+    await db.purchaseOrder.delete({
+      where: {
+        id,
+      },
+    });
+
+    revalidatePath("/purchase-orders");
+    redirectTo = "/purchase-orders?deleteSuccess=Purchase%20Order%20deleted.";
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to delete Purchase Order.";
+    redirectTo = `/purchase-orders?deleteError=${encodeURIComponent(message)}`;
+  }
+
+  redirect(redirectTo);
 }
