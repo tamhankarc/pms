@@ -31,7 +31,12 @@ type FilmikResourceType = {
   name: string;
 };
 
-type ContactPerson = { id: string; name: string; email: string; clientId: string };
+type ContactPerson = {
+  id: string;
+  name: string;
+  email: string;
+  clientId: string;
+};
 
 type BillingModel =
   | "HOURLY"
@@ -39,10 +44,17 @@ type BillingModel =
   | "FIXED_MONTHLY"
   | "FIXED_PER_COUNTRY"
   | "FIXED_COST";
-type ProjectStatus = "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "ARCHIVED";
+type ProjectStatus =
+  | "DRAFT"
+  | "ACTIVE"
+  | "ON_HOLD"
+  | "COMPLETED"
+  | "COMPLETED_BILLED"
+  | "ARCHIVED";
 
 const FILMIK_CLIENT_ID = "cmne6ed2o0000jo04t3363pqz";
 const SONY_PICTURES_CLIENT_ID = "cmn66d3q40002l104n6wvefvl";
+const UNIVERSAL_PICTURES_CLIENT_ID = "cmnh2xr1s0004l204ia5u5zj3";
 
 const initialState: ProjectFormState = {};
 
@@ -83,9 +95,20 @@ export function NewProjectForm({
   const selectedClient = clients.find((client) => client.id === clientId);
   const isFilmikClient = clientId === FILMIK_CLIENT_ID;
   const isSonyPicturesClient = clientId === SONY_PICTURES_CLIENT_ID;
+  const isUniversalPicturesClient = clientId === UNIVERSAL_PICTURES_CLIENT_ID;
   const currentMonth = new Date().toISOString().slice(0, 7);
 
-  const contactPersonOptions = useMemo(() => contactPersons.filter((person) => clientId && person.clientId === clientId).map((person) => ({ value: person.id, label: person.name, keywords: person.email })), [contactPersons, clientId]);
+  const contactPersonOptions = useMemo(
+    () =>
+      contactPersons
+        .filter((person) => clientId && person.clientId === clientId)
+        .map((person) => ({
+          value: person.id,
+          label: person.name,
+          keywords: person.email,
+        })),
+    [contactPersons, clientId],
+  );
 
   const filteredProjectTypes = useMemo(
     () => projectTypes.filter((type) => type.clientId === clientId),
@@ -170,7 +193,18 @@ export function NewProjectForm({
 
         <div className="md:col-span-2">
           <FormLabel htmlFor="contactPersonId">Contact Person</FormLabel>
-          <SearchableCombobox id="contactPersonId" value={contactPersonId} onValueChange={setContactPersonId} options={contactPersonOptions} placeholder={clientId ? "Select contact person" : "Select client first"} searchPlaceholder="Search contact persons..." emptyLabel="No contact person found." disabled={!clientId} />
+          <SearchableCombobox
+            id="contactPersonId"
+            value={contactPersonId}
+            onValueChange={setContactPersonId}
+            options={contactPersonOptions}
+            placeholder={
+              clientId ? "Select contact person" : "Select client first"
+            }
+            searchPlaceholder="Search contact persons..."
+            emptyLabel="No contact person found."
+            disabled={!clientId}
+          />
         </div>
 
         {selectedClient?.enableProjectTypes ? (
@@ -236,6 +270,7 @@ export function NewProjectForm({
               { value: "ACTIVE", label: "Active" },
               { value: "ON_HOLD", label: "On Hold" },
               { value: "COMPLETED", label: "Completed" },
+              { value: "COMPLETED_BILLED", label: "Completed & Billed" },
               { value: "ARCHIVED", label: "Archived" },
             ]}
             placeholder="Select status"
@@ -393,6 +428,43 @@ export function NewProjectForm({
                 step="0.01"
                 defaultValue="0.00"
               />
+            </div>
+          </div>
+        ) : null}
+
+        {isAdmin && isUniversalPicturesClient ? (
+          <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <h3 className="text-sm font-semibold text-slate-900">
+              Universal Cost Categories (USD)
+            </h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Used in Universal Billing Summary for Social QA and Localization.
+            </p>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              {[
+                ["universalSmallCost", "Small (1 to 19)"],
+                ["universalMediumCost", "Medium (20 to 34)"],
+                ["universalLargeCost", "Large (35 to 69)"],
+                ["universalExtraLargeCost", "Extra Large (70 above)"],
+              ].map(([id, label]) => (
+                <div key={id}>
+                  <FormLabel htmlFor={id}>{label}</FormLabel>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">
+                      $
+                    </span>
+                    <input
+                      id={id}
+                      className="input currency-input"
+                      name={id}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      defaultValue="0.00"
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         ) : null}

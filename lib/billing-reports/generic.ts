@@ -10,6 +10,12 @@ import { getLensBillingAdjustments } from "@/lib/billing-reports/lens";
 
 const FOCUS_FEATURES_CLIENT_ID = "cmpuqhyhc002in22ivx3w9vvk";
 
+export type GenericBillingReportContactPerson = {
+  id?: string;
+  name: string;
+  email: string | null;
+};
+
 export type GenericBillingReportFilters = {
   fromDate: string;
   toDate: string;
@@ -50,6 +56,8 @@ export type GenericBillingReportBlock = {
 
 export type GenericBillingReportTitleBlock = {
   movie: { id: string; title: string };
+  contactPerson: string;
+  contactPersons: GenericBillingReportContactPerson[];
   blocks: GenericBillingReportBlock[];
   totalCost: number;
 };
@@ -62,6 +70,7 @@ export type GenericBillingSummaryHistoryRow = {
   status: string;
   billingRegions: string;
   billingDate: string;
+  poNumber: string;
 };
 
 export type GenericBillingSummaryHistoryData = {
@@ -83,6 +92,7 @@ export type GenericBillingReportData = {
   includeDeveloperCosts: boolean;
   movieOptions: { id: string; title: string }[];
   selectedMovie: { id: string; title: string } | null;
+  contactPersons: GenericBillingReportContactPerson[];
   blocks: GenericBillingReportBlock[];
   titleBlocks?: GenericBillingReportTitleBlock[];
   reportTitle: string;
@@ -136,12 +146,14 @@ function formatBillingRegions(movie: {
   billingIntl: boolean;
   billingOther: boolean;
   billingSocial: boolean;
+  billingPortal?: boolean;
 }) {
   const regions: string[] = [];
   if (movie.billingDomestic) regions.push("Domestic");
   if (movie.billingIntl) regions.push("INTL");
   if (movie.billingOther) regions.push("Other");
   if (movie.billingSocial) regions.push("Social");
+  if (movie.billingPortal) regions.push("Portal");
   return regions.join(", ") || "-";
 }
 
@@ -178,6 +190,7 @@ export async function getGenericBillingSummaryHistoryData({
     billingIntl: true,
     billingOther: true,
     billingSocial: true,
+    billingPortal: true,
   } as const;
   const [summaryMovies, historyMovies] = await Promise.all([
     db.movie.findMany({
@@ -200,6 +213,26 @@ export async function getGenericBillingSummaryHistoryData({
       orderBy: [{ billingDate: "desc" }, { title: "asc" }],
     }),
   ]);
+  const allMovieIds = [...summaryMovies, ...historyMovies].map(
+    (movie) => movie.id,
+  );
+  const poAssignments = allMovieIds.length
+    ? await db.purchaseOrderAssignment.findMany({
+        where: {
+          movieId: { in: allMovieIds },
+          purchaseOrder: { status: { not: "CANCELLED" } },
+        },
+        select: {
+          movieId: true,
+          purchaseOrder: { select: { poNumber: true } },
+        },
+      })
+    : [];
+  const poByMovie = new Map<string, string>();
+  for (const assignment of poAssignments) {
+    if (assignment.movieId && !poByMovie.has(assignment.movieId))
+      poByMovie.set(assignment.movieId, assignment.purchaseOrder.poNumber);
+  }
   const mapRow = (
     movie: (typeof summaryMovies)[number],
   ): GenericBillingSummaryHistoryRow => ({
@@ -208,6 +241,7 @@ export async function getGenericBillingSummaryHistoryData({
     status: formatMovieStatus(movie.status),
     billingRegions: formatBillingRegions(movie),
     billingDate: formatBillingDate(movie.billingDate),
+    poNumber: poByMovie.get(movie.id) ?? "-",
   });
   return {
     client,
@@ -258,7 +292,7 @@ function addDeveloperCost(
 }
 
 function buildContactPersonLabel(
-  contactPersons: { name: string; email: string }[],
+  contactPersons: { name: string; email: string | null }[],
 ) {
   if (!contactPersons.length) return "-";
   return contactPersons
@@ -300,7 +334,7 @@ export async function getGenericBillingReportData({
       hourlyCost: true,
       showCountriesInTimeEntries: true,
       projects: {
-        where: { isActive: true },
+        where: { isActive: true, addToBilling: true },
         select: {
           id: true,
           name: true,
@@ -316,7 +350,7 @@ export async function getGenericBillingReportData({
           perDeveloperCost: true,
           contactPersons: {
             orderBy: { name: "asc" },
-            select: { name: true, email: true },
+            select: { id: true, name: true, email: true },
           },
         },
         orderBy: { name: "asc" },
@@ -364,6 +398,10 @@ export async function getGenericBillingReportData({
       if (!titleData || !titleData.blocks.length) continue;
       titleBlocks.push({
         movie,
+        contactPerson: titleData.selectedMovie
+          ? (titleData.blocks[0]?.rows[0]?.contactPerson ?? "-")
+          : "-",
+        contactPersons: titleData.contactPersons,
         blocks: titleData.blocks,
         totalCost: titleData.blocks.reduce(
           (sum, block) =>
@@ -390,6 +428,7 @@ export async function getGenericBillingReportData({
       includeDeveloperCosts,
       movieOptions,
       selectedMovie: null,
+      contactPersons: [],
       blocks: [],
       titleBlocks,
       reportTitle: client.name + " Billing",
@@ -409,20 +448,26 @@ export async function getGenericBillingReportData({
       includeDeveloperCosts,
       movieOptions,
       selectedMovie: null,
+      contactPersons: [],
       blocks: [],
       titleBlocks: [],
       reportTitle: client.name + " Billing",
     };
   }
 
-  const movieContactPersons =
+  const movieContactPersonsResult =
     movieSpecific && selectedMovieId && selectedMovieId !== "all"
-      ? await db.contactPerson.findMany({
-          where: { clientId, movieId: selectedMovieId },
-          orderBy: { name: "asc" },
-          select: { name: true, email: true },
+      ? await db.movie.findFirst({
+          where: { id: selectedMovieId, clientId },
+          select: {
+            contactPersons: {
+              orderBy: { name: "asc" },
+              select: { id: true, name: true, email: true },
+            },
+          },
         })
-      : [];
+      : null;
+  const movieContactPersons = movieContactPersonsResult?.contactPersons ?? [];
   const movieContactPersonLabel = buildContactPersonLabel(movieContactPersons);
 
   const projectIdsWithSelectedMovie = new Set<string>();
@@ -473,7 +518,7 @@ export async function getGenericBillingReportData({
     };
   };
   const getProjectContactPerson = (project: {
-    contactPersons: { name: string; email: string }[];
+    contactPersons: { name: string; email: string | null }[];
   }) => {
     if (movieSpecific && movieContactPersons.length)
       return movieContactPersonLabel;
@@ -492,13 +537,21 @@ export async function getGenericBillingReportData({
       where: {
         projectId: { in: eligibleProjectIds },
         ...(fromBoundary || toBoundary
-          ? { workDate: { ...(fromBoundary ? { gte: fromBoundary } : {}), ...(toBoundary ? { lte: toBoundary } : {}) } }
+          ? {
+              workDate: {
+                ...(fromBoundary ? { gte: fromBoundary } : {}),
+                ...(toBoundary ? { lte: toBoundary } : {}),
+              },
+            }
           : {}),
-        ...(movieSpecific && selectedMovieId && selectedMovieId !== "all" ? { movieId: selectedMovieId } : {}),
+        ...(movieSpecific && selectedMovieId && selectedMovieId !== "all"
+          ? { movieId: selectedMovieId }
+          : {}),
       },
       _sum: { minutesSpent: true },
     });
-    for (const group of totalGroups) totalMinutesByProject.set(group.projectId, group._sum.minutesSpent ?? 0);
+    for (const group of totalGroups)
+      totalMinutesByProject.set(group.projectId, group._sum.minutesSpent ?? 0);
   }
 
   const hourlyMinutesByProject = new Map<string, number>();
@@ -556,7 +609,8 @@ export async function getGenericBillingReportData({
       .filter(
         (project) =>
           project.billingModel === "FIXED_FULL" &&
-          (project.status === "COMPLETED" || client.id === FOCUS_FEATURES_CLIENT_ID),
+          (project.status === "COMPLETED" ||
+            client.id === FOCUS_FEATURES_CLIENT_ID),
       )
       .map((project) => {
         const developer = addDeveloperCost(
@@ -745,6 +799,7 @@ export async function getGenericBillingReportData({
     includeDeveloperCosts,
     movieOptions,
     selectedMovie,
+    contactPersons: movieContactPersons,
     blocks: possibleBlocks.filter((block) => block.rows.length > 0),
     titleBlocks: [],
     reportTitle: client.name + " Billing",

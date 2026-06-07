@@ -66,7 +66,7 @@ const clientSchema = z.object({
     .number()
     .min(0, "Global EPK Site cost cannot be negative.")
     .optional(),
-  poAssignmentMode: z.enum(["NOT_REQUIRED", "TITLE", "TITLE_BILLING_REPORT", "TITLE_PROJECT", "PROJECT"]).default("NOT_REQUIRED"),
+  poAssignmentMode: z.enum(["NOT_REQUIRED", "TITLE", "TITLE_BILLING_REPORT", "TITLE_PROJECT", "PROJECT", "BILLING_REPORT"]).default("NOT_REQUIRED"),
   isActive: z
     .union([z.literal("on"), z.literal("true"), z.literal("1")])
     .optional(),

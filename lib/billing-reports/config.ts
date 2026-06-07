@@ -15,5 +15,5 @@ export function isBillingReportClientExcluded(clientId: string) {
 export const billingReportClientVisibilityWhere = {
   isActive: true,
   id: { notIn: EXCLUDED_BILLING_REPORT_CLIENT_IDS },
-  projects: { some: { isActive: true, status: "ACTIVE" as const } },
+  projects: { some: { isActive: true, addToBilling: true, status: "ACTIVE" as const } },
 };

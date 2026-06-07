@@ -46,6 +46,22 @@ const baseSchema = z.object({
     .number()
     .nonnegative("Per Country Charges cannot be negative.")
     .optional(),
+  universalSmallCost: z.coerce
+    .number()
+    .nonnegative("Universal Small cost cannot be negative.")
+    .optional(),
+  universalMediumCost: z.coerce
+    .number()
+    .nonnegative("Universal Medium cost cannot be negative.")
+    .optional(),
+  universalLargeCost: z.coerce
+    .number()
+    .nonnegative("Universal Large cost cannot be negative.")
+    .optional(),
+  universalExtraLargeCost: z.coerce
+    .number()
+    .nonnegative("Universal Extra Large cost cannot be negative.")
+    .optional(),
   developerCount: z.coerce
     .number()
     .int()
@@ -55,7 +71,14 @@ const baseSchema = z.object({
     .number()
     .nonnegative("Per Developer Cost cannot be negative.")
     .optional(),
-  status: z.enum(["DRAFT", "ACTIVE", "ON_HOLD", "COMPLETED", "ARCHIVED"]),
+  status: z.enum([
+    "DRAFT",
+    "ACTIVE",
+    "ON_HOLD",
+    "COMPLETED",
+    "COMPLETED_BILLED",
+    "ARCHIVED",
+  ]),
   description: z.string().optional(),
   hideCountriesInEntries: z
     .union([z.literal("on"), z.literal("true"), z.literal("1")])
@@ -101,6 +124,7 @@ async function validateProjectType(
 
 const FILMIK_CLIENT_ID = "cmne6ed2o0000jo04t3363pqz";
 const SONY_PICTURES_CLIENT_ID = "cmn66d3q40002l104n6wvefvl";
+const UNIVERSAL_PICTURES_CLIENT_ID = "cmnh2xr1s0004l204ia5u5zj3";
 
 function parseMonthStart(value: string) {
   if (!/^\d{4}-\d{2}$/.test(value)) return null;
@@ -224,6 +248,10 @@ export async function createProjectAction(
       projectCostOtherMovieBillingRegion:
         formData.get("projectCostOtherMovieBillingRegion") || 0,
       perCountryCharges: formData.get("perCountryCharges") || 0,
+      universalSmallCost: formData.get("universalSmallCost") || 0,
+      universalMediumCost: formData.get("universalMediumCost") || 0,
+      universalLargeCost: formData.get("universalLargeCost") || 0,
+      universalExtraLargeCost: formData.get("universalExtraLargeCost") || 0,
       developerCount: formData.get("developerCount") || 0,
       perDeveloperCost: formData.get("perDeveloperCost") || 0,
       status: formData.get("status"),
@@ -285,8 +313,15 @@ export async function createProjectAction(
       };
 
     if (parsed.data.contactPersonId) {
-      const contactPerson = await db.contactPerson.findFirst({ where: { id: parsed.data.contactPersonId, clientId: client.id }, select: { id: true } });
-      if (!contactPerson) return { success: false, error: "Selected contact person does not belong to selected client." };
+      const contactPerson = await db.contactPerson.findFirst({
+        where: { id: parsed.data.contactPersonId, clientId: client.id },
+        select: { id: true },
+      });
+      if (!contactPerson)
+        return {
+          success: false,
+          error: "Selected contact person does not belong to selected client.",
+        };
     }
 
     const isAdminUser = user.userType === "ADMIN";
@@ -326,6 +361,22 @@ export async function createProjectAction(
         perCountryCharges:
           parsed.data.billingModel === "FIXED_PER_COUNTRY" && isAdminUser
             ? (parsed.data.perCountryCharges ?? 0)
+            : 0,
+        universalSmallCost:
+          client.id === UNIVERSAL_PICTURES_CLIENT_ID && isAdminUser
+            ? (parsed.data.universalSmallCost ?? 0)
+            : 0,
+        universalMediumCost:
+          client.id === UNIVERSAL_PICTURES_CLIENT_ID && isAdminUser
+            ? (parsed.data.universalMediumCost ?? 0)
+            : 0,
+        universalLargeCost:
+          client.id === UNIVERSAL_PICTURES_CLIENT_ID && isAdminUser
+            ? (parsed.data.universalLargeCost ?? 0)
+            : 0,
+        universalExtraLargeCost:
+          client.id === UNIVERSAL_PICTURES_CLIENT_ID && isAdminUser
+            ? (parsed.data.universalExtraLargeCost ?? 0)
             : 0,
         developerCount: 0,
         perDeveloperCost: 0,
@@ -406,6 +457,10 @@ export async function updateProjectAction(
         projectCost: true,
         projectCostOtherMovieBillingRegion: true,
         perCountryCharges: true,
+        universalSmallCost: true,
+        universalMediumCost: true,
+        universalLargeCost: true,
+        universalExtraLargeCost: true,
       },
     });
     if (!existingProject)
@@ -424,6 +479,10 @@ export async function updateProjectAction(
       projectCostOtherMovieBillingRegion:
         formData.get("projectCostOtherMovieBillingRegion") || 0,
       perCountryCharges: formData.get("perCountryCharges") || 0,
+      universalSmallCost: formData.get("universalSmallCost") || 0,
+      universalMediumCost: formData.get("universalMediumCost") || 0,
+      universalLargeCost: formData.get("universalLargeCost") || 0,
+      universalExtraLargeCost: formData.get("universalExtraLargeCost") || 0,
       developerCount: formData.get("developerCount") || 0,
       perDeveloperCost: formData.get("perDeveloperCost") || 0,
       status: formData.get("status"),
@@ -482,8 +541,15 @@ export async function updateProjectAction(
       };
 
     if (parsed.data.contactPersonId) {
-      const contactPerson = await db.contactPerson.findFirst({ where: { id: parsed.data.contactPersonId, clientId: client.id }, select: { id: true } });
-      if (!contactPerson) return { success: false, error: "Selected contact person does not belong to selected client." };
+      const contactPerson = await db.contactPerson.findFirst({
+        where: { id: parsed.data.contactPersonId, clientId: client.id },
+        select: { id: true },
+      });
+      if (!contactPerson)
+        return {
+          success: false,
+          error: "Selected contact person does not belong to selected client.",
+        };
     }
 
     const isAdminUser = user.userType === "ADMIN";
@@ -536,6 +602,30 @@ export async function updateProjectAction(
             ? isAdminUser
               ? (parsed.data.perCountryCharges ?? 0)
               : existingProject.perCountryCharges
+            : 0,
+        universalSmallCost:
+          client.id === UNIVERSAL_PICTURES_CLIENT_ID
+            ? isAdminUser
+              ? (parsed.data.universalSmallCost ?? 0)
+              : existingProject.universalSmallCost
+            : 0,
+        universalMediumCost:
+          client.id === UNIVERSAL_PICTURES_CLIENT_ID
+            ? isAdminUser
+              ? (parsed.data.universalMediumCost ?? 0)
+              : existingProject.universalMediumCost
+            : 0,
+        universalLargeCost:
+          client.id === UNIVERSAL_PICTURES_CLIENT_ID
+            ? isAdminUser
+              ? (parsed.data.universalLargeCost ?? 0)
+              : existingProject.universalLargeCost
+            : 0,
+        universalExtraLargeCost:
+          client.id === UNIVERSAL_PICTURES_CLIENT_ID
+            ? isAdminUser
+              ? (parsed.data.universalExtraLargeCost ?? 0)
+              : existingProject.universalExtraLargeCost
             : 0,
         developerCount: 0,
         perDeveloperCost: 0,
@@ -600,4 +690,52 @@ export async function toggleProjectStatusAction(formData: FormData) {
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects/${projectId}/edit`);
+}
+
+export async function completeProjectBillingAction(formData: FormData) {
+  await requireMasterDataActionUser();
+
+  const projectId = String(formData.get("projectId") || "");
+  const billingDateValue = String(formData.get("billingDate") || "");
+  const invoiceNumber = String(formData.get("invoiceNumber") || "").trim();
+  const returnTo = String(formData.get("returnTo") || "/billing-reports");
+
+  if (!projectId) throw new Error("Project is required.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(billingDateValue)) {
+    throw new Error("Billing date is required.");
+  }
+  if (!invoiceNumber) throw new Error("Invoice number is required.");
+
+  const project = await db.project.findUnique({
+    where: { id: projectId },
+    select: { clientId: true, billingModel: true },
+  });
+  if (!project) throw new Error("Project not found.");
+  if (project.billingModel === "FIXED_MONTHLY") {
+    throw new Error(
+      "Fixed-Monthly projects are not marked Completed & Billed from this action.",
+    );
+  }
+
+  await db.project.update({
+    where: { id: projectId },
+    data: {
+      status: "COMPLETED_BILLED",
+      billingDate: new Date(`${billingDateValue}T00:00:00`),
+      billingInvoiceNumber: invoiceNumber,
+    },
+  });
+
+  await db.purchaseOrder.updateMany({
+    where: {
+      clientId: project.clientId,
+      assignments: { some: { projectId } },
+    },
+    data: { status: "PROCESSED" },
+  });
+
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/billing-reports");
+  redirect(returnTo.startsWith("/") ? returnTo : "/billing-reports");
 }

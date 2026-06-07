@@ -15,11 +15,13 @@ const contactPersonSchema = z.object({
   name: z.string().trim().min(2, "Name is required."),
   email: z.string().trim().email("Valid email is required."),
   contactNumber: z.string().trim().optional(),
+  countryId: z.string().optional().nullable(),
 });
 
 async function requireCanManageContactPersons() {
   const user = await requireUserForAction();
-  if (!canManageContactPersons(user)) throw new Error("You are not allowed to manage contact persons.");
+  if (!canManageContactPersons(user))
+    throw new Error("You are not allowed to manage contact persons.");
   return user;
 }
 
@@ -30,27 +32,60 @@ function parsePayload(formData: FormData) {
     name: String(formData.get("name") ?? ""),
     email: String(formData.get("email") ?? ""),
     contactNumber: String(formData.get("contactNumber") ?? ""),
+    countryId: String(formData.get("countryId") ?? "") || null,
   });
 }
 
 async function validateClient(clientId: string) {
-  const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true } });
+  const client = await db.client.findUnique({
+    where: { id: clientId },
+    select: { id: true },
+  });
   if (!client) throw new Error("Selected client was not found.");
 }
 
-export async function createContactPersonAction(_prevState: ContactPersonFormState, formData: FormData): Promise<ContactPersonFormState> {
+async function resolveCountryId(countryId?: string | null) {
+  if (countryId) {
+    const country = await db.country.findFirst({
+      where: { id: countryId, isActive: true },
+      select: { id: true },
+    });
+    if (!country) throw new Error("Selected country was not found.");
+    return country.id;
+  }
+
+  const usCountry = await db.country.findFirst({
+    where: {
+      isActive: true,
+      OR: [{ isoCode: "US" }, { isoCode: "USA" }, { name: "United States" }],
+    },
+    select: { id: true },
+  });
+  return usCountry?.id ?? null;
+}
+
+export async function createContactPersonAction(
+  _prevState: ContactPersonFormState,
+  formData: FormData,
+): Promise<ContactPersonFormState> {
   try {
     await requireCanManageContactPersons();
     const parsed = parsePayload(formData);
-    if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message || "Invalid contact person payload." };
+    if (!parsed.success)
+      return {
+        success: false,
+        error:
+          parsed.error.issues[0]?.message || "Invalid contact person payload.",
+      };
     await validateClient(parsed.data.clientId);
+    const countryId = await resolveCountryId(parsed.data.countryId);
     await db.contactPerson.create({
       data: {
         clientId: parsed.data.clientId,
         projectId: null,
         movieId: null,
         purchaseOrderId: null,
-        countryId: null,
+        countryId,
         name: parsed.data.name,
         email: parsed.data.email.toLowerCase(),
         contactNumber: parsed.data.contactNumber || null,
@@ -59,18 +94,35 @@ export async function createContactPersonAction(_prevState: ContactPersonFormSta
     revalidatePath("/contact-persons");
     return { success: true };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Something went wrong.",
+    };
   }
 }
 
-export async function updateContactPersonAction(_prevState: ContactPersonFormState, formData: FormData): Promise<ContactPersonFormState> {
+export async function updateContactPersonAction(
+  _prevState: ContactPersonFormState,
+  formData: FormData,
+): Promise<ContactPersonFormState> {
   try {
     await requireCanManageContactPersons();
     const parsed = parsePayload(formData);
-    if (!parsed.success || !parsed.data.id) return { success: false, error: parsed.success ? "Contact Person is required." : parsed.error.issues[0]?.message };
+    if (!parsed.success || !parsed.data.id)
+      return {
+        success: false,
+        error: parsed.success
+          ? "Contact Person is required."
+          : parsed.error.issues[0]?.message,
+      };
     await validateClient(parsed.data.clientId);
-    const existing = await db.contactPerson.findUnique({ where: { id: parsed.data.id }, select: { id: true } });
-    if (!existing) return { success: false, error: "Contact Person not found." };
+    const countryId = await resolveCountryId(parsed.data.countryId);
+    const existing = await db.contactPerson.findUnique({
+      where: { id: parsed.data.id },
+      select: { id: true },
+    });
+    if (!existing)
+      return { success: false, error: "Contact Person not found." };
     await db.contactPerson.update({
       where: { id: parsed.data.id },
       data: {
@@ -78,7 +130,7 @@ export async function updateContactPersonAction(_prevState: ContactPersonFormSta
         projectId: null,
         movieId: null,
         purchaseOrderId: null,
-        countryId: null,
+        countryId,
         name: parsed.data.name,
         email: parsed.data.email.toLowerCase(),
         contactNumber: parsed.data.contactNumber || null,
@@ -88,10 +140,12 @@ export async function updateContactPersonAction(_prevState: ContactPersonFormSta
     revalidatePath(`/contact-persons/${parsed.data.id}`);
     return { success: true };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Something went wrong." };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Something went wrong.",
+    };
   }
 }
-
 
 export async function deleteContactPersonAction(formData: FormData) {
   let redirectTo = "/contact-persons";
@@ -126,7 +180,10 @@ export async function deleteContactPersonAction(formData: FormData) {
     revalidatePath("/billing-contacts");
     redirectTo = "/contact-persons?deleteSuccess=Contact%20person%20deleted.";
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to delete contact person.";
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to delete contact person.";
     redirectTo = `/contact-persons?deleteError=${encodeURIComponent(message)}`;
   }
 

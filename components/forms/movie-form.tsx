@@ -25,19 +25,20 @@ export function MovieForm({ clients, countries = [], contactPersons = [], action
   countries?: Country[];
   contactPersons?: ContactPerson[];
   action: (state: MovieFormState, formData: FormData) => Promise<MovieFormState>;
-  initialValues?: { id?: string; clientId: string; contactPersonId?: string | null; title: string; description: string | null; status?: MovieStatus; isActive: boolean; billingDomestic?: boolean; billingIntl?: boolean; billingOther?: boolean; billingSocial?: boolean; otherCountryIds?: string[]; billingUnits?: Record<string, number>; sonyTicketingBannerCost?: number | null; sonyEmailTicketingBannerCost?: number | null; sonyCoppaSite?: boolean; sonyGlobalEpkSite?: boolean };
+  initialValues?: { id?: string; clientId: string; contactPersonId?: string | null; contactPersonIds?: string[]; title: string; description: string | null; status?: MovieStatus; isActive: boolean; billingDomestic?: boolean; billingIntl?: boolean; billingOther?: boolean; billingSocial?: boolean; billingPortal?: boolean; otherCountryIds?: string[]; billingUnits?: Record<string, number>; sonyTicketingBannerCost?: number | null; sonyEmailTicketingBannerCost?: number | null; sonyCoppaSite?: boolean; sonyGlobalEpkSite?: boolean };
   submitLabel: string;
   title: string;
   canEditCosts?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [selectedClientId, setSelectedClientId] = useState(initialValues?.clientId ?? "");
-  const [contactPersonId, setContactPersonId] = useState(initialValues?.contactPersonId ?? "");
+  const [contactPersonIds, setContactPersonIds] = useState<string[]>(initialValues?.contactPersonIds ?? (initialValues?.contactPersonId ? [initialValues.contactPersonId] : []));
   const [movieStatus, setMovieStatus] = useState<MovieStatus>(initialValues?.status ?? "WORKING");
   const [billingDomestic, setBillingDomestic] = useState(initialValues?.billingDomestic ?? true);
   const [billingIntl, setBillingIntl] = useState(initialValues?.billingIntl ?? false);
   const [billingOther, setBillingOther] = useState(initialValues?.billingOther ?? false);
   const [billingSocial, setBillingSocial] = useState(initialValues?.billingSocial ?? false);
+  const [billingPortal, setBillingPortal] = useState(initialValues?.billingPortal ?? false);
   const [sonyCoppaSite, setSonyCoppaSite] = useState(initialValues?.sonyCoppaSite ?? false);
   const [sonyGlobalEpkSite, setSonyGlobalEpkSite] = useState(initialValues?.sonyGlobalEpkSite ?? false);
   const [otherCountryIds, setOtherCountryIds] = useState<string[]>(initialValues?.otherCountryIds ?? []);
@@ -56,7 +57,8 @@ export function MovieForm({ clients, countries = [], contactPersons = [], action
       {initialValues?.id ? <input type="hidden" name="id" value={initialValues.id} /> : null}
       <input type="hidden" name="clientId" value={selectedClientId} />
       <input type="hidden" name="status" value={movieStatus} />
-      <input type="hidden" name="contactPersonId" value={contactPersonId} />
+      {contactPersonIds.map((id) => <input key={id} type="hidden" name="contactPersonIds" value={id} />)}
+      <input type="hidden" name="contactPersonId" value={contactPersonIds[0] ?? ""} />
       {isSonyClient && sonyCoppaSite ? <input type="hidden" name="sonyCoppaSite" value="on" /> : null}
       {isSonyClient && sonyGlobalEpkSite ? <input type="hidden" name="sonyGlobalEpkSite" value="on" /> : null}
       {showBillingRegion ? (
@@ -65,6 +67,7 @@ export function MovieForm({ clients, countries = [], contactPersons = [], action
           {billingIntl ? <input type="hidden" name="billingIntl" value="on" /> : null}
           {billingOther ? <input type="hidden" name="billingOther" value="on" /> : null}
           {billingSocial ? <input type="hidden" name="billingSocial" value="on" /> : null}
+          {billingPortal ? <input type="hidden" name="billingPortal" value="on" /> : null}
           {otherCountryIds.map((id) => <input key={id} type="hidden" name="otherCountryIds" value={id} />)}
         </>
       ) : (
@@ -75,21 +78,22 @@ export function MovieForm({ clients, countries = [], contactPersons = [], action
       {state?.error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</div> : null}
       {state?.success ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Title saved successfully.</div> : null}
       <div className="mt-5 space-y-4">
-        <div><FormLabel htmlFor="clientId" required>Client</FormLabel><SearchableCombobox id="clientId" options={clientOptions} value={selectedClientId} onValueChange={(value) => { setSelectedClientId(value); setContactPersonId(""); if (value !== SONY_CLIENT_ID) { setSonyCoppaSite(false); setSonyGlobalEpkSite(false); } }} placeholder="Select client" searchPlaceholder="Search clients..." emptyLabel="No client found." /></div>
+        <div><FormLabel htmlFor="clientId" required>Client</FormLabel><SearchableCombobox id="clientId" options={clientOptions} value={selectedClientId} onValueChange={(value) => { setSelectedClientId(value); setContactPersonIds([]); if (value !== SONY_CLIENT_ID) { setSonyCoppaSite(false); setSonyGlobalEpkSite(false); } }} placeholder="Select client" searchPlaceholder="Search clients..." emptyLabel="No client found." /></div>
         <div><FormLabel htmlFor="title" required>Title title</FormLabel><input id="title" name="title" className="input" defaultValue={initialValues?.title ?? ""} required /></div>
-        <div><FormLabel htmlFor="contactPersonId">Contact Person</FormLabel><SearchableCombobox id="contactPersonId" options={contactPersonOptions} value={contactPersonId} onValueChange={setContactPersonId} placeholder={selectedClientId ? "Select contact person" : "Select client first"} searchPlaceholder="Search contact persons..." emptyLabel="No contact person found." disabled={!selectedClientId} /></div>
+        <div><FormLabel htmlFor="contactPersonIds">Contact Person(s)</FormLabel><SearchableMultiSelect id="contactPersonIds" options={contactPersonOptions} value={contactPersonIds} onValueChange={setContactPersonIds} placeholder={selectedClientId ? "Select contact person(s)" : "Select client first"} searchPlaceholder="Search contact persons..." emptyLabel="No contact person found." disabled={!selectedClientId} /></div>
         <div><FormLabel htmlFor="status" required>Status</FormLabel><SearchableCombobox id="status" options={movieStatusOptions} value={movieStatus} onValueChange={(value) => setMovieStatus(value as MovieStatus)} placeholder="Select status" searchPlaceholder="Search statuses..." emptyLabel="No status found." required /></div>
         {showBillingRegion ? (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <FormLabel required>Billing region</FormLabel>
-            <div className="mt-3 grid gap-3 md:grid-cols-4">
+            <div className="mt-3 grid gap-3 md:grid-cols-5">
               <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${otherSelected ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-700"}`}><input type="checkbox" checked={billingDomestic} disabled={otherSelected} onChange={(e) => setBillingDomestic(e.target.checked)} /> Domestic (US country)</label>
               <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${otherSelected ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-700"}`}><input type="checkbox" checked={billingIntl} disabled={otherSelected} onChange={(e) => setBillingIntl(e.target.checked)} /> INTL (except US)</label>
               <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${domesticOrIntlOrSocialSelected ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-700"}`}><input type="checkbox" checked={billingOther} disabled={domesticOrIntlOrSocialSelected} onChange={(e) => setBillingOther(e.target.checked)} /> Other (choose countries)</label>
               {isWarnerClient ? <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${otherSelected ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-700"}`}><input type="checkbox" checked={billingSocial} disabled={otherSelected} onChange={(e) => setBillingSocial(e.target.checked)} /> Social</label> : null}
+              <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700"><input type="checkbox" checked={billingPortal} onChange={(e) => setBillingPortal(e.target.checked)} /> Portal</label>
             </div>
             {billingOther ? <div className="mt-4"><SearchableMultiSelect id="otherCountryIds" options={countryOptions} value={otherCountryIds} onValueChange={setOtherCountryIds} placeholder="Select one or more countries" searchPlaceholder="Search countries..." emptyLabel="No country found." /></div> : null}
-            <p className="mt-2 text-xs text-slate-500">Social can be combined with Domestic and/or INTL. Other cannot be combined with Domestic, INTL, or Social.</p>
+            <p className="mt-2 text-xs text-slate-500">Portal can be combined with any existing billing region. Social can be combined with Domestic and/or INTL. Other cannot be combined with Domestic, INTL, or Social.</p>
           </div>
         ) : null}
 

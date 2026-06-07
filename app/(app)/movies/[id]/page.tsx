@@ -39,6 +39,7 @@ export default async function TitleEditPage({
       where: { id },
       include: {
         client: true,
+        contactPersons: { select: { id: true } },
       },
     }),
   ]);
@@ -70,6 +71,7 @@ export default async function TitleEditPage({
             id: movie.id,
             clientId: movie.clientId,
             contactPersonId: movie.contactPersonId,
+            contactPersonIds: movie.contactPersons.map((person) => person.id),
             title: movie.title,
             description: movie.description,
             status: movie.status,
@@ -78,6 +80,7 @@ export default async function TitleEditPage({
             billingIntl: movie.billingIntl,
             billingOther: movie.billingOther,
             billingSocial: movie.billingSocial || movie.billingRegion === "SOCIAL",
+            billingPortal: movie.billingPortal || movie.billingRegion === "PORTAL",
             otherCountryIds: movie.otherCountryIds ? JSON.parse(movie.otherCountryIds) : [],
             billingUnits: movie.billingUnitsJson ? JSON.parse(movie.billingUnitsJson) : {},
             sonyTicketingBannerCost: movie.sonyTicketingBannerCost == null ? null : Number(movie.sonyTicketingBannerCost),

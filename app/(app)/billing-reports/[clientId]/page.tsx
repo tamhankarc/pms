@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { ContactListAccordion } from "@/components/ui/contact-list-accordion";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { WarnerDeliverableFiltersClient } from "@/components/billing-reports/warner-deliverable-filters";
 import { UniversalTimeEntryFilters } from "@/components/billing-reports/universal-time-entry-filters";
@@ -13,6 +14,7 @@ import {
   completeClientMonthBillingAction,
   completeMovieBillingAction,
 } from "@/lib/actions/movie-actions";
+import { completeProjectBillingAction } from "@/lib/actions/project-actions";
 import {
   FILMIK_CLIENT_ID,
   ROYAL_CARIBBEAN_CLIENT_ID,
@@ -102,15 +104,47 @@ function formatBillTo(contact: { name: string; email: string }) {
   return `Bill To: ${contact.name} (${contact.email})`;
 }
 
-function BillingContactNotices({ contacts, activeReport }: { contacts: BillingContactNotice[]; activeReport: string }) {
-  const clientContacts = contacts.filter((item) => item.assignmentLevel === "CLIENT");
-  const reportContacts = contacts.filter((item) => item.assignmentLevel === "CLIENT_BILLING_REPORT" && item.billingReportType === activeReport);
-  const projectContacts = contacts.filter((item) => item.assignmentLevel === "CLIENT_PROJECT" && item.project);
-  if (!clientContacts.length && !reportContacts.length && !projectContacts.length) return null;
+function BillingContactNotices({
+  contacts,
+  activeReport,
+}: {
+  contacts: BillingContactNotice[];
+  activeReport: string;
+}) {
+  const clientContacts = contacts.filter(
+    (item) => item.assignmentLevel === "CLIENT",
+  );
+  const reportContacts = contacts.filter(
+    (item) =>
+      item.assignmentLevel === "CLIENT_BILLING_REPORT" &&
+      item.billingReportType === activeReport,
+  );
+  const projectContacts = contacts.filter(
+    (item) => item.assignmentLevel === "CLIENT_PROJECT" && item.project,
+  );
+  if (
+    !clientContacts.length &&
+    !reportContacts.length &&
+    !projectContacts.length
+  )
+    return null;
   return (
     <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-      {[...clientContacts, ...reportContacts].map((item) => <div key={item.id} className="font-medium text-slate-900">{formatBillTo(item.contactPerson)}</div>)}
-      {projectContacts.length ? <div className="mt-2 space-y-1">{projectContacts.map((item) => <div key={item.id}><span className="font-semibold">{item.project?.name}:</span> {formatBillTo(item.contactPerson)}</div>)}</div> : null}
+      {[...clientContacts, ...reportContacts].map((item) => (
+        <div key={item.id} className="font-medium text-slate-900">
+          {formatBillTo(item.contactPerson)}
+        </div>
+      ))}
+      {projectContacts.length ? (
+        <div className="mt-2 space-y-1">
+          {projectContacts.map((item) => (
+            <div key={item.id}>
+              <span className="font-semibold">{item.project?.name}:</span>{" "}
+              {formatBillTo(item.contactPerson)}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -171,6 +205,75 @@ function BillingDoneButton({
               type="date"
               className="input"
               defaultValue={today}
+              required
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor={`invoiceNumber-${movieId}`}>
+              Invoice number
+            </label>
+            <input
+              id={`invoiceNumber-${movieId}`}
+              name="invoiceNumber"
+              className="input"
+              required
+            />
+          </div>
+          <button type="submit" className="btn-primary w-full">
+            Billing Done
+          </button>
+        </form>
+      </div>
+    </details>
+  );
+}
+
+function ProjectBillingDoneButton({
+  projectId,
+  returnTo,
+  label = "Billing Done",
+}: {
+  projectId: string;
+  returnTo: string;
+  label?: string;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  return (
+    <details className="relative">
+      <summary className="btn-secondary list-none cursor-pointer select-none">
+        {label}
+      </summary>
+      <div className="absolute right-0 z-20 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
+        <form action={completeProjectBillingAction} className="space-y-3">
+          <input type="hidden" name="projectId" value={projectId} />
+          <input type="hidden" name="returnTo" value={returnTo} />
+          <div>
+            <label
+              className="label"
+              htmlFor={`projectBillingDate-${projectId}`}
+            >
+              Billing date
+            </label>
+            <input
+              id={`projectBillingDate-${projectId}`}
+              name="billingDate"
+              type="date"
+              className="input"
+              defaultValue={today}
+              required
+            />
+          </div>
+          <div>
+            <label
+              className="label"
+              htmlFor={`projectInvoiceNumber-${projectId}`}
+            >
+              Invoice number
+            </label>
+            <input
+              id={`projectInvoiceNumber-${projectId}`}
+              name="invoiceNumber"
+              className="input"
               required
             />
           </div>
@@ -465,7 +568,12 @@ function TimeEntryReportDetailsTable({
                 key={`${keyPrefix}-${row.date}-${row.titleName}-${row.assetName}-${index}`}
               >
                 <td className="table-cell whitespace-nowrap">{row.date}</td>
-                <td className="table-cell">{row.titleName}</td>
+                <td className="table-cell">
+                  <div className="font-medium text-slate-900">
+                    {row.titleName}
+                  </div>
+                  <ContactListAccordion contacts={row.contactPersons} />
+                </td>
                 <td className="table-cell">{row.assetName}</td>
                 {isLocalization ? (
                   <td className="table-cell">{row.territoryVariant ?? "-"}</td>
@@ -478,7 +586,7 @@ function TimeEntryReportDetailsTable({
                     {formatUsd(row.cost)}
                   </td>
                 ) : null}
-                </tr>
+              </tr>
             ))}
             {rows.length === 0 ? (
               <tr>
@@ -686,15 +794,162 @@ function UniversalTitleSummaryBlock({
   title,
   rows,
   includeCountries = false,
+  showAction = false,
+  clientId,
+  returnMovieId = "all",
 }: {
   title: string;
-  rows: NonNullable<
-    Awaited<ReturnType<typeof getAmazonBillingReportData>>
-  >["titleSummaryRows"];
+  rows: Array<{
+    movieId: string;
+    titleName: string;
+    totalAssets?: number;
+    totalCountries?: number;
+    socialAssets?: number;
+    socialCost?: number;
+    localizationAssets?: number;
+    localizationCountries?: number;
+    localizationCost?: number;
+    contactPersons: Array<{ id?: string; name: string; email: string | null }>;
+  }>;
   includeCountries?: boolean;
+  showAction?: boolean;
+  clientId?: string;
+  returnMovieId?: string;
 }) {
-  const totalAssets = rows.reduce((sum, row) => sum + row.totalAssets, 0);
-  const totalCountries = rows.reduce((sum, row) => sum + row.totalCountries, 0);
+  const isCostSummary = rows.some(
+    (row) =>
+      row.socialAssets !== undefined || row.localizationAssets !== undefined,
+  );
+
+  if (isCostSummary) {
+    const totals = rows.reduce(
+      (sum, row) => ({
+        socialAssets: sum.socialAssets + Number(row.socialAssets ?? 0),
+        socialCost: sum.socialCost + Number(row.socialCost ?? 0),
+        localizationAssets:
+          sum.localizationAssets + Number(row.localizationAssets ?? 0),
+        localizationCountries:
+          sum.localizationCountries + Number(row.localizationCountries ?? 0),
+        localizationCost:
+          sum.localizationCost + Number(row.localizationCost ?? 0),
+      }),
+      {
+        socialAssets: 0,
+        socialCost: 0,
+        localizationAssets: 0,
+        localizationCountries: 0,
+        localizationCost: 0,
+      },
+    );
+    const colSpan = showAction ? 7 : 6;
+
+    return (
+      <div className="table-wrap">
+        <table className="table-base">
+          <thead className="table-head">
+            <tr>
+              <th className="table-cell" rowSpan={2}>
+                Title Name
+              </th>
+              <th className="table-cell text-center" colSpan={2}>
+                Social QA
+              </th>
+              <th className="table-cell text-center" colSpan={3}>
+                Localization
+              </th>
+              {showAction ? (
+                <th className="table-cell" rowSpan={2}>
+                  Action
+                </th>
+              ) : null}
+            </tr>
+            <tr>
+              <th className="table-cell">Total Unique Assets</th>
+              <th className="table-cell">Cost</th>
+              <th className="table-cell">Total Unique Assets</th>
+              <th className="table-cell">Total Unique Territory/Variant</th>
+              <th className="table-cell">Cost</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((row) => (
+              <tr key={`${title}-${row.movieId}`}>
+                <td className="table-cell">
+                  <div className="font-medium text-slate-900">
+                    {row.titleName}
+                  </div>
+                  <ContactListAccordion contacts={row.contactPersons} />
+                </td>
+                <td className="table-cell">{row.socialAssets ?? 0}</td>
+                <td className="table-cell whitespace-nowrap font-medium text-slate-900">
+                  {formatUsd(Number(row.socialCost ?? 0))}
+                </td>
+                <td className="table-cell">{row.localizationAssets ?? 0}</td>
+                <td className="table-cell">{row.localizationCountries ?? 0}</td>
+                <td className="table-cell whitespace-nowrap font-medium text-slate-900">
+                  {formatUsd(Number(row.localizationCost ?? 0))}
+                </td>
+                {showAction ? (
+                  <td className="table-cell">
+                    {clientId ? (
+                      <BillingDoneButton
+                        movieId={row.movieId}
+                        returnTo={`/billing-reports/${clientId}?report=billing-summary&movieId=${returnMovieId}`}
+                        label="Billing Done"
+                      />
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                ) : null}
+              </tr>
+            ))}
+            {rows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={colSpan}
+                  className="table-cell text-center text-sm text-slate-500"
+                >
+                  No titles found for the selected filters.
+                </td>
+              </tr>
+            ) : (
+              <tr className="bg-slate-100">
+                <td className="table-cell font-semibold text-slate-900">
+                  Total
+                </td>
+                <td className="table-cell font-semibold text-slate-900">
+                  {totals.socialAssets}
+                </td>
+                <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
+                  {formatUsd(totals.socialCost)}
+                </td>
+                <td className="table-cell font-semibold text-slate-900">
+                  {totals.localizationAssets}
+                </td>
+                <td className="table-cell font-semibold text-slate-900">
+                  {totals.localizationCountries}
+                </td>
+                <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
+                  {formatUsd(totals.localizationCost)}
+                </td>
+                {showAction ? <td className="table-cell">-</td> : null}
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  const totalAssets = rows.reduce(
+    (sum, row) => sum + Number(row.totalAssets ?? 0),
+    0,
+  );
+  const totalCountries = rows.reduce(
+    (sum, row) => sum + Number(row.totalCountries ?? 0),
+    0,
+  );
 
   return (
     <div className="table-wrap">
@@ -711,12 +966,15 @@ function UniversalTitleSummaryBlock({
         <tbody className="divide-y divide-slate-100">
           {rows.map((row) => (
             <tr key={`${title}-${row.movieId}`}>
-              <td className="table-cell font-medium text-slate-900">
-                {row.titleName}
+              <td className="table-cell">
+                <div className="font-medium text-slate-900">
+                  {row.titleName}
+                </div>
+                <ContactListAccordion contacts={row.contactPersons} />
               </td>
-              <td className="table-cell">{row.totalAssets}</td>
+              <td className="table-cell">{row.totalAssets ?? 0}</td>
               {includeCountries ? (
-                <td className="table-cell">{row.totalCountries}</td>
+                <td className="table-cell">{row.totalCountries ?? 0}</td>
               ) : null}
             </tr>
           ))}
@@ -873,63 +1131,14 @@ function UniversalBillingSummaryTable({
 }: {
   data: UniversalBillingSummaryData;
 }) {
-  const totalAssets = data.rows.reduce((sum, row) => sum + row.totalAssets, 0);
-  const totalCountries = data.rows.reduce(
-    (sum, row) => sum + row.totalCountries,
-    0,
-  );
   return (
-    <div className="table-wrap">
-      <table className="table-base">
-        <thead className="table-head">
-          <tr>
-            <th className="table-cell">Title Name</th>
-            <th className="table-cell">Total Unique Assets</th>
-            <th className="table-cell">Total Unique Territory/Variant</th>
-            <th className="table-cell">Action</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {data.rows.map((row) => (
-            <tr key={row.titleName}>
-              <td className="table-cell font-medium text-slate-900">
-                {row.titleName}
-              </td>
-              <td className="table-cell">{row.totalAssets}</td>
-              <td className="table-cell">{row.totalCountries}</td>
-              <td className="table-cell">
-                <BillingDoneButton
-                  movieId={row.movieId}
-                  returnTo={`/billing-reports/${data.client.id}?report=billing-summary&movieId=${data.filters.movieId}`}
-                  label="Billing Done"
-                />
-              </td>
-            </tr>
-          ))}
-          {data.rows.length === 0 ? (
-            <tr>
-              <td
-                colSpan={4}
-                className="table-cell text-center text-sm text-slate-500"
-              >
-                No Working/Completed title records found.
-              </td>
-            </tr>
-          ) : (
-            <tr className="bg-slate-100">
-              <td className="table-cell font-semibold text-slate-900">Total</td>
-              <td className="table-cell font-semibold text-slate-900">
-                {totalAssets}
-              </td>
-              <td className="table-cell font-semibold text-slate-900">
-                {totalCountries}
-              </td>
-              <td className="table-cell">-</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+    <UniversalTitleSummaryBlock
+      title="active"
+      rows={data.rows}
+      showAction
+      clientId={data.client.id}
+      returnMovieId={data.filters.movieId}
+    />
   );
 }
 
@@ -976,7 +1185,6 @@ function UniversalBillingSummaryWorkspace({
         <UniversalTitleSummaryBlock
           title="completed"
           rows={data.completedTitleSummaryRows}
-          includeCountries
         />
       </div>
     </div>
@@ -1029,9 +1237,9 @@ function WarnerDomesticTable({
 }) {
   const canShowRows = Boolean(
     data.selectedMovie &&
-      (data.reportType !== "other-deliverable" ||
-        data.selectedCountry ||
-        data.filters.countryId === ""),
+    (data.reportType !== "other-deliverable" ||
+      data.selectedCountry ||
+      data.filters.countryId === ""),
   );
 
   return (
@@ -1063,8 +1271,8 @@ function WarnerDomesticTable({
                 colSpan={2}
                 className="table-cell text-center text-sm text-slate-500"
               >
-                Select a country with time entries for the selected title, or choose All Countries, to
-                view deliverables.
+                Select a country with time entries for the selected title, or
+                choose All Countries, to view deliverables.
               </td>
             </tr>
           ) : null}
@@ -1164,12 +1372,17 @@ function WarnerDeliverableWorkspace({
               key={`${block.selectedMovie.id}-${block.selectedCountry?.id ?? "all"}`}
               className="space-y-3"
             >
-              <h3 className="text-base font-semibold text-slate-900">
-                {block.selectedMovie.title}
-                {block.selectedCountry
-                  ? ` / ${block.selectedCountry.name}`
-                  : ""}
-              </h3>
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">
+                  {block.selectedMovie.title}
+                  {block.selectedCountry
+                    ? ` / ${block.selectedCountry.name}`
+                    : ""}
+                </h3>
+                <ContactListAccordion
+                  contacts={block.selectedMovie.contactPersons}
+                />
+              </div>
               <WarnerDomesticTable
                 data={{
                   ...data,
@@ -1183,7 +1396,19 @@ function WarnerDeliverableWorkspace({
           ))}
         </div>
       ) : (
-        <WarnerDomesticTable data={data} />
+        <div className="space-y-3">
+          {data.selectedMovie ? (
+            <div>
+              <h3 className="text-base font-semibold text-slate-900">
+                {data.selectedMovie.title}
+              </h3>
+              <ContactListAccordion
+                contacts={data.selectedMovie.contactPersons}
+              />
+            </div>
+          ) : null}
+          <WarnerDomesticTable data={data} />
+        </div>
       )}
     </div>
   );
@@ -1351,11 +1576,7 @@ function SonyPicturesReportTable({ data }: { data: SonyPicturesReportData }) {
           ))}
           {data.selectedMovie ? (
             <tr className="bg-slate-100">
-              <td
-                className="table-cell font-semibold text-slate-900"
-              >
-                Total
-              </td>
+              <td className="table-cell font-semibold text-slate-900">Total</td>
               <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
                 {formatSonyUsd(data.totalCost)}
               </td>
@@ -1404,6 +1625,7 @@ function SonyPicturesReportWorkspace({
           <span className="font-semibold text-slate-900">
             {data.selectedMovie.title}
           </span>
+          <ContactListAccordion contacts={data.contactPersons} />
         </div>
       ) : null}
       {data.titleBlocks.length ? (
@@ -1413,9 +1635,12 @@ function SonyPicturesReportWorkspace({
               key={block.movie.id}
               className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
             >
-              <h3 className="text-base font-semibold text-slate-900">
-                {block.movie.title}
-              </h3>
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">
+                  {block.movie.title}
+                </h3>
+                <ContactListAccordion contacts={block.contactPersons} />
+              </div>
               <SonyPicturesReportTable
                 data={{
                   ...data,
@@ -1465,6 +1690,7 @@ function SonyBillingSummaryHistoryWorkspace({
             <tr>
               <th className="table-cell">Title</th>
               <th className="table-cell">Billing Region</th>
+              <th className="table-cell">PO Number</th>
               <th className="table-cell">Status</th>
               <th className="table-cell">Action</th>
             </tr>
@@ -1476,6 +1702,7 @@ function SonyBillingSummaryHistoryWorkspace({
                   {row.title}
                 </td>
                 <td className="table-cell">{row.billingRegions}</td>
+                <td className="table-cell">{row.poNumber ?? "-"}</td>
                 <td className="table-cell">{row.status}</td>
                 <td className="table-cell">
                   <BillingDoneButton
@@ -1489,7 +1716,7 @@ function SonyBillingSummaryHistoryWorkspace({
             {data.summaryRows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={4}
+                  colSpan={5}
                   className="table-cell text-center text-sm text-slate-500"
                 >
                   No pending billing titles available.
@@ -1504,7 +1731,7 @@ function SonyBillingSummaryHistoryWorkspace({
         <div className="border-b border-slate-200 px-6 py-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="section-title">Billing History</h2>
+              <h2 className="section-title">Billing Summary & History</h2>
               <p className="section-subtitle">
                 Titles marked Completed &amp; Billed for the selected billing
                 year.
@@ -1542,6 +1769,7 @@ function SonyBillingSummaryHistoryWorkspace({
             <tr>
               <th className="table-cell">Title</th>
               <th className="table-cell">Billing Region</th>
+              <th className="table-cell">PO Number</th>
               <th className="table-cell">Billing Date</th>
             </tr>
           </thead>
@@ -1552,13 +1780,14 @@ function SonyBillingSummaryHistoryWorkspace({
                   {row.title}
                 </td>
                 <td className="table-cell">{row.billingRegions}</td>
+                <td className="table-cell">{row.poNumber ?? "-"}</td>
                 <td className="table-cell">{row.billingDate}</td>
               </tr>
             ))}
             {data.historyRows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={2}
+                  colSpan={4}
                   className="table-cell text-center text-sm text-slate-500"
                 >
                   No billed titles found for {data.filters.year}.
@@ -1887,8 +2116,9 @@ function FilmikCombinedCostBlock({ data }: { data: FilmikBillingReportData }) {
         <tbody className="divide-y divide-slate-100">
           {data.combinedRows.map((row) => (
             <tr key={row.key}>
-              <td className="table-cell font-medium text-slate-900">
-                {row.name}
+              <td className="table-cell">
+                <div className="font-medium text-slate-900">{row.name}</div>
+                <ContactListAccordion contacts={row.contactPerson} />
               </td>
               <td className="table-cell font-medium text-slate-900">
                 {row.key === "resource-cost"
@@ -2009,36 +2239,114 @@ function BillingHistoryFilters({
   );
 }
 
+function BillingHistorySummaryTable({
+  data,
+  clientId,
+  activeReport,
+}: {
+  data: BillingHistoryData;
+  clientId: string;
+  activeReport: AmazonReportType;
+}) {
+  const returnTo = `/billing-reports/${clientId}?report=${activeReport}&year=${data.filters.year}`;
+  return (
+    <div className="table-wrap">
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">
+              {data.client.poAssignmentMode === "PROJECT"
+                ? "Project"
+                : data.client.poAssignmentMode === "BILLING_REPORT"
+                  ? "Billing Report"
+                  : "Title"}
+            </th>
+            <th className="table-cell">Type / Billing Region</th>
+            <th className="table-cell">PO Number</th>
+            <th className="table-cell">Status</th>
+            <th className="table-cell">Action</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {data.summaryRows.map((row) => (
+            <tr key={row.itemId}>
+              <td className="table-cell font-medium text-slate-900">
+                {row.itemName}
+              </td>
+              <td className="table-cell">{row.billingRegion}</td>
+              <td className="table-cell">{row.poNumber || "-"}</td>
+              <td className="table-cell">{row.status}</td>
+              <td className="table-cell">
+                {row.itemType === "TITLE" && row.movieId ? (
+                  <BillingDoneButton
+                    movieId={row.movieId}
+                    label="Billing Done"
+                    returnTo={returnTo}
+                  />
+                ) : row.itemType === "PROJECT" && row.projectId ? (
+                  <ProjectBillingDoneButton
+                    projectId={row.projectId}
+                    label="Billing Done"
+                    returnTo={returnTo}
+                  />
+                ) : (
+                  "-"
+                )}
+              </td>
+            </tr>
+          ))}
+          {data.summaryRows.length === 0 ? (
+            <tr>
+              <td
+                colSpan={5}
+                className="table-cell text-center text-sm text-slate-500"
+              >
+                No pending billing records available.
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function BillingHistoryTable({ data }: { data: BillingHistoryData }) {
   return (
     <div className="table-wrap">
       <table className="table-base">
         <thead className="table-head">
           <tr>
-            <th className="table-cell">Title</th>
-            <th className="table-cell">Billing Region</th>
+            <th className="table-cell">
+              {data.client.poAssignmentMode === "PROJECT" ? "Project" : "Title"}
+            </th>
+            <th className="table-cell">Type / Billing Region</th>
+            <th className="table-cell">PO Number</th>
             <th className="table-cell">Billing Date</th>
+            <th className="table-cell">Status</th>
             <th className="table-cell">Title Billing Heads</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {data.rows.map((row) => (
-            <tr key={row.movieId}>
+          {data.historyRows.map((row) => (
+            <tr key={row.itemId}>
               <td className="table-cell font-medium text-slate-900">
-                {row.titleName}
+                {row.itemName}
               </td>
               <td className="table-cell">{row.billingRegion}</td>
+              <td className="table-cell">{row.poNumber || "-"}</td>
               <td className="table-cell">{row.billingDate}</td>
+              <td className="table-cell">{row.status}</td>
               <td className="table-cell">{row.movieBillingHeadCount}</td>
             </tr>
           ))}
-          {data.rows.length === 0 ? (
+          {data.historyRows.length === 0 ? (
             <tr>
               <td
-                colSpan={5}
+                colSpan={6}
                 className="table-cell text-center text-sm text-slate-500"
               >
-                No completed and billed titles found for this year.
+                No completed and billed records found for this year.
               </td>
             </tr>
           ) : null}
@@ -2071,11 +2379,28 @@ function BillingHistoryWorkspace({
         activeReport={activeReport}
         data={data}
       />
-      <div>
-        <h2 className="section-title">{data.client.name} Billing History</h2>
-        <p className="section-subtitle">Year: {data.filters.year}</p>
-      </div>
-      <BillingHistoryTable data={data} />
+      <section className="space-y-3">
+        <div>
+          <h2 className="section-title">Billing Summary</h2>
+          <p className="section-subtitle">
+            Pending billing records as per the client PO Assignment Mode.
+          </p>
+        </div>
+        <BillingHistorySummaryTable
+          data={data}
+          clientId={clientId}
+          activeReport={activeReport}
+        />
+      </section>
+      <section className="space-y-3">
+        <div>
+          <h2 className="section-title">
+            {data.client.name} Billing Summary & History
+          </h2>
+          <p className="section-subtitle">Year: {data.filters.year}</p>
+        </div>
+        <BillingHistoryTable data={data} />
+      </section>
     </div>
   );
 }
@@ -2157,7 +2482,9 @@ function RoyalHistoryWorkspace({
       <RoyalReportTabs clientId={clientId} activeReport="billing-history" />
       <RoyalHistoryFilters clientId={clientId} data={data} />
       <div>
-        <h2 className="section-title">{data.client.name} Billing History</h2>
+        <h2 className="section-title">
+          {data.client.name} Billing Summary & History
+        </h2>
         <p className="section-subtitle">Year: {data.filters.year}</p>
       </div>
       {data.monthBlocks.map((block) => (
@@ -2271,8 +2598,11 @@ function RoyalBillingReportTable({ data }: { data: RoyalBillingData }) {
         <tbody className="divide-y divide-slate-100">
           {data.rows.map((row) => (
             <tr key={row.projectId}>
-              <td className="table-cell font-medium text-slate-900">
-                {row.projectName}
+              <td className="table-cell">
+                <div className="font-medium text-slate-900">
+                  {row.projectName}
+                </div>
+                <ContactListAccordion contacts={row.contactPerson} />
               </td>
               <td className="table-cell">
                 <span className="badge-blue">{row.billingModel}</span>
@@ -2364,7 +2694,7 @@ function RoyalBillingReportWorkspace({
         <div className="card p-6 text-sm text-slate-600">
           This month has already been billed
           {data.billingDate ? ` on ${data.billingDate}` : ""}; please find
-          details in Billing History report.
+          details in Billing Summary & History report.
         </div>
       ) : (
         <RoyalBillingReportTable data={data} />
@@ -2534,7 +2864,9 @@ function GenericBillingModelBlock({
   showTotalHoursColumn?: boolean;
 }) {
   // const isCountryBlock = block.key === "fixedPerCountry";
-  const showTotalHours = showTotalHoursColumn && block.rows.some((row) => row.totalHours !== undefined);
+  const showTotalHours =
+    showTotalHoursColumn &&
+    block.rows.some((row) => row.totalHours !== undefined);
   const totalDeveloperCost = block.rows.reduce(
     (sum, row) => sum + Number(row.developerCost ?? 0),
     0,
@@ -2545,7 +2877,7 @@ function GenericBillingModelBlock({
   );
   const totalCost = block.rows.reduce((sum, row) => sum + row.cost, 0);
   let totalLabelColSpan = 2;
-  if(block.showDeveloperCost) totalLabelColSpan += 2;
+  if (block.showDeveloperCost) totalLabelColSpan += 2;
 
   return (
     <section className="table-wrap">
@@ -2554,7 +2886,9 @@ function GenericBillingModelBlock({
           <tr>
             <th className="table-cell">Project</th>
             <th className="table-cell">Status</th>
-            {showTotalHours ? <th className="table-cell">Total Hours</th> : null}
+            {showTotalHours ? (
+              <th className="table-cell">Total Hours</th>
+            ) : null}
             {block.showDeveloperCost ? (
               <th className="table-cell">Developer Cost</th>
             ) : null}
@@ -2581,18 +2915,24 @@ function GenericBillingModelBlock({
                     ))}
                   </div>
                 ) : (
-                  row.countryList && (<div className="mt-1 space-y-1 text-xs font-normal text-slate-500">
-                    <div className="font-medium text-slate-600">
-                      Countries
-                    </div>
+                  row.countryList && (
+                    <div className="mt-1 space-y-1 text-xs font-normal text-slate-500">
+                      <div className="font-medium text-slate-600">
+                        Countries
+                      </div>
                       {row.countryList || "-"}
-                  </div>)
+                    </div>
+                  )
                 )}
               </td>
               <td className="table-cell">
                 <div className="badge-blue">{row.status}</div>
               </td>
-              {showTotalHours ? <td className="table-cell whitespace-nowrap">{Number(row.totalHours ?? 0).toFixed(2)}</td> : null}
+              {showTotalHours ? (
+                <td className="table-cell whitespace-nowrap">
+                  {Number(row.totalHours ?? 0).toFixed(2)}
+                </td>
+              ) : null}
               {block.showDeveloperCost ? (
                 <td className="table-cell whitespace-nowrap font-medium text-slate-900">
                   {row.developerCost !== undefined
@@ -2617,13 +2957,156 @@ function GenericBillingModelBlock({
             >
               Total
             </td>
-            {showTotalHours ? <td className="table-cell whitespace-nowrap font-semibold text-slate-900">{block.rows.reduce((sum, row) => sum + Number(row.totalHours ?? 0), 0).toFixed(2)}</td> : null}
+            {showTotalHours ? (
+              <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
+                {block.rows
+                  .reduce((sum, row) => sum + Number(row.totalHours ?? 0), 0)
+                  .toFixed(2)}
+              </td>
+            ) : null}
             {block.showDeveloperCost ? (
               <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
                 {formatGenericUsd(totalDeveloperCost)}
               </td>
             ) : null}
             {block.showDeveloperCost ? (
+              <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
+                {formatGenericUsd(totalProjectCost)}
+              </td>
+            ) : null}
+            <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
+              {formatGenericUsd(totalCost)}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+function GenericTitleMergedBlock({
+  titleBlock,
+  showTotalHoursColumn = false,
+}: {
+  titleBlock: NonNullable<GenericBillingReportData["titleBlocks"]>[number];
+  showTotalHoursColumn?: boolean;
+}) {
+  const rows = titleBlock.blocks.flatMap((block) =>
+    block.rows.map((row) => ({ ...row, billingModel: block.title })),
+  );
+  const showTotalHours =
+    showTotalHoursColumn && rows.some((row) => row.totalHours !== undefined);
+  const showDeveloperCost = rows.some((row) => row.developerCost !== undefined);
+  const totalHours = rows.reduce(
+    (sum, row) => sum + Number(row.totalHours ?? 0),
+    0,
+  );
+  const totalDeveloperCost = rows.reduce(
+    (sum, row) => sum + Number(row.developerCost ?? 0),
+    0,
+  );
+  const totalProjectCost = rows.reduce((sum, row) => sum + row.projectCost, 0);
+  const totalCost = rows.reduce((sum, row) => sum + row.cost, 0);
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">
+              {titleBlock.movie.title}
+            </h3>
+            <ContactListAccordion
+              contacts={titleBlock.contactPersons ?? titleBlock.contactPerson}
+            />
+          </div>
+          <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-slate-700 ring-1 ring-slate-200">
+            Total: {formatGenericUsd(titleBlock.totalCost)}
+          </span>
+        </div>
+      </div>
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">Project</th>
+            <th className="table-cell">Billing Model</th>
+            <th className="table-cell">Status</th>
+            {showTotalHours ? (
+              <th className="table-cell">Total Hours</th>
+            ) : null}
+            {showDeveloperCost ? (
+              <th className="table-cell">Developer Cost</th>
+            ) : null}
+            {showDeveloperCost ? (
+              <th className="table-cell">Project Cost</th>
+            ) : null}
+            <th className="table-cell">
+              {showDeveloperCost ? "Total Cost" : "Cost"}
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map((row) => (
+            <tr key={`${row.projectId}-${row.billingModel}`}>
+              <td className="table-cell font-medium text-slate-900">
+                {row.projectName}
+                {row.lensDetails?.length ? (
+                  <div className="mt-1 space-y-1 text-xs font-normal text-slate-500">
+                    <div className="font-medium text-slate-600">
+                      Lens Type / Countries
+                    </div>
+                    {row.lensDetails.map((detail) => (
+                      <div key={detail}>{detail}</div>
+                    ))}
+                  </div>
+                ) : row.countryList ? (
+                  <div className="mt-1 space-y-1 text-xs font-normal text-slate-500">
+                    <div className="font-medium text-slate-600">Countries</div>
+                    {row.countryList}
+                  </div>
+                ) : null}
+              </td>
+              <td className="table-cell">{row.billingModel}</td>
+              <td className="table-cell">
+                <div className="badge-blue">{row.status}</div>
+              </td>
+              {showTotalHours ? (
+                <td className="table-cell whitespace-nowrap">
+                  {Number(row.totalHours ?? 0).toFixed(2)}
+                </td>
+              ) : null}
+              {showDeveloperCost ? (
+                <td className="table-cell whitespace-nowrap font-medium text-slate-900">
+                  {row.developerCost !== undefined
+                    ? formatGenericUsd(Number(row.developerCost ?? 0))
+                    : "-"}
+                </td>
+              ) : null}
+              {showDeveloperCost ? (
+                <td className="table-cell whitespace-nowrap font-medium text-slate-900">
+                  {formatGenericUsd(row.projectCost)}
+                </td>
+              ) : null}
+              <td className="table-cell whitespace-nowrap font-medium text-slate-900">
+                {formatGenericUsd(row.cost)}
+              </td>
+            </tr>
+          ))}
+          <tr className="bg-slate-50">
+            <td className="table-cell font-semibold text-slate-900" colSpan={3}>
+              Total
+            </td>
+            {showTotalHours ? (
+              <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
+                {totalHours.toFixed(2)}
+              </td>
+            ) : null}
+            {showDeveloperCost ? (
+              <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
+                {formatGenericUsd(totalDeveloperCost)}
+              </td>
+            ) : null}
+            {showDeveloperCost ? (
               <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
                 {formatGenericUsd(totalProjectCost)}
               </td>
@@ -2667,6 +3150,7 @@ function GenericBillingSummaryHistoryWorkspace({
             <tr>
               <th className="table-cell">Title</th>
               <th className="table-cell">Billing Region</th>
+              <th className="table-cell">PO Number</th>
               <th className="table-cell">Status</th>
               <th className="table-cell">Action</th>
             </tr>
@@ -2678,6 +3162,7 @@ function GenericBillingSummaryHistoryWorkspace({
                   {row.title}
                 </td>
                 <td className="table-cell">{row.billingRegions}</td>
+                <td className="table-cell">{row.poNumber ?? "-"}</td>
                 <td className="table-cell">{row.status}</td>
                 <td className="table-cell">
                   <BillingDoneButton
@@ -2691,7 +3176,7 @@ function GenericBillingSummaryHistoryWorkspace({
             {data.summaryRows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={4}
+                  colSpan={5}
                   className="table-cell text-center text-sm text-slate-500"
                 >
                   No pending billing titles available.
@@ -2705,7 +3190,7 @@ function GenericBillingSummaryHistoryWorkspace({
         <div className="border-b border-slate-200 px-6 py-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="section-title">Billing History</h2>
+              <h2 className="section-title">Billing Summary & History</h2>
               <p className="section-subtitle">
                 Titles marked Completed &amp; Billed for the selected billing
                 year.
@@ -2743,6 +3228,7 @@ function GenericBillingSummaryHistoryWorkspace({
             <tr>
               <th className="table-cell">Title</th>
               <th className="table-cell">Billing Region</th>
+              <th className="table-cell">PO Number</th>
               <th className="table-cell">Billing Date</th>
             </tr>
           </thead>
@@ -2753,13 +3239,14 @@ function GenericBillingSummaryHistoryWorkspace({
                   {row.title}
                 </td>
                 <td className="table-cell">{row.billingRegions}</td>
+                <td className="table-cell">{row.poNumber ?? "-"}</td>
                 <td className="table-cell">{row.billingDate}</td>
               </tr>
             ))}
             {data.historyRows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={2}
+                  colSpan={4}
                   className="table-cell text-center text-sm text-slate-500"
                 >
                   No billed titles found for {data.filters.year}.
@@ -2809,54 +3296,41 @@ function GenericBillingReportWorkspace({
             reportType={reportType}
             data={data}
           />
-          {data.client.id === SONY_PICTURES_CLASSICS_CLIENT_ID &&
-          data.selectedMovie &&
-          data.filters.movieId !== "all" ? (
-            <BillingDoneButton
-              movieId={data.selectedMovie.id}
-              returnTo={`/billing-reports/${clientId}?report=${reportType ?? ""}&movieId=${data.selectedMovie.id}&fromDate=${data.filters.fromDate}&toDate=${data.filters.toDate}`}
-            />
-          ) : null}
         </div>
       </div>
-      {data.selectedMovie ? (
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-          Title:{" "}
-          <span className="font-semibold text-slate-900">
-            {data.selectedMovie.title}
-          </span>
-        </div>
-      ) : null}
       {data.titleBlocks?.length ? (
         <div className="space-y-6">
           {data.titleBlocks.map((titleBlock) => (
-            <section
+            <GenericTitleMergedBlock
               key={titleBlock.movie.id}
-              className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-            >
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <h3 className="text-base font-semibold text-slate-900">
-                  {titleBlock.movie.title}
-                </h3>
-                <span className="text-sm font-semibold text-slate-700">
-                  Total: {formatGenericUsd(titleBlock.totalCost)}
-                </span>
-              </div>
-              <div className="space-y-4">
-                {titleBlock.blocks.map((block) => (
-                  <GenericBillingModelBlock
-                    key={`${titleBlock.movie.id}-${block.key}`}
-                    block={block}
-                    showTotalHoursColumn={data.client.id === FLYHOUSE_CLIENT_ID}
-                  />
-                ))}
-              </div>
-            </section>
+              titleBlock={titleBlock}
+              showTotalHoursColumn={data.client.id === FLYHOUSE_CLIENT_ID}
+            />
           ))}
         </div>
+      ) : data.selectedMovie && data.blocks.length ? (
+        <GenericTitleMergedBlock
+          titleBlock={{
+            movie: data.selectedMovie,
+            contactPerson: "",
+            contactPersons: data.contactPersons,
+            blocks: data.blocks,
+            totalCost: data.blocks.reduce(
+              (sum, block) =>
+                sum +
+                block.rows.reduce((blockSum, row) => blockSum + row.cost, 0),
+              0,
+            ),
+          }}
+          showTotalHoursColumn={data.client.id === FLYHOUSE_CLIENT_ID}
+        />
       ) : data.blocks.length ? (
         data.blocks.map((block) => (
-          <GenericBillingModelBlock key={block.key} block={block} showTotalHoursColumn={data.client.id === FLYHOUSE_CLIENT_ID} />
+          <GenericBillingModelBlock
+            key={block.key}
+            block={block}
+            showTotalHoursColumn={data.client.id === FLYHOUSE_CLIENT_ID}
+          />
         ))
       ) : (
         <div className="card p-6 text-sm text-slate-600">
@@ -3079,7 +3553,13 @@ export default async function ClientBillingReportPage({
     : genericFilters;
   const billingContactNotices = await db.billingContactAssignment.findMany({
     where: { clientId },
-    select: { id: true, assignmentLevel: true, billingReportType: true, project: { select: { id: true, name: true } }, contactPerson: { select: { name: true, email: true } } },
+    select: {
+      id: true,
+      assignmentLevel: true,
+      billingReportType: true,
+      project: { select: { id: true, name: true } },
+      contactPerson: { select: { name: true, email: true } },
+    },
     orderBy: [{ assignmentLevel: "asc" }, { updatedAt: "desc" }],
   });
 
@@ -3107,7 +3587,10 @@ export default async function ClientBillingReportPage({
           </Link>
         }
       />
-      <BillingContactNotices contacts={billingContactNotices} activeReport={activeReport} />
+      <BillingContactNotices
+        contacts={billingContactNotices}
+        activeReport={activeReport}
+      />
       {timeEntryReportData ? (
         <TimeEntryReportsWorkspace
           clientId={clientId}

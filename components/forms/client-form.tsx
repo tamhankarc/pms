@@ -107,6 +107,7 @@ export function ClientForm({
               { value: "TITLE_BILLING_REPORT", label: "Title + Billing Report" },
               { value: "TITLE_PROJECT", label: "Title + Project" },
               { value: "PROJECT", label: "Project" },
+              { value: "BILLING_REPORT", label: "Billing Report" },
             ]}
             placeholder="Select PO assignment mode"
             searchPlaceholder="Search PO assignment modes..."

@@ -28,8 +28,19 @@ export type SonyPicturesReportChargeRow = {
   cost: number;
 };
 
+export type SonyPicturesReportTitleContact = {
+  id: string;
+  name: string;
+  email: string;
+};
+
 export type SonyPicturesReportTitleBlock = {
-  movie: { id: string; title: string; status: string };
+  movie: {
+    id: string;
+    title: string;
+    status: string;
+  };
+  contactPersons: SonyPicturesReportTitleContact[];
   projectRows: SonyPicturesReportProjectRow[];
   chargeRows: SonyPicturesReportChargeRow[];
   totalCost: number;
@@ -46,6 +57,7 @@ export type SonyPicturesReportData = {
   filters: SonyPicturesReportFilters;
   movieOptions: { id: string; title: string; status: string }[];
   selectedMovie: { id: string; title: string; status: string } | null;
+  contactPersons: SonyPicturesReportTitleContact[];
   projectRows: SonyPicturesReportProjectRow[];
   chargeRows: SonyPicturesReportChargeRow[];
   totalCost: number;
@@ -59,6 +71,7 @@ export type SonyBillingSummaryHistoryRow = {
   status: string;
   billingRegions: string;
   billingDate: string;
+  poNumber: string;
 };
 export type SonyBillingSummaryHistoryData = {
   client: { id: string; name: string };
@@ -126,7 +139,7 @@ function formatDisplayDate(value: Date | null) {
 }
 
 function buildContactPersonLabel(
-  contactPersons: { name: string; email: string }[],
+  contactPersons: { name: string; email: string | null }[],
 ) {
   if (!contactPersons.length) return "-";
   return contactPersons
@@ -160,12 +173,14 @@ function formatBillingRegions(movie: {
   billingIntl: boolean;
   billingOther: boolean;
   billingSocial: boolean;
+  billingPortal?: boolean;
 }) {
   const values: string[] = [];
   if (movie.billingDomestic) values.push("Domestic");
   if (movie.billingIntl) values.push("INTL");
   if (movie.billingOther) values.push("Other");
   if (movie.billingSocial) values.push("Social");
+  if (movie.billingPortal) values.push("Portal");
   return values.length ? values.join(", ") : "-";
 }
 
@@ -243,6 +258,7 @@ export async function getSonyPicturesReportData({
         billingIntl: true,
         billingOther: true,
         billingSocial: true,
+        billingPortal: true,
         sonyCoppaSite: true,
         sonyGlobalEpkSite: true,
         sonyTicketingBannerCost: true,
@@ -333,6 +349,7 @@ export async function getSonyPicturesReportData({
       )
       .map((result) => ({
         movie: result.selectedMovie!,
+        contactPersons: result.contactPersons,
         projectRows: result.projectRows,
         chargeRows: result.chargeRows,
         totalCost: result.totalCost,
@@ -348,6 +365,7 @@ export async function getSonyPicturesReportData({
       filters: { movieId: "all" },
       movieOptions: mappedMovieOptions,
       selectedMovie: null,
+      contactPersons: [],
       projectRows: [],
       chargeRows: [],
       totalCost: titleBlocks.reduce((sum, block) => sum + block.totalCost, 0),
@@ -374,6 +392,7 @@ export async function getSonyPicturesReportData({
           billingIntl: true,
           billingOther: true,
           billingSocial: true,
+          billingPortal: true,
           sonyCoppaSite: true,
           sonyGlobalEpkSite: true,
           sonyTicketingBannerCost: true,
@@ -394,6 +413,7 @@ export async function getSonyPicturesReportData({
       filters: { movieId: selectedMovieId },
       movieOptions: mappedMovieOptions,
       selectedMovie: null,
+      contactPersons: [],
       projectRows: [],
       chargeRows: [],
       totalCost: 0,
@@ -405,10 +425,10 @@ export async function getSonyPicturesReportData({
     ticketingProject,
     ticketingEntries,
     otherProjects,
-    movieContactPersons,
+    movieContactPersonsResult,
   ] = await Promise.all([
     db.project.findFirst({
-      where: { id: SONY_TICKETING_PROJECT_ID, clientId },
+      where: { id: SONY_TICKETING_PROJECT_ID, clientId, addToBilling: true },
       select: {
         id: true,
         name: true,
@@ -432,6 +452,7 @@ export async function getSonyPicturesReportData({
       where: {
         clientId,
         isActive: true,
+        addToBilling: true,
         id: { notIn: [SONY_TICKETING_PROJECT_ID, SONY_NEWSLETTER_PROJECT_ID] },
         timeEntries: { some: { movieId: selectedMovie.id } },
       },
@@ -454,16 +475,21 @@ export async function getSonyPicturesReportData({
       },
       orderBy: { name: "asc" },
     }),
-    db.contactPerson.findMany({
-      where: { clientId, movieId: selectedMovie.id },
-      orderBy: { name: "asc" },
-      select: { name: true, email: true },
+    db.movie.findUnique({
+      where: { id: selectedMovie.id },
+      select: {
+        contactPersons: {
+          orderBy: { name: "asc" },
+          select: { id: true, name: true, email: true },
+        },
+      },
     }),
   ]);
 
+  const titleContactPersons = movieContactPersonsResult?.contactPersons ?? [];
   const ticketingContact = buildContactPersonLabel(
-    movieContactPersons.length
-      ? movieContactPersons
+    titleContactPersons.length
+      ? titleContactPersons
       : (ticketingProject?.contactPersons ?? []),
   );
   const ticketCountries = new Map<string, { label: string; code: string }>();
@@ -640,7 +666,7 @@ export async function getSonyPicturesReportData({
     );
     countriesByProject.set(entry.projectId, current);
   }
-  const movieContactPersonLabel = buildContactPersonLabel(movieContactPersons);
+  const movieContactPersonLabel = buildContactPersonLabel(titleContactPersons);
   const hourlyCost = Number(client.hourlyCost ?? 0);
   const lensAdjustments = await getLensBillingAdjustments({
     projectIds,
@@ -671,7 +697,7 @@ export async function getSonyPicturesReportData({
       formatBillingModel(project.billingModel),
       lens ? lens.cost : calculatedCost,
       countryList,
-      movieContactPersons.length
+      titleContactPersons.length
         ? movieContactPersonLabel
         : buildContactPersonLabel(project.contactPersons),
       lens && project.billingModel === "FIXED_PER_COUNTRY"
@@ -691,6 +717,7 @@ export async function getSonyPicturesReportData({
       title: `${selectedMovie.title} (${formatMovieStatus(selectedMovie.status)})`,
       status: selectedMovie.status,
     },
+    contactPersons: titleContactPersons,
     projectRows,
     chargeRows: [],
     totalCost: projectRows.reduce((sum, row) => sum + row.cost, 0),
@@ -722,6 +749,7 @@ export async function getSonyBillingSummaryHistoryData({
     billingIntl: true,
     billingOther: true,
     billingSocial: true,
+    billingPortal: true,
   } as const;
   const [summaryMovies, historyMovies] = await Promise.all([
     db.movie.findMany({
@@ -744,6 +772,27 @@ export async function getSonyBillingSummaryHistoryData({
       orderBy: [{ billingDate: "desc" }, { title: "asc" }],
     }),
   ]);
+  const allMovieIds = [...summaryMovies, ...historyMovies].map(
+    (movie) => movie.id,
+  );
+  const poAssignments = allMovieIds.length
+    ? await db.purchaseOrderAssignment.findMany({
+        where: {
+          movieId: { in: allMovieIds },
+          purchaseOrder: { status: { not: "CANCELLED" } },
+        },
+        select: {
+          movieId: true,
+          purchaseOrder: { select: { poNumber: true } },
+        },
+      })
+    : [];
+  const poByMovie = new Map<string, string>();
+  for (const assignment of poAssignments) {
+    if (assignment.movieId && !poByMovie.has(assignment.movieId)) {
+      poByMovie.set(assignment.movieId, assignment.purchaseOrder.poNumber);
+    }
+  }
   const mapRow = (
     movie: (typeof summaryMovies)[number],
   ): SonyBillingSummaryHistoryRow => ({
@@ -752,6 +801,7 @@ export async function getSonyBillingSummaryHistoryData({
     status: formatMovieStatus(movie.status),
     billingRegions: formatBillingRegions(movie),
     billingDate: formatDisplayDate(movie.billingDate),
+    poNumber: poByMovie.get(movie.id) ?? "-",
   });
   return {
     client,
@@ -828,7 +878,7 @@ export async function getSonyNewsletterBillingData({
   });
   if (!client) return null;
   const project = await db.project.findFirst({
-    where: { id: SONY_NEWSLETTER_PROJECT_ID, clientId },
+    where: { id: SONY_NEWSLETTER_PROJECT_ID, clientId, addToBilling: true },
     select: { id: true, name: true, projectCost: true },
   });
   if (!project)

@@ -21,7 +21,12 @@ type FilmikResourceType = {
   latestMonth: string;
 };
 
-type ContactPerson = { id: string; name: string; email: string; clientId: string };
+type ContactPerson = {
+  id: string;
+  name: string;
+  email: string;
+  clientId: string;
+};
 
 type BillingModel =
   | "HOURLY"
@@ -29,9 +34,16 @@ type BillingModel =
   | "FIXED_MONTHLY"
   | "FIXED_PER_COUNTRY"
   | "FIXED_COST";
-type ProjectStatus = "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "ARCHIVED";
+type ProjectStatus =
+  | "DRAFT"
+  | "ACTIVE"
+  | "ON_HOLD"
+  | "COMPLETED"
+  | "COMPLETED_BILLED"
+  | "ARCHIVED";
 const FILMIK_CLIENT_ID = "cmne6ed2o0000jo04t3363pqz";
 const SONY_PICTURES_CLIENT_ID = "cmn66d3q40002l104n6wvefvl";
+const UNIVERSAL_PICTURES_CLIENT_ID = "cmnh2xr1s0004l204ia5u5zj3";
 
 const initialState: ProjectFormState = {};
 
@@ -88,6 +100,10 @@ export function ProjectEditForm({
     perCountryCharges: number | null;
     projectCost: number | null;
     projectCostOtherMovieBillingRegion: number | null;
+    universalSmallCost: number | null;
+    universalMediumCost: number | null;
+    universalLargeCost: number | null;
+    universalExtraLargeCost: number | null;
     developerCount: number | null;
     perDeveloperCost: number | null;
   };
@@ -99,7 +115,9 @@ export function ProjectEditForm({
   const [projectTypeId, setProjectTypeId] = useState(
     initialValues.projectTypeId ?? "",
   );
-  const [contactPersonId, setContactPersonId] = useState(initialValues.contactPersonId ?? "");
+  const [contactPersonId, setContactPersonId] = useState(
+    initialValues.contactPersonId ?? "",
+  );
   const [status, setStatus] = useState<ProjectStatus>(initialValues.status);
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(
     initialValues.hideCountriesInEntries,
@@ -120,9 +138,16 @@ export function ProjectEditForm({
     initialValues.hideNewslettersInEntries,
   );
   const [addToBilling, setAddToBilling] = useState(initialValues.addToBilling);
-  const contactPersonOptions = contactPersons.filter((person) => person.clientId === clientId).map((person) => ({ value: person.id, label: person.name, keywords: person.email }));
+  const contactPersonOptions = contactPersons
+    .filter((person) => person.clientId === clientId)
+    .map((person) => ({
+      value: person.id,
+      label: person.name,
+      keywords: person.email,
+    }));
   const isFilmikClient = clientId === FILMIK_CLIENT_ID;
   const isSonyPicturesClient = clientId === SONY_PICTURES_CLIENT_ID;
+  const isUniversalPicturesClient = clientId === UNIVERSAL_PICTURES_CLIENT_ID;
   const currentMonth = new Date().toISOString().slice(0, 7);
   const [monthlyAdditionalRows, setMonthlyAdditionalRows] = useState(
     monthlyAdditionalHours.length
@@ -197,7 +222,15 @@ export function ProjectEditForm({
 
         <div className="md:col-span-2">
           <FormLabel htmlFor="contactPersonId">Contact Person</FormLabel>
-          <SearchableCombobox id="contactPersonId" value={contactPersonId} onValueChange={setContactPersonId} options={contactPersonOptions} placeholder="Select contact person" searchPlaceholder="Search contact persons..." emptyLabel="No contact person found." />
+          <SearchableCombobox
+            id="contactPersonId"
+            value={contactPersonId}
+            onValueChange={setContactPersonId}
+            options={contactPersonOptions}
+            placeholder="Select contact person"
+            searchPlaceholder="Search contact persons..."
+            emptyLabel="No contact person found."
+          />
         </div>
 
         {clientUsesProjectTypes ? (
@@ -269,6 +302,7 @@ export function ProjectEditForm({
               { value: "ACTIVE", label: "Active" },
               { value: "ON_HOLD", label: "On Hold" },
               { value: "COMPLETED", label: "Completed" },
+              { value: "COMPLETED_BILLED", label: "Completed & Billed" },
               { value: "ARCHIVED", label: "Archived" },
             ]}
             placeholder="Select status"
@@ -426,6 +460,59 @@ export function ProjectEditForm({
                 step="0.01"
                 defaultValue={initialValues.projectCost ?? "0.00"}
               />
+            </div>
+          </div>
+        ) : null}
+
+        {isAdmin && isUniversalPicturesClient ? (
+          <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <h3 className="text-sm font-semibold text-slate-900">
+              Universal Cost Categories (USD)
+            </h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Used in Universal Billing Summary for Social QA and Localization.
+            </p>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              {[
+                [
+                  "universalSmallCost",
+                  "Small (1 to 19)",
+                  initialValues.universalSmallCost,
+                ],
+                [
+                  "universalMediumCost",
+                  "Medium (20 to 34)",
+                  initialValues.universalMediumCost,
+                ],
+                [
+                  "universalLargeCost",
+                  "Large (35 to 69)",
+                  initialValues.universalLargeCost,
+                ],
+                [
+                  "universalExtraLargeCost",
+                  "Extra Large (70 above)",
+                  initialValues.universalExtraLargeCost,
+                ],
+              ].map(([id, label, value]) => (
+                <div key={String(id)}>
+                  <FormLabel htmlFor={String(id)}>{label}</FormLabel>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">
+                      $
+                    </span>
+                    <input
+                      id={String(id)}
+                      className="input currency-input"
+                      name={String(id)}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      defaultValue={String(value ?? "0.00")}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         ) : null}

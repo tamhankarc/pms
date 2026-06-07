@@ -109,7 +109,7 @@ export function royalMonthRange(month: string) {
 }
 
 function buildContactPersonLabel(
-  contactPersons: { name: string; email: string }[],
+  contactPersons: { name: string; email: string | null }[],
 ) {
   if (!contactPersons.length) return "-";
   return contactPersons
@@ -144,7 +144,7 @@ export async function getRoyalBillingReportData({
       name: true,
       hourlyCost: true,
       projects: {
-        where: { isActive: true },
+        where: { isActive: true, addToBilling: true },
         select: {
           id: true,
           name: true,

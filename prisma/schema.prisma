@@ -44,6 +44,7 @@ enum ProjectStatus {
   ACTIVE
   ON_HOLD
   COMPLETED
+  COMPLETED_BILLED
   ARCHIVED
 }
 
@@ -84,6 +85,7 @@ enum MovieBillingRegion {
   INTL
   OTHER
   SOCIAL
+  PORTAL
 }
 
 enum MovieStatus {
@@ -158,6 +160,7 @@ enum BillingContactAssignmentLevel {
 
 enum PurchaseOrderStatus {
   ACTIVE
+  PROCESSED
   EXHAUSTED
   EXPIRED
   CANCELLED
@@ -369,6 +372,8 @@ model Movie {
   billingIntl                  Boolean            @default(false)
   billingOther                 Boolean            @default(false)
   billingSocial                Boolean            @default(false)
+  billingPortal                Boolean            @default(false)
+  billingInvoiceNumber         String?
   otherCountryIds              String?            @db.Text
   billingUnitsJson             String?            @db.Text
   sonyTicketingBannerCost      Decimal            @default(0) @db.Decimal(12, 2)
@@ -609,10 +614,16 @@ model Project {
   projectCost             Decimal       @default(0) @db.Decimal(12, 2)
   projectCostOtherMovieBillingRegion Decimal @default(0) @db.Decimal(12, 2)
   perCountryCharges       Decimal       @default(0) @db.Decimal(12, 2)
+  universalSmallCost      Decimal       @default(0) @db.Decimal(12, 2)
+  universalMediumCost     Decimal       @default(0) @db.Decimal(12, 2)
+  universalLargeCost      Decimal       @default(0) @db.Decimal(12, 2)
+  universalExtraLargeCost Decimal       @default(0) @db.Decimal(12, 2)
   developerCount          Int           @default(0)
   perDeveloperCost        Decimal       @default(0) @db.Decimal(12, 2)
   startDate               DateTime?
   endDate                 DateTime?
+  billingDate             DateTime?
+  billingInvoiceNumber    String?
   isActive                Boolean       @default(true)
   createdById             String?
   updatedById             String?

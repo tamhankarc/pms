@@ -11,12 +11,39 @@ export default async function NewContactPersonPage() {
   const currentUser = await requireUser();
   if (!canManageContactPersons(currentUser)) redirect("/dashboard");
 
-  const clients = await db.client.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+  const [clients, countries] = await Promise.all([
+    db.client.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.country.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, isoCode: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Create Contact Person" description="Create a client contact person." actions={<Link href="/contact-persons" className="btn-secondary">Back to Contact Persons</Link>} />
-      <div className="max-w-3xl"><ContactPersonForm clients={clients} action={createContactPersonAction} title="Create Contact Person" submitLabel="Create Contact Person" /></div>
+      <PageHeader
+        title="Create Contact Person"
+        description="Create a client contact person."
+        actions={
+          <Link href="/contact-persons" className="btn-secondary">
+            Back to Contact Persons
+          </Link>
+        }
+      />
+      <div className="max-w-3xl">
+        <ContactPersonForm
+          clients={clients}
+          countries={countries}
+          action={createContactPersonAction}
+          title="Create Contact Person"
+          submitLabel="Create Contact Person"
+        />
+      </div>
     </div>
   );
 }

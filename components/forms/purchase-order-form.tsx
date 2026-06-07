@@ -60,7 +60,12 @@ export function PurchaseOrderForm({
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [clientId, setClientId] = useState(initialValues?.clientId ?? "");
-  const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>(initialValues?.assignmentMode ?? "TITLE");
+  const initialClient = clients.find((client) => client.id === (initialValues?.clientId ?? ""));
+  const normalizeAssignmentMode = (mode?: string): AssignmentMode => {
+    if (mode === "TITLE" || mode === "TITLE_BILLING_REPORT" || mode === "TITLE_PROJECT" || mode === "PROJECT" || mode === "BILLING_REPORT") return mode;
+    return "PROJECT";
+  };
+  const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>(normalizeAssignmentMode(initialValues?.assignmentMode ?? initialClient?.poAssignmentMode));
   const [movieIds, setTitleIds] = useState<string[]>(initialValues?.movieIds ?? []);
   const [projectId, setProjectId] = useState(initialValues?.projectId ?? "");
   const [billingReportType, setBillingReportType] = useState(initialValues?.billingReportType ?? "");
@@ -68,10 +73,12 @@ export function PurchaseOrderForm({
   const clientOptions = useMemo(() => clients.map((client) => ({ value: client.id, label: client.name })), [clients]);
   const selectedClient = clients.find((client) => client.id === clientId);
   const clientUsesTitleDropdown = selectedClient?.showMoviesInEntries ?? true;
+  const rawAssignmentMode = normalizeAssignmentMode(selectedClient?.poAssignmentMode ?? assignmentMode);
+  const effectiveAssignmentMode: AssignmentMode = !clientUsesTitleDropdown && ["TITLE", "TITLE_BILLING_REPORT", "TITLE_PROJECT"].includes(rawAssignmentMode) ? "PROJECT" : rawAssignmentMode;
   const titleOptions = useMemo(() => titles.filter((movie) => !clientId || movie.clientId === clientId).map((movie) => ({ value: movie.id, label: movie.title, keywords: movie.clientName ?? "" })), [titles, clientId]);
   const projectOptions = useMemo(() => projects.filter((project) => !clientId || project.clientId === clientId).map((project) => ({ value: project.id, label: clientId === "cmn66d3q40002l104n6wvefvl" && project.id === "cmnijd30h0001l404y6i8tb2y" && project.newsletterType ? `Newsletters - ${project.newsletterType}` : project.name, keywords: project.clientName ?? "" })), [projects, clientId]);
   const billingReportOptions = useMemo(() => billingReports.filter((report) => !report.clientIds?.length || report.clientIds.includes(clientId)).map((report) => ({ value: report.value, label: report.label })), [billingReports, clientId]);
-  const poKindLabel = assignmentMode === "TITLE" && movieIds.length > 1 ? "Residual" : assignmentMode === "TITLE" && movieIds.length === 1 ? "Normal" : "Configured by selected mode";
+  // const poKindLabel = effectiveAssignmentMode === "TITLE" && movieIds.length > 1 ? "Residual" : effectiveAssignmentMode === "TITLE" && movieIds.length === 1 ? "Normal" : "Configured by selected mode";
 
   function handleClientChange(nextClientId: string) {
     setClientId(nextClientId);
@@ -80,7 +87,7 @@ export function PurchaseOrderForm({
     setBillingReportType("");
     if (nextClientId) {
       const nextClient = clients.find((client) => client.id === nextClientId);
-      if (nextClient && nextClient.showMoviesInEntries === false && ["TITLE", "TITLE_BILLING_REPORT", "TITLE_PROJECT"].includes(assignmentMode)) setAssignmentMode("PROJECT");
+      if (nextClient) setAssignmentMode(normalizeAssignmentMode(nextClient.poAssignmentMode));
     }
   }
 
@@ -88,7 +95,7 @@ export function PurchaseOrderForm({
     <form action={formAction} className="card p-6">
       {initialValues?.id ? <input type="hidden" name="id" value={initialValues.id} /> : null}
       <input type="hidden" name="clientId" value={clientId} />
-      <input type="hidden" name="assignmentMode" value={assignmentMode} />
+      <input type="hidden" name="assignmentMode" value={effectiveAssignmentMode} />
       <input type="hidden" name="projectId" value={projectId} />
       <input type="hidden" name="billingReportType" value={billingReportType} />
 
@@ -112,6 +119,7 @@ export function PurchaseOrderForm({
               defaultValue={initialValues?.status ?? "ACTIVE"}
               options={[
                 { value: "ACTIVE", label: "Active" },
+                { value: "PROCESSED", label: "Processed" },
                 { value: "EXHAUSTED", label: "Exhausted" },
                 { value: "EXPIRED", label: "Expired" },
                 { value: "CANCELLED", label: "Cancelled" },
@@ -121,8 +129,7 @@ export function PurchaseOrderForm({
               emptyLabel="No status found."
             />
           </div>
-          <div><FormLabel htmlFor="amount">PO Amount</FormLabel><input id="amount" name="amount" type="number" min="0" step="0.01" className="input" defaultValue={initialValues?.amount ?? "0.00"} /></div>
-          <div><FormLabel htmlFor="currency">Currency</FormLabel><input id="currency" name="currency" className="input" defaultValue={initialValues?.currency ?? "USD"} /></div>
+          <div><FormLabel htmlFor="amount">PO Amount</FormLabel><div className="flex gap-2"><SearchableCombobox id="currency" name="currency" defaultValue={initialValues?.currency ?? "USD"} options={[{ value: "USD", label: "$ USD" }, { value: "GBP", label: "£ Pound" }, { value: "EUR", label: "€ Euro" }, { value: "INR", label: "₹ Rupee" }]} placeholder="Currency" searchPlaceholder="Search currency..." emptyLabel="No currency found." /><input id="amount" name="amount" type="number" min="0" step="0.01" className="input" defaultValue={initialValues?.amount ?? "0.00"} /></div></div>
           <div><FormLabel htmlFor="poDate">PO Date</FormLabel><input id="poDate" name="poDate" type="date" className="input" defaultValue={initialValues?.poDate ?? ""} /></div>
           <div><FormLabel htmlFor="validFrom">Valid From</FormLabel><input id="validFrom" name="validFrom" type="date" className="input" defaultValue={initialValues?.validFrom ?? ""} /></div>
           <div><FormLabel htmlFor="validTo">Valid To</FormLabel><input id="validTo" name="validTo" type="date" className="input" defaultValue={initialValues?.validTo ?? ""} /></div>
@@ -130,26 +137,14 @@ export function PurchaseOrderForm({
         </div>
         <div><FormLabel htmlFor="notes">Notes</FormLabel><textarea id="notes" name="notes" className="input min-h-24" defaultValue={initialValues?.notes ?? ""} /></div>
 
-        <div className="rounded-xl border border-slate-200 p-4">
-          <FormLabel htmlFor="assignmentMode" required>PO Assignment</FormLabel>
-          <div className="mt-2 grid gap-3 md:grid-cols-4">
-            {([
-              ...(clientUsesTitleDropdown ? [["TITLE", "Title"], ["TITLE_BILLING_REPORT", "Title + Billing Report"], ["TITLE_PROJECT", "Title + Project"]] : []),
-              ["PROJECT", "Project"],
-              ["BILLING_REPORT", "Billing Report"],
-            ] as [AssignmentMode, string][]).map(([value, label]) => (
-              <label key={value} className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm ${assignmentMode === value ? "border-brand-500 bg-brand-50 text-brand-900" : "border-slate-200 bg-white text-slate-700"}`}>
-                <input type="radio" checked={assignmentMode === value} onChange={() => { setAssignmentMode(value); if (value !== "BILLING_REPORT" && value !== "TITLE_BILLING_REPORT") setBillingReportType(""); }} />
-                <span className="font-medium">{label}</span>
-              </label>
-            ))}
-          </div>
-          <p className="mt-2 text-xs text-slate-500">Title mode labels itself automatically: 1 PO + 1 Title = Normal, 1 PO + multiple Titles = Residual. Current: <strong>{poKindLabel}</strong>.</p>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+          <span className="font-semibold text-slate-900">PO Assignment:</span> {selectedClient?.poAssignmentMode ? selectedClient.poAssignmentMode.replaceAll("_", " ") : "Select client first"}
+          <p className="mt-1 text-xs text-slate-500">This is controlled from the selected client&apos;s PO Assignment Mode.</p>
         </div>
 
-        {assignmentMode !== "PROJECT" && assignmentMode !== "BILLING_REPORT" ? <div><FormLabel htmlFor="movieIds" required>Title(s)</FormLabel><SearchableMultiSelect id="movieIds" name="movieIds" options={titleOptions} value={movieIds} onValueChange={setTitleIds} placeholder={clientId ? "Select title(s)" : "Select client first"} searchPlaceholder="Search titles..." emptyLabel="No titles found." disabled={!clientId} required /></div> : null}
-        {(assignmentMode === "TITLE_BILLING_REPORT" || assignmentMode === "BILLING_REPORT") ? <div><FormLabel htmlFor="billingReportType" required>Billing Report</FormLabel><SearchableCombobox id="billingReportType" options={billingReportOptions} value={billingReportType} onValueChange={setBillingReportType} placeholder={clientId ? "Select billing report" : "Select client first"} searchPlaceholder="Search reports..." emptyLabel="No billing report found." disabled={!clientId} /></div> : null}
-        {(assignmentMode === "TITLE_PROJECT" || assignmentMode === "PROJECT") ? <div><FormLabel htmlFor="projectId" required>Project</FormLabel><SearchableCombobox id="projectId" options={projectOptions} value={projectId} onValueChange={setProjectId} placeholder={clientId ? "Select project" : "Select client first"} searchPlaceholder="Search projects..." emptyLabel="No project found." disabled={!clientId} /></div> : null}
+        {effectiveAssignmentMode !== "PROJECT" && effectiveAssignmentMode !== "BILLING_REPORT" ? <div><FormLabel htmlFor="movieIds" required>Title(s)</FormLabel><SearchableMultiSelect id="movieIds" name="movieIds" options={titleOptions} value={movieIds} onValueChange={setTitleIds} placeholder={clientId ? "Select title(s)" : "Select client first"} searchPlaceholder="Search titles..." emptyLabel="No titles found." disabled={!clientId} required /></div> : null}
+        {(effectiveAssignmentMode === "TITLE_BILLING_REPORT" || effectiveAssignmentMode === "BILLING_REPORT") ? <div><FormLabel htmlFor="billingReportType" required>Billing Report</FormLabel><SearchableCombobox id="billingReportType" options={billingReportOptions} value={billingReportType} onValueChange={setBillingReportType} placeholder={clientId ? "Select billing report" : "Select client first"} searchPlaceholder="Search reports..." emptyLabel="No billing report found." disabled={!clientId} /></div> : null}
+        {(effectiveAssignmentMode === "TITLE_PROJECT" || effectiveAssignmentMode === "PROJECT") ? <div><FormLabel htmlFor="projectId" required>Project</FormLabel><SearchableCombobox id="projectId" options={projectOptions} value={projectId} onValueChange={setProjectId} placeholder={clientId ? "Select project" : "Select client first"} searchPlaceholder="Search projects..." emptyLabel="No project found." disabled={!clientId} /></div> : null}
 
         <button className="btn-primary w-full" disabled={pending}>{pending ? "Saving..." : submitLabel}</button>
       </div>

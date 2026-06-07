@@ -18,7 +18,7 @@ const purchaseOrderSchema = z.object({
   poDate: z.string().optional(),
   validFrom: z.string().optional(),
   validTo: z.string().optional(),
-  status: z.enum(["ACTIVE", "EXHAUSTED", "EXPIRED", "CANCELLED"]),
+  status: z.enum(["ACTIVE", "PROCESSED", "EXHAUSTED", "EXPIRED", "CANCELLED"]),
   documentUrl: z.string().trim().optional(),
   notes: z.string().trim().optional(),
   assignmentMode: z.enum(["TITLE", "TITLE_BILLING_REPORT", "TITLE_PROJECT", "PROJECT", "BILLING_REPORT"]),

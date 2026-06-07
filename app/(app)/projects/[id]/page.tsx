@@ -24,35 +24,40 @@ export default async function ProjectDetailPage({
   });
   if (!project) notFound();
 
-  const [projectTypes, filmikResourceTypesRaw, contactPersons] = await Promise.all([
-    db.projectType.findMany({
-      where: { clientId: project.clientId, isActive: true },
-      orderBy: { name: "asc" },
-    }),
-    project.clientId === "cmne6ed2o0000jo04t3363pqz"
-      ? db.filmikResourceType.findMany({
-          where: {
-            clientId: "cmne6ed2o0000jo04t3363pqz",
-            OR: [
-              { isActive: true },
-              { projectCounts: { some: { projectId: project.id } } },
-            ],
-          },
-          select: {
-            id: true,
-            name: true,
-            projectCounts: {
-              where: { projectId: project.id },
-              orderBy: { effectiveMonth: "desc" },
-              take: 1,
-              select: { count: true, effectiveMonth: true },
+  const [projectTypes, filmikResourceTypesRaw, contactPersons] =
+    await Promise.all([
+      db.projectType.findMany({
+        where: { clientId: project.clientId, isActive: true },
+        orderBy: { name: "asc" },
+      }),
+      project.clientId === "cmne6ed2o0000jo04t3363pqz"
+        ? db.filmikResourceType.findMany({
+            where: {
+              clientId: "cmne6ed2o0000jo04t3363pqz",
+              OR: [
+                { isActive: true },
+                { projectCounts: { some: { projectId: project.id } } },
+              ],
             },
-          },
-          orderBy: { name: "asc" },
-        })
-      : Promise.resolve([]),
-    db.contactPerson.findMany({ where: { clientId: project.clientId }, orderBy: { name: "asc" }, select: { id: true, clientId: true, name: true, email: true } }),
-  ]);
+            select: {
+              id: true,
+              name: true,
+              projectCounts: {
+                where: { projectId: project.id },
+                orderBy: { effectiveMonth: "desc" },
+                take: 1,
+                select: { count: true, effectiveMonth: true },
+              },
+            },
+            orderBy: { name: "asc" },
+          })
+        : Promise.resolve([]),
+      db.contactPerson.findMany({
+        where: { clientId: project.clientId },
+        orderBy: { name: "asc" },
+        select: { id: true, clientId: true, name: true, email: true },
+      }),
+    ]);
   const filmikResourceTypes = filmikResourceTypesRaw.map((resource) => ({
     id: resource.id,
     name: resource.name,
@@ -125,6 +130,10 @@ export default async function ProjectDetailPage({
           projectCostOtherMovieBillingRegion: Number(
             project.projectCostOtherMovieBillingRegion ?? 0,
           ),
+          universalSmallCost: Number(project.universalSmallCost ?? 0),
+          universalMediumCost: Number(project.universalMediumCost ?? 0),
+          universalLargeCost: Number(project.universalLargeCost ?? 0),
+          universalExtraLargeCost: Number(project.universalExtraLargeCost ?? 0),
           developerCount: Number(project.developerCount ?? 0),
           perDeveloperCost: Number(project.perDeveloperCost ?? 0),
         }}

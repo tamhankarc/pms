@@ -30,6 +30,12 @@ export type AmazonBillingReportFilters = {
   countryId: string;
 };
 
+export type BillingReportContactPerson = {
+  id?: string;
+  name: string;
+  email: string | null;
+};
+
 export type AmazonBillingReportRow = {
   date: string;
   titleName: string;
@@ -38,6 +44,7 @@ export type AmazonBillingReportRow = {
   assetType: string;
   cost: number;
   contactPerson: string;
+  contactPersons: BillingReportContactPerson[];
 };
 
 export type AmazonBillingReportSummaryRow = {
@@ -52,6 +59,7 @@ export type UniversalTitleSummaryRow = {
   status: string;
   totalAssets: number;
   totalCountries: number;
+  contactPersons: BillingReportContactPerson[];
 };
 
 export type AmazonBillingReportData = {
@@ -102,6 +110,7 @@ export type WarnerDomesticDeliverableData = {
     billingDomestic?: boolean;
     billingIntl?: boolean;
     billingOther?: boolean;
+    contactPersons?: BillingReportContactPerson[];
   } | null;
   selectedCountry: { id: string; name: string; isoCode: string | null } | null;
   rows: WarnerDomesticDeliverableLine[];
@@ -113,6 +122,7 @@ export type WarnerDomesticDeliverableData = {
       billingDomestic?: boolean;
       billingIntl?: boolean;
       billingOther?: boolean;
+      contactPersons?: BillingReportContactPerson[];
     };
     selectedCountry: {
       id: string;
@@ -171,7 +181,7 @@ export const AMAZON_REPORTS: Partial<
     kind: "time-entry",
   },
   "billing-history": {
-    title: "Billing History",
+    title: "Billing Summary & History",
     projectName: "",
     includeLanguage: false,
     includeCountry: false,
@@ -208,13 +218,6 @@ export const UNIVERSAL_REPORTS: Partial<
 export const WARNER_REPORTS: Partial<
   Record<AmazonReportType, BillingReportDefinition>
 > = {
-  "wbhe-status": {
-    title: "WBHE Status",
-    projectName: "WB Home Entertainment (Social)",
-    includeLanguage: false,
-    includeCountry: false,
-    kind: "time-entry",
-  },
   "domestic-deliverable": {
     title: "Domestic Deliverable",
     projectName: "",
@@ -236,8 +239,15 @@ export const WARNER_REPORTS: Partial<
     includeCountry: false,
     kind: "deliverable",
   },
+  "wbhe-status": {
+    title: "WBHE Status",
+    projectName: "WB Home Entertainment (Social)",
+    includeLanguage: false,
+    includeCountry: false,
+    kind: "time-entry",
+  },
   "billing-history": {
-    title: "Billing History",
+    title: "Billing Summary & History",
     projectName: "",
     includeLanguage: false,
     includeCountry: false,
@@ -289,7 +299,7 @@ export const SONY_PICTURES_CLASSICS_REPORTS: Partial<
     kind: "generic-movie",
   },
   "billing-history": {
-    title: "Billing History",
+    title: "Billing Summary & History",
     projectName: "",
     includeLanguage: false,
     includeCountry: false,
@@ -443,8 +453,11 @@ export function buildAmazonBillingReportFilters(
 
   return {
     fromDate:
-      monthRange?.fromDate ?? normalizeDateInput(getValue("fromDate"), defaults.fromDate),
-    toDate: monthRange?.toDate ?? normalizeDateInput(getValue("toDate"), defaults.toDate),
+      monthRange?.fromDate ??
+      normalizeDateInput(getValue("fromDate"), defaults.fromDate),
+    toDate:
+      monthRange?.toDate ??
+      normalizeDateInput(getValue("toDate"), defaults.toDate),
     movieId: getValue("movieId") || "all",
     assetTypeId: getValue("assetTypeId") || "all",
     assetNameId: getValue("assetNameId") || getValue("assetTypeId") || "all",
@@ -475,7 +488,7 @@ export function buildWarnerDomesticDeliverableFilters(
 }
 
 function buildContactPersonLabel(
-  contactPersons: { name: string; email: string }[],
+  contactPersons: { name: string; email: string | null }[],
 ) {
   if (!contactPersons.length) return "-";
   return contactPersons
@@ -518,6 +531,7 @@ export async function getAmazonBillingReportData({
   const project = await db.project.findFirst({
     where: {
       clientId,
+      addToBilling: true,
       name: reportConfig.projectName,
     },
     select: {
@@ -526,7 +540,7 @@ export async function getAmazonBillingReportData({
       projectCost: true,
       contactPersons: {
         orderBy: { name: "asc" },
-        select: { name: true, email: true },
+        select: { id: true, name: true, email: true },
       },
     },
   });
@@ -565,7 +579,17 @@ export async function getAmazonBillingReportData({
     },
     select: {
       movieId: true,
-      movie: { select: { id: true, title: true, status: true } },
+      movie: {
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          contactPersons: {
+            orderBy: { name: "asc" },
+            select: { id: true, name: true, email: true },
+          },
+        },
+      },
       assetType: { select: { id: true, name: true } },
       assetName: { select: { id: true, name: true } },
       country: { select: { id: true, name: true } },
@@ -713,7 +737,17 @@ export async function getAmazonBillingReportData({
       ...(filters.countryId !== "all" ? { countryId: filters.countryId } : {}),
     },
     include: {
-      movie: { select: { id: true, title: true, status: true } },
+      movie: {
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          contactPersons: {
+            orderBy: { name: "asc" },
+            select: { id: true, name: true, email: true },
+          },
+        },
+      },
       assetType: { select: { name: true, cost: true } },
       language: { select: { name: true, code: true } },
       country: { select: { name: true, isoCode: true } },
@@ -726,41 +760,46 @@ export async function getAmazonBillingReportData({
     ],
   });
 
-  const movieContactPersons =
-    filters.movieId !== "all"
-      ? await db.contactPerson.findMany({
-          where: { clientId, movieId: filters.movieId },
-          orderBy: { name: "asc" },
-          select: { name: true, email: true },
-        })
-      : [];
-  const contactPersons = movieContactPersons.length
-    ? buildContactPersonLabel(movieContactPersons)
-    : buildContactPersonLabel(project.contactPersons);
+  const projectContactPersons = project.contactPersons.map((person) => ({
+    id: person.id,
+    name: person.name,
+    email: person.email,
+  }));
+  const selectedTitleContactPersons =
+    filters.movieId !== "all" ? (entries[0]?.movie?.contactPersons ?? []) : [];
+  const contactPersons = selectedTitleContactPersons.length
+    ? buildContactPersonLabel(selectedTitleContactPersons)
+    : buildContactPersonLabel(projectContactPersons);
 
   const isUniversalLocalization =
     client.name.trim().toLowerCase() === UNIVERSAL_CLIENT_NAME.toLowerCase() &&
     reportType === "localization";
 
-  const rows: AmazonBillingReportRow[] = entries.map((entry) => ({
-    date: formatDisplayDate(entry.workDate),
-    titleName: entry.movie?.title ?? "-",
-    assetName: isAmazonClient
-      ? entry.taskName || entry.assetName?.name || "-"
-      : entry.assetName?.name || entry.taskName || "-",
-    territoryVariant: isUniversalLocalization
-      ? (entry.country?.name ?? "-")
-      : reportConfig.includeLanguage
-        ? (entry.language?.name ?? entry.country?.name ?? "-")
-        : undefined,
-    assetType: isUniversalLocalization
-      ? "Assets"
-      : (entry.assetType?.name ?? "-"),
-    cost: isUniversalLocalization
-      ? Number(project.projectCost ?? 0)
-      : Number(entry.assetType?.cost ?? 0),
-    contactPerson: contactPersons,
-  }));
+  const rows: AmazonBillingReportRow[] = entries.map((entry) => {
+    const rowContactPersons = entry.movie?.contactPersons.length
+      ? entry.movie.contactPersons
+      : projectContactPersons;
+    return {
+      date: formatDisplayDate(entry.workDate),
+      titleName: entry.movie?.title ?? "-",
+      assetName: isAmazonClient
+        ? entry.taskName || entry.assetName?.name || "-"
+        : entry.assetName?.name || entry.taskName || "-",
+      territoryVariant: isUniversalLocalization
+        ? (entry.country?.name ?? "-")
+        : reportConfig.includeLanguage
+          ? (entry.language?.name ?? entry.country?.name ?? "-")
+          : undefined,
+      assetType: isUniversalLocalization
+        ? "Assets"
+        : (entry.assetType?.name ?? "-"),
+      cost: isUniversalLocalization
+        ? Number(project.projectCost ?? 0)
+        : Number(entry.assetType?.cost ?? 0),
+      contactPerson: buildContactPersonLabel(rowContactPersons),
+      contactPersons: rowContactPersons,
+    };
+  });
 
   const summaryMap = new Map<string, AmazonBillingReportSummaryRow>();
   for (const row of rows) {
@@ -781,6 +820,7 @@ export async function getAmazonBillingReportData({
       id: string;
       title: string;
       status: string;
+      contactPersons?: BillingReportContactPerson[];
     } | null;
     assetName: {
       name: string;
@@ -801,6 +841,7 @@ export async function getAmazonBillingReportData({
         status: string;
         assets: Set<string>;
         countries: Set<string>;
+        contactPersons: BillingReportContactPerson[];
       }
     >();
     for (const entry of entryList) {
@@ -811,6 +852,7 @@ export async function getAmazonBillingReportData({
         status: entry.movie.status ?? "",
         assets: new Set<string>(),
         countries: new Set<string>(),
+        contactPersons: entry.movie.contactPersons ?? [],
       };
       const asset = entry.assetName?.name || entry.taskName || "";
       if (asset.trim()) current.assets.add(asset.trim());
@@ -824,6 +866,7 @@ export async function getAmazonBillingReportData({
         status: value.status,
         totalAssets: value.assets.size,
         totalCountries: value.countries.size,
+        contactPersons: value.contactPersons,
       }))
       .sort((a, b) => a.titleName.localeCompare(b.titleName));
   };
@@ -850,7 +893,17 @@ export async function getAmazonBillingReportData({
             : {}),
         },
         include: {
-          movie: { select: { id: true, title: true, status: true } },
+          movie: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              contactPersons: {
+                orderBy: { name: "asc" },
+                select: { id: true, name: true, email: true },
+              },
+            },
+          },
           assetName: { select: { name: true } },
           country: { select: { name: true } },
         },
@@ -884,8 +937,12 @@ export type UniversalBillingSummaryRow = {
   movieId: string;
   titleName: string;
   status: string;
-  totalAssets: number;
-  totalCountries: number;
+  socialAssets: number;
+  socialCost: number;
+  localizationAssets: number;
+  localizationCountries: number;
+  localizationCost: number;
+  contactPersons: BillingReportContactPerson[];
 };
 
 export type UniversalBillingSummaryData = {
@@ -895,7 +952,7 @@ export type UniversalBillingSummaryData = {
   filters: AmazonBillingReportFilters;
   titleOptions: { id: string; title: string; status: string }[];
   rows: UniversalBillingSummaryRow[];
-  completedTitleSummaryRows: UniversalTitleSummaryRow[];
+  completedTitleSummaryRows: UniversalBillingSummaryRow[];
   projectFound: boolean;
 };
 
@@ -914,6 +971,24 @@ export function getMonthRangeFromDateInput(
     fromDate: toDateInputValue(new Date(year, monthIndex, 1)),
     toDate: toDateInputValue(new Date(year, monthIndex + 1, 0)),
   };
+}
+
+function getUniversalCategoryCost(
+  count: number,
+  project:
+    | {
+        universalSmallCost: unknown;
+        universalMediumCost: unknown;
+        universalLargeCost: unknown;
+        universalExtraLargeCost: unknown;
+      }
+    | undefined,
+) {
+  if (!project || count <= 0) return 0;
+  if (count <= 19) return Number(project.universalSmallCost ?? 0);
+  if (count <= 34) return Number(project.universalMediumCost ?? 0);
+  if (count <= 69) return Number(project.universalLargeCost ?? 0);
+  return Number(project.universalExtraLargeCost ?? 0);
 }
 
 export async function getUniversalBillingSummaryData({
@@ -935,6 +1010,7 @@ export async function getUniversalBillingSummaryData({
   const summaryProjects = await db.project.findMany({
     where: {
       clientId,
+      addToBilling: true,
       id: {
         in: [
           UNIVERSAL_SOCIAL_QC_PROJECT_ID,
@@ -942,10 +1018,22 @@ export async function getUniversalBillingSummaryData({
         ],
       },
     },
-    select: { id: true },
+    select: {
+      id: true,
+      universalSmallCost: true,
+      universalMediumCost: true,
+      universalLargeCost: true,
+      universalExtraLargeCost: true,
+    },
   });
 
   const summaryProjectIds = summaryProjects.map((project) => project.id);
+  const socialProject = summaryProjects.find(
+    (project) => project.id === UNIVERSAL_SOCIAL_QC_PROJECT_ID,
+  );
+  const localizationProject = summaryProjects.find(
+    (project) => project.id === UNIVERSAL_SOCIAL_LOCALIZATION_PROJECT_ID,
+  );
 
   if (!summaryProjectIds.length) {
     return {
@@ -971,108 +1059,98 @@ export async function getUniversalBillingSummaryData({
     orderBy: { title: "asc" },
   });
 
-  const entries = await db.timeEntry.findMany({
-    where: {
-      projectId: { in: summaryProjectIds },
-      movieId: { not: null },
-      movie: { status: { in: ["WORKING", "COMPLETED"] } },
-      ...(filters.movieId !== "all" ? { movieId: filters.movieId } : {}),
-    },
-    select: {
-      movie: { select: { id: true, title: true, status: true } },
-      assetName: { select: { name: true } },
-      taskName: true,
-      country: { select: { name: true } },
-    },
-    orderBy: [{ movie: { title: "asc" } }, { workDate: "asc" }],
-  });
+  const buildRows = async (
+    statuses: Array<"WORKING" | "COMPLETED" | "COMPLETED_BILLED">,
+  ) => {
+    const entries = await db.timeEntry.findMany({
+      where: {
+        projectId: { in: summaryProjectIds },
+        movieId: { not: null },
+        movie: { status: { in: statuses } },
+        ...(filters.movieId !== "all" ? { movieId: filters.movieId } : {}),
+      },
+      select: {
+        projectId: true,
+        taskName: true,
+        movie: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            contactPersons: {
+              orderBy: { name: "asc" },
+              select: { id: true, name: true, email: true },
+            },
+          },
+        },
+        assetName: { select: { name: true } },
+        country: { select: { name: true } },
+      },
+      orderBy: [{ movie: { title: "asc" } }, { workDate: "asc" }],
+    });
 
-  const map = new Map<
-    string,
-    {
-      movieId: string;
-      titleName: string;
-      status: string;
-      assets: Set<string>;
-      countries: Set<string>;
+    const map = new Map<
+      string,
+      {
+        movieId: string;
+        titleName: string;
+        status: string;
+        socialAssets: Set<string>;
+        localizationAssets: Set<string>;
+        localizationCountries: Set<string>;
+        contactPersons: BillingReportContactPerson[];
+      }
+    >();
+
+    for (const entry of entries) {
+      if (!entry.movie) continue;
+      const current = map.get(entry.movie.id) ?? {
+        movieId: entry.movie.id,
+        titleName: entry.movie.title,
+        status: entry.movie.status,
+        socialAssets: new Set<string>(),
+        localizationAssets: new Set<string>(),
+        localizationCountries: new Set<string>(),
+        contactPersons: entry.movie.contactPersons ?? [],
+      };
+      const asset = (entry.assetName?.name ?? entry.taskName ?? "").trim();
+      if (entry.projectId === UNIVERSAL_SOCIAL_QC_PROJECT_ID && asset) {
+        current.socialAssets.add(asset);
+      }
+      if (entry.projectId === UNIVERSAL_SOCIAL_LOCALIZATION_PROJECT_ID) {
+        if (asset) current.localizationAssets.add(asset);
+        if (entry.country?.name)
+          current.localizationCountries.add(entry.country.name);
+      }
+      map.set(entry.movie.id, current);
     }
-  >();
-  for (const entry of entries) {
-    if (!entry.movie) continue;
-    const current = map.get(entry.movie.id) ?? {
-      movieId: entry.movie.id,
-      titleName: entry.movie.title,
-      status: entry.movie.status,
-      assets: new Set<string>(),
-      countries: new Set<string>(),
-    };
-    const asset = entry.assetName?.name ?? entry.taskName ?? "";
-    if (asset.trim()) current.assets.add(asset.trim());
-    if (entry.country?.name) current.countries.add(entry.country.name);
-    map.set(entry.movie.id, current);
-  }
 
-  const rows = Array.from(map.values())
-    .map((value) => ({
-      movieId: value.movieId,
-      titleName: `${value.titleName} (${formatMovieStatus(value.status)})`,
-      status: value.status,
-      totalAssets: value.assets.size,
-      totalCountries: value.countries.size,
-    }))
-    .sort((a, b) => a.titleName.localeCompare(b.titleName));
+    return Array.from(map.values())
+      .map((value) => {
+        const socialAssets = value.socialAssets.size;
+        const localizationAssets = value.localizationAssets.size;
+        const localizationCountries = value.localizationCountries.size;
+        return {
+          movieId: value.movieId,
+          titleName: `${value.titleName} (${formatMovieStatus(value.status)})`,
+          status: value.status,
+          socialAssets,
+          socialCost: getUniversalCategoryCost(socialAssets, socialProject),
+          localizationAssets,
+          localizationCountries,
+          localizationCost:
+            getUniversalCategoryCost(localizationAssets, localizationProject) *
+            localizationCountries,
+          contactPersons: value.contactPersons,
+        } satisfies UniversalBillingSummaryRow;
+      })
+      .sort((a, b) => a.titleName.localeCompare(b.titleName));
+  };
 
-  const completedEntries = await db.timeEntry.findMany({
-    where: {
-      projectId: { in: summaryProjectIds },
-      movieId: { not: null },
-      movie: { status: "COMPLETED_BILLED" },
-      ...(filters.movieId !== "all" ? { movieId: filters.movieId } : {}),
-    },
-    select: {
-      movieId: true,
-      taskName: true,
-      movie: { select: { id: true, title: true, status: true } },
-      assetName: { select: { name: true } },
-      country: { select: { name: true } },
-    },
-    orderBy: [{ movie: { title: "asc" } }, { workDate: "asc" }],
-  });
-
-  const completedMap = new Map<
-    string,
-    {
-      movieId: string;
-      titleName: string;
-      status: string;
-      assets: Set<string>;
-      countries: Set<string>;
-    }
-  >();
-  for (const entry of completedEntries) {
-    if (!entry.movie) continue;
-    const current = completedMap.get(entry.movie.id) ?? {
-      movieId: entry.movieId ?? "",
-      titleName: `${entry.movie.title} (${formatMovieStatus(entry.movie.status)})`,
-      status: entry.movie.status,
-      assets: new Set<string>(),
-      countries: new Set<string>(),
-    };
-    const asset = entry.assetName?.name ?? entry.taskName ?? "";
-    if (asset.trim()) current.assets.add(asset.trim());
-    if (entry.country?.name) current.countries.add(entry.country.name);
-    completedMap.set(entry.movie.id, current);
-  }
-
-  const completedTitleSummaryRows = Array.from(completedMap.values())
-    .map((value) => ({
-      movieId: value.movieId,
-      titleName: value.titleName,
-      status: value.status,
-      totalAssets: value.assets.size,
-      totalCountries: value.countries.size,
-    }))
-    .sort((a, b) => a.titleName.localeCompare(b.titleName));
+  const [rows, completedTitleSummaryRows] = await Promise.all([
+    buildRows(["WORKING", "COMPLETED"]),
+    buildRows(["COMPLETED_BILLED"]),
+  ]);
 
   return {
     client,
@@ -1302,6 +1380,10 @@ async function getWarnerDeliverableData({
           billingDomestic: true,
           billingOther: true,
           billingIntl: true,
+          contactPersons: {
+            orderBy: { name: "asc" },
+            select: { id: true, name: true, email: true },
+          },
         },
       })
     : null;
@@ -1407,7 +1489,9 @@ async function getWarnerDeliverableData({
 
     if (isOther) {
       aggregateOtherCountries = Boolean(
-        !filters.countryId && selectedMovie.billingOther && countryOptions.length > 1,
+        !filters.countryId &&
+        selectedMovie.billingOther &&
+        countryOptions.length > 1,
       );
       const selectedCountryId = aggregateOtherCountries
         ? ""
@@ -1434,6 +1518,7 @@ async function getWarnerDeliverableData({
             billingDomestic: selectedMovie.billingDomestic,
             billingIntl: selectedMovie.billingIntl,
             billingOther: selectedMovie.billingOther,
+            contactPersons: selectedMovie.contactPersons,
           },
           selectedCountry: null,
           rows: [],
@@ -1629,6 +1714,7 @@ async function getWarnerDeliverableData({
   const fixedFullProjects = await db.project.findMany({
     where: {
       clientId,
+      addToBilling: true,
       billingModel: "FIXED_FULL",
       timeEntries: {
         some: {
@@ -1642,7 +1728,11 @@ async function getWarnerDeliverableData({
                   },
                 }
               : aggregateOtherCountries
-                ? { countryId: { in: countryOptions.map((country) => country.id) } }
+                ? {
+                    countryId: {
+                      in: countryOptions.map((country) => country.id),
+                    },
+                  }
                 : { countryId: selectedCountry?.id ?? "" }),
         },
       },
@@ -1702,6 +1792,7 @@ async function getWarnerDeliverableData({
       billingDomestic: selectedMovie.billingDomestic,
       billingIntl: selectedMovie.billingIntl,
       billingOther: selectedMovie.billingOther,
+      contactPersons: selectedMovie.contactPersons,
     },
     selectedCountry,
     rows,
@@ -1754,17 +1845,25 @@ export async function getWarnerOtherDeliverableData({
 export type BillingHistoryFilters = { year: string };
 
 export type BillingHistoryRow = {
-  movieId: string;
-  titleName: string;
+  itemId: string;
+  itemType: "TITLE" | "PROJECT" | "BILLING_REPORT";
+  itemName: string;
   billingRegion: string;
   billingDate: string;
+  poNumber: string;
+  status: string;
+  movieId?: string;
+  projectId?: string;
+  billingReportType?: string;
   timeEntryCount: number;
   movieBillingHeadCount: number;
 };
 
 export type BillingHistoryData = {
-  client: { id: string; name: string };
+  client: { id: string; name: string; poAssignmentMode: string };
   filters: BillingHistoryFilters;
+  summaryRows: BillingHistoryRow[];
+  historyRows: BillingHistoryRow[];
   rows: BillingHistoryRow[];
 };
 
@@ -1790,8 +1889,49 @@ function formatBillingRegion(value: string) {
     INTL: "INTL",
     OTHER: "Other",
     SOCIAL: "Social",
+    PORTAL: "Portal",
   };
   return labels[value] ?? value.replaceAll("_", " ");
+}
+
+function formatMovieBillingRegions(movie: {
+  billingDomestic?: boolean;
+  billingIntl?: boolean;
+  billingOther?: boolean;
+  billingSocial?: boolean;
+  billingPortal?: boolean;
+  billingRegion?: string | null;
+}) {
+  const regions: string[] = [];
+  if (movie.billingDomestic) regions.push("Domestic");
+  if (movie.billingIntl) regions.push("INTL");
+  if (movie.billingOther) regions.push("Other");
+  if (movie.billingSocial) regions.push("Social");
+  if (movie.billingPortal) regions.push("Portal");
+  if (regions.length) return regions.join(", ");
+  return movie.billingRegion ? formatBillingRegion(movie.billingRegion) : "-";
+}
+
+function formatEntityStatus(value: string) {
+  return value
+    .replaceAll("_", " ")
+    .replace("COMPLETED BILLED", "COMPLETED & BILLED");
+}
+
+function getReportLabel(reportType: string) {
+  const labels: Record<string, string> = {
+    "social-assets": "Social Assets",
+    localization: "Localization",
+    "wbhe-status": "WBHE Status",
+    "domestic-deliverable": "Domestic Deliverable",
+    "intl-deliverable": "Intl Deliverable",
+    "other-deliverable": "Other Deliverable",
+    "spe-main": "SPE Billing",
+    "canada-other": "SPE US Ticketing, Canada & Other",
+    newsletters: "Newsletters",
+    "billing-summary": "Billing Summary",
+  };
+  return labels[reportType] ?? reportType.replaceAll("-", " ");
 }
 
 export async function getBillingHistoryData({
@@ -1803,7 +1943,7 @@ export async function getBillingHistoryData({
 }): Promise<BillingHistoryData | null> {
   const client = await db.client.findUnique({
     where: { id: clientId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, poAssignmentMode: true },
   });
   if (!client) return null;
 
@@ -1811,41 +1951,192 @@ export async function getBillingHistoryData({
   const start = new Date(year, 0, 1);
   const end = new Date(year + 1, 0, 1);
 
-  const movies = await db.movie.findMany({
+  const poNumberByMovie = new Map<string, string>();
+  const poNumberByProject = new Map<string, string>();
+  const poNumberByReport = new Map<string, string>();
+  const poAssignments = await db.purchaseOrderAssignment.findMany({
     where: {
       clientId,
-      isActive: true,
-      status: "COMPLETED_BILLED",
-      billingDate: { gte: start, lt: end },
+      purchaseOrder: { status: { not: "CANCELLED" } },
     },
     select: {
-      id: true,
-      title: true,
-      billingRegion: true,
-      billingDate: true,
-      _count: {
-        select: {
-          timeEntries: true,
-          movieBillingHeadAssignments: true,
-        },
-      },
+      movieId: true,
+      projectId: true,
+      billingReportType: true,
+      purchaseOrder: { select: { poNumber: true } },
     },
-    orderBy: [{ billingDate: "desc" }, { title: "asc" }],
+    orderBy: { createdAt: "asc" },
   });
 
+  for (const assignment of poAssignments) {
+    const poNumber = assignment.purchaseOrder.poNumber;
+    if (assignment.movieId && !poNumberByMovie.has(assignment.movieId)) {
+      poNumberByMovie.set(assignment.movieId, poNumber);
+    }
+    if (assignment.projectId && !poNumberByProject.has(assignment.projectId)) {
+      poNumberByProject.set(assignment.projectId, poNumber);
+    }
+    if (
+      assignment.billingReportType &&
+      !poNumberByReport.has(assignment.billingReportType)
+    ) {
+      poNumberByReport.set(assignment.billingReportType, poNumber);
+    }
+  }
+
+  const movieSelect = {
+    id: true,
+    title: true,
+    status: true,
+    billingRegion: true,
+    billingDomestic: true,
+    billingIntl: true,
+    billingOther: true,
+    billingSocial: true,
+    billingPortal: true,
+    billingDate: true,
+    _count: {
+      select: {
+        timeEntries: true,
+        movieBillingHeadAssignments: true,
+      },
+    },
+  } as const;
+
+  const projectSelect = {
+    id: true,
+    name: true,
+    status: true,
+    billingModel: true,
+    billingDate: true,
+    _count: {
+      select: {
+        timeEntries: true,
+      },
+    },
+  } as const;
+
+  if (client.poAssignmentMode === "PROJECT") {
+    const [summaryProjects, historyProjects] = await Promise.all([
+      db.project.findMany({
+        where: {
+          clientId,
+          isActive: true,
+          addToBilling: true,
+          billingModel: { not: "FIXED_MONTHLY" },
+          status: { in: ["ACTIVE", "COMPLETED"] },
+        },
+        select: projectSelect,
+        orderBy: { name: "asc" },
+      }),
+      db.project.findMany({
+        where: {
+          clientId,
+          isActive: true,
+          addToBilling: true,
+          billingModel: { not: "FIXED_MONTHLY" },
+          status: "COMPLETED_BILLED",
+          billingDate: { gte: start, lt: end },
+        },
+        select: projectSelect,
+        orderBy: [{ billingDate: "desc" }, { name: "asc" }],
+      }),
+    ]);
+
+    const mapProjectRow = (
+      project: (typeof summaryProjects)[number],
+    ): BillingHistoryRow => ({
+      itemId: project.id,
+      itemType: "PROJECT",
+      itemName: project.name,
+      projectId: project.id,
+      billingRegion: "Project",
+      billingDate: project.billingDate
+        ? formatDisplayDate(project.billingDate)
+        : "-",
+      poNumber: poNumberByProject.get(project.id) ?? "-",
+      status: formatEntityStatus(project.status),
+      timeEntryCount: project._count.timeEntries,
+      movieBillingHeadCount: 0,
+    });
+
+    const summaryRows = summaryProjects.map(mapProjectRow);
+    const historyRows = historyProjects.map(mapProjectRow);
+    return { client, filters, summaryRows, historyRows, rows: historyRows };
+  }
+
+  if (client.poAssignmentMode === "BILLING_REPORT") {
+    const catalog =
+      getBillingReportCatalogForClient(client.name, client.id) ?? {};
+    const reportRows = Object.entries(catalog)
+      .filter(([reportType]) => !reportType.includes("history"))
+      .map(([reportType, definition]) => ({
+        itemId: reportType,
+        itemType: "BILLING_REPORT" as const,
+        itemName: definition?.title ?? getReportLabel(reportType),
+        billingReportType: reportType,
+        billingRegion: "Billing Report",
+        billingDate: "-",
+        poNumber: poNumberByReport.get(reportType) ?? "-",
+        status: "Pending",
+        timeEntryCount: 0,
+        movieBillingHeadCount: 0,
+      }));
+
+    return {
+      client,
+      filters,
+      summaryRows: reportRows,
+      historyRows: [],
+      rows: [],
+    };
+  }
+
+  const [summaryMovies, historyMovies] = await Promise.all([
+    db.movie.findMany({
+      where: {
+        clientId,
+        isActive: true,
+        status: { in: ["WORKING", "COMPLETED"] },
+      },
+      select: movieSelect,
+      orderBy: { title: "asc" },
+    }),
+    db.movie.findMany({
+      where: {
+        clientId,
+        isActive: true,
+        status: "COMPLETED_BILLED",
+        billingDate: { gte: start, lt: end },
+      },
+      select: movieSelect,
+      orderBy: [{ billingDate: "desc" }, { title: "asc" }],
+    }),
+  ]);
+
+  const mapMovieRow = (
+    movie: (typeof summaryMovies)[number],
+  ): BillingHistoryRow => ({
+    itemId: movie.id,
+    itemType: "TITLE",
+    itemName: movie.title,
+    movieId: movie.id,
+    billingRegion: formatMovieBillingRegions(movie),
+    billingDate: movie.billingDate ? formatDisplayDate(movie.billingDate) : "-",
+    poNumber: poNumberByMovie.get(movie.id) ?? "-",
+    status: formatEntityStatus(movie.status),
+    timeEntryCount: movie._count.timeEntries,
+    movieBillingHeadCount: movie._count.movieBillingHeadAssignments,
+  });
+
+  const summaryRows = summaryMovies.map(mapMovieRow);
+  const historyRows = historyMovies.map(mapMovieRow);
   return {
     client,
     filters,
-    rows: movies.map((movie) => ({
-      movieId: movie.id,
-      titleName: movie.title,
-      billingRegion: formatBillingRegion(movie.billingRegion),
-      billingDate: movie.billingDate
-        ? formatDisplayDate(movie.billingDate)
-        : "-",
-      timeEntryCount: movie._count.timeEntries,
-      movieBillingHeadCount: movie._count.movieBillingHeadAssignments,
-    })),
+    summaryRows,
+    historyRows,
+    rows: historyRows,
   };
 }
 

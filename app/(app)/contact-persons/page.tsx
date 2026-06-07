@@ -9,7 +9,11 @@ import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { requireUser } from "@/lib/auth";
 import { deleteContactPersonAction } from "@/lib/actions/contact-person-actions";
 import { db } from "@/lib/db";
-import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
+import {
+  DEFAULT_PAGE_SIZE,
+  paginateItems,
+  parsePageParam,
+} from "@/lib/pagination";
 import { canManageContactPersons } from "@/lib/permissions";
 
 export default async function ContactPersonsPage({
@@ -74,6 +78,7 @@ export default async function ContactPersonsPage({
         client: true,
         movie: true,
         purchaseOrder: true,
+        country: true,
       },
       orderBy: {
         name: "asc",
@@ -154,6 +159,7 @@ export default async function ContactPersonsPage({
               <th className="table-cell">Name</th>
               <th className="table-cell">Email</th>
               <th className="table-cell">Contact Number</th>
+              <th className="table-cell">Country</th>
               <th className="table-cell">Client</th>
               <th className="table-cell">Action</th>
             </tr>
@@ -162,10 +168,17 @@ export default async function ContactPersonsPage({
             {paginatedContactPersons.map((person) => (
               <tr key={person.id}>
                 <td className="table-cell">
-                  <div className="font-medium text-slate-900">{person.name}</div>
+                  <div className="font-medium text-slate-900">
+                    {person.name}
+                  </div>
                 </td>
                 <td className="table-cell">{person.email}</td>
                 <td className="table-cell">{person.contactNumber || "—"}</td>
+                <td className="table-cell">
+                  {person.country?.isoCode
+                    ? `${person.country.name} (${person.country.isoCode})`
+                    : person.country?.name || "—"}
+                </td>
                 <td className="table-cell">{person.client.name}</td>
                 <td className="table-cell">
                   <div className="flex flex-wrap gap-2">
@@ -186,7 +199,7 @@ export default async function ContactPersonsPage({
             {contactPersons.length === 0 ? (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={6}
                   className="table-cell text-center text-sm text-slate-500"
                 >
                   No contact persons found.

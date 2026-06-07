@@ -594,19 +594,10 @@ export function TimeEntryEditForm({
           />
         </div>
 
-        <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-          <input type="hidden" name="isBillable" value="false" />
-          <input
-            type="checkbox"
-            name="isBillable"
-            value="true"
-            defaultChecked={entry.isBillable}
-          />
-          Billable time
-        </label>
+        <input type="hidden" name="isBillable" value="true" />
       </div>
 
-      <div className="flex gap-3">
+      <div className="mt-5 flex gap-3">
         <Link href="/time-entries" className="btn-secondary">
           Cancel
         </Link>

@@ -4,11 +4,26 @@ import { requireUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
+import { DeleteButton } from "@/components/ui/delete-button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { db } from "@/lib/db";
-import { toggleMovieStatusAction } from "@/lib/actions/movie-actions";
+import {
+  deleteMovieAction,
+  toggleMovieStatusAction,
+} from "@/lib/actions/movie-actions";
 import { PaginationControls } from "@/components/ui/pagination-controls";
-import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
+import {
+  DEFAULT_PAGE_SIZE,
+  paginateItems,
+  parsePageParam,
+} from "@/lib/pagination";
+
+function canDeleteTitles(user: {
+  userType?: string | null;
+  functionalRole?: string | null;
+}) {
+  return user.userType === "ADMIN" && user.functionalRole === "OTHER";
+}
 
 function formatTitleWorkflowStatus(status: string) {
   if (status === "COMPLETED_BILLED") return "Completed & Billed";
@@ -17,10 +32,16 @@ function formatTitleWorkflowStatus(status: string) {
 }
 
 export default async function TitlesPage({
-
   searchParams,
 }: {
-  searchParams?: Promise<{ q?: string; status?: string; clientId?: string; page?: string }>;
+  searchParams?: Promise<{
+    q?: string;
+    status?: string;
+    clientId?: string;
+    page?: string;
+    deleteError?: string;
+    deleteSuccess?: string;
+  }>;
 }) {
   const currentUser = await requireUser();
   if (!canManageMovies(currentUser)) redirect("/dashboard");
@@ -30,6 +51,9 @@ export default async function TitlesPage({
   const status = params.status ?? "all";
   const clientId = params.clientId ?? "all";
   const page = parsePageParam(params.page);
+  const deleteError = params.deleteError ?? "";
+  const deleteSuccess = params.deleteSuccess ?? "";
+  const showDeleteAction = canDeleteTitles(currentUser);
 
   const [clients, movies] = await Promise.all([
     db.client.findMany({
@@ -48,19 +72,49 @@ export default async function TitlesPage({
     }),
   ]);
 
-  const { items: paginatedTitles, currentPage, totalPages, totalItems, pageSize } = paginateItems(movies, page, DEFAULT_PAGE_SIZE);
+  const {
+    items: paginatedTitles,
+    currentPage,
+    totalPages,
+    totalItems,
+    pageSize,
+  } = paginateItems(movies, page, DEFAULT_PAGE_SIZE);
 
   return (
     <div>
       <PageHeader
         title="Titles"
         description="Manage movies. Each movie belongs to exactly one client. Title code is generated automatically."
-        actions={<Link className="btn-primary" href="/movies/new">Create Title</Link>}
+        actions={
+          <Link className="btn-primary" href="/movies/new">
+            Create Title
+          </Link>
+        }
       />
 
+      {deleteSuccess ? (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {deleteSuccess}
+        </div>
+      ) : null}
+
+      {deleteError ? (
+        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {deleteError}
+        </div>
+      ) : null}
+
       <div className="mb-6 card p-4">
-        <AutoSubmitFilterForm className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]" method="get">
-          <input className="input" name="q" defaultValue={q} placeholder="Search by movie title" />
+        <AutoSubmitFilterForm
+          className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]"
+          method="get"
+        >
+          <input
+            className="input"
+            name="q"
+            defaultValue={q}
+            placeholder="Search by movie title"
+          />
           <SearchableCombobox
             id="status"
             name="status"
@@ -80,7 +134,10 @@ export default async function TitlesPage({
             defaultValue={clientId}
             options={[
               { value: "all", label: "All clients" },
-              ...clients.map((client) => ({ value: client.id, label: client.name })),
+              ...clients.map((client) => ({
+                value: client.id,
+                label: client.name,
+              })),
             ]}
             placeholder="All clients"
             searchPlaceholder="Search clients..."
@@ -90,56 +147,94 @@ export default async function TitlesPage({
       </div>
 
       <div className="table-wrap">
-          <table className="table-base">
-            <thead className="table-head">
-              <tr>
-                <th className="table-cell">Title</th>
-                <th className="table-cell">Client</th>
-                <th className="table-cell">Billing Region</th>
-                <th className="table-cell">Title Status</th>
-                <th className="table-cell">Status</th>
-                <th className="table-cell">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {paginatedTitles.map((movie) => (
-                <tr key={movie.id}>
-                  <td className="table-cell">
-                    <div className="font-medium text-slate-900">{movie.title}</div>
-                  </td>
-                  <td className="table-cell">{movie.client.name}</td>
-                  <td className="table-cell">{[movie.billingDomestic ? "Domestic" : null, movie.billingIntl ? "INTL" : null, movie.billingOther ? "Other" : null, movie.billingSocial ? "Social" : null].filter(Boolean).join(", ") || "—"}</td>
-                  <td className="table-cell"><span className="badge-blue">{formatTitleWorkflowStatus(movie.status)}</span></td>
-                  <td className="table-cell">
-                    <span className={movie.isActive ? "badge-emerald" : "badge-slate"}>
-                      {movie.isActive ? "Active" : "Inactive"}
-                    </span>
-                  </td>
-                  <td className="table-cell">
-                    <div className="flex gap-2">
-                      <Link href={`/movies/${movie.id}`} className="btn-secondary text-xs">
-                        Edit
-                      </Link>
-                      <form action={toggleMovieStatusAction}>
+        <table className="table-base">
+          <thead className="table-head">
+            <tr>
+              <th className="table-cell">Title</th>
+              <th className="table-cell">Client</th>
+              <th className="table-cell">Billing Region</th>
+              <th className="table-cell">Title Status</th>
+              <th className="table-cell">Status</th>
+              <th className="table-cell">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {paginatedTitles.map((movie) => (
+              <tr key={movie.id}>
+                <td className="table-cell">
+                  <div className="font-medium text-slate-900">
+                    {movie.title}
+                  </div>
+                </td>
+                <td className="table-cell">{movie.client.name}</td>
+                <td className="table-cell">
+                  {[
+                    movie.billingDomestic ? "Domestic" : null,
+                    movie.billingIntl ? "INTL" : null,
+                    movie.billingOther ? "Other" : null,
+                    movie.billingSocial ? "Social" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(", ") || "—"}
+                </td>
+                <td className="table-cell">
+                  <span className="badge-blue">
+                    {formatTitleWorkflowStatus(movie.status)}
+                  </span>
+                </td>
+                <td className="table-cell">
+                  <span
+                    className={movie.isActive ? "badge-emerald" : "badge-slate"}
+                  >
+                    {movie.isActive ? "Active" : "Inactive"}
+                  </span>
+                </td>
+                <td className="table-cell">
+                  <div className="flex gap-2">
+                    <Link
+                      href={`/movies/${movie.id}`}
+                      className="btn-secondary text-xs"
+                    >
+                      Edit
+                    </Link>
+                    <form action={toggleMovieStatusAction}>
+                      <input type="hidden" name="movieId" value={movie.id} />
+                      <button className="btn-secondary text-xs">
+                        {movie.isActive ? "Deactivate" : "Activate"}
+                      </button>
+                    </form>
+                    {showDeleteAction ? (
+                      <form action={deleteMovieAction}>
                         <input type="hidden" name="movieId" value={movie.id} />
-                        <button className="btn-secondary text-xs">
-                          {movie.isActive ? "Deactivate" : "Activate"}
-                        </button>
+                        <DeleteButton
+                          confirmMessage={`Delete title ${movie.title}? This cannot be undone.`}
+                        />
                       </form>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {movies.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="table-cell text-center text-sm text-slate-500">
-                    No titles found.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-          <PaginationControls basePath="/movies" currentPage={currentPage} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} searchParams={{ q, status, clientId }} />
+                    ) : null}
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {movies.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={6}
+                  className="table-cell text-center text-sm text-slate-500"
+                >
+                  No titles found.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+        <PaginationControls
+          basePath="/movies"
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          searchParams={{ q, status, clientId }}
+        />
       </div>
     </div>
   );
