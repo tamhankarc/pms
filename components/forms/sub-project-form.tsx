@@ -330,7 +330,7 @@ export function SubProjectForm({
                 }
                 disabled={projectAlreadyHidesTitles}
               />
-              Hide movie dropdown in Time Entries and Estimates for this sub
+              Hide title dropdown in Time Entries and Estimates for this sub
               project
             </label>
             {projectAlreadyHidesTitles ? (

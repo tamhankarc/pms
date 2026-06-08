@@ -67,7 +67,7 @@ const movieSchema = z.object({
 async function requireCanManageMovies() {
   const user = await requireUserForAction();
   if (!canManageMovies(user))
-    throw new Error("You are not allowed to manage movies.");
+    throw new Error("You are not allowed to manage titles.");
   return user;
 }
 export async function createMovieAction(
@@ -101,7 +101,7 @@ export async function createMovieAction(
     if (!parsed.success) {
       return {
         success: false,
-        error: parsed.error.issues[0]?.message || "Invalid movie payload.",
+        error: parsed.error.issues[0]?.message || "Invalid title payload.",
       };
     }
 
@@ -148,7 +148,7 @@ export async function createMovieAction(
     )
       return {
         success: false,
-        error: "Select at least one movie billing region.",
+        error: "Select at least one title billing region.",
       };
     if (billingOther && !otherCountryIds.length)
       return {
@@ -347,7 +347,7 @@ export async function updateMovieAction(
     )
       return {
         success: false,
-        error: "Select at least one movie billing region.",
+        error: "Select at least one title billing region.",
       };
     if (billingOther && !otherCountryIds.length)
       return {

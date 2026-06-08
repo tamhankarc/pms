@@ -39,7 +39,7 @@ export function MovieBillingHeadAssignmentListFilters({
 
   return (
     <AutoSubmitFilterForm ref={formRef} className="grid gap-3 md:grid-cols-[1fr_220px_220px_180px_auto]" method="get">
-      <input className="input" name="q" defaultValue={q} placeholder="Search by client, movie, or billing head" />
+      <input className="input" name="q" defaultValue={q} placeholder="Search by client, title, or billing head" />
       <input type="hidden" name="clientId" value={selectedClientId} />
       <input type="hidden" name="movieId" value={selectedMovieId} />
       <input type="hidden" name="status" value={selectedStatus} />

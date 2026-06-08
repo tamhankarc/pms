@@ -84,7 +84,7 @@ export default async function TitlesPage({
     <div>
       <PageHeader
         title="Titles"
-        description="Manage movies. Each movie belongs to exactly one client. Title code is generated automatically."
+        description="Manage titles. Each title belongs to exactly one client. Title code is generated automatically."
         actions={
           <Link className="btn-primary" href="/movies/new">
             Create Title
@@ -113,7 +113,7 @@ export default async function TitlesPage({
             className="input"
             name="q"
             defaultValue={q}
-            placeholder="Search by movie title"
+            placeholder="Search by title name"
           />
           <SearchableCombobox
             id="status"

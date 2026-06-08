@@ -150,6 +150,9 @@ export function canCreateOrEditProject(user: UserLike) {
 export function canCreateProjects(user: UserLike) {
   return canCreateOrEditProject(user);
 }
+export function canDeleteProjects(user: UserLike) {
+  return isAdmin(user) && getFunctionalRole(user) === "OTHER";
+}
 export function canSeeAllProjects(user: UserLike) {
   return (
     isAdmin(user) ||
@@ -226,7 +229,11 @@ export function canManageSubProjects(user: UserLike) {
   );
 }
 export function canManagePurchaseOrders(user: UserLike) {
-  return isAdmin(user) || isAccounts(user) || hasExtraMenuAccess(user, "purchase-orders");
+  return (
+    isAdmin(user) ||
+    isAccounts(user) ||
+    hasExtraMenuAccess(user, "purchase-orders")
+  );
 }
 
 export function canManageContactPersons(user: UserLike) {
@@ -241,6 +248,9 @@ export function canManageClientBillingHeads(user: UserLike) {
 }
 export function canManageMovieBillingHeads(user: UserLike) {
   return isAdmin(user) || hasExtraMenuAccess(user, "movie-billing-heads");
+}
+export function canDeleteMovieBillingHeads(user: UserLike) {
+  return isAdmin(user) && getFunctionalRole(user) === "OTHER";
 }
 
 export function canSeeBillingDashboard(user: UserLike) {

@@ -133,7 +133,7 @@ export function MovieForm({ clients, countries = [], contactPersons = [], action
           </div>
         ) : null}
         <div><FormLabel htmlFor="description">Description</FormLabel><textarea id="description" name="description" className="input min-h-28" defaultValue={initialValues?.description ?? ""} /></div>
-        <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700"><input type="checkbox" name="isActive" defaultChecked={initialValues?.isActive ?? true} /> Active movie</label>
+        <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700"><input type="checkbox" name="isActive" defaultChecked={initialValues?.isActive ?? true} /> Active title</label>
         <button className="btn-primary w-full" disabled={pending}>{pending ? "Saving..." : submitLabel}</button>
       </div>
     </form>

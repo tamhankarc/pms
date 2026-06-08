@@ -11,19 +11,41 @@ import {
   getWarnerIntlDeliverableData,
   getWarnerOtherDeliverableData,
   getUniversalBillingSummaryData,
+  buildBillingHistoryFilters,
+  getBillingHistoryData,
   normalizeAmazonReportType,
 } from "@/lib/billing-reports/amazon";
 import { db } from "@/lib/db";
-import { FILMIK_CLIENT_ID, SONY_PICTURES_CLASSICS_CLIENT_ID, isBillingReportClientExcluded } from "@/lib/billing-reports/config";
-import { buildGenericBillingReportFilters, getGenericBillingReportData } from "@/lib/billing-reports/generic";
+import {
+  FILMIK_CLIENT_ID,
+  SONY_PICTURES_CLASSICS_CLIENT_ID,
+  isBillingReportClientExcluded,
+} from "@/lib/billing-reports/config";
+import {
+  buildGenericBillingReportFilters,
+  buildGenericBillingSummaryHistoryFilters,
+  getGenericBillingReportData,
+  getGenericBillingSummaryHistoryData,
+} from "@/lib/billing-reports/generic";
 import {
   buildSonyNewsletterBillingFilters,
   buildSonyPicturesReportFilters,
+  buildSonyBillingSummaryHistoryFilters,
   getSonyNewsletterBillingData,
   getSonyPicturesReportData,
+  getSonyBillingSummaryHistoryData,
 } from "@/lib/billing-reports/sony";
-import { buildFilmikBillingReportFilters, getFilmikBillingReportData, getFilmikBillingReportFileName } from "@/lib/billing-reports/filmik";
-import { buildRoyalBillingFilters, getRoyalBillingReportData, getRoyalBillingReportFileName, ROYAL_CARIBBEAN_CLIENT_NAME } from "@/lib/billing-reports/royal";
+import {
+  buildFilmikBillingReportFilters,
+  getFilmikBillingReportData,
+  getFilmikBillingReportFileName,
+} from "@/lib/billing-reports/filmik";
+import {
+  buildRoyalBillingFilters,
+  getRoyalBillingReportData,
+  getRoyalBillingReportFileName,
+  ROYAL_CARIBBEAN_CLIENT_NAME,
+} from "@/lib/billing-reports/royal";
 import {
   buildAmazonReportExcel,
   buildAmazonReportFileName,
@@ -46,6 +68,15 @@ import {
   getSonyNewsletterBillingFileName,
   buildRoyalBillingReportExcel,
   buildRoyalBillingReportPdf,
+  buildBillingHistoryReportExcel,
+  buildBillingHistoryReportPdf,
+  getBillingHistoryReportFileName,
+  buildGenericBillingSummaryHistoryExcel,
+  buildGenericBillingSummaryHistoryPdf,
+  getGenericBillingSummaryHistoryFileName,
+  buildSonyBillingSummaryHistoryExcel,
+  buildSonyBillingSummaryHistoryPdf,
+  getSonyBillingSummaryHistoryFileName,
 } from "@/lib/billing-reports/export";
 
 export async function GET(
@@ -54,26 +85,41 @@ export async function GET(
 ) {
   const user = await getSession();
   if (!user) return new Response("Unauthorized", { status: 401 });
-  if (!canViewBillingReports(user)) return new Response("Forbidden", { status: 403 });
+  if (!canViewBillingReports(user))
+    return new Response("Forbidden", { status: 403 });
 
   const { clientId } = await params;
-  const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, name: true, showMoviesInEntries: true } });
-  if (!client || isBillingReportClientExcluded(client.id)) redirect("/billing-reports");
+  const client = await db.client.findUnique({
+    where: { id: clientId },
+    select: { id: true, name: true, showMoviesInEntries: true },
+  });
+  if (!client || isBillingReportClientExcluded(client.id))
+    redirect("/billing-reports");
 
   const { searchParams } = new URL(request.url);
-  const configuredReportCatalog = getBillingReportCatalogForClient(client.name, client.id);
-  const reportCatalog = configuredReportCatalog ?? (client.showMoviesInEntries ? GENERIC_TITLE_REPORTS : null);
+  const configuredReportCatalog = getBillingReportCatalogForClient(
+    client.name,
+    client.id,
+  );
+  const reportCatalog =
+    configuredReportCatalog ??
+    (client.showMoviesInEntries ? GENERIC_TITLE_REPORTS : null);
   const requestedReport = searchParams.get("report");
   const reportType = reportCatalog
-    ? requestedReport && Object.prototype.hasOwnProperty.call(reportCatalog, requestedReport)
-      ? requestedReport as import("@/lib/billing-reports/amazon").AmazonReportType
-      : Object.keys(reportCatalog)[0] as import("@/lib/billing-reports/amazon").AmazonReportType
+    ? requestedReport &&
+      Object.prototype.hasOwnProperty.call(reportCatalog, requestedReport)
+      ? (requestedReport as import("@/lib/billing-reports/amazon").AmazonReportType)
+      : (Object.keys(
+          reportCatalog,
+        )[0] as import("@/lib/billing-reports/amazon").AmazonReportType)
     : normalizeAmazonReportType(requestedReport, client.name, client.id);
   const reportDefinition = reportCatalog?.[reportType];
   const format = searchParams.get("format") === "pdf" ? "pdf" : "excel";
 
-
-  if (client.name.trim().toLowerCase() === ROYAL_CARIBBEAN_CLIENT_NAME.toLowerCase()) {
+  if (
+    client.name.trim().toLowerCase() ===
+    ROYAL_CARIBBEAN_CLIENT_NAME.toLowerCase()
+  ) {
     const filters = buildRoyalBillingFilters(searchParams);
     const data = await getRoyalBillingReportData({ clientId, filters });
     if (!data) redirect("/billing-reports");
@@ -97,6 +143,29 @@ export async function GET(
     });
   }
 
+  if (reportDefinition?.kind === "billing-history") {
+    const filters = buildBillingHistoryFilters(searchParams);
+    const data = await getBillingHistoryData({ clientId, filters });
+    if (!data) redirect("/billing-reports");
+
+    if (format === "pdf") {
+      const pdf = buildBillingHistoryReportPdf(data);
+      return new Response(Buffer.from(pdf, "binary"), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${getBillingHistoryReportFileName(data, "pdf")}"`,
+        },
+      });
+    }
+
+    const excel = buildBillingHistoryReportExcel(data);
+    return new Response(excel, {
+      headers: {
+        "Content-Type": "application/vnd.ms-excel; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${getBillingHistoryReportFileName(data, "xls")}"`,
+      },
+    });
+  }
 
   if (reportDefinition?.kind === "time-entry-summary") {
     const filters = buildAmazonBillingReportFilters(searchParams);
@@ -123,11 +192,12 @@ export async function GET(
   }
   if (reportDefinition?.kind === "deliverable") {
     const filters = buildWarnerDomesticDeliverableFilters(searchParams);
-    const data = reportType === "intl-deliverable"
-      ? await getWarnerIntlDeliverableData({ clientId, filters })
-      : reportType === "other-deliverable"
-        ? await getWarnerOtherDeliverableData({ clientId, filters })
-        : await getWarnerDomesticDeliverableData({ clientId, filters });
+    const data =
+      reportType === "intl-deliverable"
+        ? await getWarnerIntlDeliverableData({ clientId, filters })
+        : reportType === "other-deliverable"
+          ? await getWarnerOtherDeliverableData({ clientId, filters })
+          : await getWarnerDomesticDeliverableData({ clientId, filters });
     if (!data) redirect("/billing-reports");
 
     if (format === "pdf") {
@@ -151,7 +221,11 @@ export async function GET(
 
   if (reportDefinition?.kind === "sony-movie") {
     const filters = buildSonyPicturesReportFilters(searchParams);
-    const data = await getSonyPicturesReportData({ clientId, filters, variant: reportType === "canada-other" ? "canada-other" : "main" });
+    const data = await getSonyPicturesReportData({
+      clientId,
+      filters,
+      variant: reportType === "canada-other" ? "canada-other" : "main",
+    });
     if (!data) redirect("/billing-reports");
 
     if (format === "pdf") {
@@ -169,6 +243,30 @@ export async function GET(
       headers: {
         "Content-Type": "application/vnd.ms-excel; charset=utf-8",
         "Content-Disposition": `attachment; filename="${getSonyPicturesReportFileName(data, "xls")}"`,
+      },
+    });
+  }
+
+  if (reportDefinition?.kind === "sony-summary-history") {
+    const filters = buildSonyBillingSummaryHistoryFilters(searchParams);
+    const data = await getSonyBillingSummaryHistoryData({ clientId, filters });
+    if (!data) redirect("/billing-reports");
+
+    if (format === "pdf") {
+      const pdf = buildSonyBillingSummaryHistoryPdf(data);
+      return new Response(Buffer.from(pdf, "binary"), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${getSonyBillingSummaryHistoryFileName(data, "pdf")}"`,
+        },
+      });
+    }
+
+    const excel = buildSonyBillingSummaryHistoryExcel(data);
+    return new Response(excel, {
+      headers: {
+        "Content-Type": "application/vnd.ms-excel; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${getSonyBillingSummaryHistoryFileName(data, "xls")}"`,
       },
     });
   }
@@ -197,7 +295,10 @@ export async function GET(
     });
   }
 
-  if (client.id === FILMIK_CLIENT_ID && reportDefinition?.kind === "generic-filmik") {
+  if (
+    client.id === FILMIK_CLIENT_ID &&
+    reportDefinition?.kind === "generic-filmik"
+  ) {
     const filters = buildFilmikBillingReportFilters(searchParams);
     const data = await getFilmikBillingReportData(filters);
     if (!data) redirect("/billing-reports");
@@ -221,10 +322,39 @@ export async function GET(
     });
   }
 
-  const isSonyPicturesClassicsReport = client.id === SONY_PICTURES_CLASSICS_CLIENT_ID;
-  const genericOptions = reportDefinition?.kind === "generic-movie"
-    ? { movieSpecific: true, openDateRange: isSonyPicturesClassicsReport }
-    : undefined;
+  const isSonyPicturesClassicsReport =
+    client.id === SONY_PICTURES_CLASSICS_CLIENT_ID;
+  const genericOptions =
+    reportDefinition?.kind === "generic-movie"
+      ? { movieSpecific: true, openDateRange: isSonyPicturesClassicsReport }
+      : undefined;
+
+  if (reportDefinition?.kind === "generic-summary-history") {
+    const filters = buildGenericBillingSummaryHistoryFilters(searchParams);
+    const data = await getGenericBillingSummaryHistoryData({
+      clientId,
+      filters,
+    });
+    if (!data) redirect("/billing-reports");
+
+    if (format === "pdf") {
+      const pdf = buildGenericBillingSummaryHistoryPdf(data);
+      return new Response(Buffer.from(pdf, "binary"), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${getGenericBillingSummaryHistoryFileName(data, "pdf")}"`,
+        },
+      });
+    }
+
+    const excel = buildGenericBillingSummaryHistoryExcel(data);
+    return new Response(excel, {
+      headers: {
+        "Content-Type": "application/vnd.ms-excel; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${getGenericBillingSummaryHistoryFileName(data, "xls")}"`,
+      },
+    });
+  }
 
   if (!reportDefinition || genericOptions) {
     const genericFilters = buildGenericBillingReportFilters(searchParams);
@@ -236,7 +366,11 @@ export async function GET(
           movieId: searchParams.get("movieId") ?? "all",
         }
       : genericFilters;
-    const data = await getGenericBillingReportData({ clientId, filters, options: genericOptions });
+    const data = await getGenericBillingReportData({
+      clientId,
+      filters,
+      options: genericOptions,
+    });
     if (!data) redirect("/billing-reports");
 
     if (format === "pdf") {
@@ -258,10 +392,18 @@ export async function GET(
     });
   }
 
-  if (reportDefinition.kind === "placeholder") return new Response("Export is not available yet for this placeholder report.", { status: 404 });
+  if (reportDefinition.kind === "placeholder")
+    return new Response(
+      "Export is not available yet for this placeholder report.",
+      { status: 404 },
+    );
 
   const filters = buildAmazonBillingReportFilters(searchParams);
-  const data = await getAmazonBillingReportData({ clientId, reportType, filters });
+  const data = await getAmazonBillingReportData({
+    clientId,
+    reportType,
+    filters,
+  });
   if (!data) redirect("/billing-reports");
 
   if (format === "pdf") {

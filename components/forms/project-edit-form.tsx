@@ -332,7 +332,7 @@ export function ProjectEditForm({
               checked={hideMoviesInEntries}
               onChange={(event) => setHideTitlesInEntries(event.target.checked)}
             />
-            Hide movie dropdown in Time Entries and Estimates for this project
+            Hide title dropdown in Time Entries and Estimates for this project
           </label>
         ) : null}
 

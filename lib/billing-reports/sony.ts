@@ -65,6 +65,13 @@ export type SonyPicturesReportData = {
 };
 
 export type SonyBillingSummaryHistoryFilters = { year: string };
+export type SonyBillingSummaryHistoryReportValue = {
+  reportType: string;
+  reportTitle: string;
+  cost: number;
+  poNumber: string;
+};
+
 export type SonyBillingSummaryHistoryRow = {
   movieId: string;
   title: string;
@@ -72,6 +79,7 @@ export type SonyBillingSummaryHistoryRow = {
   billingRegions: string;
   billingDate: string;
   poNumber: string;
+  reportValues: SonyBillingSummaryHistoryReportValue[];
 };
 export type SonyBillingSummaryHistoryData = {
   client: { id: string; name: string };
@@ -139,12 +147,18 @@ function formatDisplayDate(value: Date | null) {
 }
 
 function buildContactPersonLabel(
-  contactPersons: { name: string; email: string | null }[],
+  contactPersons: {
+    name: string;
+    email: string | null;
+    countryCode?: string | null;
+    country?: { isoCode: string | null } | null;
+  }[],
 ) {
   if (!contactPersons.length) return "-";
   return contactPersons
     .map(
-      (person) => `${person.name}${person.email ? ` (${person.email})` : ""}`,
+      (person) =>
+        `${person.name}${(person.countryCode ?? person.country?.isoCode) ? ` (${person.countryCode ?? person.country?.isoCode})` : ""}${person.email ? ` (${person.email})` : ""}`,
     )
     .join(", ");
 }
@@ -436,7 +450,11 @@ export async function getSonyPicturesReportData({
         projectCostOtherMovieBillingRegion: true,
         contactPersons: {
           orderBy: { name: "asc" },
-          select: { name: true, email: true },
+          select: {
+            name: true,
+            email: true,
+            country: { select: { isoCode: true } },
+          },
         },
       },
     }),
@@ -470,7 +488,11 @@ export async function getSonyPicturesReportData({
         projectCostOtherMovieBillingRegion: true,
         contactPersons: {
           orderBy: { name: "asc" },
-          select: { name: true, email: true },
+          select: {
+            name: true,
+            email: true,
+            country: { select: { isoCode: true } },
+          },
         },
       },
       orderBy: { name: "asc" },
@@ -480,7 +502,12 @@ export async function getSonyPicturesReportData({
       select: {
         contactPersons: {
           orderBy: { name: "asc" },
-          select: { id: true, name: true, email: true },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            country: { select: { isoCode: true } },
+          },
         },
       },
     }),
@@ -783,16 +810,29 @@ export async function getSonyBillingSummaryHistoryData({
         },
         select: {
           movieId: true,
+          billingReportType: true,
           purchaseOrder: { select: { poNumber: true } },
         },
       })
     : [];
   const poByMovie = new Map<string, string>();
+  const poByMovieReport = new Map<string, string>();
   for (const assignment of poAssignments) {
     if (assignment.movieId && !poByMovie.has(assignment.movieId)) {
       poByMovie.set(assignment.movieId, assignment.purchaseOrder.poNumber);
     }
+    if (assignment.movieId && assignment.billingReportType) {
+      const key = `${assignment.movieId}:${assignment.billingReportType}`;
+      if (!poByMovieReport.has(key)) {
+        poByMovieReport.set(key, assignment.purchaseOrder.poNumber);
+      }
+    }
   }
+  const reportDefinitions = [
+    ["spe-main", "SPE Billing"],
+    ["canada-other", "SPE US Ticketing, Canada & Other"],
+    ["newsletters", "Newsletters"],
+  ] as const;
   const mapRow = (
     movie: (typeof summaryMovies)[number],
   ): SonyBillingSummaryHistoryRow => ({
@@ -802,6 +842,15 @@ export async function getSonyBillingSummaryHistoryData({
     billingRegions: formatBillingRegions(movie),
     billingDate: formatDisplayDate(movie.billingDate),
     poNumber: poByMovie.get(movie.id) ?? "-",
+    reportValues: reportDefinitions.map(([reportType, reportTitle]) => ({
+      reportType,
+      reportTitle,
+      cost: 0,
+      poNumber:
+        poByMovieReport.get(`${movie.id}:${reportType}`) ??
+        poByMovie.get(movie.id) ??
+        "-",
+    })),
   });
   return {
     client,

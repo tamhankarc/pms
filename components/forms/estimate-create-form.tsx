@@ -523,8 +523,8 @@ export function EstimateCreateForm({
               searchPlaceholder="Search asset names..."
               emptyLabel={
                 selectedMovieId
-                  ? "No asset names found for selected movie."
-                  : "Select a movie first."
+                  ? "No asset names found for selected title."
+                  : "Select a title first."
               }
               disabled={!selectedMovieId}
             />

@@ -72,12 +72,18 @@ function formatMonthLabel(month: string) {
 }
 
 function buildContactPersonLabel(
-  contactPersons: { name: string; email: string | null }[],
+  contactPersons: {
+    name: string;
+    email: string | null;
+    countryCode?: string | null;
+    country?: { isoCode: string | null } | null;
+  }[],
 ) {
   if (!contactPersons.length) return "-";
   return contactPersons
     .map(
-      (person) => `${person.name}${person.email ? ` (${person.email})` : ""}`,
+      (person) =>
+        `${person.name}${(person.countryCode ?? person.country?.isoCode) ? ` (${person.countryCode ?? person.country?.isoCode})` : ""}${person.email ? ` (${person.email})` : ""}`,
     )
     .join(", ");
 }
@@ -122,7 +128,11 @@ export async function getFilmikBillingReportData(
           name: true,
           contactPersons: {
             orderBy: { name: "asc" },
-            select: { name: true, email: true },
+            select: {
+              name: true,
+              email: true,
+              country: { select: { isoCode: true } },
+            },
           },
         },
         orderBy: { name: "asc" },

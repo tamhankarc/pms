@@ -32,7 +32,7 @@ export default async function EditMovieBillingHeadPage({
       {row.movie.status === "COMPLETED_BILLED" ? (
         <div className="card p-6">
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            This movie billing head belongs to the billed title <strong>{row.movie.title}</strong>. It is viewable but cannot be edited.
+            This title billing head belongs to the billed title <strong>{row.movie.title}</strong>. It is viewable but cannot be edited.
           </div>
           <dl className="mt-5 grid gap-4 md:grid-cols-2">
             <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Title</dt><dd className="mt-1 text-sm text-slate-900">{row.movie.title}</dd></div>

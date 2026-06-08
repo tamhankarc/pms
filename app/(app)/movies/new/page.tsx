@@ -32,8 +32,8 @@ export default async function NewTitlePage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Create Title" description="Add a new movie and configure its billing region, status, and client-specific billing fields." actions={<Link className="btn-secondary" href="/movies">Back to Titles</Link>} />
-      <MovieForm clients={clients} countries={countries} contactPersons={contactPersons} action={createMovieAction} title="Create movie" submitLabel="Create movie" canEditCosts={canViewCostData(currentUser)} />
+      <PageHeader title="Create Title" description="Add a new title and configure its billing region, status, and client-specific billing fields." actions={<Link className="btn-secondary" href="/movies">Back to Titles</Link>} />
+      <MovieForm clients={clients} countries={countries} contactPersons={contactPersons} action={createMovieAction} title="Create title" submitLabel="Create title" canEditCosts={canViewCostData(currentUser)} />
     </div>
   );
 }

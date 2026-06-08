@@ -6,7 +6,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
 import { generateProjectCode } from "@/lib/project-code";
-import { canCreateOrEditProject } from "@/lib/permissions";
+import { canCreateOrEditProject, canDeleteProjects } from "@/lib/permissions";
 
 export type ProjectFormState = { success?: boolean; error?: string };
 
@@ -738,4 +738,52 @@ export async function completeProjectBillingAction(formData: FormData) {
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/billing-reports");
   redirect(returnTo.startsWith("/") ? returnTo : "/billing-reports");
+}
+
+async function requireCanDeleteProjects() {
+  const user = await requireUserForAction();
+  if (!canDeleteProjects(user)) {
+    throw new Error(
+      "Only Admin users with functional role Other can delete projects.",
+    );
+  }
+  return user;
+}
+
+export async function deleteProjectAction(formData: FormData) {
+  let redirectTo = "/projects";
+
+  try {
+    await requireCanDeleteProjects();
+    const projectId = String(formData.get("projectId") || "");
+
+    if (!projectId) {
+      throw new Error("Project is required.");
+    }
+
+    const project = await db.project.findUnique({
+      where: { id: projectId },
+      select: { id: true },
+    });
+
+    if (!project) {
+      throw new Error("Project not found.");
+    }
+
+    await db.project.delete({
+      where: { id: projectId },
+    });
+
+    revalidatePath("/projects");
+    revalidatePath("/time-entries");
+    revalidatePath("/estimates");
+    revalidatePath("/billing-reports");
+    redirectTo = "/projects?deleteSuccess=Project%20deleted.";
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to delete project.";
+    redirectTo = `/projects?deleteError=${encodeURIComponent(message)}`;
+  }
+
+  redirect(redirectTo);
 }

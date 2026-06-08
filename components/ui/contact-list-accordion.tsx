@@ -8,6 +8,11 @@ type ContactListItem =
       id?: string;
       name: string;
       email?: string | null;
+      countryCode?: string | null;
+      country?: {
+        isoCode?: string | null;
+        name?: string | null;
+      } | null;
     };
 
 type ContactListAccordionProps = {
@@ -23,7 +28,12 @@ function normalizeContacts(contacts?: ContactListItem[] | string | null) {
     .map((item) => {
       if (typeof item === "string") return item.trim();
       const email = item.email?.trim();
-      return `${item.name}${email ? ` (${email})` : ""}`.trim();
+      const countryCode =
+        item.countryCode?.trim() ||
+        item.country?.isoCode?.trim() ||
+        item.country?.name?.trim() ||
+        "";
+      return `${item.name}${countryCode ? ` (${countryCode})` : ""}${email ? ` (${email})` : ""}`.trim();
     })
     .filter(Boolean)
     .filter((item) => item !== "-");

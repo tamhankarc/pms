@@ -82,7 +82,7 @@ export async function generateMovieCode(clientId: string, movieTitle: string) {
   });
 
   if (!client) {
-    throw new Error("Client not found for movie code generation.");
+    throw new Error("Client not found for title code generation.");
   }
 
   const clientPrefix = (client.code?.trim() || makePrefix(client.name, "CLT")).toUpperCase();

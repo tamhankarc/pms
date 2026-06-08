@@ -50,10 +50,10 @@ export default async function TitleEditPage({
     <div className="space-y-6">
       <PageHeader
         title={`Edit movie · ${movie.title}`}
-        description="Update movie details and client association."
+        description="Update title details and client association."
         actions={
           <Link href="/movies" className="btn-secondary">
-            Back to movies
+            Back to titles
           </Link>
         }
       />

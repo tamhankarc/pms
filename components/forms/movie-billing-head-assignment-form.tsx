@@ -166,7 +166,7 @@ export function MovieBillingHeadAssignmentForm({
       <input type="hidden" name="billingHeadId" value={billingHeadId} />
       {effectiveCountryIds.map((id) => <input key={id} type="hidden" name="countryIds" value={id} />)}
       <h2 className="section-title">{title}</h2>
-      <p className="section-subtitle">Select Client and Title first. Billing Head is filtered by the selected movie&apos;s billing region. Country becomes available after Billing Head is selected.</p>
+      <p className="section-subtitle">Select Client and Title first. Billing Head is filtered by the selected title&apos;s billing region. Country becomes available after Billing Head is selected.</p>
       {state?.error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{state.error}</div> : null}
       {state?.success ? <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">Title billing head saved successfully.</div> : null}
       <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -176,11 +176,11 @@ export function MovieBillingHeadAssignmentForm({
         </div>
         <div className={!clientId ? "opacity-60" : ""}>
           <FormLabel htmlFor="movieId" required>Title</FormLabel>
-          <SearchableCombobox id="movieId" value={movieId} onValueChange={handleTitleChange} options={movieOptions} placeholder={clientId ? "Select Working movie" : "Select client first"} searchPlaceholder="Search titles..." emptyLabel="No Working titles found." disabled={!clientId} required />
+          <SearchableCombobox id="movieId" value={movieId} onValueChange={handleTitleChange} options={movieOptions} placeholder={clientId ? "Select Working title" : "Select client first"} searchPlaceholder="Search titles..." emptyLabel="No Working titles found." disabled={!clientId} required />
         </div>
         <div className={!movieId ? "opacity-60" : ""}>
           <FormLabel htmlFor="billingHeadId" required>Billing Head</FormLabel>
-          <SearchableCombobox id="billingHeadId" value={billingHeadId} onValueChange={handleBillingHeadChange} options={billingHeadOptions} placeholder={movieId ? "Select Fixed - Optional billing head" : "Select client and movie first"} searchPlaceholder="Search billing heads..." emptyLabel="No valid Fixed - Optional heads found." disabled={!movieId} required />
+          <SearchableCombobox id="billingHeadId" value={billingHeadId} onValueChange={handleBillingHeadChange} options={billingHeadOptions} placeholder={movieId ? "Select Fixed - Optional billing head" : "Select client and title first"} searchPlaceholder="Search billing heads..." emptyLabel="No valid Fixed - Optional heads found." disabled={!movieId} required />
         </div>
         <div className={!billingHeadId ? "opacity-60" : ""}>
           <FormLabel htmlFor="countryIds" required>Country</FormLabel>
@@ -206,7 +206,7 @@ export function MovieBillingHeadAssignmentForm({
             <input id="units" name="units" type="number" min="0" step="1" className="input" defaultValue={initialValues?.units ?? ""} />
           </div>
         ) : null}
-        <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700"><input type="checkbox" name="isActive" defaultChecked={initialValues?.isActive ?? true} /> Active movie billing head</label>
+        <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700"><input type="checkbox" name="isActive" defaultChecked={initialValues?.isActive ?? true} /> Active title billing head</label>
         <div className="md:col-span-2"><button className="btn-primary w-full md:w-auto" disabled={pending}>{pending ? "Saving..." : submitLabel}</button></div>
       </div>
     </form>

@@ -1,10 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
-import { canManageMovieBillingHeads, canViewCostData } from "@/lib/permissions";
+import {
+  canDeleteMovieBillingHeads,
+  canManageMovieBillingHeads,
+  canViewCostData,
+} from "@/lib/permissions";
 
 export type MovieBillingHeadAssignmentFormState = { success?: boolean; error?: string };
 
@@ -183,4 +188,51 @@ export async function toggleMovieBillingHeadAssignmentStatusAction(formData: For
   await db.movieBillingHeadAssignment.update({ where: { id }, data: { isActive: !row.isActive } });
   revalidatePath("/movie-billing-heads");
   revalidatePath(`/movie-billing-heads/${id}`);
+}
+
+
+async function requireCanDeleteMovieBillingHeads() {
+  const user = await requireUserForAction();
+  if (!canDeleteMovieBillingHeads(user)) {
+    throw new Error(
+      "Only Admin users with functional role Other can delete title billing heads.",
+    );
+  }
+  return user;
+}
+
+export async function deleteMovieBillingHeadAssignmentAction(formData: FormData) {
+  let redirectTo = "/movie-billing-heads";
+
+  try {
+    await requireCanDeleteMovieBillingHeads();
+    const id = String(formData.get("id") || "");
+
+    if (!id) {
+      throw new Error("Title billing head is required.");
+    }
+
+    const row = await db.movieBillingHeadAssignment.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!row) {
+      throw new Error("Title billing head not found.");
+    }
+
+    await db.movieBillingHeadAssignment.delete({
+      where: { id },
+    });
+
+    revalidatePath("/movie-billing-heads");
+    revalidatePath("/billing-reports");
+    redirectTo = "/movie-billing-heads?deleteSuccess=Title%20billing%20head%20deleted.";
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to delete title billing head.";
+    redirectTo = `/movie-billing-heads?deleteError=${encodeURIComponent(message)}`;
+  }
+
+  redirect(redirectTo);
 }

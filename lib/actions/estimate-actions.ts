@@ -270,7 +270,7 @@ async function validateClientFieldRequirements(
     if (!movie) {
       return {
         valid: false as const,
-        error: "Selected movie does not belong to the selected client.",
+        error: "Selected title does not belong to the selected client.",
       };
     }
   }

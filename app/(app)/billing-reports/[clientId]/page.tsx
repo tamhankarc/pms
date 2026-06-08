@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -97,11 +98,20 @@ type BillingContactNotice = {
   assignmentLevel: string;
   billingReportType: string | null;
   project: { id: string; name: string } | null;
-  contactPerson: { name: string; email: string };
+  contactPerson: {
+    name: string;
+    email: string;
+    country?: { isoCode: string | null } | null;
+  };
 };
 
-function formatBillTo(contact: { name: string; email: string }) {
-  return `Bill To: ${contact.name} (${contact.email})`;
+function formatBillTo(contact: {
+  name: string;
+  email: string;
+  country?: { isoCode: string | null } | null;
+}) {
+  const countryCode = contact.country?.isoCode;
+  return `Bill To: ${contact.name}${countryCode ? ` (${countryCode})` : ""} (${contact.email})`;
 }
 
 function BillingContactNotices({
@@ -368,6 +378,7 @@ function ExportButtons({
     assetNameId?: string;
     countryId?: string;
     month?: string;
+    year?: string;
   };
 }) {
   const query = buildQueryString({
@@ -379,6 +390,7 @@ function ExportButtons({
     assetNameId: filters.assetNameId ?? "",
     countryId: filters.countryId ?? "",
     month: filters.month ?? "",
+    year: filters.year ?? "",
   });
 
   return (
@@ -1661,6 +1673,89 @@ function SonyPicturesReportWorkspace({
   );
 }
 
+function SonyBillingSummaryHistoryTable({
+  data,
+  clientId,
+  rows,
+  includeAction,
+}: {
+  data: SonyBillingSummaryHistoryData;
+  clientId: string;
+  rows: SonyBillingSummaryHistoryData["summaryRows"];
+  includeAction: boolean;
+}) {
+  const reportColumns = rows[0]?.reportValues ?? [];
+  const emptyColSpan =
+    1 + Math.max(reportColumns.length, 1) * 2 + (includeAction ? 1 : 0);
+  return (
+    <table className="table-base">
+      <thead className="table-head">
+        <tr>
+          <th className="table-cell" rowSpan={2}>
+            Title Name
+          </th>
+          {reportColumns.map((report) => (
+            <th
+              key={report.reportType}
+              className="table-cell text-center"
+              colSpan={2}
+            >
+              {report.reportTitle}
+            </th>
+          ))}
+          {includeAction ? (
+            <th className="table-cell" rowSpan={2}>
+              Action
+            </th>
+          ) : null}
+        </tr>
+        <tr>
+          {reportColumns.map((report) => (
+            <Fragment key={report.reportType}>
+              <th className="table-cell">Cost</th>
+              <th className="table-cell">PO Number</th>
+            </Fragment>
+          ))}
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-slate-100">
+        {rows.map((row) => (
+          <tr key={row.movieId}>
+            <td className="table-cell font-medium text-slate-900">
+              {row.title} ({row.status})
+            </td>
+            {(row.reportValues ?? []).map((report) => (
+              <Fragment key={`${row.movieId}-${report.reportType}`}>
+                <td className="table-cell">{formatSonyUsd(report.cost)}</td>
+                <td className="table-cell">{report.poNumber || "-"}</td>
+              </Fragment>
+            ))}
+            {includeAction ? (
+              <td className="table-cell">
+                <BillingDoneButton
+                  movieId={row.movieId}
+                  label="Billing Done"
+                  returnTo={`/billing-reports/${clientId}?report=billing-summary-history&year=${data.filters.year}`}
+                />
+              </td>
+            ) : null}
+          </tr>
+        ))}
+        {rows.length === 0 ? (
+          <tr>
+            <td
+              colSpan={emptyColSpan}
+              className="table-cell text-center text-sm text-slate-500"
+            >
+              No billing records available.
+            </td>
+          </tr>
+        ) : null}
+      </tbody>
+    </table>
+  );
+}
+
 function SonyBillingSummaryHistoryWorkspace({
   clientId,
   activeReport,
@@ -1677,6 +1772,13 @@ function SonyBillingSummaryHistoryWorkspace({
         activeReport={activeReport}
         clientName={data.client.name}
       />
+      <div className="flex justify-end">
+        <ExportButtons
+          clientId={clientId}
+          reportType={activeReport}
+          filters={{ year: data.filters.year }}
+        />
+      </div>
 
       <section className="table-wrap">
         <div className="border-b border-slate-200 px-6 py-5">
@@ -1685,46 +1787,12 @@ function SonyBillingSummaryHistoryWorkspace({
             Titles which have not been marked Completed &amp; Billed.
           </p>
         </div>
-        <table className="table-base">
-          <thead className="table-head">
-            <tr>
-              <th className="table-cell">Title</th>
-              <th className="table-cell">Billing Region</th>
-              <th className="table-cell">PO Number</th>
-              <th className="table-cell">Status</th>
-              <th className="table-cell">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {data.summaryRows.map((row) => (
-              <tr key={row.movieId}>
-                <td className="table-cell font-medium text-slate-900">
-                  {row.title}
-                </td>
-                <td className="table-cell">{row.billingRegions}</td>
-                <td className="table-cell">{row.poNumber ?? "-"}</td>
-                <td className="table-cell">{row.status}</td>
-                <td className="table-cell">
-                  <BillingDoneButton
-                    movieId={row.movieId}
-                    label="Billing Done"
-                    returnTo={`/billing-reports/${clientId}?report=billing-summary-history&year=${data.filters.year}`}
-                  />
-                </td>
-              </tr>
-            ))}
-            {data.summaryRows.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={5}
-                  className="table-cell text-center text-sm text-slate-500"
-                >
-                  No pending billing titles available.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+        <SonyBillingSummaryHistoryTable
+          data={data}
+          clientId={clientId}
+          rows={data.summaryRows}
+          includeAction
+        />
       </section>
 
       <section className="table-wrap">
@@ -1764,38 +1832,12 @@ function SonyBillingSummaryHistoryWorkspace({
             </AutoSubmitFilterForm>
           </div>
         </div>
-        <table className="table-base">
-          <thead className="table-head">
-            <tr>
-              <th className="table-cell">Title</th>
-              <th className="table-cell">Billing Region</th>
-              <th className="table-cell">PO Number</th>
-              <th className="table-cell">Billing Date</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {data.historyRows.map((row) => (
-              <tr key={row.movieId}>
-                <td className="table-cell font-medium text-slate-900">
-                  {row.title}
-                </td>
-                <td className="table-cell">{row.billingRegions}</td>
-                <td className="table-cell">{row.poNumber ?? "-"}</td>
-                <td className="table-cell">{row.billingDate}</td>
-              </tr>
-            ))}
-            {data.historyRows.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={4}
-                  className="table-cell text-center text-sm text-slate-500"
-                >
-                  No billed titles found for {data.filters.year}.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+        <SonyBillingSummaryHistoryTable
+          data={data}
+          clientId={clientId}
+          rows={data.historyRows}
+          includeAction={false}
+        />
       </section>
     </div>
   );
@@ -2239,69 +2281,100 @@ function BillingHistoryFilters({
   );
 }
 
-function BillingHistorySummaryTable({
+function BillingHistoryCostCell({ value }: { value?: number }) {
+  return (
+    <span className="whitespace-nowrap">
+      {typeof value === "number" ? formatUsd(value) : "-"}
+    </span>
+  );
+}
+
+function BillingHistoryTitleReportTable({
   data,
   clientId,
   activeReport,
+  rows,
+  includeAction,
 }: {
   data: BillingHistoryData;
   clientId: string;
   activeReport: AmazonReportType;
+  rows: BillingHistoryData["summaryRows"];
+  includeAction: boolean;
 }) {
   const returnTo = `/billing-reports/${clientId}?report=${activeReport}&year=${data.filters.year}`;
+  const reportColumns = rows[0]?.reportValues ?? [];
+  const emptyColSpan =
+    1 + Math.max(reportColumns.length, 1) * 2 + (includeAction ? 1 : 0);
+
   return (
     <div className="table-wrap">
       <table className="table-base">
         <thead className="table-head">
           <tr>
-            <th className="table-cell">
-              {data.client.poAssignmentMode === "PROJECT"
-                ? "Project"
-                : data.client.poAssignmentMode === "BILLING_REPORT"
-                  ? "Billing Report"
-                  : "Title"}
+            <th className="table-cell" rowSpan={2}>
+              Title Name
             </th>
-            <th className="table-cell">Type / Billing Region</th>
-            <th className="table-cell">PO Number</th>
-            <th className="table-cell">Status</th>
-            <th className="table-cell">Action</th>
+            {reportColumns.map((report) => (
+              <th
+                key={report.reportType}
+                className="table-cell text-center"
+                colSpan={2}
+              >
+                {report.reportTitle}
+              </th>
+            ))}
+            {includeAction ? (
+              <th className="table-cell" rowSpan={2}>
+                Action
+              </th>
+            ) : null}
+          </tr>
+          <tr>
+            {reportColumns.map((report) => (
+              <Fragment key={report.reportType}>
+                <th className="table-cell">Cost</th>
+                <th className="table-cell">PO Number</th>
+              </Fragment>
+            ))}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {data.summaryRows.map((row) => (
+          {rows.map((row) => (
             <tr key={row.itemId}>
               <td className="table-cell font-medium text-slate-900">
-                {row.itemName}
+                {row.itemName} ({row.titleStatus ?? row.status})
               </td>
-              <td className="table-cell">{row.billingRegion}</td>
-              <td className="table-cell">{row.poNumber || "-"}</td>
-              <td className="table-cell">{row.status}</td>
-              <td className="table-cell">
-                {row.itemType === "TITLE" && row.movieId ? (
-                  <BillingDoneButton
-                    movieId={row.movieId}
-                    label="Billing Done"
-                    returnTo={returnTo}
-                  />
-                ) : row.itemType === "PROJECT" && row.projectId ? (
-                  <ProjectBillingDoneButton
-                    projectId={row.projectId}
-                    label="Billing Done"
-                    returnTo={returnTo}
-                  />
-                ) : (
-                  "-"
-                )}
-              </td>
+              {(row.reportValues ?? []).map((report) => (
+                <Fragment key={`${row.itemId}-${report.reportType}`}>
+                  <td className="table-cell">
+                    <BillingHistoryCostCell value={report.cost} />
+                  </td>
+                  <td className="table-cell">{report.poNumber || "-"}</td>
+                </Fragment>
+              ))}
+              {includeAction ? (
+                <td className="table-cell">
+                  {row.movieId ? (
+                    <BillingDoneButton
+                      movieId={row.movieId}
+                      label="Billing Done"
+                      returnTo={returnTo}
+                    />
+                  ) : (
+                    "-"
+                  )}
+                </td>
+              ) : null}
             </tr>
           ))}
-          {data.summaryRows.length === 0 ? (
+          {rows.length === 0 ? (
             <tr>
               <td
-                colSpan={5}
+                colSpan={emptyColSpan}
                 className="table-cell text-center text-sm text-slate-500"
               >
-                No pending billing records available.
+                No billing records available.
               </td>
             </tr>
           ) : null}
@@ -2311,48 +2384,258 @@ function BillingHistorySummaryTable({
   );
 }
 
-function BillingHistoryTable({ data }: { data: BillingHistoryData }) {
+function BillingHistoryProjectTable({
+  data,
+  clientId,
+  activeReport,
+  rows,
+  includeAction,
+}: {
+  data: BillingHistoryData;
+  clientId: string;
+  activeReport: AmazonReportType;
+  rows: BillingHistoryData["summaryRows"];
+  includeAction: boolean;
+}) {
+  const returnTo = `/billing-reports/${clientId}?report=${activeReport}&year=${data.filters.year}`;
+  const isTitleProject = data.client.poAssignmentMode === "TITLE_PROJECT";
   return (
     <div className="table-wrap">
       <table className="table-base">
         <thead className="table-head">
           <tr>
             <th className="table-cell">
-              {data.client.poAssignmentMode === "PROJECT" ? "Project" : "Title"}
+              {isTitleProject
+                ? "Project - Title (Project Status)"
+                : "Project (Project Status)"}
             </th>
-            <th className="table-cell">Type / Billing Region</th>
+            {isTitleProject ? (
+              <th className="table-cell">Title Status</th>
+            ) : null}
+            {!isTitleProject ? (
+              <th className="table-cell">Billing Model</th>
+            ) : null}
+            <th className="table-cell">Cost</th>
             <th className="table-cell">PO Number</th>
-            <th className="table-cell">Billing Date</th>
-            <th className="table-cell">Status</th>
-            <th className="table-cell">Title Billing Heads</th>
+            {includeAction ? <th className="table-cell">Action</th> : null}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {data.historyRows.map((row) => (
+          {rows.map((row) => (
             <tr key={row.itemId}>
               <td className="table-cell font-medium text-slate-900">
-                {row.itemName}
+                {row.itemName} ({row.projectStatus ?? row.status})
               </td>
-              <td className="table-cell">{row.billingRegion}</td>
+              {isTitleProject ? (
+                <td className="table-cell">{row.titleStatus ?? "-"}</td>
+              ) : null}
+              {!isTitleProject ? (
+                <td className="table-cell">{row.billingModel ?? "-"}</td>
+              ) : null}
+              <td className="table-cell">
+                <BillingHistoryCostCell value={row.cost} />
+              </td>
               <td className="table-cell">{row.poNumber || "-"}</td>
-              <td className="table-cell">{row.billingDate}</td>
-              <td className="table-cell">{row.status}</td>
-              <td className="table-cell">{row.movieBillingHeadCount}</td>
+              {includeAction ? (
+                <td className="table-cell">
+                  {row.projectId ? (
+                    <ProjectBillingDoneButton
+                      projectId={row.projectId}
+                      label="Billing Done"
+                      returnTo={returnTo}
+                    />
+                  ) : (
+                    "-"
+                  )}
+                </td>
+              ) : null}
             </tr>
           ))}
-          {data.historyRows.length === 0 ? (
+          {rows.length === 0 ? (
             <tr>
               <td
-                colSpan={6}
+                colSpan={(isTitleProject ? 4 : 4) + (includeAction ? 1 : 0)}
                 className="table-cell text-center text-sm text-slate-500"
               >
-                No completed and billed records found for this year.
+                No billing records available.
               </td>
             </tr>
           ) : null}
         </tbody>
       </table>
     </div>
+  );
+}
+
+function BillingHistoryDefaultTable({
+  data,
+  clientId,
+  activeReport,
+  rows,
+  includeAction,
+}: {
+  data: BillingHistoryData;
+  clientId: string;
+  activeReport: AmazonReportType;
+  rows: BillingHistoryData["summaryRows"];
+  includeAction: boolean;
+}) {
+  const returnTo = `/billing-reports/${clientId}?report=${activeReport}&year=${data.filters.year}`;
+  return (
+    <div className="table-wrap">
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">
+              {data.client.poAssignmentMode === "BILLING_REPORT"
+                ? "Billing Report"
+                : "Title"}
+            </th>
+            <th className="table-cell">Type / Billing Region</th>
+            <th className="table-cell">PO Number</th>
+            {includeAction ? (
+              <th className="table-cell">Status</th>
+            ) : (
+              <th className="table-cell">Billing Date</th>
+            )}
+            {includeAction ? <th className="table-cell">Action</th> : null}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map((row) => (
+            <tr key={row.itemId}>
+              <td className="table-cell font-medium text-slate-900">
+                {row.itemName}
+              </td>
+              <td className="table-cell">{row.billingRegion}</td>
+              <td className="table-cell">{row.poNumber || "-"}</td>
+              <td className="table-cell">
+                {includeAction ? row.status : row.billingDate}
+              </td>
+              {includeAction ? (
+                <td className="table-cell">
+                  {row.itemType === "TITLE" && row.movieId ? (
+                    <BillingDoneButton
+                      movieId={row.movieId}
+                      label="Billing Done"
+                      returnTo={returnTo}
+                    />
+                  ) : row.itemType === "PROJECT" && row.projectId ? (
+                    <ProjectBillingDoneButton
+                      projectId={row.projectId}
+                      label="Billing Done"
+                      returnTo={returnTo}
+                    />
+                  ) : (
+                    "-"
+                  )}
+                </td>
+              ) : null}
+            </tr>
+          ))}
+          {rows.length === 0 ? (
+            <tr>
+              <td
+                colSpan={includeAction ? 5 : 4}
+                className="table-cell text-center text-sm text-slate-500"
+              >
+                No billing records available.
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function BillingHistorySummaryTable({
+  data,
+  clientId,
+  activeReport,
+}: {
+  data: BillingHistoryData;
+  clientId: string;
+  activeReport: AmazonReportType;
+}) {
+  if (data.client.poAssignmentMode === "TITLE_BILLING_REPORT") {
+    return (
+      <BillingHistoryTitleReportTable
+        data={data}
+        clientId={clientId}
+        activeReport={activeReport}
+        rows={data.summaryRows}
+        includeAction
+      />
+    );
+  }
+  if (
+    data.client.poAssignmentMode === "TITLE_PROJECT" ||
+    data.client.poAssignmentMode === "PROJECT"
+  ) {
+    return (
+      <BillingHistoryProjectTable
+        data={data}
+        clientId={clientId}
+        activeReport={activeReport}
+        rows={data.summaryRows}
+        includeAction
+      />
+    );
+  }
+  return (
+    <BillingHistoryDefaultTable
+      data={data}
+      clientId={clientId}
+      activeReport={activeReport}
+      rows={data.summaryRows}
+      includeAction
+    />
+  );
+}
+
+function BillingHistoryTable({
+  data,
+  clientId,
+  activeReport,
+}: {
+  data: BillingHistoryData;
+  clientId: string;
+  activeReport: AmazonReportType;
+}) {
+  if (data.client.poAssignmentMode === "TITLE_BILLING_REPORT") {
+    return (
+      <BillingHistoryTitleReportTable
+        data={data}
+        clientId={clientId}
+        activeReport={activeReport}
+        rows={data.historyRows}
+        includeAction={false}
+      />
+    );
+  }
+  if (
+    data.client.poAssignmentMode === "TITLE_PROJECT" ||
+    data.client.poAssignmentMode === "PROJECT"
+  ) {
+    return (
+      <BillingHistoryProjectTable
+        data={data}
+        clientId={clientId}
+        activeReport={activeReport}
+        rows={data.historyRows}
+        includeAction={false}
+      />
+    );
+  }
+  return (
+    <BillingHistoryDefaultTable
+      data={data}
+      clientId={clientId}
+      activeReport={activeReport}
+      rows={data.historyRows}
+      includeAction={false}
+    />
   );
 }
 
@@ -2374,11 +2657,18 @@ function BillingHistoryWorkspace({
         activeReport={activeReport}
         clientName={clientName}
       />
-      <BillingHistoryFilters
-        clientId={clientId}
-        activeReport={activeReport}
-        data={data}
-      />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <BillingHistoryFilters
+          clientId={clientId}
+          activeReport={activeReport}
+          data={data}
+        />
+        <ExportButtons
+          clientId={clientId}
+          reportType={activeReport}
+          filters={{ year: data.filters.year }}
+        />
+      </div>
       <section className="space-y-3">
         <div>
           <h2 className="section-title">Billing Summary</h2>
@@ -2399,7 +2689,11 @@ function BillingHistoryWorkspace({
           </h2>
           <p className="section-subtitle">Year: {data.filters.year}</p>
         </div>
-        <BillingHistoryTable data={data} />
+        <BillingHistoryTable
+          data={data}
+          clientId={clientId}
+          activeReport={activeReport}
+        />
       </section>
     </div>
   );
@@ -3121,6 +3415,146 @@ function GenericTitleMergedBlock({
   );
 }
 
+function GenericSummaryHistoryTable({
+  data,
+  clientId,
+  rows,
+  includeAction,
+}: {
+  data: GenericBillingSummaryHistoryData;
+  clientId: string;
+  rows: GenericBillingSummaryHistoryData["summaryRows"];
+  includeAction: boolean;
+}) {
+  const isProjectMode = data.client.poAssignmentMode === "PROJECT";
+  const isTitleProjectMode = data.client.poAssignmentMode === "TITLE_PROJECT";
+  const returnTo = `/billing-reports/${clientId}?report=billing-summary-history&year=${data.filters.year}`;
+
+  if (isProjectMode || isTitleProjectMode) {
+    return (
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">
+              {isTitleProjectMode
+                ? "Project - Title (Project Status)"
+                : "Project (Project Status)"}
+            </th>
+            {isTitleProjectMode ? (
+              <th className="table-cell">Title Status</th>
+            ) : null}
+            {isProjectMode ? (
+              <th className="table-cell">Billing Model</th>
+            ) : null}
+            <th className="table-cell">Cost</th>
+            <th className="table-cell">PO Number</th>
+            {includeAction ? <th className="table-cell">Action</th> : null}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map((row) => (
+            <tr key={row.itemId}>
+              <td className="table-cell font-medium text-slate-900">
+                {row.title} ({row.projectStatus ?? row.status})
+              </td>
+              {isTitleProjectMode ? (
+                <td className="table-cell">{row.titleStatus ?? "-"}</td>
+              ) : null}
+              {isProjectMode ? (
+                <td className="table-cell">{row.billingModel ?? "-"}</td>
+              ) : null}
+              <td className="table-cell">
+                {typeof row.cost === "number"
+                  ? formatGenericUsd(row.cost)
+                  : "-"}
+              </td>
+              <td className="table-cell">{row.poNumber ?? "-"}</td>
+              {includeAction ? (
+                <td className="table-cell">
+                  {row.projectId ? (
+                    <ProjectBillingDoneButton
+                      projectId={row.projectId}
+                      label="Billing Done"
+                      returnTo={returnTo}
+                    />
+                  ) : (
+                    "-"
+                  )}
+                </td>
+              ) : null}
+            </tr>
+          ))}
+          {rows.length === 0 ? (
+            <tr>
+              <td
+                colSpan={(isTitleProjectMode ? 4 : 4) + (includeAction ? 1 : 0)}
+                className="table-cell text-center text-sm text-slate-500"
+              >
+                No billing records available.
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+    );
+  }
+
+  return (
+    <table className="table-base">
+      <thead className="table-head">
+        <tr>
+          <th className="table-cell">Title</th>
+          <th className="table-cell">Billing Region</th>
+          <th className="table-cell">PO Number</th>
+          {includeAction ? (
+            <th className="table-cell">Status</th>
+          ) : (
+            <th className="table-cell">Billing Date</th>
+          )}
+          {includeAction ? <th className="table-cell">Action</th> : null}
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-slate-100">
+        {rows.map((row) => (
+          <tr key={row.itemId}>
+            <td className="table-cell font-medium text-slate-900">
+              {row.title}
+            </td>
+            <td className="table-cell">{row.billingRegions}</td>
+            <td className="table-cell">{row.poNumber ?? "-"}</td>
+            <td className="table-cell">
+              {includeAction ? row.status : row.billingDate}
+            </td>
+            {includeAction ? (
+              <td className="table-cell">
+                {row.movieId ? (
+                  <BillingDoneButton
+                    movieId={row.movieId}
+                    label="Billing Done"
+                    returnTo={returnTo}
+                  />
+                ) : (
+                  "-"
+                )}
+              </td>
+            ) : null}
+          </tr>
+        ))}
+        {rows.length === 0 ? (
+          <tr>
+            <td
+              colSpan={includeAction ? 5 : 4}
+              className="table-cell text-center text-sm text-slate-500"
+            >
+              No billing records available.
+            </td>
+          </tr>
+        ) : null}
+      </tbody>
+    </table>
+  );
+}
+
 function GenericBillingSummaryHistoryWorkspace({
   clientId,
   activeReport,
@@ -3138,53 +3572,26 @@ function GenericBillingSummaryHistoryWorkspace({
         clientName={data.client.name}
         useGenericTitleReports
       />
+      <div className="flex justify-end">
+        <ExportButtons
+          clientId={clientId}
+          reportType={activeReport}
+          filters={{ year: data.filters.year }}
+        />
+      </div>
       <section className="table-wrap">
         <div className="border-b border-slate-200 px-6 py-5">
           <h2 className="section-title">Billing Summary</h2>
           <p className="section-subtitle">
-            Titles which have not been marked Completed &amp; Billed.
+            Pending billing records as per the client PO Assignment Mode.
           </p>
         </div>
-        <table className="table-base">
-          <thead className="table-head">
-            <tr>
-              <th className="table-cell">Title</th>
-              <th className="table-cell">Billing Region</th>
-              <th className="table-cell">PO Number</th>
-              <th className="table-cell">Status</th>
-              <th className="table-cell">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {data.summaryRows.map((row) => (
-              <tr key={row.movieId}>
-                <td className="table-cell font-medium text-slate-900">
-                  {row.title}
-                </td>
-                <td className="table-cell">{row.billingRegions}</td>
-                <td className="table-cell">{row.poNumber ?? "-"}</td>
-                <td className="table-cell">{row.status}</td>
-                <td className="table-cell">
-                  <BillingDoneButton
-                    movieId={row.movieId}
-                    label="Billing Done"
-                    returnTo={`/billing-reports/${clientId}?report=billing-summary-history&year=${data.filters.year}`}
-                  />
-                </td>
-              </tr>
-            ))}
-            {data.summaryRows.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={5}
-                  className="table-cell text-center text-sm text-slate-500"
-                >
-                  No pending billing titles available.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+        <GenericSummaryHistoryTable
+          data={data}
+          clientId={clientId}
+          rows={data.summaryRows}
+          includeAction
+        />
       </section>
       <section className="table-wrap">
         <div className="border-b border-slate-200 px-6 py-5">
@@ -3192,8 +3599,7 @@ function GenericBillingSummaryHistoryWorkspace({
             <div>
               <h2 className="section-title">Billing Summary & History</h2>
               <p className="section-subtitle">
-                Titles marked Completed &amp; Billed for the selected billing
-                year.
+                Completed &amp; Billed records for the selected billing year.
               </p>
             </div>
             <AutoSubmitFilterForm
@@ -3223,38 +3629,12 @@ function GenericBillingSummaryHistoryWorkspace({
             </AutoSubmitFilterForm>
           </div>
         </div>
-        <table className="table-base">
-          <thead className="table-head">
-            <tr>
-              <th className="table-cell">Title</th>
-              <th className="table-cell">Billing Region</th>
-              <th className="table-cell">PO Number</th>
-              <th className="table-cell">Billing Date</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {data.historyRows.map((row) => (
-              <tr key={row.movieId}>
-                <td className="table-cell font-medium text-slate-900">
-                  {row.title}
-                </td>
-                <td className="table-cell">{row.billingRegions}</td>
-                <td className="table-cell">{row.poNumber ?? "-"}</td>
-                <td className="table-cell">{row.billingDate}</td>
-              </tr>
-            ))}
-            {data.historyRows.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={4}
-                  className="table-cell text-center text-sm text-slate-500"
-                >
-                  No billed titles found for {data.filters.year}.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+        <GenericSummaryHistoryTable
+          data={data}
+          clientId={clientId}
+          rows={data.historyRows}
+          includeAction={false}
+        />
       </section>
     </div>
   );
@@ -3558,7 +3938,13 @@ export default async function ClientBillingReportPage({
       assignmentLevel: true,
       billingReportType: true,
       project: { select: { id: true, name: true } },
-      contactPerson: { select: { name: true, email: true } },
+      contactPerson: {
+        select: {
+          name: true,
+          email: true,
+          country: { select: { isoCode: true } },
+        },
+      },
     },
     orderBy: [{ assignmentLevel: "asc" }, { updatedAt: "desc" }],
   });

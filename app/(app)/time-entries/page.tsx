@@ -275,7 +275,7 @@ export default async function TimeEntriesPage({
                     ) : (
                       entry.project?.client.showMoviesInEntries && (
                         <div className="text-[11px] xl:text-xs text-slate-500 break-words">
-                          {entry.movie?.title ?? "No specific movie"}
+                          {entry.movie?.title ?? "No specific title"}
                         </div>
                       )
                     )}

@@ -14,6 +14,8 @@ export type GenericBillingReportContactPerson = {
   id?: string;
   name: string;
   email: string | null;
+  countryCode?: string | null;
+  country?: { isoCode: string | null } | null;
 };
 
 export type GenericBillingReportFilters = {
@@ -65,16 +67,24 @@ export type GenericBillingReportTitleBlock = {
 export type GenericBillingSummaryHistoryFilters = { year: string };
 
 export type GenericBillingSummaryHistoryRow = {
-  movieId: string;
+  itemId: string;
+  itemType: "TITLE" | "PROJECT" | "TITLE_PROJECT";
+  movieId?: string;
+  projectId?: string;
   title: string;
+  projectName?: string;
   status: string;
+  titleStatus?: string;
+  projectStatus?: string;
+  billingModel?: string;
   billingRegions: string;
   billingDate: string;
   poNumber: string;
+  cost?: number;
 };
 
 export type GenericBillingSummaryHistoryData = {
-  client: { id: string; name: string };
+  client: { id: string; name: string; poAssignmentMode: string };
   filters: GenericBillingSummaryHistoryFilters;
   summaryRows: GenericBillingSummaryHistoryRow[];
   historyRows: GenericBillingSummaryHistoryRow[];
@@ -175,12 +185,44 @@ export async function getGenericBillingSummaryHistoryData({
 }): Promise<GenericBillingSummaryHistoryData | null> {
   const client = await db.client.findUnique({
     where: { id: clientId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, poAssignmentMode: true, hourlyCost: true },
   });
   if (!client) return null;
   const year = Number(filters.year);
   const yearStart = new Date(year, 0, 1);
   const yearEnd = new Date(year + 1, 0, 1);
+
+  const formatProjectBillingModel = (value: string) =>
+    ({
+      HOURLY: "Hourly",
+      FIXED_FULL: "Fixed Full",
+      FIXED_MONTHLY: "Fixed Monthly",
+      FIXED_PER_COUNTRY: "Fixed Per Country",
+      FIXED_COST: "Fixed Cost",
+    })[value] ?? value.replaceAll("_", " ");
+  const projectCostValue = (project: {
+    billingModel: string;
+    projectCost?: unknown;
+    perCountryCharges?: unknown;
+    fixedContractHours?: unknown;
+    additionalCharges?: unknown;
+    partialBillingCost?: unknown;
+  }) => {
+    const hourlyCost = Number(client.hourlyCost ?? 0);
+    if (project.billingModel === "FIXED_COST")
+      return Number(project.projectCost ?? 0);
+    if (project.billingModel === "FIXED_PER_COUNTRY")
+      return Number(project.perCountryCharges ?? 0);
+    if (project.billingModel === "FIXED_FULL") {
+      return (
+        Number(project.fixedContractHours ?? 0) * hourlyCost +
+        Number(project.additionalCharges ?? 0) -
+        Number(project.partialBillingCost ?? 0)
+      );
+    }
+    return Number(project.projectCost ?? 0);
+  };
+
   const select = {
     id: true,
     title: true,
@@ -192,6 +234,200 @@ export async function getGenericBillingSummaryHistoryData({
     billingSocial: true,
     billingPortal: true,
   } as const;
+  const projectSelect = {
+    id: true,
+    name: true,
+    status: true,
+    billingModel: true,
+    billingDate: true,
+    projectCost: true,
+    perCountryCharges: true,
+    fixedContractHours: true,
+    additionalCharges: true,
+    partialBillingCost: true,
+  } as const;
+
+  if (client.poAssignmentMode === "PROJECT") {
+    const [summaryProjects, historyProjects] = await Promise.all([
+      db.project.findMany({
+        where: {
+          clientId,
+          isActive: true,
+          addToBilling: true,
+          billingModel: { not: "FIXED_MONTHLY" },
+          status: { in: ["ACTIVE", "COMPLETED"] },
+        },
+        select: projectSelect,
+        orderBy: { name: "asc" },
+      }),
+      db.project.findMany({
+        where: {
+          clientId,
+          isActive: true,
+          addToBilling: true,
+          billingModel: { not: "FIXED_MONTHLY" },
+          status: "COMPLETED_BILLED",
+          billingDate: { gte: yearStart, lt: yearEnd },
+        },
+        select: projectSelect,
+        orderBy: [{ billingDate: "desc" }, { name: "asc" }],
+      }),
+    ]);
+    const projectIds = [...summaryProjects, ...historyProjects].map(
+      (project) => project.id,
+    );
+    const poAssignments = projectIds.length
+      ? await db.purchaseOrderAssignment.findMany({
+          where: {
+            projectId: { in: projectIds },
+            purchaseOrder: { status: { not: "CANCELLED" } },
+          },
+          select: {
+            projectId: true,
+            purchaseOrder: { select: { poNumber: true } },
+          },
+        })
+      : [];
+    const poByProject = new Map<string, string>();
+    for (const assignment of poAssignments) {
+      if (assignment.projectId && !poByProject.has(assignment.projectId)) {
+        poByProject.set(
+          assignment.projectId,
+          assignment.purchaseOrder.poNumber,
+        );
+      }
+    }
+    const mapProject = (
+      project: (typeof summaryProjects)[number],
+    ): GenericBillingSummaryHistoryRow => ({
+      itemId: project.id,
+      itemType: "PROJECT",
+      projectId: project.id,
+      title: project.name,
+      status: formatProjectStatus(project.status),
+      projectStatus: formatProjectStatus(project.status),
+      billingModel: formatProjectBillingModel(project.billingModel),
+      billingRegions: "Project",
+      billingDate: formatBillingDate(project.billingDate),
+      poNumber: poByProject.get(project.id) ?? "-",
+      cost: projectCostValue(project),
+    });
+    return {
+      client,
+      filters,
+      summaryRows: summaryProjects.map(mapProject),
+      historyRows: historyProjects.map(mapProject),
+    };
+  }
+
+  if (client.poAssignmentMode === "TITLE_PROJECT") {
+    const [summaryEntries, historyEntries] = await Promise.all([
+      db.timeEntry.findMany({
+        where: {
+          project: {
+            clientId,
+            isActive: true,
+            addToBilling: true,
+            billingModel: { not: "FIXED_MONTHLY" },
+          },
+          movie: {
+            clientId,
+            isActive: true,
+            status: { in: ["WORKING", "COMPLETED"] },
+          },
+        },
+        select: { movie: { select }, project: { select: projectSelect } },
+      }),
+      db.timeEntry.findMany({
+        where: {
+          project: {
+            clientId,
+            isActive: true,
+            addToBilling: true,
+            billingModel: { not: "FIXED_MONTHLY" },
+            status: "COMPLETED_BILLED",
+            billingDate: { gte: yearStart, lt: yearEnd },
+          },
+          movie: { clientId, isActive: true },
+        },
+        select: { movie: { select }, project: { select: projectSelect } },
+      }),
+    ]);
+    const hasMovieAndProject = (
+      entry: (typeof summaryEntries)[number],
+    ): entry is (typeof summaryEntries)[number] & {
+      movie: NonNullable<(typeof summaryEntries)[number]["movie"]>;
+      project: NonNullable<(typeof summaryEntries)[number]["project"]>;
+    } => Boolean(entry.movie && entry.project);
+
+    const allTitleProjectEntries = [
+      ...summaryEntries,
+      ...historyEntries,
+    ].filter(hasMovieAndProject);
+
+    const pairs = allTitleProjectEntries.map(
+      (entry) => `${entry.movie.id}:${entry.project.id}`,
+    );
+    const poAssignments = pairs.length
+      ? await db.purchaseOrderAssignment.findMany({
+          where: { clientId, purchaseOrder: { status: { not: "CANCELLED" } } },
+          select: {
+            movieId: true,
+            projectId: true,
+            purchaseOrder: { select: { poNumber: true } },
+          },
+        })
+      : [];
+    const poByPair = new Map<string, string>();
+    for (const assignment of poAssignments) {
+      if (assignment.movieId && assignment.projectId) {
+        const key = `${assignment.movieId}:${assignment.projectId}`;
+        if (!poByPair.has(key))
+          poByPair.set(key, assignment.purchaseOrder.poNumber);
+      }
+    }
+    const mapEntries = (entries: typeof summaryEntries) => {
+      const byPair = new Map<string, (typeof allTitleProjectEntries)[number]>();
+
+      for (const entry of entries) {
+        if (!hasMovieAndProject(entry)) continue;
+
+        byPair.set(`${entry.movie.id}:${entry.project.id}`, entry);
+      }
+
+      return Array.from(byPair.values()).map(
+        (entry): GenericBillingSummaryHistoryRow => {
+          const movie = entry.movie;
+          const project = entry.project;
+          const key = `${movie.id}:${project.id}`;
+
+          return {
+            itemId: key,
+            itemType: "TITLE_PROJECT",
+            movieId: movie.id,
+            projectId: project.id,
+            title: `${project.name} - ${movie.title}`,
+            projectName: project.name,
+            status: formatProjectStatus(project.status),
+            titleStatus: formatMovieStatus(movie.status),
+            projectStatus: formatProjectStatus(project.status),
+            billingModel: formatProjectBillingModel(project.billingModel),
+            billingRegions: formatBillingRegions(movie),
+            billingDate: formatBillingDate(project.billingDate),
+            poNumber: poByPair.get(key) ?? "-",
+            cost: projectCostValue(project),
+          };
+        },
+      );
+    };
+    return {
+      client,
+      filters,
+      summaryRows: mapEntries(summaryEntries),
+      historyRows: mapEntries(historyEntries),
+    };
+  }
+
   const [summaryMovies, historyMovies] = await Promise.all([
     db.movie.findMany({
       where: {
@@ -236,6 +472,8 @@ export async function getGenericBillingSummaryHistoryData({
   const mapRow = (
     movie: (typeof summaryMovies)[number],
   ): GenericBillingSummaryHistoryRow => ({
+    itemId: movie.id,
+    itemType: "TITLE",
     movieId: movie.id,
     title: movie.title,
     status: formatMovieStatus(movie.status),
@@ -292,12 +530,18 @@ function addDeveloperCost(
 }
 
 function buildContactPersonLabel(
-  contactPersons: { name: string; email: string | null }[],
+  contactPersons: {
+    name: string;
+    email: string | null;
+    countryCode?: string | null;
+    country?: { isoCode: string | null } | null;
+  }[],
 ) {
   if (!contactPersons.length) return "-";
   return contactPersons
     .map(
-      (person) => `${person.name}${person.email ? ` (${person.email})` : ""}`,
+      (person) =>
+        `${person.name}${(person.countryCode ?? person.country?.isoCode) ? ` (${person.countryCode ?? person.country?.isoCode})` : ""}${person.email ? ` (${person.email})` : ""}`,
     )
     .join(", ");
 }
@@ -350,7 +594,12 @@ export async function getGenericBillingReportData({
           perDeveloperCost: true,
           contactPersons: {
             orderBy: { name: "asc" },
-            select: { id: true, name: true, email: true },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              country: { select: { isoCode: true } },
+            },
           },
         },
         orderBy: { name: "asc" },
@@ -462,7 +711,12 @@ export async function getGenericBillingReportData({
           select: {
             contactPersons: {
               orderBy: { name: "asc" },
-              select: { id: true, name: true, email: true },
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                country: { select: { isoCode: true } },
+              },
             },
           },
         })
@@ -518,7 +772,12 @@ export async function getGenericBillingReportData({
     };
   };
   const getProjectContactPerson = (project: {
-    contactPersons: { name: string; email: string | null }[];
+    contactPersons: {
+      name: string;
+      email: string | null;
+      countryCode?: string | null;
+      country?: { isoCode: string | null } | null;
+    }[];
   }) => {
     if (movieSpecific && movieContactPersons.length)
       return movieContactPersonLabel;

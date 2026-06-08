@@ -450,13 +450,13 @@ export function TimeEntryCreateForm({
               value={selectedMovieId}
               onValueChange={setSelectedMovieId}
               options={[
-                { value: "", label: "No specific movie" },
+                { value: "", label: "No specific title" },
                 ...filteredTitles.map((movie) => ({
                   value: movie.id,
                   label: movie.title,
                 })),
               ]}
-              placeholder="No specific movie"
+              placeholder="No specific title"
               searchPlaceholder="Search titles..."
               emptyLabel="No titles found."
             />
@@ -512,8 +512,8 @@ export function TimeEntryCreateForm({
               searchPlaceholder="Search asset names..."
               emptyLabel={
                 selectedMovieId
-                  ? "No asset names found for selected movie."
-                  : "Select a movie first."
+                  ? "No asset names found for selected title."
+                  : "Select a title first."
               }
               disabled={!selectedMovieId}
             />

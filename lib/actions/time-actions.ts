@@ -482,7 +482,7 @@ async function validateClientFieldRequirements(
     if (!movie) {
       return {
         valid: false as const,
-        error: "Selected movie does not belong to the selected client.",
+        error: "Selected title does not belong to the selected client.",
       };
     }
 
@@ -513,7 +513,7 @@ async function validateClientFieldRequirements(
     if (!movieId) {
       return {
         valid: false as const,
-        error: "Select a movie before selecting an asset name.",
+        error: "Select a title before selecting an asset name.",
       };
     }
 
@@ -530,7 +530,7 @@ async function validateClientFieldRequirements(
     if (!assetName) {
       return {
         valid: false as const,
-        error: "Selected asset name does not belong to the selected movie.",
+        error: "Selected asset name does not belong to the selected title.",
       };
     }
   }

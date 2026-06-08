@@ -28,7 +28,7 @@ async function ensureUniversalMovie(movieId: string) {
     where: { id: movieId, clientId: UNIVERSAL_PICTURES_CLIENT_ID, isActive: true },
     select: { id: true },
   });
-  if (!movie) throw new Error("Selected movie does not belong to Universal Pictures International.");
+  if (!movie) throw new Error("Selected title does not belong to Universal Pictures International.");
 }
 
 export async function createAssetNameAction(_prevState: AssetNameFormState, formData: FormData): Promise<AssetNameFormState> {
