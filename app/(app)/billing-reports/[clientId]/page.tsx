@@ -4538,11 +4538,13 @@ function GenericBillingReportWorkspace({
   reportType,
   data,
   clientName,
+  showGenericReportTabs = false,
 }: {
   clientId: string;
   reportType?: AmazonReportType;
   data: GenericBillingReportData;
   clientName?: string;
+  showGenericReportTabs?: boolean;
 }) {
   return (
     <div className="space-y-6">
@@ -4551,7 +4553,7 @@ function GenericBillingReportWorkspace({
           clientId={clientId}
           activeReport={reportType}
           clientName={clientName}
-          useGenericTitleReports={data.movieSpecific}
+          useGenericTitleReports={showGenericReportTabs || data.movieSpecific}
         />
       ) : null}
       <GenericBillingReportFilters
@@ -4638,6 +4640,7 @@ export default async function ClientBillingReportPage({
       isActive: true,
       hourlyCost: true,
       showMoviesInEntries: true,
+      poAssignmentMode: true,
       projects: {
         where: { isActive: true },
         select: {
@@ -4686,14 +4689,19 @@ export default async function ClientBillingReportPage({
   );
   const usesGenericTitleReports =
     !configuredReportCatalog && client.showMoviesInEntries;
-  const hasGenericBillingData =
-    client.projects.some((project) => project._count.timeEntries > 0) ||
-    client.movies.some((movie) => movie.isActive);
-  if (usesGenericTitleReports && !hasGenericBillingData)
+  const usesGenericProjectReports =
+    !configuredReportCatalog && client.poAssignmentMode === "PROJECT";
+  const usesGenericReportCatalog =
+    usesGenericTitleReports || usesGenericProjectReports;
+  const hasGenericBillingData = usesGenericProjectReports
+    ? client.projects.length > 0
+    : client.projects.some((project) => project._count.timeEntries > 0) ||
+      client.movies.some((movie) => movie.isActive);
+  if (usesGenericReportCatalog && !hasGenericBillingData)
     redirect("/billing-reports");
   const reportCatalog =
     configuredReportCatalog ??
-    (usesGenericTitleReports ? GENERIC_TITLE_REPORTS : null);
+    (usesGenericReportCatalog ? GENERIC_TITLE_REPORTS : null);
   const requestedReport = Array.isArray(resolvedSearchParams.report)
     ? resolvedSearchParams.report[0]
     : resolvedSearchParams.report;
@@ -4825,7 +4833,10 @@ export default async function ClientBillingReportPage({
     client.id === SONY_PICTURES_CLASSICS_CLIENT_ID;
   const genericBillingOptions =
     activeReportDefinition?.kind === "generic-movie"
-      ? { movieSpecific: true, openDateRange: isSonyPicturesClassicsReport }
+      ? {
+          movieSpecific: !usesGenericProjectReports,
+          openDateRange: isSonyPicturesClassicsReport,
+        }
       : undefined;
   const effectiveGenericFilters = isSonyPicturesClassicsReport
     ? {
@@ -4979,6 +4990,7 @@ export default async function ClientBillingReportPage({
           reportType={reportCatalog ? activeReport : undefined}
           clientName={reportCatalog ? client.name : undefined}
           data={genericBillingReportData!}
+          showGenericReportTabs={usesGenericReportCatalog}
         />
       )}
     </div>

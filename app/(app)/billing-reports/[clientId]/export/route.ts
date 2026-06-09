@@ -95,7 +95,12 @@ export async function GET(
   const { clientId } = await params;
   const client = await db.client.findUnique({
     where: { id: clientId },
-    select: { id: true, name: true, showMoviesInEntries: true },
+    select: {
+      id: true,
+      name: true,
+      showMoviesInEntries: true,
+      poAssignmentMode: true,
+    },
   });
   if (!client || isBillingReportClientExcluded(client.id))
     redirect("/billing-reports");
@@ -105,9 +110,13 @@ export async function GET(
     client.name,
     client.id,
   );
+  const usesGenericProjectReports =
+    !configuredReportCatalog && client.poAssignmentMode === "PROJECT";
   const reportCatalog =
     configuredReportCatalog ??
-    (client.showMoviesInEntries ? GENERIC_TITLE_REPORTS : null);
+    (client.showMoviesInEntries || usesGenericProjectReports
+      ? GENERIC_TITLE_REPORTS
+      : null);
   const requestedReport = searchParams.get("report");
   const reportType = reportCatalog
     ? requestedReport &&
@@ -360,7 +369,10 @@ export async function GET(
     client.id === SONY_PICTURES_CLASSICS_CLIENT_ID;
   const genericOptions =
     reportDefinition?.kind === "generic-movie"
-      ? { movieSpecific: true, openDateRange: isSonyPicturesClassicsReport }
+      ? {
+          movieSpecific: !usesGenericProjectReports,
+          openDateRange: isSonyPicturesClassicsReport,
+        }
       : undefined;
 
   if (reportDefinition?.kind === "generic-summary-history") {
