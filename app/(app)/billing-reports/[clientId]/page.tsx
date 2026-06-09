@@ -903,6 +903,7 @@ function UniversalTitleSummaryBlock({
     localizationAssets?: number;
     localizationCountries?: number;
     localizationCost?: number;
+    poNumber?: string;
     contactPersons: Array<{ id?: string; name: string; email: string | null }>;
   }>;
   includeCountries?: boolean;
@@ -935,7 +936,7 @@ function UniversalTitleSummaryBlock({
         localizationCost: 0,
       },
     );
-    const colSpan = showAction ? 7 : 6;
+    const colSpan = showAction ? 8 : 7;
 
     return (
       <div className="table-wrap">
@@ -950,6 +951,9 @@ function UniversalTitleSummaryBlock({
               </th>
               <th className="table-cell text-center" colSpan={3}>
                 Localization
+              </th>
+              <th className="table-cell" rowSpan={2}>
+                PO Number
               </th>
               {showAction ? (
                 <th className="table-cell" rowSpan={2}>
@@ -983,6 +987,7 @@ function UniversalTitleSummaryBlock({
                 <td className="table-cell whitespace-nowrap font-medium text-slate-900">
                   {formatUsd(Number(row.localizationCost ?? 0))}
                 </td>
+                <td className="table-cell">{row.poNumber || "-"}</td>
                 {showAction ? (
                   <td className="table-cell">
                     {clientId ? (
@@ -1012,6 +1017,7 @@ function UniversalTitleSummaryBlock({
                 <td className="table-cell font-semibold text-slate-900">
                   Total
                 </td>
+                <td className="table-cell font-semibold text-slate-900">-</td>
                 <td className="table-cell font-semibold text-slate-900">
                   {totals.socialAssets}
                 </td>

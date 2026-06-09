@@ -273,7 +273,10 @@ export function canAccessLeaveRequests(user: UserLike) {
 }
 
 export function canManageManualAttendance(user: UserLike) {
-  return isAdmin(user) && getFunctionalRole(user) === "OTHER";
+  return (
+    (isAdmin(user) && getFunctionalRole(user) === "OTHER") ||
+    hasExtraMenuAccess(user, "attendance-history")
+  );
 }
 
 export function canAssignApprovers(user: UserLike) {
@@ -285,4 +288,13 @@ export function canViewLeaveApprovals(user: UserLike) {
 }
 export function canViewHRReports(user: UserLike) {
   return isAdmin(user) || isHR(user);
+}
+
+function getShift(user: UserLike) {
+  if (!user || typeof user === "string" || !("shift" in user)) return undefined;
+  return user.shift ?? undefined;
+}
+
+export function isNightShiftTeamLead(user: UserLike) {
+  return isTeamLead(user) && getShift(user) === "NIGHT";
 }

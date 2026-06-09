@@ -289,6 +289,7 @@ export function buildUniversalBillingSummaryExcel(
   const header = [
     "Title Name",
     "Contact Person(s)",
+    "PO Number",
     "Social QA - Total Unique Assets",
     "Social QA - Cost",
     "Localization - Total Unique Assets",
@@ -298,6 +299,7 @@ export function buildUniversalBillingSummaryExcel(
   const rowValues = (row: UniversalBillingSummaryData["rows"][number]) => [
     row.titleName,
     formatContactPersonsForExport(row.contactPersons),
+    row.poNumber || "-",
     row.socialAssets,
     row.socialCost,
     row.localizationAssets,
@@ -313,10 +315,11 @@ export function buildUniversalBillingSummaryExcel(
     ]),
     excelRow([]),
     excelRow(header),
-    ...data.rows.map((row) => excelRow(rowValues(row), [3, 4, 5, 6])),
+    ...data.rows.map((row) => excelRow(rowValues(row), [4, 5, 6, 7])),
     excelRow(
       [
         "Total",
+        "",
         "",
         totals.socialAssets,
         totals.socialCost,
@@ -324,7 +327,7 @@ export function buildUniversalBillingSummaryExcel(
         totals.localizationCountries,
         totals.localizationCost,
       ],
-      [3, 4, 5, 6],
+      [4, 5, 6, 7],
     ),
   ];
   const completedRows = [
@@ -337,7 +340,7 @@ export function buildUniversalBillingSummaryExcel(
     excelRow([]),
     excelRow(header),
     ...data.completedTitleSummaryRows.map((row) =>
-      excelRow(rowValues(row), [3, 4, 5, 6]),
+      excelRow(rowValues(row), [4, 5, 6, 7]),
     ),
     ...(data.completedTitleSummaryRows.length
       ? [
@@ -345,13 +348,14 @@ export function buildUniversalBillingSummaryExcel(
             [
               "Total",
               "",
+              "",
               completedTotals.socialAssets,
               completedTotals.socialCost,
               completedTotals.localizationAssets,
               completedTotals.localizationCountries,
               completedTotals.localizationCost,
             ],
-            [3, 4, 5, 6],
+            [4, 5, 6, 7],
           ),
         ]
       : []),
@@ -905,17 +909,19 @@ export function buildUniversalBillingSummaryPdf(
   data: UniversalBillingSummaryData,
 ) {
   const columns: PdfTableColumn[] = [
-    { header: "Title Name", width: 160 },
-    { header: "Contact Person(s)", width: 130 },
-    { header: "Social Assets", width: 70, align: "right" },
-    { header: "Social Cost", width: 70, align: "right" },
-    { header: "Loc Assets", width: 70, align: "right" },
-    { header: "Territory/Variant", width: 85, align: "right" },
-    { header: "Loc Cost", width: 70, align: "right" },
+    { header: "Title Name", width: 120 },
+    { header: "Contact Person(s)", width: 105 },
+    { header: "PO Number", width: 70 },
+    { header: "Social Assets", width: 60, align: "right" },
+    { header: "Social Cost", width: 60, align: "right" },
+    { header: "Loc Assets", width: 60, align: "right" },
+    { header: "Territory/Variant", width: 75, align: "right" },
+    { header: "Loc Cost", width: 60, align: "right" },
   ];
   const rowValues = (row: UniversalBillingSummaryData["rows"][number]) => [
     row.titleName,
     formatContactPersonsForExport(row.contactPersons),
+    row.poNumber || "-",
     row.socialAssets,
     formatUsd(row.socialCost),
     row.localizationAssets,

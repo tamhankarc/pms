@@ -25,4 +25,5 @@ export type CurrentUser = {
   extraMenuKeys?: string[];
   email?: string;
   fullName?: string | null;
+  shift?: "DAY" | "NIGHT" | null;
 };

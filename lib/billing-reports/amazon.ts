@@ -247,18 +247,11 @@ export const UNIVERSAL_REPORTS: Partial<
     kind: "time-entry",
   },
   "billing-summary": {
-    title: "Billing Summary",
+    title: "Billing Summary & History",
     projectName: "UNI Social Localization",
     includeLanguage: false,
     includeCountry: true,
     kind: "time-entry-summary",
-  },
-  "billing-history": {
-    title: "Billing Summary & History",
-    projectName: "",
-    includeLanguage: false,
-    includeCountry: false,
-    kind: "billing-history",
   },
 };
 
@@ -1047,6 +1040,7 @@ export type UniversalBillingSummaryRow = {
   localizationAssets: number;
   localizationCountries: number;
   localizationCost: number;
+  poNumber: string;
   contactPersons: BillingReportContactPerson[];
 };
 
@@ -1133,6 +1127,72 @@ export async function getUniversalBillingSummaryData({
   });
 
   const summaryProjectIds = summaryProjects.map((project) => project.id);
+  const poNumberByMovie = new Map<string, string>();
+  const poNumberByProject = new Map<string, string>();
+  const poNumberByReport = new Map<string, string>();
+  const poNumberByMovieProject = new Map<string, string>();
+  const poNumberByMovieReport = new Map<string, string>();
+  const poAssignments = await db.purchaseOrderAssignment.findMany({
+    where: {
+      clientId,
+      purchaseOrder: { status: { not: "CANCELLED" } },
+    },
+    select: {
+      movieId: true,
+      projectId: true,
+      billingReportType: true,
+      purchaseOrder: { select: { poNumber: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  for (const assignment of poAssignments) {
+    const poNumber = assignment.purchaseOrder.poNumber;
+    if (assignment.movieId && !poNumberByMovie.has(assignment.movieId)) {
+      poNumberByMovie.set(assignment.movieId, poNumber);
+    }
+    if (assignment.projectId && !poNumberByProject.has(assignment.projectId)) {
+      poNumberByProject.set(assignment.projectId, poNumber);
+    }
+    if (
+      assignment.billingReportType &&
+      !poNumberByReport.has(assignment.billingReportType)
+    ) {
+      poNumberByReport.set(assignment.billingReportType, poNumber);
+    }
+    if (assignment.movieId && assignment.projectId) {
+      const key = `${assignment.movieId}:${assignment.projectId}`;
+      if (!poNumberByMovieProject.has(key)) {
+        poNumberByMovieProject.set(key, poNumber);
+      }
+    }
+    if (assignment.movieId && assignment.billingReportType) {
+      const key = `${assignment.movieId}:${assignment.billingReportType}`;
+      if (!poNumberByMovieReport.has(key)) {
+        poNumberByMovieReport.set(key, poNumber);
+      }
+    }
+  }
+
+  const getSummaryPoNumber = (movieId: string) => {
+    const values = new Set<string>();
+    const add = (value: string | undefined) => {
+      if (value) values.add(value);
+    };
+
+    add(poNumberByMovieReport.get(`${movieId}:billing-summary`));
+    for (const projectId of summaryProjectIds) {
+      add(poNumberByMovieProject.get(`${movieId}:${projectId}`));
+    }
+    add(poNumberByMovie.get(movieId));
+    add(poNumberByReport.get("billing-summary"));
+    for (const projectId of summaryProjectIds) {
+      add(poNumberByProject.get(projectId));
+    }
+
+    return values.size ? Array.from(values).join(", ") : "-";
+  };
+
   const socialProject = summaryProjects.find(
     (project) => project.id === UNIVERSAL_SOCIAL_QC_PROJECT_ID,
   );
@@ -1251,6 +1311,7 @@ export async function getUniversalBillingSummaryData({
           localizationCost:
             getUniversalCategoryCost(localizationAssets, localizationProject) *
             localizationCountries,
+          poNumber: getSummaryPoNumber(value.movieId),
           contactPersons: value.contactPersons,
         } satisfies UniversalBillingSummaryRow;
       })

@@ -6,7 +6,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
-import type { FunctionalRoleCode, UserType } from "@prisma/client";
+import type { FunctionalRoleCode, ShiftType, UserType } from "@prisma/client";
 import type { MenuKey } from "@/lib/menu-access";
 import { parseMenuKeysJson } from "@/lib/menu-access";
 
@@ -19,6 +19,7 @@ export type SessionUser = {
   designation?: string | null;
   userType: UserType;
   functionalRole: FunctionalRoleCode | "UNASSIGNED";
+  shift?: ShiftType | null;
   extraMenuKeys?: MenuKey[];
 };
 
@@ -67,17 +68,27 @@ export async function getSession() {
   try {
     const { payload } = await jwtVerify(token, getSecret());
     const session = payload as unknown as SessionUser;
+    const currentYear = new Date().getFullYear();
 
     if (session.id) {
       const user = await db.user.findUnique({
         where: { id: session.id },
-        select: { extraMenuItemsJson: true, isActive: true },
+        select: {
+          extraMenuItemsJson: true,
+          isActive: true,
+          leaveYearProfiles: {
+            where: { year: currentYear },
+            select: { shift: true },
+            take: 1,
+          },
+        }
       });
 
       if (!user?.isActive) return null;
 
       return {
         ...session,
+        shift: user.leaveYearProfiles[0]?.shift ?? session.shift ?? null,
         extraMenuKeys: parseMenuKeysJson(user.extraMenuItemsJson),
       };
     }
@@ -130,6 +141,7 @@ export async function requireUserTypesForAction(userTypes: UserType[]) {
 
 export async function authenticate(usernameOrEmail: string, password: string) {
   const normalizedInput = usernameOrEmail.trim().toLowerCase();
+  const currentYear = new Date().getFullYear();
   const user = await db.user.findFirst({
     where: {
       OR: [{ email: normalizedInput }, { username: normalizedInput }],
@@ -144,6 +156,11 @@ export async function authenticate(usernameOrEmail: string, password: string) {
       functionalRole: true,
       passwordHash: true,
       isActive: true,
+      leaveYearProfiles: {
+        where: { year: currentYear },
+        select: { shift: true },
+        take: 1,
+      },
       extraMenuItemsJson: true,
     },
   });
@@ -162,6 +179,7 @@ export async function authenticate(usernameOrEmail: string, password: string) {
     designation: user.designation ?? null,
     userType: user.userType,
     functionalRole: user.functionalRole ?? "UNASSIGNED",
+    shift: user.leaveYearProfiles[0]?.shift ?? null,
     extraMenuKeys: parseMenuKeysJson(user.extraMenuItemsJson),
   } satisfies SessionUser;
 }
