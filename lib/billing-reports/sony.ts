@@ -69,6 +69,8 @@ export type SonyBillingSummaryHistoryFilters = {
   year: string;
   projectMonth?: string;
   portalsMonth?: string;
+  dvdMonth?: string;
+  newsletterMonth?: string;
 };
 export type SonyBillingSummaryHistoryReportValue = {
   reportType: string;
@@ -87,11 +89,22 @@ export type SonyBillingSummaryHistoryRow = {
   poNumber: string;
   reportValues: SonyBillingSummaryHistoryReportValue[];
 };
+export type SonyBillingSummaryHistoryNewsletterRow = {
+  newsletterType: string;
+  count?: number;
+  cost: number;
+  poNumber: string;
+  billingMonth?: string;
+  billingDate?: string;
+};
+
 export type SonyBillingSummaryHistoryData = {
   client: { id: string; name: string };
   filters: SonyBillingSummaryHistoryFilters;
   summaryRows: SonyBillingSummaryHistoryRow[];
   historyRows: SonyBillingSummaryHistoryRow[];
+  newsletterRows: SonyBillingSummaryHistoryNewsletterRow[];
+  newsletterHistoryRows: SonyBillingSummaryHistoryNewsletterRow[];
 };
 
 function getParamValue(
@@ -116,9 +129,27 @@ export function buildSonyBillingSummaryHistoryFilters(
   searchParams: URLSearchParams | Record<string, string | string[] | undefined>,
 ) {
   const currentYear = String(new Date().getFullYear());
+  const currentMonth = `${currentYear}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
   const year = getParamValue(searchParams, "year") || currentYear;
+  const projectMonth =
+    getParamValue(searchParams, "projectMonth") || currentMonth;
+  const portalsMonth =
+    getParamValue(searchParams, "portalsMonth") || projectMonth;
+  const dvdMonth = getParamValue(searchParams, "dvdMonth") || portalsMonth;
+  const newsletterMonth =
+    getParamValue(searchParams, "newsletterMonth") || projectMonth;
   return {
     year: /^\d{4}$/.test(year) ? year : currentYear,
+    projectMonth: /^\d{4}-\d{2}$/.test(projectMonth)
+      ? projectMonth
+      : currentMonth,
+    portalsMonth: /^\d{4}-\d{2}$/.test(portalsMonth)
+      ? portalsMonth
+      : currentMonth,
+    dvdMonth: /^\d{4}-\d{2}$/.test(dvdMonth) ? dvdMonth : currentMonth,
+    newsletterMonth: /^\d{4}-\d{2}$/.test(newsletterMonth)
+      ? newsletterMonth
+      : currentMonth,
   } satisfies SonyBillingSummaryHistoryFilters;
 }
 
@@ -749,7 +780,7 @@ export async function getSonyPicturesReportData({
     ).sort((a, b) => a.localeCompare(b));
     const calculatedCost = calculateProjectCost(
       project,
-      minutesByProject.get(project.id) ?? 0,
+      Number(minutesByProject.get(project.id) ?? 0),
       countries.length,
       hourlyCost,
       variant === "canada-other",
@@ -875,7 +906,6 @@ export async function getSonyBillingSummaryHistoryData({
   const reportDefinitions = [
     ["spe-main", "SPE Billing"],
     ["canada-other", "SPE US Ticketing, Canada & Other"],
-    ["newsletters", "Newsletters"],
   ] as const;
   const mapRow = async (
     movie: (typeof summaryMovies)[number],
@@ -904,6 +934,84 @@ export async function getSonyBillingSummaryHistoryData({
       })),
     ),
   });
+  const newsletterMonth = filters.newsletterMonth || defaultMonthValue();
+  const newsletterReport = await getSonyNewsletterBillingData({
+    clientId,
+    filters: { month: newsletterMonth },
+  });
+  const newsletterTypes = (newsletterReport?.rows ?? []).map(
+    (row) => row.newsletterType,
+  );
+  const newsletterPoAssignments = newsletterTypes.length
+    ? await db.purchaseOrderAssignment.findMany({
+        where: {
+          clientId,
+          projectId: SONY_NEWSLETTER_PROJECT_ID,
+          billingReportType: { in: newsletterTypes },
+          purchaseOrder: { status: { not: "CANCELLED" } },
+        },
+        select: {
+          billingReportType: true,
+          purchaseOrder: { select: { poNumber: true } },
+        },
+      })
+    : [];
+  const poByNewsletterType = new Map<string, string>();
+  for (const assignment of newsletterPoAssignments) {
+    if (
+      assignment.billingReportType &&
+      !poByNewsletterType.has(assignment.billingReportType)
+    ) {
+      poByNewsletterType.set(
+        assignment.billingReportType,
+        assignment.purchaseOrder.poNumber,
+      );
+    }
+  }
+  const newsletterRows = (newsletterReport?.rows ?? []).map((row) => ({
+    newsletterType: row.newsletterType,
+    count: row.count,
+    cost: row.cost,
+    billingMonth: newsletterMonth,
+    poNumber: poByNewsletterType.get(row.newsletterType) ?? "-",
+  }));
+
+  const newsletterHistoryRecords = await db.billingRecord.findMany({
+    where: {
+      clientId,
+      projectId: SONY_NEWSLETTER_PROJECT_ID,
+      billingYear: year,
+    },
+    include: {
+      purchaseOrder: {
+        select: {
+          poNumber: true,
+          assignments: {
+            where: { projectId: SONY_NEWSLETTER_PROJECT_ID },
+            select: { billingReportType: true },
+            take: 1,
+          },
+        },
+      },
+    },
+    orderBy: [
+      { billingYear: "desc" },
+      { billingMonth: "desc" },
+      { billingDate: "desc" },
+    ],
+  });
+  const newsletterHistoryRows = newsletterHistoryRecords.map((record) => ({
+    newsletterType:
+      record.purchaseOrder?.assignments[0]?.billingReportType ?? "Unspecified",
+    cost: Number(record.amount ?? 0),
+    poNumber: record.purchaseOrder?.poNumber ?? "-",
+    billingMonth:
+      record.billingYear && record.billingMonth
+        ? `${record.billingYear}-${String(record.billingMonth).padStart(2, "0")}`
+        : undefined,
+    billingDate: formatDisplayDate(record.billingDate),
+  }));
+
   return {
     client,
     filters,
@@ -911,6 +1019,8 @@ export async function getSonyBillingSummaryHistoryData({
     historyRows: await Promise.all(
       historyMovies.map((movie) => mapRow(movie, true)),
     ),
+    newsletterRows,
+    newsletterHistoryRows,
   };
 }
 

@@ -14,6 +14,7 @@ const baseSchema = z.object({
   clientId: z.string().optional(),
   projectTypeId: z.string().optional().nullable(),
   contactPersonId: z.string().optional().nullable(),
+  contactPersonIds: z.array(z.string()).optional(),
   name: z.string().min(2, "Project name is required."),
   billingModel: z.enum([
     "HOURLY",
@@ -23,7 +24,8 @@ const baseSchema = z.object({
     "FIXED_COST",
   ]),
   billingCycle: z.enum(["ONE_TIME", "MONTHLY"]).default("ONE_TIME"),
-  warnerProjectType: z.enum(["OTHER", "PORTAL"]).default("OTHER"),
+  warnerProjectType: z.enum(["OTHER", "PORTAL", "DVD"]).default("OTHER"),
+  sonyProjectType: z.enum(["OTHER", "NEWSLETTERS"]).default("OTHER"),
   fixedContractHours: z.coerce.number().nonnegative().optional(),
   fixedMonthlyHours: z.coerce.number().nonnegative().optional(),
   additionalCharges: z.coerce
@@ -241,10 +243,15 @@ export async function createProjectAction(
       clientId: String(formData.get("clientId") ?? ""),
       projectTypeId: String(formData.get("projectTypeId") ?? "") || null,
       contactPersonId: String(formData.get("contactPersonId") ?? "") || null,
+      contactPersonIds: formData
+        .getAll("contactPersonIds")
+        .map(String)
+        .filter(Boolean),
       name: String(formData.get("name") ?? ""),
       billingModel: formData.get("billingModel"),
       billingCycle: formData.get("billingCycle") || "ONE_TIME",
       warnerProjectType: formData.get("warnerProjectType") || "OTHER",
+      sonyProjectType: formData.get("sonyProjectType") || "OTHER",
       fixedContractHours: formData.get("fixedContractHours") || 0,
       fixedMonthlyHours: formData.get("fixedMonthlyHours") || 0,
       additionalCharges: formData.get("additionalCharges") || 0,
@@ -317,15 +324,25 @@ export async function createProjectAction(
         error: "Selected project type is invalid for the chosen client.",
       };
 
-    if (parsed.data.contactPersonId) {
-      const contactPerson = await db.contactPerson.findFirst({
-        where: { id: parsed.data.contactPersonId, clientId: client.id },
-        select: { id: true },
+    const contactPersonIds = Array.from(
+      new Set(
+        (parsed.data.contactPersonIds?.length
+          ? parsed.data.contactPersonIds
+          : parsed.data.contactPersonId
+            ? [parsed.data.contactPersonId]
+            : []
+        ).filter(Boolean),
+      ),
+    );
+    if (contactPersonIds.length) {
+      const contactPersonCount = await db.contactPerson.count({
+        where: { id: { in: contactPersonIds }, clientId: client.id },
       });
-      if (!contactPerson)
+      if (contactPersonCount !== contactPersonIds.length)
         return {
           success: false,
-          error: "Selected contact person does not belong to selected client.",
+          error:
+            "One or more selected contact persons do not belong to selected client.",
         };
     }
 
@@ -334,16 +351,15 @@ export async function createProjectAction(
     const project = await db.project.create({
       data: {
         clientId: client.id,
-        contactPersonId: parsed.data.contactPersonId || null,
+        contactPersonId: contactPersonIds[0] || null,
+        contactPersons: contactPersonIds.length
+          ? { connect: contactPersonIds.map((id) => ({ id })) }
+          : undefined,
         projectTypeId: parsed.data.projectTypeId || null,
         name: parsed.data.name.trim(),
         code: projectCode,
         billingModel: parsed.data.billingModel,
         billingCycle: parsed.data.billingCycle,
-        warnerProjectType:
-          client.id === WARNER_BROS_CLIENT_ID
-            ? parsed.data.warnerProjectType
-            : "OTHER",
         fixedContractHours:
           parsed.data.billingModel === "FIXED_FULL" && isAdminUser
             ? (parsed.data.fixedContractHours ?? 0)
@@ -421,6 +437,12 @@ export async function createProjectAction(
       parsed.data.billingModel,
       formData,
     );
+    if (client.id === WARNER_BROS_CLIENT_ID) {
+      await db.$executeRaw`UPDATE Project SET warnerProjectType = ${parsed.data.warnerProjectType} WHERE id = ${project.id}`;
+    }
+    if (client.id === SONY_PICTURES_CLIENT_ID) {
+      await db.$executeRaw`UPDATE Project SET sonyProjectType = ${parsed.data.sonyProjectType} WHERE id = ${project.id}`;
+    }
     await saveFilmikResourceCounts(project.id, client.id, formData);
 
     revalidatePath("/projects");
@@ -479,10 +501,15 @@ export async function updateProjectAction(
     const parsed = projectUpdateSchema.safeParse({
       projectTypeId: String(formData.get("projectTypeId") ?? "") || null,
       contactPersonId: String(formData.get("contactPersonId") ?? "") || null,
+      contactPersonIds: formData
+        .getAll("contactPersonIds")
+        .map(String)
+        .filter(Boolean),
       name: String(formData.get("name") ?? ""),
       billingModel: formData.get("billingModel"),
       billingCycle: formData.get("billingCycle") || "ONE_TIME",
       warnerProjectType: formData.get("warnerProjectType") || "OTHER",
+      sonyProjectType: formData.get("sonyProjectType") || "OTHER",
       fixedContractHours: formData.get("fixedContractHours") || 0,
       fixedMonthlyHours: formData.get("fixedMonthlyHours") || 0,
       additionalCharges: formData.get("additionalCharges") || 0,
@@ -552,15 +579,25 @@ export async function updateProjectAction(
         error: "Selected project type is invalid for the chosen client.",
       };
 
-    if (parsed.data.contactPersonId) {
-      const contactPerson = await db.contactPerson.findFirst({
-        where: { id: parsed.data.contactPersonId, clientId: client.id },
-        select: { id: true },
+    const contactPersonIds = Array.from(
+      new Set(
+        (parsed.data.contactPersonIds?.length
+          ? parsed.data.contactPersonIds
+          : parsed.data.contactPersonId
+            ? [parsed.data.contactPersonId]
+            : []
+        ).filter(Boolean),
+      ),
+    );
+    if (contactPersonIds.length) {
+      const contactPersonCount = await db.contactPerson.count({
+        where: { id: { in: contactPersonIds }, clientId: client.id },
       });
-      if (!contactPerson)
+      if (contactPersonCount !== contactPersonIds.length)
         return {
           success: false,
-          error: "Selected contact person does not belong to selected client.",
+          error:
+            "One or more selected contact persons do not belong to selected client.",
         };
     }
 
@@ -570,14 +607,11 @@ export async function updateProjectAction(
       where: { id: projectId },
       data: {
         projectTypeId: parsed.data.projectTypeId || null,
-        contactPersonId: parsed.data.contactPersonId || null,
+        contactPersonId: contactPersonIds[0] || null,
+        contactPersons: { set: contactPersonIds.map((id) => ({ id })) },
         name: parsed.data.name.trim(),
         billingModel: parsed.data.billingModel,
         billingCycle: parsed.data.billingCycle,
-        warnerProjectType:
-          existingProject.clientId === WARNER_BROS_CLIENT_ID
-            ? parsed.data.warnerProjectType
-            : "OTHER",
         fixedContractHours:
           parsed.data.billingModel === "FIXED_FULL"
             ? isAdminUser
@@ -677,6 +711,12 @@ export async function updateProjectAction(
         parsed.data.billingModel,
         formData,
       );
+    }
+    if (existingProject.clientId === WARNER_BROS_CLIENT_ID) {
+      await db.$executeRaw`UPDATE Project SET warnerProjectType = ${parsed.data.warnerProjectType} WHERE id = ${projectId}`;
+    }
+    if (existingProject.clientId === SONY_PICTURES_CLIENT_ID) {
+      await db.$executeRaw`UPDATE Project SET sonyProjectType = ${parsed.data.sonyProjectType} WHERE id = ${projectId}`;
     }
     await saveFilmikResourceCounts(projectId, client.id, formData);
 

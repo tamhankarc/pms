@@ -19,7 +19,11 @@ export function isLeaveAllowedUser(user: {
 }) {
   if (user.isActive === false) return false;
   if (
-    ["ADMIN", "OPERATIONS", "REPORT_VIEWER", "ACCOUNTS"].includes(user.userType)
+    ["OPERATIONS", "REPORT_VIEWER", "ACCOUNTS"].includes(user.userType)
+  )
+    return false;
+  if (
+    ["ADMIN"].includes(user.userType) && user.functionalRole !== "PROJECT_MANAGER"
   )
     return false;
   return true;

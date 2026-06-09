@@ -31,7 +31,9 @@ type PurchaseOrderProjectOption = {
   billingCycle: string;
   client: {
     name: string;
+    showNewslettersInEntries: boolean;
   };
+  hideNewslettersInEntries: boolean;
   newsletters: {
     newsletterType: string | null;
   }[];
@@ -39,6 +41,11 @@ type PurchaseOrderProjectOption = {
 
 type PurchaseOrderAssignmentItem = {
   movieId: string | null;
+};
+
+type PurchaseOrderNewsletterOption = {
+  clientId: string;
+  newsletterType: string | null;
 };
 
 function toFormAssignmentMode(value?: string | null): AssignmentMode {
@@ -71,7 +78,7 @@ export default async function EditPurchaseOrderPage({
 
   const { id } = await params;
 
-  const [clients, movies, projects, po] = await Promise.all([
+  const [clients, movies, projects, newsletters, po] = await Promise.all([
     db.client.findMany({
       where: {
         isActive: true,
@@ -94,6 +101,7 @@ export default async function EditPurchaseOrderPage({
         client: {
           select: {
             name: true,
+            showNewslettersInEntries: true,
           },
         },
       },
@@ -116,13 +124,13 @@ export default async function EditPurchaseOrderPage({
         client: {
           select: {
             name: true,
+            showNewslettersInEntries: true,
           },
         },
         newsletters: {
           select: {
             newsletterType: true,
           },
-          take: 1,
         },
       },
       orderBy: [
@@ -136,6 +144,11 @@ export default async function EditPurchaseOrderPage({
         },
       ],
     }),
+    db.newsletter.findMany({
+      where: { isActive: true, newsletterType: { not: null } },
+      select: { clientId: true, newsletterType: true },
+      orderBy: { name: "asc" },
+    }),
     db.purchaseOrder.findUnique({
       where: {
         id,
@@ -148,6 +161,15 @@ export default async function EditPurchaseOrderPage({
 
   if (!po) {
     notFound();
+  }
+
+  const newsletterTypesByClient = new Map<string, string[]>();
+  for (const newsletter of newsletters as PurchaseOrderNewsletterOption[]) {
+    if (!newsletter.newsletterType) continue;
+    const values = newsletterTypesByClient.get(newsletter.clientId) ?? [];
+    if (!values.includes(newsletter.newsletterType))
+      values.push(newsletter.newsletterType);
+    newsletterTypesByClient.set(newsletter.clientId, values);
   }
 
   const assignment = po.assignments[0];
@@ -179,6 +201,10 @@ export default async function EditPurchaseOrderPage({
             clientId: project.clientId,
             clientName: project.client.name,
             newsletterType: project.newsletters[0]?.newsletterType ?? null,
+            newsletterTypes:
+              newsletterTypesByClient.get(project.clientId) ?? [],
+            showNewslettersInEntries: project.client.showNewslettersInEntries,
+            hideNewslettersInEntries: project.hideNewslettersInEntries,
             billingCycle: project.billingCycle,
           }))}
           action={updatePurchaseOrderAction}
@@ -201,7 +227,16 @@ export default async function EditPurchaseOrderPage({
               .map((item: PurchaseOrderAssignmentItem) => item.movieId)
               .filter((value): value is string => Boolean(value)),
             projectId: assignment?.projectId ?? "",
-            billingReportType: assignment?.billingReportType ?? "",
+            billingReportType:
+              assignment?.assignmentMode === "TITLE_BILLING_REPORT" ||
+              assignment?.assignmentMode === "BILLING_REPORT"
+                ? (assignment?.billingReportType ?? "")
+                : "",
+            newsletterType:
+              assignment?.assignmentMode === "TITLE_PROJECT" ||
+              assignment?.assignmentMode === "PROJECT"
+                ? (assignment?.billingReportType ?? "")
+                : "",
             billingMonth:
               assignment?.billingYear && assignment?.billingMonth
                 ? `${assignment.billingYear}-${String(assignment.billingMonth).padStart(2, "0")}`

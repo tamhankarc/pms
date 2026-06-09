@@ -24,10 +24,17 @@ type PurchaseOrderProjectOption = {
   billingCycle: string;
   client: {
     name: string;
+    showNewslettersInEntries: boolean;
   };
+  hideNewslettersInEntries: boolean;
   newsletters: {
     newsletterType: string | null;
   }[];
+};
+
+type PurchaseOrderNewsletterOption = {
+  clientId: string;
+  newsletterType: string | null;
 };
 
 export default async function NewPurchaseOrderPage() {
@@ -37,7 +44,7 @@ export default async function NewPurchaseOrderPage() {
     redirect("/dashboard");
   }
 
-  const [clients, movies, projects] = await Promise.all([
+  const [clients, movies, projects, newsletters] = await Promise.all([
     db.client.findMany({
       where: {
         isActive: true,
@@ -60,6 +67,7 @@ export default async function NewPurchaseOrderPage() {
         client: {
           select: {
             name: true,
+            showNewslettersInEntries: true,
           },
         },
       },
@@ -82,13 +90,13 @@ export default async function NewPurchaseOrderPage() {
         client: {
           select: {
             name: true,
+            showNewslettersInEntries: true,
           },
         },
         newsletters: {
           select: {
             newsletterType: true,
           },
-          take: 1,
         },
       },
       orderBy: [
@@ -102,7 +110,21 @@ export default async function NewPurchaseOrderPage() {
         },
       ],
     }),
+    db.newsletter.findMany({
+      where: { isActive: true, newsletterType: { not: null } },
+      select: { clientId: true, newsletterType: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
+
+  const newsletterTypesByClient = new Map<string, string[]>();
+  for (const newsletter of newsletters as PurchaseOrderNewsletterOption[]) {
+    if (!newsletter.newsletterType) continue;
+    const values = newsletterTypesByClient.get(newsletter.clientId) ?? [];
+    if (!values.includes(newsletter.newsletterType))
+      values.push(newsletter.newsletterType);
+    newsletterTypesByClient.set(newsletter.clientId, values);
+  }
 
   return (
     <div className="space-y-6">
@@ -131,6 +153,10 @@ export default async function NewPurchaseOrderPage() {
             clientId: project.clientId,
             clientName: project.client.name,
             newsletterType: project.newsletters[0]?.newsletterType ?? null,
+            newsletterTypes:
+              newsletterTypesByClient.get(project.clientId) ?? [],
+            showNewslettersInEntries: project.client.showNewslettersInEntries,
+            hideNewslettersInEntries: project.hideNewslettersInEntries,
             billingCycle: project.billingCycle,
           }))}
           action={createPurchaseOrderAction}

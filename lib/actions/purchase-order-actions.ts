@@ -32,6 +32,7 @@ const purchaseOrderSchema = z.object({
   projectId: z.string().optional(),
   billingReportType: z.string().optional(),
   billingMonth: z.string().optional(),
+  newsletterType: z.string().optional(),
 });
 
 function parseBillingMonth(value?: string) {
@@ -75,6 +76,7 @@ function getFormValues(formData: FormData) {
     projectId: String(formData.get("projectId") ?? ""),
     billingReportType: String(formData.get("billingReportType") ?? ""),
     billingMonth: String(formData.get("billingMonth") ?? ""),
+    newsletterType: String(formData.get("newsletterType") ?? ""),
   };
 }
 
@@ -120,7 +122,13 @@ async function validateAssignmentPayload(
     if (!data.projectId) throw new Error("Project is required.");
     const project = await db.project.findFirst({
       where: { id: data.projectId, clientId: data.clientId },
-      select: { id: true, billingCycle: true },
+      select: {
+        id: true,
+        billingCycle: true,
+        hideNewslettersInEntries: true,
+        client: { select: { showNewslettersInEntries: true } },
+        newsletters: { select: { newsletterType: true } },
+      },
     });
     if (!project)
       throw new Error("Selected project does not belong to selected client.");
@@ -129,6 +137,31 @@ async function validateAssignmentPayload(
       !/^\d{4}-\d{2}$/.test(data.billingMonth || "")
     )
       throw new Error("Billing month is required for monthly projects.");
+    const availableNewsletterTypes = Array.from(
+      new Set(
+        project.newsletters
+          .map((newsletter) => newsletter.newsletterType)
+          .filter(
+            (value): value is NonNullable<typeof value> => Boolean(value),
+          )
+          .map(String),
+      ),
+    );
+    const requiresNewsletterType = Boolean(
+      project.client.showNewslettersInEntries &&
+      !project.hideNewslettersInEntries &&
+      availableNewsletterTypes.length,
+    );
+    if (requiresNewsletterType) {
+      if (!data.newsletterType)
+        throw new Error(
+          "Newsletter type is required for the selected project.",
+        );
+      if (!availableNewsletterTypes.includes(data.newsletterType))
+        throw new Error(
+          "Selected newsletter type is invalid for the selected project.",
+        );
+    }
   }
 }
 
@@ -195,7 +228,10 @@ async function savePurchaseOrder(
         parsed.data.assignmentMode === "TITLE_BILLING_REPORT" ||
         parsed.data.assignmentMode === "BILLING_REPORT"
           ? parsed.data.billingReportType || null
-          : null,
+          : parsed.data.assignmentMode === "TITLE_PROJECT" ||
+              parsed.data.assignmentMode === "PROJECT"
+            ? parsed.data.newsletterType || null
+            : null,
       billingMonth,
       billingYear,
     })),

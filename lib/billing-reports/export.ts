@@ -8,6 +8,7 @@ import {
   getExportTimestamp,
   sanitizeFileSegment,
 } from "@/lib/billing-reports/amazon";
+import { FILMIK_CLIENT_ID } from "@/lib/billing-reports/config";
 import type {
   GenericBillingReportData,
   GenericBillingSummaryHistoryData,
@@ -990,31 +991,70 @@ export function buildAmazonReportFileName(
 }
 
 export function buildWarnerPortalReportExcel(data: WarnerPortalReportData) {
+  const hasHourlyRows = data.rows.some((row) => row.billingModel === "Hourly");
+  const worksheets = [
+    worksheet(data.reportTitle, [
+      excelRow([data.client.name]),
+      excelRow(["Report", data.reportTitle]),
+      excelRow(["Billing Month", data.filters.month]),
+      excelRow([]),
+      excelRow(["Project", ...(hasHourlyRows ? ["Hours"] : []), "Cost"]),
+      ...data.rows.map((row) =>
+        excelRow(
+          [
+            row.projectName,
+            ...(hasHourlyRows
+              ? [row.billingModel === "Hourly" ? row.totalHours : "-"]
+              : []),
+            row.cost,
+          ],
+          hasHourlyRows ? [1, 2] : [1],
+        ),
+      ),
+      excelRow([]),
+      excelRow(
+        ["Total", ...(hasHourlyRows ? [data.totalHours] : []), data.totalCost],
+        hasHourlyRows ? [1, 2] : [1],
+      ),
+    ]),
+  ];
+
+  for (const project of data.rows) {
+    worksheets.push(
+      worksheet(project.projectName.slice(0, 31), [
+        excelRow([project.projectName]),
+        excelRow(["Billing Month", data.filters.month]),
+        excelRow([]),
+        excelRow(["Date", "Task Name", "Task Description", "Hours"]),
+        ...project.detailRows.map((row) =>
+          excelRow(
+            [row.date, row.taskName, row.taskDescription, row.hours],
+            [3],
+          ),
+        ),
+        excelRow([]),
+        excelRow(["Total", "", "", project.totalHours], [3]),
+      ]),
+    );
+  }
+
   return `<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
- ${worksheet("Portals", [
-   excelRow([data.client.name]),
-   excelRow(["Report", data.reportTitle]),
-   excelRow(["Billing Month", data.filters.month]),
-   excelRow([]),
-   excelRow(["Project", "Hours", "Cost"]),
-   ...data.rows.map((row) =>
-     excelRow([row.projectName, row.totalHours, row.cost], [1, 2]),
-   ),
-   excelRow([]),
-   excelRow(["Total", data.totalHours, data.totalCost], [1, 2]),
- ])}
+ ${worksheets.join("\n")}
 </Workbook>`;
 }
 
 export function buildWarnerPortalReportPdf(data: WarnerPortalReportData) {
-  const commands: string[] = [];
-  commands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
-  commands.push(
+  const pageStreams: string[] = [];
+  const summaryCommands: string[] = [];
+  summaryCommands.push(
+    textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true),
+  );
+  summaryCommands.push(
     textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true),
   );
-  commands.push(
+  summaryCommands.push(
     textCommand(
       `Billing Month: ${data.filters.month}`,
       MARGIN_X,
@@ -1022,12 +1062,15 @@ export function buildWarnerPortalReportPdf(data: WarnerPortalReportData) {
       9,
     ),
   );
+  const hasHourlyRows = data.rows.some((row) => row.billingModel === "Hourly");
   const columns: PdfTableColumn[] = [
-    { header: "Project", width: 300 },
-    { header: "Hours", width: 110, align: "right" },
+    { header: "Project", width: hasHourlyRows ? 300 : 360 },
+    ...(hasHourlyRows
+      ? ([{ header: "Hours", width: 110, align: "right" }] as PdfTableColumn[])
+      : []),
     { header: "Cost", width: 120, align: "right" },
   ];
-  drawTableHeader(commands, columns, MARGIN_X, TOP_Y - 70);
+  drawTableHeader(summaryCommands, columns, MARGIN_X, TOP_Y - 70);
   let y = TOP_Y - 70 - HEADER_HEIGHT;
   const rows = data.rows.length
     ? data.rows.map((row) => [
@@ -1035,20 +1078,80 @@ export function buildWarnerPortalReportPdf(data: WarnerPortalReportData) {
         row.totalHours.toFixed(2),
         formatUsd(row.cost),
       ])
-    : [["No portal projects are available.", "", ""]];
+    : [["No projects are available.", "", ""]];
   for (const row of rows) {
-    drawTableRow(commands, columns, row, MARGIN_X, y, DETAIL_ROW_HEIGHT, 6.5);
+    drawTableRow(
+      summaryCommands,
+      columns,
+      row,
+      MARGIN_X,
+      y,
+      DETAIL_ROW_HEIGHT,
+      6.5,
+    );
     y -= DETAIL_ROW_HEIGHT;
     if (y < 50) break;
   }
-  return buildPdfDocument([commands.join("\n")]);
+  pageStreams.push(summaryCommands.join("\n"));
+
+  const detailColumns: PdfTableColumn[] = [
+    { header: "Date", width: 80 },
+    { header: "Task Name", width: 170 },
+    { header: "Task Description", width: 330 },
+    { header: "Hours", width: 80, align: "right" },
+  ];
+  for (const project of data.rows) {
+    const commands: string[] = [];
+    commands.push(textCommand(project.projectName, MARGIN_X, TOP_Y, 14, true));
+    commands.push(
+      textCommand(
+        `Billing Month: ${data.filters.month}`,
+        MARGIN_X,
+        TOP_Y - 20,
+        9,
+      ),
+    );
+    commands.push(
+      textCommand(
+        `Total: ${project.totalHours.toFixed(2)}h / ${formatUsd(project.cost)}`,
+        MARGIN_X,
+        TOP_Y - 36,
+        9,
+      ),
+    );
+    drawTableHeader(commands, detailColumns, MARGIN_X, TOP_Y - 64);
+    let detailY = TOP_Y - 64 - HEADER_HEIGHT;
+    const detailRows = project.detailRows.length
+      ? project.detailRows.map((row) => [
+          row.date,
+          row.taskName,
+          row.taskDescription,
+          row.hours.toFixed(2),
+        ])
+      : [["No time entries found.", "", "", ""]];
+    for (const row of detailRows) {
+      drawTableRow(
+        commands,
+        detailColumns,
+        row,
+        MARGIN_X,
+        detailY,
+        DETAIL_ROW_HEIGHT,
+        6.5,
+      );
+      detailY -= DETAIL_ROW_HEIGHT;
+      if (detailY < 50) break;
+    }
+    pageStreams.push(commands.join("\n"));
+  }
+  return buildPdfDocument(pageStreams);
 }
 
 export function getWarnerPortalReportFileName(
   data: WarnerPortalReportData,
   extension: "xls" | "pdf",
 ) {
-  return `${sanitizeFileSegment(data.client.name)}_Portals_${getExportTimestamp()}.${extension}`;
+  return `${sanitizeFileSegment(data.client.name)}_${sanitizeFileSegment(data.reportTitle)}_${getExportTimestamp()}.${extension}`;
 }
 
 export function buildWarnerDomesticReportExcel(
@@ -2938,15 +3041,15 @@ export function buildRoyalBillingReportExcel(data: RoyalBillingData) {
 
 export function buildRoyalBillingReportPdf(data: RoyalBillingData) {
   const columns: PdfTableColumn[] = [
-    { header: "Project", width: 120 },
-    { header: "Contact Person(s)", width: 130 },
-    { header: "Billing Model", width: 70 },
+    { header: "Project", width: 130 },
+    { header: "Contact Person(s)", width: 145 },
+    { header: "Billing Model", width: 75 },
     { header: "Hours", width: 55, align: "right" },
     { header: "Addl Hrs", width: 55, align: "right" },
-    { header: "Project Cost", width: 80, align: "right" },
-    { header: "Excess Hrs", width: 58, align: "right" },
-    { header: "Excess Cost", width: 80, align: "right" },
-    { header: "Total", width: 80, align: "right" },
+    { header: "Project Cost", width: 85, align: "right" },
+    { header: "Excess Hrs", width: 60, align: "right" },
+    { header: "Excess Cost", width: 85, align: "right" },
+    { header: "Total", width: 75, align: "right" },
   ];
   const rows: PdfTableRow[] = [
     ...data.rows.map(
@@ -3025,12 +3128,17 @@ function billingHistoryExcelRows(
 
   if (poAssignmentMode === "TITLE_PROJECT" || poAssignmentMode === "PROJECT") {
     const isTitleProject = poAssignmentMode === "TITLE_PROJECT";
+    const hideBillingModel = data.client.id === FILMIK_CLIENT_ID;
     const hasBillingMonth = rows.some((row) => row.billingMonth);
     const headers = [
       isTitleProject
         ? "Project - Title (Project Status)"
         : "Project (Project Status)",
-      ...(isTitleProject ? ["Title Status"] : ["Billing Model"]),
+      ...(isTitleProject
+        ? ["Title Status"]
+        : hideBillingModel
+          ? []
+          : ["Billing Model"]),
       "Cost",
       ...(hasBillingMonth ? ["Billing Month"] : []),
       "PO Number",
@@ -3041,13 +3149,21 @@ function billingHistoryExcelRows(
       ...rows.map((row) => {
         const values = [
           `${row.itemName} (${row.projectStatus ?? row.status})`,
-          isTitleProject ? (row.titleStatus ?? "-") : (row.billingModel ?? "-"),
+          ...(isTitleProject
+            ? [row.titleStatus ?? "-"]
+            : hideBillingModel
+              ? []
+              : [row.billingModel ?? "-"]),
           typeof row.cost === "number" ? row.cost : "-",
           ...(hasBillingMonth ? [row.billingMonth ?? "-"] : []),
           row.poNumber || "-",
           ...(includeAction ? ["Billing Done"] : []),
         ];
-        return excelRow(values, typeof row.cost === "number" ? [2] : []);
+        const costIndex = isTitleProject || !hideBillingModel ? 2 : 1;
+        return excelRow(
+          values,
+          typeof row.cost === "number" ? [costIndex] : [],
+        );
       }),
     ];
   }
@@ -3189,13 +3305,18 @@ function billingHistoryPdfPage(
     poAssignmentMode === "PROJECT"
   ) {
     const isTitleProject = poAssignmentMode === "TITLE_PROJECT";
+    const hideBillingModel = data.client.id === FILMIK_CLIENT_ID;
     const hasBillingMonth = rows.some((row) => row.billingMonth);
     columns = [
       {
         header: isTitleProject ? "Project - Title" : "Project",
         width: hasBillingMonth ? 195 : 230,
       },
-      { header: isTitleProject ? "Title Status" : "Billing Model", width: 105 },
+      ...(isTitleProject
+        ? ([{ header: "Title Status", width: 105 }] as PdfTableColumn[])
+        : hideBillingModel
+          ? []
+          : ([{ header: "Billing Model", width: 105 }] as PdfTableColumn[])),
       { header: "Cost", width: 90, align: "right" },
       ...(hasBillingMonth
         ? ([{ header: "Billing Month", width: 95 }] as PdfTableColumn[])
@@ -3204,7 +3325,11 @@ function billingHistoryPdfPage(
     ];
     tableRows = rows.map((row) => [
       `${row.itemName} (${row.projectStatus ?? row.status})`,
-      isTitleProject ? (row.titleStatus ?? "-") : (row.billingModel ?? "-"),
+      ...(isTitleProject
+        ? [row.titleStatus ?? "-"]
+        : hideBillingModel
+          ? []
+          : [row.billingModel ?? "-"]),
       typeof row.cost === "number" ? formatUsd(row.cost) : "-",
       ...(hasBillingMonth ? [row.billingMonth ?? "-"] : []),
       row.poNumber || "-",
@@ -3499,6 +3624,32 @@ function sonySummaryHistoryExcelRows(
   ];
 }
 
+function sonyNewsletterSummaryHistoryExcelRows(
+  rows: SonyBillingSummaryHistoryData["newsletterRows"],
+) {
+  return [
+    excelRow([
+      "Newsletter Type",
+      "Count",
+      "Billing Month/Date",
+      "Cost",
+      "PO Number",
+    ]),
+    ...rows.map((row) =>
+      excelRow(
+        [
+          row.newsletterType,
+          row.count ?? "-",
+          row.billingMonth ?? row.billingDate ?? "-",
+          row.cost,
+          row.poNumber || "-",
+        ],
+        [3],
+      ),
+    ),
+  ];
+}
+
 export function buildSonyBillingSummaryHistoryExcel(
   data: SonyBillingSummaryHistoryData,
 ) {
@@ -3513,12 +3664,28 @@ export function buildSonyBillingSummaryHistoryExcel(
    ...sonySummaryHistoryExcelRows(data.summaryRows, true),
  ])}
 
+ ${worksheet("Newsletters", [
+   excelRow([data.client.name]),
+   excelRow(["Report", "Newsletters"]),
+   excelRow(["Billing Month", data.filters.newsletterMonth ?? ""]),
+   excelRow([]),
+   ...sonyNewsletterSummaryHistoryExcelRows(data.newsletterRows),
+ ])}
+
  ${worksheet("Billing History", [
    excelRow([data.client.name]),
    excelRow(["Report", "Billing Summary & History"]),
    excelRow(["Year", data.filters.year]),
    excelRow([]),
    ...sonySummaryHistoryExcelRows(data.historyRows),
+ ])}
+
+ ${worksheet("Newsletters History", [
+   excelRow([data.client.name]),
+   excelRow(["Report", "Newsletters Billing History"]),
+   excelRow(["Year", data.filters.year]),
+   excelRow([]),
+   ...sonyNewsletterSummaryHistoryExcelRows(data.newsletterHistoryRows),
  ])}
 </Workbook>`;
 }
@@ -3569,15 +3736,61 @@ function sonySummaryHistoryPdfPage(
   return commands.join("\n");
 }
 
+function sonyNewsletterSummaryHistoryPdfPage(
+  data: SonyBillingSummaryHistoryData,
+  title: string,
+  rows: SonyBillingSummaryHistoryData["newsletterRows"],
+) {
+  const commands: string[] = [
+    textCommand(title, MARGIN_X, TOP_Y, 15, true),
+    textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true),
+    textCommand(`Year: ${data.filters.year}`, MARGIN_X, TOP_Y - 38, 9),
+  ];
+  const columns: PdfTableColumn[] = [
+    { header: "Newsletter Type", width: 165 },
+    { header: "Count", width: 75, align: "right" },
+    { header: "Billing Month/Date", width: 125 },
+    { header: "Cost", width: 95, align: "right" },
+    { header: "PO Number", width: 120 },
+  ];
+  const tableRows: PdfTableRow[] = rows.map((row) => [
+    row.newsletterType,
+    row.count ?? "-",
+    row.billingMonth ?? row.billingDate ?? "-",
+    formatUsd(row.cost),
+    row.poNumber || "-",
+  ]);
+  drawTableHeader(commands, columns, MARGIN_X, TOP_Y - 84);
+  let y = TOP_Y - 84 - HEADER_HEIGHT;
+  for (const row of tableRows.length
+    ? tableRows
+    : [["No records available", "", "", "", ""]]) {
+    drawTableRow(commands, columns, row, MARGIN_X, y, DETAIL_ROW_HEIGHT, 6.5);
+    y -= DETAIL_ROW_HEIGHT;
+    if (y < 50) break;
+  }
+  return commands.join("\n");
+}
+
 export function buildSonyBillingSummaryHistoryPdf(
   data: SonyBillingSummaryHistoryData,
 ) {
   return buildPdfDocument([
     sonySummaryHistoryPdfPage(data, "Billing Summary", data.summaryRows),
+    sonyNewsletterSummaryHistoryPdfPage(
+      data,
+      "Newsletters",
+      data.newsletterRows,
+    ),
     sonySummaryHistoryPdfPage(
       data,
       `${data.client.name} Billing Summary & History`,
       data.historyRows,
+    ),
+    sonyNewsletterSummaryHistoryPdfPage(
+      data,
+      "Newsletters Billing History",
+      data.newsletterHistoryRows,
     ),
   ]);
 }

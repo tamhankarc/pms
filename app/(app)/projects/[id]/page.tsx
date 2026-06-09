@@ -19,6 +19,7 @@ export default async function ProjectDetailPage({
     where: { id },
     include: {
       client: true,
+      contactPersons: { select: { id: true } },
       monthlyAdditionalHours: { orderBy: { month: "asc" } },
     },
   });
@@ -58,6 +59,12 @@ export default async function ProjectDetailPage({
         select: { id: true, clientId: true, name: true, email: true },
       }),
     ]);
+  const [projectSpecialTypes] = await db.$queryRaw<
+    Array<{
+      warnerProjectType?: "OTHER" | "PORTAL" | "DVD" | null;
+      sonyProjectType?: "OTHER" | "NEWSLETTERS" | null;
+    }>
+  >`SELECT warnerProjectType, sonyProjectType FROM Project WHERE id = ${project.id} LIMIT 1`;
   const filmikResourceTypes = filmikResourceTypesRaw.map((resource) => ({
     id: resource.id,
     name: resource.name,
@@ -104,10 +111,13 @@ export default async function ProjectDetailPage({
         initialValues={{
           projectTypeId: project.projectTypeId,
           contactPersonId: project.contactPersonId,
+          contactPersonIds: project.contactPersons.map((person) => person.id),
           name: project.name,
           billingModel: project.billingModel,
           billingCycle: project.billingCycle,
-          warnerProjectType: project.warnerProjectType,
+          warnerProjectType:
+            projectSpecialTypes?.warnerProjectType ?? project.warnerProjectType,
+          sonyProjectType: projectSpecialTypes?.sonyProjectType ?? "OTHER",
           fixedContractHours:
             project.fixedContractHours == null
               ? null

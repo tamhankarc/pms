@@ -7,6 +7,7 @@ import {
 } from "@/lib/actions/project-actions";
 import { FormLabel } from "@/components/ui/form-label";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 
 type ProjectType = {
   id: string;
@@ -35,7 +36,8 @@ type BillingModel =
   | "FIXED_PER_COUNTRY"
   | "FIXED_COST";
 type BillingCycle = "ONE_TIME" | "MONTHLY";
-type WarnerProjectType = "OTHER" | "PORTAL";
+type WarnerProjectType = "OTHER" | "PORTAL" | "DVD";
+type SonyProjectType = "OTHER" | "NEWSLETTERS";
 type ProjectStatus =
   | "DRAFT"
   | "ACTIVE"
@@ -85,10 +87,12 @@ export function ProjectEditForm({
   initialValues: {
     projectTypeId: string | null;
     contactPersonId: string | null;
+    contactPersonIds?: string[];
     name: string;
     billingModel: BillingModel;
     billingCycle: BillingCycle;
     warnerProjectType: WarnerProjectType;
+    sonyProjectType: SonyProjectType;
     fixedContractHours: number | null;
     fixedMonthlyHours: number | null;
     status: ProjectStatus;
@@ -123,11 +127,15 @@ export function ProjectEditForm({
   const [warnerProjectType, setWarnerProjectType] = useState<WarnerProjectType>(
     initialValues.warnerProjectType ?? "OTHER",
   );
+  const [sonyProjectType, setSonyProjectType] = useState<SonyProjectType>(
+    initialValues.sonyProjectType ?? "OTHER",
+  );
   const [projectTypeId, setProjectTypeId] = useState(
     initialValues.projectTypeId ?? "",
   );
-  const [contactPersonId, setContactPersonId] = useState(
-    initialValues.contactPersonId ?? "",
+  const [contactPersonIds, setContactPersonIds] = useState<string[]>(
+    initialValues.contactPersonIds ??
+      (initialValues.contactPersonId ? [initialValues.contactPersonId] : []),
   );
   const [status, setStatus] = useState<ProjectStatus>(initialValues.status);
   const [hideCountriesInEntries, setHideCountriesInEntries] = useState(
@@ -178,10 +186,18 @@ export function ProjectEditForm({
   return (
     <form action={formAction} className="card p-6">
       <input type="hidden" name="projectTypeId" value={projectTypeId} />
-      <input type="hidden" name="contactPersonId" value={contactPersonId} />
+      {contactPersonIds.map((id) => (
+        <input key={id} type="hidden" name="contactPersonIds" value={id} />
+      ))}
+      <input
+        type="hidden"
+        name="contactPersonId"
+        value={contactPersonIds[0] ?? ""}
+      />
       <input type="hidden" name="billingModel" value={billingModel} />
       <input type="hidden" name="billingCycle" value={billingCycle} />
       <input type="hidden" name="warnerProjectType" value={warnerProjectType} />
+      <input type="hidden" name="sonyProjectType" value={sonyProjectType} />
       <input type="hidden" name="status" value={status} />
       {hideCountriesInEntries ? (
         <input type="hidden" name="hideCountriesInEntries" value="on" />
@@ -235,13 +251,14 @@ export function ProjectEditForm({
         </div>
 
         <div className="md:col-span-2">
-          <FormLabel htmlFor="contactPersonId">Contact Person</FormLabel>
-          <SearchableCombobox
-            id="contactPersonId"
-            value={contactPersonId}
-            onValueChange={setContactPersonId}
+          <FormLabel htmlFor="contactPersonIds">Contact Person(s)</FormLabel>
+          <SearchableMultiSelect
+            id="contactPersonIds"
+            name="contactPersonIds"
+            value={contactPersonIds}
+            onValueChange={setContactPersonIds}
             options={contactPersonOptions}
-            placeholder="Select contact person"
+            placeholder="Select contact person(s)"
             searchPlaceholder="Search contact persons..."
             emptyLabel="No contact person found."
           />
@@ -340,6 +357,30 @@ export function ProjectEditForm({
               options={[
                 { value: "OTHER", label: "Other" },
                 { value: "PORTAL", label: "Portal" },
+                { value: "DVD", label: "DVD" },
+              ]}
+              placeholder="Select project type"
+              searchPlaceholder="Search project types..."
+              emptyLabel="No project type found."
+              required
+            />
+          </div>
+        ) : null}
+
+        {isSonyPicturesClient ? (
+          <div>
+            <FormLabel htmlFor="sonyProjectType" required>
+              Project type
+            </FormLabel>
+            <SearchableCombobox
+              id="sonyProjectType"
+              value={sonyProjectType}
+              onValueChange={(value) =>
+                setSonyProjectType(value as SonyProjectType)
+              }
+              options={[
+                { value: "OTHER", label: "Other" },
+                { value: "NEWSLETTERS", label: "Newsletters" },
               ]}
               placeholder="Select project type"
               searchPlaceholder="Search project types..."

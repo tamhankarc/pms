@@ -22,6 +22,7 @@ export type RoyalBillingRow = {
   excessHours: number;
   excessCost: number;
   totalCost: number;
+  poNumber: string;
 };
 export type RoyalBillingData = {
   client: { id: string; name: string; hourlyCost: number };
@@ -172,6 +173,36 @@ export async function getRoyalBillingReportData({
   if (!client) return null;
   const range = royalMonthRange(filters.month);
   const projectIds = client.projects.map((project) => project.id);
+  const poAssignments = projectIds.length
+    ? await db.purchaseOrderAssignment.findMany({
+        where: {
+          clientId,
+          projectId: { in: projectIds },
+          OR: [
+            { billingMonth: Number(filters.month.slice(5, 7)), billingYear: Number(filters.month.slice(0, 4)) },
+            { billingMonth: null, billingYear: null },
+          ],
+          purchaseOrder: { status: { not: "CANCELLED" } },
+        },
+        select: {
+          projectId: true,
+          billingMonth: true,
+          billingYear: true,
+          purchaseOrder: { select: { poNumber: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
+  const poByProject = new Map<string, string>();
+  for (const assignment of poAssignments) {
+    if (!assignment.projectId) continue;
+    const isMonthSpecific =
+      assignment.billingMonth === Number(filters.month.slice(5, 7)) &&
+      assignment.billingYear === Number(filters.month.slice(0, 4));
+    if (isMonthSpecific || !poByProject.has(assignment.projectId)) {
+      poByProject.set(assignment.projectId, assignment.purchaseOrder.poNumber);
+    }
+  }
   const minutesGroups = projectIds.length
     ? await db.timeEntry.groupBy({
         by: ["projectId"],
@@ -204,9 +235,8 @@ export async function getRoyalBillingReportData({
   });
   const rows = client.projects
     .map((project) => {
-      const projectHours = Number(
-        ((minutesByProject.get(project.id) ?? 0) / 60).toFixed(2),
-      );
+      const projectMinutes = Number(minutesByProject.get(project.id) ?? 0);
+      const projectHours = Number((projectMinutes / 60).toFixed(2));
       const isFixedMonthly = project.billingModel === "FIXED_MONTHLY";
       const fixedMonthlyHours = isFixedMonthly
         ? Number(project.fixedMonthlyHours ?? 0)
@@ -248,6 +278,7 @@ export async function getRoyalBillingReportData({
         excessHours: lens ? 0 : excessHours,
         excessCost: lens ? 0 : excessCost,
         totalCost,
+        poNumber: poByProject.get(project.id) ?? "-",
       } satisfies RoyalBillingRow;
     })
     .filter(

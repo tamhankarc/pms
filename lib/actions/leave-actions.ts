@@ -87,8 +87,7 @@ async function getRequestEmployee(
   });
   if (
     !target ||
-    !isLeaveAllowedUser(target) ||
-    ["ADMIN", "ACCOUNTS", "OPERATIONS"].includes(target.userType)
+    !isLeaveAllowedUser(target)
   ) {
     throw new Error("Selected user is not eligible for leave requests.");
   }

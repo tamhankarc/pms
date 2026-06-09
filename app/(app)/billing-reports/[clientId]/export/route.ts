@@ -199,6 +199,9 @@ export async function GET(
     const data = await getWarnerPortalReportData({
       clientId,
       month: searchParams.get("month") ?? undefined,
+      projectType: reportType === "dvd-sites" ? "DVD" : "PORTAL",
+      reportType: reportType === "dvd-sites" ? "dvd-sites" : "portals",
+      reportTitle: reportType === "dvd-sites" ? "DVD Sites" : "Portals",
     });
     if (!data) redirect("/billing-reports");
 

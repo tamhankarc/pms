@@ -47,6 +47,12 @@ enum BillingCycle {
 enum WarnerProjectType {
   OTHER
   PORTAL
+  DVD
+}
+
+enum SonyProjectType {
+  OTHER
+  NEWSLETTERS
 }
 
 enum ProjectStatus {
@@ -653,6 +659,7 @@ model Project {
   addToBilling            Boolean       @default(false)
   billingCycle           BillingCycle  @default(ONE_TIME)
   warnerProjectType      WarnerProjectType @default(OTHER)
+  sonyProjectType        SonyProjectType @default(OTHER)
 
   client      Client       @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   primaryContactPerson ContactPerson? @relation("ProjectPrimaryContactPerson", fields: [contactPersonId], references: [id], onDelete: SetNull, onUpdate: Cascade)

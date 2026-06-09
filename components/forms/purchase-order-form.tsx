@@ -24,6 +24,9 @@ type Project = {
   clientId: string;
   clientName?: string;
   newsletterType?: string | null;
+  newsletterTypes?: string[];
+  showNewslettersInEntries?: boolean;
+  hideNewslettersInEntries?: boolean;
   billingCycle?: string;
 };
 type BillingReportOption = {
@@ -86,6 +89,7 @@ export function PurchaseOrderForm({
     projectId?: string;
     billingReportType?: string;
     billingMonth?: string;
+    newsletterType?: string;
   };
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
@@ -104,9 +108,21 @@ export function PurchaseOrderForm({
       return mode;
     return "PROJECT";
   };
+  const isTitleBasedAssignmentMode = (mode: AssignmentMode) =>
+    mode === "TITLE" ||
+    mode === "TITLE_BILLING_REPORT" ||
+    mode === "TITLE_PROJECT";
+  const normalizeAvailableAssignmentMode = (
+    mode: AssignmentMode,
+    usesTitleDropdown: boolean,
+  ): AssignmentMode =>
+    !usesTitleDropdown && isTitleBasedAssignmentMode(mode) ? "PROJECT" : mode;
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>(
-    normalizeAssignmentMode(
-      initialValues?.assignmentMode ?? initialClient?.poAssignmentMode,
+    normalizeAvailableAssignmentMode(
+      normalizeAssignmentMode(
+        initialValues?.assignmentMode ?? initialClient?.poAssignmentMode,
+      ),
+      initialClient?.showMoviesInEntries ?? true,
     ),
   );
   const [movieIds, setTitleIds] = useState<string[]>(
@@ -119,6 +135,9 @@ export function PurchaseOrderForm({
   const [billingMonth, setBillingMonth] = useState(
     initialValues?.billingMonth ?? new Date().toISOString().slice(0, 7),
   );
+  const [newsletterType, setNewsletterType] = useState(
+    initialValues?.newsletterType ?? "",
+  );
 
   const clientOptions = useMemo(
     () => clients.map((client) => ({ value: client.id, label: client.name })),
@@ -126,16 +145,24 @@ export function PurchaseOrderForm({
   );
   const selectedClient = clients.find((client) => client.id === clientId);
   const clientUsesTitleDropdown = selectedClient?.showMoviesInEntries ?? true;
-  const rawAssignmentMode = normalizeAssignmentMode(
-    selectedClient?.poAssignmentMode ?? assignmentMode,
+  const clientDefaultAssignmentMode = normalizeAssignmentMode(
+    selectedClient?.poAssignmentMode,
   );
-  const effectiveAssignmentMode: AssignmentMode =
-    !clientUsesTitleDropdown &&
-    ["TITLE", "TITLE_BILLING_REPORT", "TITLE_PROJECT"].includes(
-      rawAssignmentMode,
-    )
-      ? "PROJECT"
-      : rawAssignmentMode;
+  const effectiveAssignmentMode = normalizeAvailableAssignmentMode(
+    assignmentMode,
+    clientUsesTitleDropdown,
+  );
+  const assignmentModeOptions = [
+    ...(clientUsesTitleDropdown
+      ? [
+          { value: "TITLE", label: "Title only" },
+          { value: "TITLE_BILLING_REPORT", label: "Title + Billing Report" },
+          { value: "TITLE_PROJECT", label: "Title + Project" },
+        ]
+      : []),
+    { value: "PROJECT", label: "Project only" },
+    { value: "BILLING_REPORT", label: "Billing Report only" },
+  ];
   const titleOptions = useMemo(
     () =>
       titles
@@ -175,6 +202,17 @@ export function PurchaseOrderForm({
   );
   const selectedProject = projects.find((project) => project.id === projectId);
   const needsBillingMonth = selectedProject?.billingCycle === "MONTHLY";
+  const showNewsletterType = Boolean(
+    selectedProject?.showNewslettersInEntries &&
+    !selectedProject?.hideNewslettersInEntries &&
+    selectedProject.newsletterTypes?.length,
+  );
+  const newsletterTypeOptions = (selectedProject?.newsletterTypes ?? []).map(
+    (value) => ({
+      value,
+      label: value === "AFFIRM" ? "Affirm" : value,
+    }),
+  );
   // const poKindLabel = effectiveAssignmentMode === "TITLE" && movieIds.length > 1 ? "Residual" : effectiveAssignmentMode === "TITLE" && movieIds.length === 1 ? "Normal" : "Configured by selected mode";
 
   function handleClientChange(nextClientId: string) {
@@ -182,11 +220,32 @@ export function PurchaseOrderForm({
     setTitleIds([]);
     setProjectId("");
     setBillingReportType("");
+    setNewsletterType("");
     if (nextClientId) {
       const nextClient = clients.find((client) => client.id === nextClientId);
-      if (nextClient)
-        setAssignmentMode(normalizeAssignmentMode(nextClient.poAssignmentMode));
+      if (nextClient) {
+        setAssignmentMode(
+          normalizeAvailableAssignmentMode(
+            normalizeAssignmentMode(nextClient.poAssignmentMode),
+            nextClient.showMoviesInEntries ?? true,
+          ),
+        );
+      }
+    } else {
+      setAssignmentMode("PROJECT");
     }
+  }
+
+  function handleAssignmentModeChange(nextAssignmentMode: string) {
+    const nextMode = normalizeAvailableAssignmentMode(
+      normalizeAssignmentMode(nextAssignmentMode),
+      clientUsesTitleDropdown,
+    );
+    setAssignmentMode(nextMode);
+    setTitleIds([]);
+    setProjectId("");
+    setBillingReportType("");
+    setNewsletterType("");
   }
 
   return (
@@ -203,10 +262,12 @@ export function PurchaseOrderForm({
       <input type="hidden" name="projectId" value={projectId} />
       <input type="hidden" name="billingReportType" value={billingReportType} />
       <input type="hidden" name="billingMonth" value={billingMonth} />
+      <input type="hidden" name="newsletterType" value={newsletterType} />
 
       <h2 className="section-title">{title}</h2>
       <p className="section-subtitle">
-        Create the PO once, then assign it using the client-specific PO mode.
+        Create the PO once, then assign it using the client default or a
+        PO-specific assignment override.
       </p>
       {state?.error ? (
         <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -233,6 +294,30 @@ export function PurchaseOrderForm({
             searchPlaceholder="Search clients..."
             emptyLabel="No client found."
           />
+        </div>
+        <div>
+          <FormLabel htmlFor="assignmentMode" required>
+            PO Assignment Mode
+          </FormLabel>
+          <SearchableCombobox
+            id="assignmentMode"
+            options={assignmentModeOptions}
+            value={effectiveAssignmentMode}
+            onValueChange={handleAssignmentModeChange}
+            placeholder={
+              clientId ? "Select PO assignment mode" : "Select client first"
+            }
+            searchPlaceholder="Search PO assignment modes..."
+            emptyLabel="No assignment mode found."
+            disabled={!clientId}
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Client default:{" "}
+            {selectedClient
+              ? clientDefaultAssignmentMode.replaceAll("_", " ")
+              : "Select client first"}
+            . Change this field to override the default for this PO only.
+          </p>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div>
@@ -345,17 +430,6 @@ export function PurchaseOrderForm({
           />
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-          <span className="font-semibold text-slate-900">PO Assignment:</span>{" "}
-          {selectedClient?.poAssignmentMode
-            ? selectedClient.poAssignmentMode.replaceAll("_", " ")
-            : "Select client first"}
-          <p className="mt-1 text-xs text-slate-500">
-            This is controlled from the selected client&apos;s PO Assignment
-            Mode.
-          </p>
-        </div>
-
         {effectiveAssignmentMode !== "PROJECT" &&
         effectiveAssignmentMode !== "BILLING_REPORT" ? (
           <div>
@@ -406,7 +480,10 @@ export function PurchaseOrderForm({
               id="projectId"
               options={projectOptions}
               value={projectId}
-              onValueChange={setProjectId}
+              onValueChange={(value) => {
+                setProjectId(value);
+                setNewsletterType("");
+              }}
               placeholder={clientId ? "Select project" : "Select client first"}
               searchPlaceholder="Search projects..."
               emptyLabel="No project found."
@@ -414,6 +491,27 @@ export function PurchaseOrderForm({
             />
           </div>
         ) : null}
+        {showNewsletterType ? (
+          <div>
+            <FormLabel htmlFor="newsletterType" required>
+              Newsletter Type
+            </FormLabel>
+            <SearchableCombobox
+              id="newsletterType"
+              options={newsletterTypeOptions}
+              value={newsletterType}
+              onValueChange={setNewsletterType}
+              placeholder="Select newsletter type"
+              searchPlaceholder="Search newsletter types..."
+              emptyLabel="No newsletter type found."
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              This PO will be matched to the selected Newsletter type for this
+              project.
+            </p>
+          </div>
+        ) : null}
+
         {needsBillingMonth ? (
           <div>
             <FormLabel htmlFor="billingMonth" required>
