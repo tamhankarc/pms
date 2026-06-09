@@ -6,7 +6,11 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { addManualAttendanceLogAction } from "@/lib/actions/manual-attendance-actions";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { canManageManualAttendance } from "@/lib/permissions";
+import type { Prisma } from "@prisma/client";
+import {
+  canAddManualAttendance,
+  canManageManualAttendance,
+} from "@/lib/permissions";
 import {
   formatDateInIst,
   formatTimeInIst,
@@ -45,55 +49,124 @@ export default async function AttendanceHistoryPage({
 }) {
   const currentUser = await requireUser();
   if (!canManageManualAttendance(currentUser)) redirect("/dashboard");
+  const canAddManualLog = canAddManualAttendance(currentUser);
 
   const params = (await searchParams) ?? {};
   const todayKey = getIstDateKey();
-  const selectedUserId = params.userId ?? "";
-  const fromDate = isDateKey(params.fromDate) ? params.fromDate! : getMonthStart(todayKey);
-  const toDate = isDateKey(params.toDate) ? params.toDate! : todayKey;
-  const currentPage = parsePageParam(params.page);
 
-  const userOptions = await db.user.findMany({
-    where: {
-      isActive: true,
-      OR: [
-        { userType: "EMPLOYEE" },
-        { userType: "TEAM_LEAD" },
-        {
-          userType: "MANAGER",
-          functionalRole: { notIn: ["PROJECT_MANAGER", "GENERAL_MANAGER"] },
+  const fromDate = isDateKey(params.fromDate)
+  ? params.fromDate!
+  : getMonthStart(todayKey);
+const toDate = isDateKey(params.toDate) ? params.toDate! : todayKey;
+const currentPage = parsePageParam(params.page);
+
+const attendanceEligibleUserWhere: Prisma.UserWhereInput = {
+  isActive: true,
+  OR: [
+    { userType: "EMPLOYEE" },
+    { userType: "TEAM_LEAD" },
+    {
+      userType: "MANAGER",
+      functionalRole: {
+        notIn: ["PROJECT_MANAGER", "GENERAL_MANAGER"],
+      },
+    },
+  ],
+};
+
+const userSelect = {
+  id: true,
+  fullName: true,
+  username: true,
+  email: true,
+  employeeCode: true,
+  userType: true,
+  functionalRole: true,
+};
+
+const scopedUserOptions = canAddManualLog
+  ? await db.user.findMany({
+      where: attendanceEligibleUserWhere,
+      select: userSelect,
+      orderBy: [{ fullName: "asc" }],
+    })
+  : await db.employeeTeamLead
+      .findMany({
+        where: {
+          teamLeadId: currentUser.id,
+          employee: attendanceEligibleUserWhere,
         },
-      ],
-    },
-    select: {
-      id: true,
-      fullName: true,
-      username: true,
-      email: true,
-      employeeCode: true,
-      userType: true,
-      functionalRole: true,
-    },
-    orderBy: [{ fullName: "asc" }],
-  });
-
-  const selectedUser = selectedUserId
-    ? await db.user.findFirst({
-        where: { id: selectedUserId, isActive: true },
-        select: {
-          id: true,
-          fullName: true,
-          username: true,
-          email: true,
-          employeeCode: true,
-          leaveYearProfiles: {
-            select: { year: true, shift: true },
-            orderBy: { year: "desc" },
+        include: {
+          employee: {
+            select: userSelect,
+          },
+        },
+        orderBy: {
+          employee: {
+            fullName: "asc",
           },
         },
       })
-    : null;
+      .then(async (assignments) => {
+        const assignedUsers = assignments.map(
+          (assignment) => assignment.employee,
+        );
 
+        if (assignedUsers.length > 0) {
+          return assignedUsers;
+        }
+
+        const selfUser = await db.user.findFirst({
+          where: {
+            AND: [
+              { id: currentUser.id },
+              attendanceEligibleUserWhere,
+            ],
+          },
+          select: userSelect,
+        });
+
+        return selfUser ? [selfUser] : [];
+      });
+
+const allowedUserIds = new Set(scopedUserOptions.map((user) => user.id));
+
+const selectedUserId =
+  params.userId && allowedUserIds.has(params.userId)
+    ? params.userId
+    : canAddManualLog
+      ? ""
+      : scopedUserOptions[0]?.id ?? "";
+
+const selectedUser = selectedUserId
+  ? await db.user.findFirst({
+      where: {
+        AND: [
+          {
+            id: selectedUserId,
+            isActive: true,
+          },
+          {
+            id: {
+              in: Array.from(allowedUserIds),
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        fullName: true,
+        username: true,
+        email: true,
+        employeeCode: true,
+        leaveYearProfiles: {
+          select: { year: true, shift: true },
+          orderBy: { year: "desc" },
+        },
+      },
+    })
+  : null;
+  
   const rangeStart = getDayBoundsUtcFromIstDateKey(fromDate).startUtc;
   const rangeEnd = getDayBoundsUtcFromIstDateKey(toDate).endUtc;
 
@@ -154,7 +227,7 @@ export default async function AttendanceHistoryPage({
             <SearchableCombobox
               id="attendance-user"
               name="userId"
-              options={userOptions.map((option) => ({
+              options={scopedUserOptions.map((option) => ({
                 value: option.id,
                 label: `${option.fullName}${option.employeeCode ? ` (${option.employeeCode})` : ""}`,
                 keywords: `${option.username} ${option.email} ${option.employeeCode ?? ""} ${option.userType} ${option.functionalRole ?? ""}`,
@@ -259,112 +332,114 @@ export default async function AttendanceHistoryPage({
         />
       </section>
 
-      <section className="card p-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
-            <PlusCircle className="h-5 w-5" />
-          </div>
-          <div>
-            <h2 className="section-title">Add manual attendance log</h2>
-            <p className="section-subtitle">Add either Mark-In or Mark-Out. The form does not add both together.</p>
-          </div>
-        </div>
-
-        <form action={addManualAttendanceLogAction} className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <input type="hidden" name="userId" value={selectedUserId} />
-          <input type="hidden" name="fromDate" value={fromDate} />
-          <input type="hidden" name="toDate" value={toDate} />
-
-          <div className="xl:col-span-2">
-            <label className="form-label">Selected user</label>
-            <div className="input-field flex items-center bg-slate-50 text-slate-700">
-              {selectedUser ? `${selectedUser.fullName} (${selectedUser.username})` : "Select a user above first"}
+      {canAddManualLog ? (
+        <section className="card p-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
+              <PlusCircle className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="section-title">Add manual attendance log</h2>
+              <p className="section-subtitle">Add either Mark-In or Mark-Out. The form does not add both together.</p>
             </div>
           </div>
 
-          <div>
-            <label htmlFor="actionType" className="form-label">
-              Action
-            </label>
-            <SearchableCombobox
-              id="actionType"
-              name="actionType"
-              required
-              disabled={!selectedUser}
-              defaultValue="MARK_IN"
-              options={[
-                { value: "MARK_IN", label: "Mark-In" },
-                { value: "MARK_OUT", label: "Mark-Out" },
-              ]}
-              placeholder="Select action"
-              searchPlaceholder="Search actions..."
-              emptyLabel="No action found."
-              buttonClassName="input-field"
-            />
-          </div>
+          <form action={addManualAttendanceLogAction} className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <input type="hidden" name="userId" value={selectedUserId} />
+            <input type="hidden" name="fromDate" value={fromDate} />
+            <input type="hidden" name="toDate" value={toDate} />
 
-          <div>
-            <label htmlFor="attendanceDate" className="form-label">
-              Attendance/work date
-            </label>
-            <input id="attendanceDate" name="attendanceDate" type="date" required defaultValue={todayKey} className="input-field" disabled={!selectedUser} />
-          </div>
+            <div className="xl:col-span-2">
+              <label className="form-label">Selected user</label>
+              <div className="input-field flex items-center bg-slate-50 text-slate-700">
+                {selectedUser ? `${selectedUser.fullName} (${selectedUser.username})` : "Select a user above first"}
+              </div>
+            </div>
 
-          <div>
-            <label htmlFor="markedAtDate" className="form-label">
-              Marked-at date (IST)
-            </label>
-            <input id="markedAtDate" name="markedAtDate" type="date" required defaultValue={todayKey} className="input-field" disabled={!selectedUser} />
-          </div>
+            <div>
+              <label htmlFor="actionType" className="form-label">
+                Action
+              </label>
+              <SearchableCombobox
+                id="actionType"
+                name="actionType"
+                required
+                disabled={!selectedUser}
+                defaultValue="MARK_IN"
+                options={[
+                  { value: "MARK_IN", label: "Mark-In" },
+                  { value: "MARK_OUT", label: "Mark-Out" },
+                ]}
+                placeholder="Select action"
+                searchPlaceholder="Search actions..."
+                emptyLabel="No action found."
+                buttonClassName="input-field"
+              />
+            </div>
 
-          <div>
-            <label htmlFor="markedAtTime" className="form-label">
-              Marked-at time (IST)
-            </label>
-            <input id="markedAtTime" name="markedAtTime" type="time" required className="input-field" disabled={!selectedUser} />
-          </div>
+            <div>
+              <label htmlFor="attendanceDate" className="form-label">
+                Attendance/work date
+              </label>
+              <input id="attendanceDate" name="attendanceDate" type="date" required defaultValue={todayKey} className="input-field" disabled={!selectedUser} />
+            </div>
 
-          <div>
-            <label htmlFor="city" className="form-label">
-              City
-            </label>
-            <input id="city" name="city" type="text" className="input-field" placeholder="Optional" disabled={!selectedUser} />
-          </div>
+            <div>
+              <label htmlFor="markedAtDate" className="form-label">
+                Marked-at date (IST)
+              </label>
+              <input id="markedAtDate" name="markedAtDate" type="date" required defaultValue={todayKey} className="input-field" disabled={!selectedUser} />
+            </div>
 
-          <div>
-            <label htmlFor="state" className="form-label">
-              State
-            </label>
-            <input id="state" name="state" type="text" className="input-field" placeholder="Optional" disabled={!selectedUser} />
-          </div>
+            <div>
+              <label htmlFor="markedAtTime" className="form-label">
+                Marked-at time (IST)
+              </label>
+              <input id="markedAtTime" name="markedAtTime" type="time" required className="input-field" disabled={!selectedUser} />
+            </div>
 
-          <div>
-            <label htmlFor="latitude" className="form-label">
-              Latitude
-            </label>
-            <input id="latitude" name="latitude" type="number" step="0.0000001" className="input-field" placeholder="0.0000000" disabled={!selectedUser} />
-          </div>
+            <div>
+              <label htmlFor="city" className="form-label">
+                City
+              </label>
+              <input id="city" name="city" type="text" className="input-field" placeholder="Optional" disabled={!selectedUser} />
+            </div>
 
-          <div>
-            <label htmlFor="longitude" className="form-label">
-              Longitude
-            </label>
-            <input id="longitude" name="longitude" type="number" step="0.0000001" className="input-field" placeholder="0.0000000" disabled={!selectedUser} />
-          </div>
+            <div>
+              <label htmlFor="state" className="form-label">
+                State
+              </label>
+              <input id="state" name="state" type="text" className="input-field" placeholder="Optional" disabled={!selectedUser} />
+            </div>
 
-          <div className="md:col-span-2 xl:col-span-4">
-            <p className="text-xs text-slate-500">
-              For night-shift Mark-Out after midnight, keep Attendance/work date as the shift start date and set Marked-at date to the next calendar date.
-            </p>
-          </div>
+            <div>
+              <label htmlFor="latitude" className="form-label">
+                Latitude
+              </label>
+              <input id="latitude" name="latitude" type="number" step="0.0000001" className="input-field" placeholder="0.0000000" disabled={!selectedUser} />
+            </div>
 
-          <div className="md:col-span-2 xl:col-span-4">
-            <button type="submit" className="btn-primary" disabled={!selectedUser}>
-              Add attendance log
-            </button>
-          </div>
-        </form>
-      </section>
+            <div>
+              <label htmlFor="longitude" className="form-label">
+                Longitude
+              </label>
+              <input id="longitude" name="longitude" type="number" step="0.0000001" className="input-field" placeholder="0.0000000" disabled={!selectedUser} />
+            </div>
+
+            <div className="md:col-span-2 xl:col-span-4">
+              <p className="text-xs text-slate-500">
+                For night-shift Mark-Out after midnight, keep Attendance/work date as the shift start date and set Marked-at date to the next calendar date.
+              </p>
+            </div>
+
+            <div className="md:col-span-2 xl:col-span-4">
+              <button type="submit" className="btn-primary" disabled={!selectedUser}>
+                Add attendance log
+              </button>
+            </div>
+          </form>
+        </section>
+      ) : null}
     </div>
   );
 }
