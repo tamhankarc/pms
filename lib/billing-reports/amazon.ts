@@ -1,11 +1,13 @@
 import { db } from "@/lib/db";
 import {
   FILMIK_CLIENT_ID,
+  ROYAL_CARIBBEAN_CLIENT_ID,
   SONY_PICTURES_CLASSICS_CLIENT_ID,
   SONY_PICTURES_CLIENT_ID,
   WARNER_BROS_CLIENT_ID,
 } from "@/lib/billing-reports/config";
 import { getLensBillingAdjustments } from "@/lib/billing-reports/lens";
+import type { MovieStatus } from "@prisma/client";
 
 export type AmazonReportType =
   | "social-assets"
@@ -14,6 +16,7 @@ export type AmazonReportType =
   | "domestic-deliverable"
   | "intl-deliverable"
   | "other-deliverable"
+  | "portals"
   | "spe-main"
   | "canada-other"
   | "newsletters"
@@ -101,6 +104,7 @@ export type WarnerDomesticDeliverableData = {
     | "domestic-deliverable"
     | "intl-deliverable"
     | "other-deliverable"
+    | "portals"
     | "newsletters";
   reportTitle: string;
   filters: WarnerDeliverableFilters;
@@ -151,6 +155,12 @@ export type BillingReportDefinition = {
   projectName: string;
   includeLanguage: boolean;
   includeCountry: boolean;
+  poAssignmentMode?:
+    | "TITLE"
+    | "TITLE_BILLING_REPORT"
+    | "TITLE_PROJECT"
+    | "PROJECT"
+    | "BILLING_REPORT";
   kind?:
     | "time-entry"
     | "time-entry-summary"
@@ -162,7 +172,8 @@ export type BillingReportDefinition = {
     | "sony-movie"
     | "sony-newsletters"
     | "sony-summary-history"
-    | "billing-history";
+    | "billing-history"
+    | "warner-portals";
 };
 
 export const AMAZON_REPORTS: Partial<
@@ -226,6 +237,7 @@ export const WARNER_REPORTS: Partial<
     includeLanguage: false,
     includeCountry: false,
     kind: "deliverable",
+    poAssignmentMode: "TITLE_BILLING_REPORT",
   },
   "intl-deliverable": {
     title: "Intl Deliverable",
@@ -233,6 +245,7 @@ export const WARNER_REPORTS: Partial<
     includeLanguage: false,
     includeCountry: false,
     kind: "deliverable",
+    poAssignmentMode: "TITLE_BILLING_REPORT",
   },
   "other-deliverable": {
     title: "Other Deliverable",
@@ -240,6 +253,7 @@ export const WARNER_REPORTS: Partial<
     includeLanguage: false,
     includeCountry: false,
     kind: "deliverable",
+    poAssignmentMode: "TITLE_BILLING_REPORT",
   },
   "wbhe-status": {
     title: "WBHE Status",
@@ -247,6 +261,15 @@ export const WARNER_REPORTS: Partial<
     includeLanguage: false,
     includeCountry: false,
     kind: "time-entry",
+    poAssignmentMode: "TITLE_BILLING_REPORT",
+  },
+  portals: {
+    title: "Portals",
+    projectName: "",
+    includeLanguage: false,
+    includeCountry: false,
+    kind: "warner-portals",
+    poAssignmentMode: "TITLE_PROJECT",
   },
   "billing-history": {
     title: "Billing Summary & History",
@@ -318,6 +341,13 @@ export const FILMIK_REPORTS: Partial<
     includeLanguage: false,
     includeCountry: false,
     kind: "generic-filmik",
+  },
+  "billing-history": {
+    title: "Billing Summary & History",
+    projectName: "",
+    includeLanguage: false,
+    includeCountry: false,
+    kind: "billing-history",
   },
 };
 
@@ -1298,6 +1328,7 @@ function getDeliverableReportTitle(
     | "domestic-deliverable"
     | "intl-deliverable"
     | "other-deliverable"
+    | "portals"
     | "newsletters",
 ) {
   if (reportType === "intl-deliverable") return "Intl Deliverable";
@@ -1309,6 +1340,7 @@ async function getWarnerDeliverableData({
   clientId,
   filters,
   reportType,
+  includeCompletedBilled = false,
 }: {
   clientId: string;
   filters: WarnerDeliverableFilters;
@@ -1316,12 +1348,17 @@ async function getWarnerDeliverableData({
     | "domestic-deliverable"
     | "intl-deliverable"
     | "other-deliverable"
+    | "portals"
     | "newsletters";
+  includeCompletedBilled?: boolean;
 }): Promise<WarnerDomesticDeliverableData | null> {
   const isDomestic = reportType === "domestic-deliverable";
   const isIntl = reportType === "intl-deliverable";
   const isOther = reportType === "other-deliverable";
   const reportTitle = getDeliverableReportTitle(reportType);
+  const allowedMovieStatuses: MovieStatus[] = includeCompletedBilled
+    ? ["WORKING", "COMPLETED", "COMPLETED_BILLED"]
+    : ["WORKING", "COMPLETED"];
 
   const client = await db.client.findUnique({
     where: { id: clientId },
@@ -1340,7 +1377,7 @@ async function getWarnerDeliverableData({
     where: {
       clientId,
       isActive: true,
-      status: { in: ["WORKING", "COMPLETED"] },
+      status: { in: allowedMovieStatuses },
       billingRegion: { not: "SOCIAL" as const },
       ...(!isDomestic
         ? { timeEntries: { some: { project: { clientId } } } }
@@ -1379,7 +1416,7 @@ async function getWarnerDeliverableData({
           id: selectedMovieId,
           clientId,
           isActive: true,
-          status: { in: ["WORKING", "COMPLETED"] },
+          status: { in: allowedMovieStatuses },
           billingRegion: { not: "SOCIAL" as const },
           ...(!isDomestic
             ? { timeEntries: { some: { project: { clientId } } } }
@@ -1880,7 +1917,11 @@ export async function getWarnerOtherDeliverableData({
   });
 }
 
-export type BillingHistoryFilters = { year: string };
+export type BillingHistoryFilters = {
+  year: string;
+  projectMonth: string;
+  portalsMonth: string;
+};
 
 export type BillingHistoryReportValue = {
   reportType: string;
@@ -1902,6 +1943,7 @@ export type BillingHistoryRow = {
   titleStatus?: string;
   projectStatus?: string;
   billingModel?: string;
+  billingMonth?: string;
   cost?: number;
   reportValues?: BillingHistoryReportValue[];
   movieId?: string;
@@ -1911,10 +1953,48 @@ export type BillingHistoryRow = {
   movieBillingHeadCount: number;
 };
 
+export type WarnerPortalProjectRow = {
+  projectId: string;
+  projectName: string;
+  status: string;
+  billingModel: string;
+  totalHours: number;
+  cost: number;
+  poNumber: string;
+  billingMonth: string;
+};
+
+export type WarnerPortalReportData = {
+  client: { id: string; name: string };
+  reportType: "portals";
+  reportTitle: string;
+  filters: { month: string };
+  rows: WarnerPortalProjectRow[];
+  totalHours: number;
+  totalCost: number;
+};
+
+export type BillingHistorySection = {
+  key: string;
+  title: string;
+  poAssignmentMode:
+    | "TITLE"
+    | "TITLE_BILLING_REPORT"
+    | "TITLE_PROJECT"
+    | "PROJECT"
+    | "BILLING_REPORT";
+  rows: BillingHistoryRow[];
+  monthFilterParam?: string;
+  monthFilterValue?: string;
+};
+
 export type BillingHistoryData = {
   client: { id: string; name: string; poAssignmentMode: string };
   filters: BillingHistoryFilters;
   summaryRows: BillingHistoryRow[];
+  portalRows?: WarnerPortalProjectRow[];
+  summarySections?: BillingHistorySection[];
+  historySections?: BillingHistorySection[];
   historyRows: BillingHistoryRow[];
   rows: BillingHistoryRow[];
 };
@@ -1929,9 +2009,18 @@ export function buildBillingHistoryFilters(
     return Array.isArray(value) ? value[0] : value;
   };
   const currentYear = String(new Date().getFullYear());
+  const currentMonth = `${currentYear}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
   const year = getValue("year") || currentYear;
+  const projectMonth = getValue("projectMonth") || currentMonth;
+  const portalsMonth = getValue("portalsMonth") || projectMonth;
   return {
     year: /^\d{4}$/.test(year) ? year : currentYear,
+    projectMonth: /^\d{4}-\d{2}$/.test(projectMonth)
+      ? projectMonth
+      : currentMonth,
+    portalsMonth: /^\d{4}-\d{2}$/.test(portalsMonth)
+      ? portalsMonth
+      : currentMonth,
   } satisfies BillingHistoryFilters;
 }
 
@@ -1999,6 +2088,22 @@ function formatBillingModel(value: string) {
   return labels[value] ?? value.replaceAll("_", " ");
 }
 
+function parseYearMonth(value?: string | null) {
+  const now = new Date();
+  const fallback = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const safeValue = value && /^\d{4}-\d{2}$/.test(value) ? value : fallback;
+  const [yearText, monthText] = safeValue.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  return {
+    value: safeValue,
+    year,
+    month,
+    start: new Date(year, month - 1, 1),
+    end: new Date(year, month, 1),
+  };
+}
+
 function getReportLabel(reportType: string) {
   const labels: Record<string, string> = {
     "social-assets": "Social Assets",
@@ -2007,12 +2112,382 @@ function getReportLabel(reportType: string) {
     "domestic-deliverable": "Domestic Deliverable",
     "intl-deliverable": "Intl Deliverable",
     "other-deliverable": "Other Deliverable",
+    portals: "Portals",
     "spe-main": "SPE Billing",
     "canada-other": "SPE US Ticketing, Canada & Other",
     newsletters: "Newsletters",
     "billing-summary": "Billing Summary",
   };
   return labels[reportType] ?? reportType.replaceAll("-", " ");
+}
+
+async function getGenericMovieBillingCostForSummary({
+  clientId,
+  movieId,
+  projectId,
+  includeCompletedBilled = false,
+  billingMonth,
+}: {
+  clientId: string;
+  movieId?: string;
+  projectId?: string;
+  includeCompletedBilled?: boolean;
+  billingMonth?: string;
+}) {
+  const { getGenericBillingReportData } =
+    await import("@/lib/billing-reports/generic");
+  const monthRange = billingMonth ? parseYearMonth(billingMonth) : null;
+  const defaults = getDefaultMonthRange();
+  const openDateRange =
+    clientId === SONY_PICTURES_CLASSICS_CLIENT_ID && !monthRange;
+  const data = await getGenericBillingReportData({
+    clientId,
+    filters: {
+      fromDate: openDateRange
+        ? ""
+        : monthRange
+          ? `${monthRange.value}-01`
+          : defaults.fromDate,
+      toDate: openDateRange
+        ? ""
+        : monthRange
+          ? new Date(monthRange.year, monthRange.month, 0)
+              .toISOString()
+              .slice(0, 10)
+          : defaults.toDate,
+      movieId: movieId ?? "all",
+    },
+    options: {
+      movieSpecific: Boolean(movieId),
+      openDateRange,
+      includeCompletedBilled,
+    },
+  });
+
+  if (!data) return 0;
+  const blocks = data.titleBlocks?.length
+    ? data.titleBlocks.flatMap((titleBlock) => titleBlock.blocks)
+    : data.blocks;
+  return blocks.reduce(
+    (sum, block) =>
+      sum +
+      block.rows
+        .filter((row) => !projectId || row.projectId === projectId)
+        .reduce((rowSum, row) => rowSum + Number(row.cost ?? 0), 0),
+    0,
+  );
+}
+
+async function getFilmikBillingCostForSummary(projectId?: string) {
+  const { buildFilmikBillingReportFilters, getFilmikBillingReportData } =
+    await import("@/lib/billing-reports/filmik");
+  const filters = buildFilmikBillingReportFilters({});
+  const data = await getFilmikBillingReportData(filters);
+  if (!data) return 0;
+  if (projectId) {
+    return data.combinedRows
+      .filter((row) => row.key === projectId)
+      .reduce((sum, row) => sum + Number(row.clientCost ?? 0), 0);
+  }
+  return Number(data.combinedTotalClientCost ?? 0);
+}
+
+async function getRoyalBillingCostForSummary({
+  clientId,
+  projectId,
+}: {
+  clientId: string;
+  projectId?: string;
+}) {
+  const { buildRoyalBillingFilters, getRoyalBillingReportData } =
+    await import("@/lib/billing-reports/royal");
+  const filters = buildRoyalBillingFilters({});
+  const data = await getRoyalBillingReportData({ clientId, filters });
+  if (!data) return 0;
+  if (projectId) {
+    return data.rows
+      .filter((row) => row.projectId === projectId)
+      .reduce((sum, row) => sum + Number(row.totalCost ?? 0), 0);
+  }
+  return Number(data.totals.totalCost ?? 0);
+}
+
+async function getProjectBillingCostForSummary({
+  clientId,
+  projectId,
+  movieId,
+  fallbackCost,
+  includeCompletedBilled = false,
+  billingMonth,
+}: {
+  clientId: string;
+  projectId: string;
+  movieId?: string;
+  fallbackCost: number;
+  includeCompletedBilled?: boolean;
+  billingMonth?: string;
+}) {
+  let calculatedCost = 0;
+  if (clientId === FILMIK_CLIENT_ID) {
+    calculatedCost = await getFilmikBillingCostForSummary(projectId);
+  } else if (clientId === ROYAL_CARIBBEAN_CLIENT_ID) {
+    calculatedCost = await getRoyalBillingCostForSummary({
+      clientId,
+      projectId,
+    });
+  } else {
+    calculatedCost = await getGenericMovieBillingCostForSummary({
+      clientId,
+      movieId,
+      projectId,
+      includeCompletedBilled,
+      billingMonth,
+    });
+  }
+  return calculatedCost || fallbackCost;
+}
+
+function getDefaultBillingReportFiltersForSummary(
+  movieId: string = "all",
+): AmazonBillingReportFilters {
+  const defaults = getDefaultMonthRange();
+  return {
+    fromDate: defaults.fromDate,
+    toDate: defaults.toDate,
+    movieId,
+    assetTypeId: "all",
+    assetNameId: "all",
+    countryId: "all",
+  };
+}
+
+async function getBillingReportCalculatedCostForSummary({
+  clientId,
+  reportType,
+  movieId = "all",
+  includeCompletedBilled = false,
+}: {
+  clientId: string;
+  reportType: string;
+  movieId?: string;
+  includeCompletedBilled?: boolean;
+}) {
+  if (reportType === "domestic-deliverable") {
+    const data = await getWarnerDeliverableData({
+      clientId,
+      reportType: "domestic-deliverable",
+      filters: { movieId, countryId: "" },
+      includeCompletedBilled,
+    });
+    return Number(data?.totalCost ?? 0);
+  }
+
+  if (reportType === "intl-deliverable") {
+    const data = await getWarnerDeliverableData({
+      clientId,
+      reportType: "intl-deliverable",
+      filters: { movieId, countryId: "" },
+      includeCompletedBilled,
+    });
+    return Number(data?.totalCost ?? 0);
+  }
+
+  if (reportType === "other-deliverable") {
+    const data = await getWarnerDeliverableData({
+      clientId,
+      reportType: "other-deliverable",
+      filters: { movieId, countryId: "" },
+      includeCompletedBilled,
+    });
+    return Number(data?.totalCost ?? 0);
+  }
+
+  if (reportType === "portals") {
+    const data = await getWarnerPortalReportData({ clientId });
+    return Number(data?.totalCost ?? 0);
+  }
+
+  if (reportType === "billing-summary") {
+    const data = await getUniversalBillingSummaryData({
+      clientId,
+      filters: getDefaultBillingReportFiltersForSummary(movieId),
+    });
+    const rows = data?.rows ?? [];
+    return rows.reduce(
+      (sum, row) => sum + row.socialCost + row.localizationCost,
+      0,
+    );
+  }
+
+  const catalog = await db.client
+    .findUnique({ where: { id: clientId }, select: { id: true, name: true } })
+    .then((client) =>
+      client ? getBillingReportCatalogForClient(client.name, client.id) : null,
+    );
+  const definition = catalog?.[reportType as AmazonReportType];
+
+  if (definition?.kind === "generic-movie") {
+    return getGenericMovieBillingCostForSummary({
+      clientId,
+      movieId,
+      includeCompletedBilled,
+    });
+  }
+
+  if (definition?.kind === "generic-filmik") {
+    return getFilmikBillingCostForSummary();
+  }
+
+  const data = await getAmazonBillingReportData({
+    clientId,
+    reportType: reportType as AmazonReportType,
+    filters: getDefaultBillingReportFiltersForSummary(movieId),
+  });
+
+  if (!data) return 0;
+
+  return data.rows.reduce((sum, row) => sum + Number(row.cost ?? 0), 0);
+}
+
+export async function getWarnerPortalReportData({
+  clientId,
+  month,
+}: {
+  clientId: string;
+  month?: string;
+}): Promise<WarnerPortalReportData | null> {
+  const client = await db.client.findUnique({
+    where: { id: clientId },
+    select: { id: true, name: true, hourlyCost: true },
+  });
+  if (!client) return null;
+
+  const monthRange = parseYearMonth(month);
+
+  const projects = await db.project.findMany({
+    where: {
+      clientId,
+      isActive: true,
+      addToBilling: true,
+      warnerProjectType: "PORTAL",
+    },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      billingModel: true,
+      billingCycle: true,
+      projectCost: true,
+      perCountryCharges: true,
+      fixedContractHours: true,
+      fixedMonthlyHours: true,
+      additionalCharges: true,
+      partialBillingCost: true,
+    },
+    orderBy: { name: "asc" },
+  });
+
+  const poAssignments = await db.purchaseOrderAssignment.findMany({
+    where: {
+      clientId,
+      projectId: { in: projects.map((project) => project.id) },
+      OR: [
+        { billingMonth: monthRange.month, billingYear: monthRange.year },
+        { billingMonth: null, billingYear: null },
+      ],
+      purchaseOrder: { status: { not: "CANCELLED" } },
+    },
+    select: {
+      projectId: true,
+      billingMonth: true,
+      billingYear: true,
+      purchaseOrder: { select: { poNumber: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  const poByProject = new Map<string, string>();
+  for (const assignment of poAssignments) {
+    if (!assignment.projectId) continue;
+    const isMonthSpecific =
+      assignment.billingMonth === monthRange.month &&
+      assignment.billingYear === monthRange.year;
+    if (isMonthSpecific || !poByProject.has(assignment.projectId)) {
+      poByProject.set(assignment.projectId, assignment.purchaseOrder.poNumber);
+    }
+  }
+
+  const hourlyCost = Number(client.hourlyCost ?? 0);
+  const fallbackProjectCost = (project: (typeof projects)[number]) => {
+    if (project.billingModel === "FIXED_COST") {
+      return Number(project.projectCost ?? 0);
+    }
+    if (project.billingModel === "FIXED_PER_COUNTRY") {
+      return Number(project.perCountryCharges ?? 0);
+    }
+    if (project.billingModel === "FIXED_FULL") {
+      return (
+        Number(project.fixedContractHours ?? 0) * hourlyCost +
+        Number(project.additionalCharges ?? 0) -
+        Number(project.partialBillingCost ?? 0)
+      );
+    }
+    if (project.billingModel === "FIXED_MONTHLY") {
+      return Number(project.fixedMonthlyHours ?? 0) * hourlyCost;
+    }
+    return Number(project.projectCost ?? 0);
+  };
+
+  const minuteGroups = projects.length
+    ? await db.timeEntry.groupBy({
+        by: ["projectId"],
+        where: {
+          projectId: { in: projects.map((project) => project.id) },
+          workDate: { gte: monthRange.start, lt: monthRange.end },
+        },
+        _sum: { minutesSpent: true },
+      })
+    : [];
+  const minutesByProject = new Map(
+    minuteGroups.map((group) => [
+      group.projectId,
+      group._sum.minutesSpent ?? 0,
+    ]),
+  );
+
+  const rows = await Promise.all(
+    projects.map(async (project) => {
+      const totalHours = (minutesByProject.get(project.id) ?? 0) / 60;
+      const calculatedCost = await getProjectBillingCostForSummary({
+        clientId,
+        projectId: project.id,
+        fallbackCost: fallbackProjectCost(project),
+        billingMonth: monthRange.value,
+      });
+      return {
+        projectId: project.id,
+        projectName: project.name,
+        status: formatEntityStatus(project.status),
+        billingModel: formatBillingModel(project.billingModel),
+        totalHours,
+        cost:
+          project.billingModel === "HOURLY"
+            ? totalHours * hourlyCost
+            : calculatedCost,
+        poNumber: poByProject.get(project.id) ?? "-",
+        billingMonth: monthRange.value,
+      };
+    }),
+  );
+
+  return {
+    client: { id: client.id, name: client.name },
+    reportType: "portals",
+    reportTitle: "Portals",
+    filters: { month: monthRange.value },
+    rows,
+    totalHours: rows.reduce((sum, row) => sum + row.totalHours, 0),
+    totalCost: rows.reduce((sum, row) => sum + row.cost, 0),
+  };
 }
 
 export async function getBillingHistoryData({
@@ -2101,6 +2576,7 @@ export async function getBillingHistoryData({
     name: true,
     status: true,
     billingModel: true,
+    billingCycle: true,
     billingDate: true,
     projectCost: true,
     perCountryCharges: true,
@@ -2143,53 +2619,143 @@ export async function getBillingHistoryData({
   };
 
   if (client.poAssignmentMode === "PROJECT") {
-    const [summaryProjects, historyProjects] = await Promise.all([
-      db.project.findMany({
-        where: {
-          clientId,
-          isActive: true,
-          addToBilling: true,
-          billingModel: { not: "FIXED_MONTHLY" },
-          status: { in: ["ACTIVE", "COMPLETED"] },
-        },
-        select: projectSelect,
-        orderBy: { name: "asc" },
-      }),
-      db.project.findMany({
-        where: {
-          clientId,
-          isActive: true,
-          addToBilling: true,
-          billingModel: { not: "FIXED_MONTHLY" },
-          status: "COMPLETED_BILLED",
-          billingDate: { gte: start, lt: end },
-        },
-        select: projectSelect,
-        orderBy: [{ billingDate: "desc" }, { name: "asc" }],
-      }),
-    ]);
+    const projectMonthRange = parseYearMonth(filters.projectMonth);
+    const currentBillingMonth = projectMonthRange.month;
+    const currentBillingYear = projectMonthRange.year;
+    const [summaryProjects, oneTimeHistoryProjects, monthlyBillingRecords] =
+      await Promise.all([
+        db.project.findMany({
+          where: {
+            clientId,
+            isActive: true,
+            addToBilling: true,
+            OR: [
+              {
+                billingCycle: "MONTHLY",
+                status: { in: ["ACTIVE", "COMPLETED"] },
+              },
+              {
+                billingCycle: "ONE_TIME",
+                billingModel: { not: "FIXED_MONTHLY" },
+                status: { in: ["ACTIVE", "COMPLETED"] },
+              },
+            ],
+          },
+          select: projectSelect,
+          orderBy: { name: "asc" },
+        }),
+        db.project.findMany({
+          where: {
+            clientId,
+            isActive: true,
+            addToBilling: true,
+            billingCycle: "ONE_TIME",
+            billingModel: { not: "FIXED_MONTHLY" },
+            status: "COMPLETED_BILLED",
+            billingDate: { gte: start, lt: end },
+          },
+          select: projectSelect,
+          orderBy: [{ billingDate: "desc" }, { name: "asc" }],
+        }),
+        db.billingRecord.findMany({
+          where: {
+            clientId,
+            projectId: { not: null },
+            billingYear: year,
+          },
+          include: {
+            project: { select: projectSelect },
+            purchaseOrder: { select: { poNumber: true } },
+          },
+          orderBy: [{ billingYear: "desc" }, { billingMonth: "desc" }],
+        }),
+      ]);
+    const billedMonthlyKeys = new Set(
+      monthlyBillingRecords
+        .filter((record) => record.billingMonth && record.billingYear)
+        .map(
+          (record) =>
+            `${record.projectId}:${record.billingYear}:${record.billingMonth}`,
+        ),
+    );
+    const pendingSummaryProjects = summaryProjects.filter(
+      (project) =>
+        project.billingCycle !== "MONTHLY" ||
+        !billedMonthlyKeys.has(
+          `${project.id}:${currentBillingYear}:${currentBillingMonth}`,
+        ),
+    );
+    const historyProjects = oneTimeHistoryProjects;
 
-    const mapProjectRow = (
+    const mapProjectRow = async (
       project: (typeof summaryProjects)[number],
-    ): BillingHistoryRow => ({
-      itemId: project.id,
+      includeCompletedBilled = false,
+      monthly?: {
+        month: number;
+        year: number;
+        amount?: unknown;
+        poNumber?: string | null;
+        billingDate?: Date | null;
+      },
+    ): Promise<BillingHistoryRow> => ({
+      itemId: monthly
+        ? `${project.id}:${monthly.year}:${monthly.month}`
+        : project.id,
       itemType: "PROJECT",
       itemName: project.name,
       projectId: project.id,
       billingRegion: "Project",
       billingModel: formatBillingModel(project.billingModel),
-      cost: formatMoney(getSimpleProjectCost(project)),
-      billingDate: project.billingDate
-        ? formatDisplayDate(project.billingDate)
-        : "-",
-      poNumber: poNumberByProject.get(project.id) ?? "-",
+      cost: monthly
+        ? formatMoney(Number(monthly.amount ?? 0))
+        : formatMoney(
+            await getProjectBillingCostForSummary({
+              clientId,
+              projectId: project.id,
+              fallbackCost: getSimpleProjectCost(project),
+              includeCompletedBilled,
+              billingMonth:
+                project.billingCycle === "MONTHLY"
+                  ? projectMonthRange.value
+                  : undefined,
+            }),
+          ),
+      billingDate: monthly?.billingDate
+        ? formatDisplayDate(monthly.billingDate)
+        : project.billingDate
+          ? formatDisplayDate(project.billingDate)
+          : "-",
+      billingMonth: monthly
+        ? `${monthly.year}-${String(monthly.month).padStart(2, "0")}`
+        : project.billingCycle === "MONTHLY"
+          ? `${currentBillingYear}-${String(currentBillingMonth).padStart(2, "0")}`
+          : undefined,
+      poNumber: monthly?.poNumber ?? poNumberByProject.get(project.id) ?? "-",
       status: formatEntityStatus(project.status),
       timeEntryCount: project._count.timeEntries,
       movieBillingHeadCount: 0,
     });
 
-    const summaryRows = summaryProjects.map(mapProjectRow);
-    const historyRows = historyProjects.map(mapProjectRow);
+    const summaryRows = await Promise.all(
+      pendingSummaryProjects.map((project) => mapProjectRow(project)),
+    );
+    const historyRows = await Promise.all(
+      historyProjects
+        .map((project) => mapProjectRow(project, true))
+        .concat(
+          monthlyBillingRecords
+            .filter((record) => record.project)
+            .map((record) =>
+              mapProjectRow(record.project!, true, {
+                month: record.billingMonth ?? 0,
+                year: record.billingYear ?? year,
+                amount: record.amount,
+                poNumber: record.purchaseOrder?.poNumber ?? null,
+                billingDate: record.billingDate,
+              }),
+            ),
+        ),
+    );
     return { client, filters, summaryRows, historyRows, rows: historyRows };
   }
 
@@ -2242,7 +2808,10 @@ export async function getBillingHistoryData({
       entry: (typeof summaryEntries)[number],
     ): entry is TitleProjectEntry => Boolean(entry.movie && entry.project);
 
-    const makeRows = (entries: typeof summaryEntries) => {
+    const makeRows = async (
+      entries: typeof summaryEntries,
+      includeCompletedBilled = false,
+    ) => {
       const byPair = new Map<string, TitleProjectEntry>();
 
       for (const entry of entries) {
@@ -2251,26 +2820,163 @@ export async function getBillingHistoryData({
         byPair.set(`${entry.movie.id}:${entry.project.id}`, entry);
       }
 
-      return Array.from(byPair.values())
+      return Promise.all(
+        Array.from(byPair.values())
+          .sort((a, b) =>
+            `${a.project.name} ${a.movie.title}`.localeCompare(
+              `${b.project.name} ${b.movie.title}`,
+            ),
+          )
+          .map(async (entry): Promise<BillingHistoryRow> => {
+            const movie = entry.movie;
+            const project = entry.project;
+            const key = `${movie.id}:${project.id}`;
+
+            return {
+              itemId: key,
+              itemType: "TITLE_PROJECT",
+              itemName: `${project.name} - ${movie.title}`,
+              titleName: movie.title,
+              projectName: project.name,
+              movieId: movie.id,
+              projectId: project.id,
+              billingRegion: formatMovieBillingRegions(movie),
+              billingModel: formatBillingModel(project.billingModel),
+              billingDate: project.billingDate
+                ? formatDisplayDate(project.billingDate)
+                : "-",
+              poNumber:
+                poNumberByMovieProject.get(key) ??
+                poNumberByProject.get(project.id) ??
+                poNumberByMovie.get(movie.id) ??
+                "-",
+              status: formatEntityStatus(project.status),
+              titleStatus: formatEntityStatus(movie.status),
+              projectStatus: formatEntityStatus(project.status),
+              cost: formatMoney(
+                await getProjectBillingCostForSummary({
+                  clientId,
+                  projectId: project.id,
+                  movieId: movie.id,
+                  fallbackCost: getSimpleProjectCost(project),
+                  includeCompletedBilled,
+                }),
+              ),
+              timeEntryCount: project._count.timeEntries,
+              movieBillingHeadCount: movie._count.movieBillingHeadAssignments,
+            };
+          }),
+      );
+    };
+
+    const summaryRows = await makeRows(summaryEntries);
+    const historyRows = await makeRows(historyEntries, true);
+    return { client, filters, summaryRows, historyRows, rows: historyRows };
+  }
+
+  if (client.poAssignmentMode === "BILLING_REPORT") {
+    const catalog =
+      getBillingReportCatalogForClient(client.name, client.id) ?? {};
+    const reportRows = await Promise.all(
+      Object.entries(catalog)
+        .filter(([reportType]) => !reportType.includes("history"))
+        .map(async ([reportType, definition]) => ({
+          itemId: reportType,
+          itemType: "BILLING_REPORT" as const,
+          itemName: definition?.title ?? getReportLabel(reportType),
+          billingReportType: reportType,
+          billingRegion: "Billing Report",
+          billingDate: "-",
+          poNumber: poNumberByReport.get(reportType) ?? "-",
+          status: "Pending",
+          cost: await getBillingReportCalculatedCostForSummary({
+            clientId,
+            reportType,
+          }),
+          timeEntryCount: 0,
+          movieBillingHeadCount: 0,
+        })),
+    );
+
+    return {
+      client,
+      filters,
+      summaryRows: reportRows,
+      historyRows: [],
+      rows: [],
+    };
+  }
+
+  const getWarnerPortalTitleProjectRows = async (
+    includeCompletedBilled = false,
+  ): Promise<BillingHistoryRow[]> => {
+    if (client.id !== WARNER_BROS_CLIENT_ID) return [];
+
+    const entries = await db.timeEntry.findMany({
+      where: {
+        project: {
+          clientId,
+          isActive: true,
+          addToBilling: true,
+          warnerProjectType: "PORTAL",
+          billingModel: { not: "FIXED_MONTHLY" },
+          ...(includeCompletedBilled
+            ? {
+                status: "COMPLETED_BILLED",
+                billingDate: { gte: start, lt: end },
+              }
+            : { status: { in: ["ACTIVE", "COMPLETED"] } }),
+        },
+        movie: {
+          clientId,
+          isActive: true,
+          status: includeCompletedBilled
+            ? { in: ["WORKING", "COMPLETED", "COMPLETED_BILLED"] }
+            : { in: ["WORKING", "COMPLETED"] },
+        },
+      },
+      select: {
+        movie: { select: movieSelect },
+        project: { select: projectSelect },
+      },
+    });
+
+    type WarnerPortalTitleProjectEntry = (typeof entries)[number] & {
+      movie: NonNullable<(typeof entries)[number]["movie"]>;
+      project: NonNullable<(typeof entries)[number]["project"]>;
+    };
+
+    const hasMovieAndProject = (
+      entry: (typeof entries)[number],
+    ): entry is WarnerPortalTitleProjectEntry =>
+      Boolean(entry.movie && entry.project);
+
+    const byPair = new Map<string, WarnerPortalTitleProjectEntry>();
+    for (const entry of entries) {
+      if (!hasMovieAndProject(entry)) continue;
+      byPair.set(`${entry.movie.id}:${entry.project.id}`, entry);
+    }
+
+    return Promise.all(
+      Array.from(byPair.values())
         .sort((a, b) =>
           `${a.project.name} ${a.movie.title}`.localeCompare(
             `${b.project.name} ${b.movie.title}`,
           ),
         )
-        .map((entry): BillingHistoryRow => {
+        .map(async (entry): Promise<BillingHistoryRow> => {
           const movie = entry.movie;
           const project = entry.project;
           const key = `${movie.id}:${project.id}`;
-
           return {
-            itemId: key,
+            itemId: `portal:${key}`,
             itemType: "TITLE_PROJECT",
             itemName: `${project.name} - ${movie.title}`,
             titleName: movie.title,
             projectName: project.name,
             movieId: movie.id,
             projectId: project.id,
-            billingRegion: formatMovieBillingRegions(movie),
+            billingRegion: "Portal",
             billingModel: formatBillingModel(project.billingModel),
             billingDate: project.billingDate
               ? formatDisplayDate(project.billingDate)
@@ -2283,44 +2989,21 @@ export async function getBillingHistoryData({
             status: formatEntityStatus(project.status),
             titleStatus: formatEntityStatus(movie.status),
             projectStatus: formatEntityStatus(project.status),
-            cost: formatMoney(getSimpleProjectCost(project)),
+            cost: formatMoney(
+              await getProjectBillingCostForSummary({
+                clientId,
+                projectId: project.id,
+                movieId: movie.id,
+                fallbackCost: getSimpleProjectCost(project),
+                includeCompletedBilled,
+              }),
+            ),
             timeEntryCount: project._count.timeEntries,
             movieBillingHeadCount: movie._count.movieBillingHeadAssignments,
           };
-        });
-    };
-
-    const summaryRows = makeRows(summaryEntries);
-    const historyRows = makeRows(historyEntries);
-    return { client, filters, summaryRows, historyRows, rows: historyRows };
-  }
-
-  if (client.poAssignmentMode === "BILLING_REPORT") {
-    const catalog =
-      getBillingReportCatalogForClient(client.name, client.id) ?? {};
-    const reportRows = Object.entries(catalog)
-      .filter(([reportType]) => !reportType.includes("history"))
-      .map(([reportType, definition]) => ({
-        itemId: reportType,
-        itemType: "BILLING_REPORT" as const,
-        itemName: definition?.title ?? getReportLabel(reportType),
-        billingReportType: reportType,
-        billingRegion: "Billing Report",
-        billingDate: "-",
-        poNumber: poNumberByReport.get(reportType) ?? "-",
-        status: "Pending",
-        timeEntryCount: 0,
-        movieBillingHeadCount: 0,
-      }));
-
-    return {
-      client,
-      filters,
-      summaryRows: reportRows,
-      historyRows: [],
-      rows: [],
-    };
-  }
+        }),
+    );
+  };
 
   const [summaryMovies, historyMovies] = await Promise.all([
     db.movie.findMany({
@@ -2356,7 +3039,6 @@ export async function getBillingHistoryData({
     poNumber: poNumberByMovie.get(movie.id) ?? "-",
     status: formatEntityStatus(movie.status),
     titleStatus: formatEntityStatus(movie.status),
-    cost: 0,
     timeEntryCount: movie._count.timeEntries,
     movieBillingHeadCount: movie._count.movieBillingHeadAssignments,
   });
@@ -2371,34 +3053,131 @@ export async function getBillingHistoryData({
 
   const reportDefinitions = Object.entries(
     getBillingReportCatalogForClient(client.name, client.id) ?? {},
-  ).filter(([reportType]) => !reportType.includes("history"));
-  const withReportValues = (row: BillingHistoryRow): BillingHistoryRow =>
+  ).filter(
+    ([reportType, definition]) =>
+      !reportType.includes("history") &&
+      definition?.poAssignmentMode !== "TITLE_PROJECT" &&
+      definition?.kind !== "warner-portals",
+  );
+  const withReportValues = async (
+    row: BillingHistoryRow,
+    includeCompletedBilled = false,
+  ): Promise<BillingHistoryRow> =>
     client.poAssignmentMode === "TITLE_BILLING_REPORT"
       ? {
           ...row,
-          reportValues: reportDefinitions.map(([reportType, definition]) => ({
-            reportType,
-            reportTitle: definition?.title ?? getReportLabel(reportType),
-            cost: 0,
-            poNumber:
-              poNumberByMovieReport.get(`${row.movieId}:${reportType}`) ??
-              poNumberByMovie.get(row.movieId ?? "") ??
-              poNumberByReport.get(reportType) ??
-              "-",
-          })),
+          cost: await getBillingReportCalculatedCostForSummary({
+            clientId,
+            reportType: "social-assets",
+            movieId: row.movieId ?? "all",
+            includeCompletedBilled,
+          }),
+          reportValues: await Promise.all(
+            reportDefinitions.map(async ([reportType, definition]) => ({
+              reportType,
+              reportTitle: definition?.title ?? getReportLabel(reportType),
+              cost: await getBillingReportCalculatedCostForSummary({
+                clientId,
+                reportType,
+                movieId: row.movieId ?? "all",
+                includeCompletedBilled,
+              }),
+              poNumber:
+                poNumberByMovieReport.get(`${row.movieId}:${reportType}`) ??
+                poNumberByMovie.get(row.movieId ?? "") ??
+                poNumberByReport.get(reportType) ??
+                "-",
+            })),
+          ),
         }
-      : row;
+      : {
+          ...row,
+          cost: await getBillingReportCalculatedCostForSummary({
+            clientId,
+            reportType: "social-assets",
+            movieId: row.movieId ?? "all",
+            includeCompletedBilled,
+          }),
+        };
 
-  const summaryRows = visibleSummaryMovies
-    .map(mapMovieRow)
-    .map(withReportValues);
-  const historyRows = visibleHistoryMovies
-    .map(mapMovieRow)
-    .map(withReportValues);
+  const summaryRows = await Promise.all(
+    visibleSummaryMovies.map((movie) => withReportValues(mapMovieRow(movie))),
+  );
+  const historyRows = await Promise.all(
+    visibleHistoryMovies.map((movie) =>
+      withReportValues(mapMovieRow(movie), true),
+    ),
+  );
+  const portalRows =
+    client.id === WARNER_BROS_CLIENT_ID
+      ? ((
+          await getWarnerPortalReportData({
+            clientId,
+            month: filters.portalsMonth,
+          })
+        )?.rows ?? [])
+      : undefined;
+  const portalSummaryRows = (portalRows ?? []).map(
+    (row): BillingHistoryRow => ({
+      itemId: `portal:${row.projectId}:${row.billingMonth}`,
+      itemType: "PROJECT",
+      itemName: row.projectName,
+      projectName: row.projectName,
+      projectId: row.projectId,
+      billingRegion: "Portal",
+      billingModel: row.billingModel,
+      billingMonth: row.billingMonth,
+      billingDate: "-",
+      poNumber: row.poNumber,
+      status: row.status,
+      projectStatus: row.status,
+      cost: row.cost,
+      timeEntryCount: 0,
+      movieBillingHeadCount: 0,
+    }),
+  );
+  const portalHistoryRows = await getWarnerPortalTitleProjectRows(true);
   return {
     client,
     filters,
     summaryRows,
+    portalRows,
+    summarySections:
+      client.id === WARNER_BROS_CLIENT_ID
+        ? [
+            {
+              key: "title-billing-report",
+              title: "Billing Summary",
+              poAssignmentMode: "TITLE_BILLING_REPORT",
+              rows: summaryRows,
+            },
+            {
+              key: "portals",
+              title: "Portals",
+              poAssignmentMode: "PROJECT",
+              rows: portalSummaryRows,
+              monthFilterParam: "portalsMonth",
+              monthFilterValue: filters.portalsMonth,
+            },
+          ]
+        : undefined,
+    historySections:
+      client.id === WARNER_BROS_CLIENT_ID
+        ? [
+            {
+              key: "title-billing-report-history",
+              title: `${client.name} Billing Summary & History`,
+              poAssignmentMode: "TITLE_BILLING_REPORT",
+              rows: historyRows,
+            },
+            {
+              key: "portal-history",
+              title: "Portals Billing History",
+              poAssignmentMode: "TITLE_PROJECT",
+              rows: portalHistoryRows,
+            },
+          ]
+        : undefined,
     historyRows,
     rows: historyRows,
   };

@@ -10,6 +10,7 @@ import {
   getWarnerDomesticDeliverableData,
   getWarnerIntlDeliverableData,
   getWarnerOtherDeliverableData,
+  getWarnerPortalReportData,
   getUniversalBillingSummaryData,
   buildBillingHistoryFilters,
   getBillingHistoryData,
@@ -55,6 +56,9 @@ import {
   buildWarnerDomesticReportExcel,
   buildWarnerDomesticReportFileName,
   buildWarnerDomesticReportPdf,
+  buildWarnerPortalReportExcel,
+  buildWarnerPortalReportPdf,
+  getWarnerPortalReportFileName,
   buildGenericBillingReportExcel,
   buildGenericBillingReportPdf,
   getGenericBillingReportFileName,
@@ -190,6 +194,33 @@ export async function GET(
       },
     });
   }
+
+  if (reportDefinition?.kind === "warner-portals") {
+    const data = await getWarnerPortalReportData({
+      clientId,
+      month: searchParams.get("month") ?? undefined,
+    });
+    if (!data) redirect("/billing-reports");
+
+    if (format === "pdf") {
+      const pdf = buildWarnerPortalReportPdf(data);
+      return new Response(Buffer.from(pdf, "binary"), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${getWarnerPortalReportFileName(data, "pdf")}"`,
+        },
+      });
+    }
+
+    const excel = buildWarnerPortalReportExcel(data);
+    return new Response(excel, {
+      headers: {
+        "Content-Type": "application/vnd.ms-excel; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${getWarnerPortalReportFileName(data, "xls")}"`,
+      },
+    });
+  }
+
   if (reportDefinition?.kind === "deliverable") {
     const filters = buildWarnerDomesticDeliverableFilters(searchParams);
     const data =

@@ -44,6 +44,8 @@ type BillingModel =
   | "FIXED_MONTHLY"
   | "FIXED_PER_COUNTRY"
   | "FIXED_COST";
+type BillingCycle = "ONE_TIME" | "MONTHLY";
+type WarnerProjectType = "OTHER" | "PORTAL";
 type ProjectStatus =
   | "DRAFT"
   | "ACTIVE"
@@ -55,6 +57,7 @@ type ProjectStatus =
 const FILMIK_CLIENT_ID = "cmne6ed2o0000jo04t3363pqz";
 const SONY_PICTURES_CLIENT_ID = "cmn66d3q40002l104n6wvefvl";
 const UNIVERSAL_PICTURES_CLIENT_ID = "cmnh2xr1s0004l204ia5u5zj3";
+const WARNER_BROS_CLIENT_ID = "cmn66av4j0001l104077m5vxz";
 
 const initialState: ProjectFormState = {};
 
@@ -72,6 +75,9 @@ export function NewProjectForm({
   isAdmin?: boolean;
 }) {
   const [billingModel, setBillingModel] = useState<BillingModel>("HOURLY");
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>("ONE_TIME");
+  const [warnerProjectType, setWarnerProjectType] =
+    useState<WarnerProjectType>("OTHER");
   const [clientId, setClientId] = useState("");
   const [projectTypeId, setProjectTypeId] = useState("");
   const [contactPersonId, setContactPersonId] = useState("");
@@ -96,6 +102,7 @@ export function NewProjectForm({
   const isFilmikClient = clientId === FILMIK_CLIENT_ID;
   const isSonyPicturesClient = clientId === SONY_PICTURES_CLIENT_ID;
   const isUniversalPicturesClient = clientId === UNIVERSAL_PICTURES_CLIENT_ID;
+  const isWarnerClient = clientId === WARNER_BROS_CLIENT_ID;
   const currentMonth = new Date().toISOString().slice(0, 7);
 
   const contactPersonOptions = useMemo(
@@ -121,6 +128,8 @@ export function NewProjectForm({
       <input type="hidden" name="projectTypeId" value={projectTypeId} />
       <input type="hidden" name="contactPersonId" value={contactPersonId} />
       <input type="hidden" name="billingModel" value={billingModel} />
+      <input type="hidden" name="billingCycle" value={billingCycle} />
+      <input type="hidden" name="warnerProjectType" value={warnerProjectType} />
       <input type="hidden" name="status" value={status} />
       {hideCountriesInEntries ? (
         <input type="hidden" name="hideCountriesInEntries" value="on" />
@@ -173,6 +182,7 @@ export function NewProjectForm({
               setClientId(value);
               setProjectTypeId("");
               setContactPersonId("");
+              setWarnerProjectType("OTHER");
               setHideCountriesInEntries(false);
               setHideTitlesInEntries(false);
               setHideAssetTypesInEntries(false);
@@ -256,6 +266,52 @@ export function NewProjectForm({
             required
           />
         </div>
+
+        <div>
+          <FormLabel htmlFor="billingCycle" required>
+            Billing cycle
+          </FormLabel>
+          <SearchableCombobox
+            id="billingCycle"
+            value={billingCycle}
+            onValueChange={(value) => setBillingCycle(value as BillingCycle)}
+            options={[
+              { value: "ONE_TIME", label: "One Time" },
+              { value: "MONTHLY", label: "Monthly" },
+            ]}
+            placeholder="Select billing cycle"
+            searchPlaceholder="Search billing cycles..."
+            emptyLabel="No billing cycle found."
+            required
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Use Monthly for projects billed every month, including hourly
+            projects with a new PO each month.
+          </p>
+        </div>
+
+        {isWarnerClient ? (
+          <div>
+            <FormLabel htmlFor="warnerProjectType" required>
+              Project type
+            </FormLabel>
+            <SearchableCombobox
+              id="warnerProjectType"
+              value={warnerProjectType}
+              onValueChange={(value) =>
+                setWarnerProjectType(value as WarnerProjectType)
+              }
+              options={[
+                { value: "OTHER", label: "Other" },
+                { value: "PORTAL", label: "Portal" },
+              ]}
+              placeholder="Select project type"
+              searchPlaceholder="Search project types..."
+              emptyLabel="No project type found."
+              required
+            />
+          </div>
+        ) : null}
 
         <div>
           <FormLabel htmlFor="status" required>

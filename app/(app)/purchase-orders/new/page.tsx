@@ -21,6 +21,7 @@ type PurchaseOrderProjectOption = {
   id: string;
   name: string;
   clientId: string;
+  billingCycle: string;
   client: {
     name: string;
   };
@@ -130,6 +131,7 @@ export default async function NewPurchaseOrderPage() {
             clientId: project.clientId,
             clientName: project.client.name,
             newsletterType: project.newsletters[0]?.newsletterType ?? null,
+            billingCycle: project.billingCycle,
           }))}
           action={createPurchaseOrderAction}
           title="Create Purchase Order"

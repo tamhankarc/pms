@@ -22,6 +22,8 @@ const baseSchema = z.object({
     "FIXED_PER_COUNTRY",
     "FIXED_COST",
   ]),
+  billingCycle: z.enum(["ONE_TIME", "MONTHLY"]).default("ONE_TIME"),
+  warnerProjectType: z.enum(["OTHER", "PORTAL"]).default("OTHER"),
   fixedContractHours: z.coerce.number().nonnegative().optional(),
   fixedMonthlyHours: z.coerce.number().nonnegative().optional(),
   additionalCharges: z.coerce
@@ -125,6 +127,7 @@ async function validateProjectType(
 const FILMIK_CLIENT_ID = "cmne6ed2o0000jo04t3363pqz";
 const SONY_PICTURES_CLIENT_ID = "cmn66d3q40002l104n6wvefvl";
 const UNIVERSAL_PICTURES_CLIENT_ID = "cmnh2xr1s0004l204ia5u5zj3";
+const WARNER_BROS_CLIENT_ID = "cmn66av4j0001l104077m5vxz";
 
 function parseMonthStart(value: string) {
   if (!/^\d{4}-\d{2}$/.test(value)) return null;
@@ -240,6 +243,8 @@ export async function createProjectAction(
       contactPersonId: String(formData.get("contactPersonId") ?? "") || null,
       name: String(formData.get("name") ?? ""),
       billingModel: formData.get("billingModel"),
+      billingCycle: formData.get("billingCycle") || "ONE_TIME",
+      warnerProjectType: formData.get("warnerProjectType") || "OTHER",
       fixedContractHours: formData.get("fixedContractHours") || 0,
       fixedMonthlyHours: formData.get("fixedMonthlyHours") || 0,
       additionalCharges: formData.get("additionalCharges") || 0,
@@ -334,6 +339,11 @@ export async function createProjectAction(
         name: parsed.data.name.trim(),
         code: projectCode,
         billingModel: parsed.data.billingModel,
+        billingCycle: parsed.data.billingCycle,
+        warnerProjectType:
+          client.id === WARNER_BROS_CLIENT_ID
+            ? parsed.data.warnerProjectType
+            : "OTHER",
         fixedContractHours:
           parsed.data.billingModel === "FIXED_FULL" && isAdminUser
             ? (parsed.data.fixedContractHours ?? 0)
@@ -471,6 +481,8 @@ export async function updateProjectAction(
       contactPersonId: String(formData.get("contactPersonId") ?? "") || null,
       name: String(formData.get("name") ?? ""),
       billingModel: formData.get("billingModel"),
+      billingCycle: formData.get("billingCycle") || "ONE_TIME",
+      warnerProjectType: formData.get("warnerProjectType") || "OTHER",
       fixedContractHours: formData.get("fixedContractHours") || 0,
       fixedMonthlyHours: formData.get("fixedMonthlyHours") || 0,
       additionalCharges: formData.get("additionalCharges") || 0,
@@ -561,6 +573,11 @@ export async function updateProjectAction(
         contactPersonId: parsed.data.contactPersonId || null,
         name: parsed.data.name.trim(),
         billingModel: parsed.data.billingModel,
+        billingCycle: parsed.data.billingCycle,
+        warnerProjectType:
+          existingProject.clientId === WARNER_BROS_CLIENT_ID
+            ? parsed.data.warnerProjectType
+            : "OTHER",
         fixedContractHours:
           parsed.data.billingModel === "FIXED_FULL"
             ? isAdminUser
@@ -708,28 +725,80 @@ export async function completeProjectBillingAction(formData: FormData) {
 
   const project = await db.project.findUnique({
     where: { id: projectId },
-    select: { clientId: true, billingModel: true },
+    select: { clientId: true, billingModel: true, billingCycle: true },
   });
   if (!project) throw new Error("Project not found.");
-  if (project.billingModel === "FIXED_MONTHLY") {
-    throw new Error(
-      "Fixed-Monthly projects are not marked Completed & Billed from this action.",
-    );
-  }
+  const billingDate = new Date(`${billingDateValue}T00:00:00`);
+  const amount = Number(formData.get("amount") || 0);
+  const billingMonthValue = String(formData.get("billingMonth") || "");
+  const billingYearValue = String(formData.get("billingYear") || "");
+  const billingMonth = /^\d{4}-\d{2}$/.test(billingMonthValue)
+    ? Number(billingMonthValue.slice(5, 7))
+    : Number(billingYearValue) && Number(formData.get("billingMonthNumber"))
+      ? Number(formData.get("billingMonthNumber"))
+      : billingDate.getMonth() + 1;
+  const billingYear = /^\d{4}-\d{2}$/.test(billingMonthValue)
+    ? Number(billingMonthValue.slice(0, 4))
+    : Number(billingYearValue) || billingDate.getFullYear();
 
-  await db.project.update({
-    where: { id: projectId },
-    data: {
-      status: "COMPLETED_BILLED",
-      billingDate: new Date(`${billingDateValue}T00:00:00`),
-      billingInvoiceNumber: invoiceNumber,
+  const matchingPo = await db.purchaseOrder.findFirst({
+    where: {
+      clientId: project.clientId,
+      assignments: {
+        some: {
+          projectId,
+          ...(project.billingCycle === "MONTHLY"
+            ? { billingMonth, billingYear }
+            : {}),
+        },
+      },
+      status: { not: "CANCELLED" },
     },
+    select: { id: true },
+    orderBy: { createdAt: "desc" },
   });
+
+  if (project.billingCycle === "MONTHLY") {
+    await db.billingRecord.create({
+      data: {
+        clientId: project.clientId,
+        projectId,
+        purchaseOrderId: matchingPo?.id ?? null,
+        billingMonth,
+        billingYear,
+        billingDate,
+        invoiceNumber,
+        amount: Number.isFinite(amount) ? amount : 0,
+      },
+    });
+  } else {
+    if (project.billingModel === "FIXED_MONTHLY") {
+      throw new Error(
+        "Fixed-Monthly projects are not marked Completed & Billed from this action.",
+      );
+    }
+
+    await db.project.update({
+      where: { id: projectId },
+      data: {
+        status: "COMPLETED_BILLED",
+        billingDate,
+        billingInvoiceNumber: invoiceNumber,
+      },
+    });
+  }
 
   await db.purchaseOrder.updateMany({
     where: {
       clientId: project.clientId,
-      assignments: { some: { projectId } },
+      assignments: {
+        some: {
+          projectId,
+          ...(project.billingCycle === "MONTHLY"
+            ? { billingMonth, billingYear }
+            : {}),
+        },
+      },
     },
     data: { status: "PROCESSED" },
   });

@@ -28,6 +28,7 @@ type PurchaseOrderProjectOption = {
   id: string;
   name: string;
   clientId: string;
+  billingCycle: string;
   client: {
     name: string;
   };
@@ -178,6 +179,7 @@ export default async function EditPurchaseOrderPage({
             clientId: project.clientId,
             clientName: project.client.name,
             newsletterType: project.newsletters[0]?.newsletterType ?? null,
+            billingCycle: project.billingCycle,
           }))}
           action={updatePurchaseOrderAction}
           title={`Edit Purchase Order: ${po.poNumber}`}
@@ -200,6 +202,10 @@ export default async function EditPurchaseOrderPage({
               .filter((value): value is string => Boolean(value)),
             projectId: assignment?.projectId ?? "",
             billingReportType: assignment?.billingReportType ?? "",
+            billingMonth:
+              assignment?.billingYear && assignment?.billingMonth
+                ? `${assignment.billingYear}-${String(assignment.billingMonth).padStart(2, "0")}`
+                : "",
           }}
         />
       </div>

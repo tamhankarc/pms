@@ -106,6 +106,8 @@ export default async function ProjectDetailPage({
           contactPersonId: project.contactPersonId,
           name: project.name,
           billingModel: project.billingModel,
+          billingCycle: project.billingCycle,
+          warnerProjectType: project.warnerProjectType,
           fixedContractHours:
             project.fixedContractHours == null
               ? null

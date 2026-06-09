@@ -5,6 +5,7 @@ import {
   sanitizeFileSegment,
 } from "@/lib/billing-reports/amazon";
 import { getLensBillingAdjustments } from "@/lib/billing-reports/lens";
+import type { MovieStatus } from "@prisma/client";
 
 const SONY_TICKETING_PROJECT_ID = "cmnn1qrex000ll7043zm4uyti";
 const SONY_NEWSLETTER_PROJECT_ID = "cmnijd30h0001l404y6i8tb2y";
@@ -64,7 +65,11 @@ export type SonyPicturesReportData = {
   titleBlocks: SonyPicturesReportTitleBlock[];
 };
 
-export type SonyBillingSummaryHistoryFilters = { year: string };
+export type SonyBillingSummaryHistoryFilters = {
+  year: string;
+  projectMonth?: string;
+  portalsMonth?: string;
+};
 export type SonyBillingSummaryHistoryReportValue = {
   reportType: string;
   reportTitle: string;
@@ -78,6 +83,7 @@ export type SonyBillingSummaryHistoryRow = {
   status: string;
   billingRegions: string;
   billingDate: string;
+  billingMonth?: string;
   poNumber: string;
   reportValues: SonyBillingSummaryHistoryReportValue[];
 };
@@ -144,6 +150,38 @@ function formatDisplayDate(value: Date | null) {
     month: "short",
     year: "numeric",
   }).format(value);
+}
+
+async function getSonyBillingReportCalculatedCostForSummary({
+  clientId,
+  reportType,
+  movieId,
+  includeCompletedBilled = false,
+}: {
+  clientId: string;
+  reportType: string;
+  movieId: string;
+  includeCompletedBilled?: boolean;
+}) {
+  if (reportType === "spe-main" || reportType === "canada-other") {
+    const data = await getSonyPicturesReportData({
+      clientId,
+      filters: { movieId },
+      variant: reportType === "canada-other" ? "canada-other" : "main",
+      includeCompletedBilled,
+    });
+    return Number(data?.totalCost ?? 0);
+  }
+
+  if (reportType === "newsletters") {
+    const data = await getSonyNewsletterBillingData({
+      clientId,
+      filters: { month: defaultMonthValue() },
+    });
+    return Number(data?.totalCost ?? 0);
+  }
+
+  return 0;
 }
 
 function buildContactPersonLabel(
@@ -238,10 +276,12 @@ export async function getSonyPicturesReportData({
   clientId,
   filters,
   variant = "main",
+  includeCompletedBilled = false,
 }: {
   clientId: string;
   filters: SonyPicturesReportFilters;
   variant?: "main" | "canada-other";
+  includeCompletedBilled?: boolean;
 }): Promise<SonyPicturesReportData | null> {
   const client = await db.client.findUnique({
     where: { id: clientId },
@@ -255,13 +295,16 @@ export async function getSonyPicturesReportData({
     },
   });
   if (!client) return null;
+  const allowedMovieStatuses: MovieStatus[] = includeCompletedBilled
+    ? ["WORKING", "COMPLETED", "COMPLETED_BILLED"]
+    : ["WORKING", "COMPLETED"];
 
   const [rawMovieOptions, otherProjectEntryMovieIds] = await Promise.all([
     db.movie.findMany({
       where: {
         clientId,
         isActive: true,
-        status: { in: ["WORKING", "COMPLETED"] },
+        status: { in: allowedMovieStatuses },
         timeEntries: { some: { projectId: SONY_TICKETING_PROJECT_ID } },
       },
       select: {
@@ -292,7 +335,7 @@ export async function getSonyPicturesReportData({
         movie: {
           clientId,
           isActive: true,
-          status: { in: ["WORKING", "COMPLETED"] },
+          status: { in: allowedMovieStatuses },
         },
         projectId: {
           notIn: [SONY_TICKETING_PROJECT_ID, SONY_NEWSLETTER_PROJECT_ID],
@@ -354,6 +397,7 @@ export async function getSonyPicturesReportData({
           clientId,
           filters: { movieId: movie.id },
           variant,
+          includeCompletedBilled,
         }),
       ),
     );
@@ -396,7 +440,7 @@ export async function getSonyPicturesReportData({
           id: selectedMovieId,
           clientId,
           isActive: true,
-          status: { in: ["WORKING", "COMPLETED"] },
+          status: { in: allowedMovieStatuses },
         },
         select: {
           id: true,
@@ -833,30 +877,40 @@ export async function getSonyBillingSummaryHistoryData({
     ["canada-other", "SPE US Ticketing, Canada & Other"],
     ["newsletters", "Newsletters"],
   ] as const;
-  const mapRow = (
+  const mapRow = async (
     movie: (typeof summaryMovies)[number],
-  ): SonyBillingSummaryHistoryRow => ({
+    includeCompletedBilled = false,
+  ): Promise<SonyBillingSummaryHistoryRow> => ({
     movieId: movie.id,
     title: movie.title,
     status: formatMovieStatus(movie.status),
     billingRegions: formatBillingRegions(movie),
     billingDate: formatDisplayDate(movie.billingDate),
     poNumber: poByMovie.get(movie.id) ?? "-",
-    reportValues: reportDefinitions.map(([reportType, reportTitle]) => ({
-      reportType,
-      reportTitle,
-      cost: 0,
-      poNumber:
-        poByMovieReport.get(`${movie.id}:${reportType}`) ??
-        poByMovie.get(movie.id) ??
-        "-",
-    })),
+    reportValues: await Promise.all(
+      reportDefinitions.map(async ([reportType, reportTitle]) => ({
+        reportType,
+        reportTitle,
+        cost: await getSonyBillingReportCalculatedCostForSummary({
+          clientId,
+          reportType,
+          movieId: movie.id,
+          includeCompletedBilled,
+        }),
+        poNumber:
+          poByMovieReport.get(`${movie.id}:${reportType}`) ??
+          poByMovie.get(movie.id) ??
+          "-",
+      })),
+    ),
   });
   return {
     client,
     filters,
-    summaryRows: summaryMovies.map(mapRow),
-    historyRows: historyMovies.map(mapRow),
+    summaryRows: await Promise.all(summaryMovies.map((movie) => mapRow(movie))),
+    historyRows: await Promise.all(
+      historyMovies.map((movie) => mapRow(movie, true)),
+    ),
   };
 }
 

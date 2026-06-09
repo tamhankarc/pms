@@ -74,12 +74,14 @@ import {
   getWarnerDomesticDeliverableData,
   getWarnerIntlDeliverableData,
   getWarnerOtherDeliverableData,
+  getWarnerPortalReportData,
   getUniversalBillingSummaryData,
   isWarnerBillingReportClient,
   normalizeAmazonReportType,
   type AmazonReportType,
   type BillingHistoryData,
   type WarnerDomesticDeliverableData,
+  type WarnerPortalReportData,
   type UniversalBillingSummaryData,
 } from "@/lib/billing-reports/amazon";
 
@@ -92,6 +94,58 @@ function buildQueryString(values: Record<string, string>) {
 }
 
 const BILLING_REPORT_DETAIL_PAGE_SIZE = 20;
+const BILLING_HISTORY_PAGE_SIZE = 10;
+
+function normalizePaginationKey(value: string) {
+  return (
+    value.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "section"
+  );
+}
+
+function getBillingHistoryPageParam(sectionKey: string) {
+  return `billingHistoryPage_${normalizePaginationKey(sectionKey)}`;
+}
+
+function getPaginatedBillingHistoryRows<T>(
+  rows: T[],
+  searchParams: BillingReportPageSearchParams,
+  sectionKey: string,
+) {
+  const pageParam = getBillingHistoryPageParam(sectionKey);
+  return {
+    pageParam,
+    page: paginateItems(
+      rows,
+      parsePageParam(getSearchParamValue(searchParams, pageParam)),
+      BILLING_HISTORY_PAGE_SIZE,
+    ),
+  };
+}
+
+function BillingHistoryPagination<T>({
+  clientId,
+  searchParams,
+  sectionKey,
+  pageData,
+}: {
+  clientId: string;
+  searchParams: BillingReportPageSearchParams;
+  sectionKey: string;
+  pageData: ReturnType<typeof paginateItems<T>>;
+}) {
+  return (
+    <PaginationControls
+      basePath={`/billing-reports/${clientId}`}
+      currentPage={pageData.currentPage}
+      totalPages={pageData.totalPages}
+      totalItems={pageData.totalItems}
+      pageSize={pageData.pageSize}
+      searchParams={searchParams}
+      pageParam={getBillingHistoryPageParam(sectionKey)}
+      anchor={`#${normalizePaginationKey(sectionKey)}`}
+    />
+  );
+}
 
 type BillingContactNotice = {
   id: string;
@@ -190,10 +244,14 @@ function BillingDoneButton({
   movieId,
   returnTo,
   label = "Update Billing Status",
+  billingMonth,
+  amount,
 }: {
   movieId: string;
   returnTo: string;
   label?: string;
+  billingMonth?: string;
+  amount?: number;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   return (
@@ -205,6 +263,12 @@ function BillingDoneButton({
         <form action={completeMovieBillingAction} className="space-y-3">
           <input type="hidden" name="movieId" value={movieId} />
           <input type="hidden" name="returnTo" value={returnTo} />
+          {billingMonth ? (
+            <input type="hidden" name="billingMonth" value={billingMonth} />
+          ) : null}
+          {typeof amount === "number" ? (
+            <input type="hidden" name="amount" value={String(amount)} />
+          ) : null}
           <div>
             <label className="label" htmlFor={`billingDate-${movieId}`}>
               Billing date
@@ -242,10 +306,14 @@ function ProjectBillingDoneButton({
   projectId,
   returnTo,
   label = "Billing Done",
+  billingMonth,
+  amount,
 }: {
   projectId: string;
   returnTo: string;
   label?: string;
+  billingMonth?: string;
+  amount?: number;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   return (
@@ -257,6 +325,12 @@ function ProjectBillingDoneButton({
         <form action={completeProjectBillingAction} className="space-y-3">
           <input type="hidden" name="projectId" value={projectId} />
           <input type="hidden" name="returnTo" value={returnTo} />
+          {billingMonth ? (
+            <input type="hidden" name="billingMonth" value={billingMonth} />
+          ) : null}
+          {typeof amount === "number" ? (
+            <input type="hidden" name="amount" value={String(amount)} />
+          ) : null}
           <div>
             <label
               className="label"
@@ -379,6 +453,8 @@ function ExportButtons({
     countryId?: string;
     month?: string;
     year?: string;
+    projectMonth?: string;
+    portalsMonth?: string;
   };
 }) {
   const query = buildQueryString({
@@ -391,6 +467,8 @@ function ExportButtons({
     countryId: filters.countryId ?? "",
     month: filters.month ?? "",
     year: filters.year ?? "",
+    projectMonth: filters.projectMonth ?? "",
+    portalsMonth: filters.portalsMonth ?? "",
   });
 
   return (
@@ -1685,8 +1763,11 @@ function SonyBillingSummaryHistoryTable({
   includeAction: boolean;
 }) {
   const reportColumns = rows[0]?.reportValues ?? [];
+  const hasBillingMonth = rows.some((row) => row.billingMonth);
   const emptyColSpan =
-    1 + Math.max(reportColumns.length, 1) * 2 + (includeAction ? 1 : 0);
+    1 +
+    Math.max(reportColumns.length, 1) * (hasBillingMonth ? 3 : 2) +
+    (includeAction ? 1 : 0);
   return (
     <table className="table-base">
       <thead className="table-head">
@@ -1698,7 +1779,7 @@ function SonyBillingSummaryHistoryTable({
             <th
               key={report.reportType}
               className="table-cell text-center"
-              colSpan={2}
+              colSpan={hasBillingMonth ? 3 : 2}
             >
               {report.reportTitle}
             </th>
@@ -1713,6 +1794,9 @@ function SonyBillingSummaryHistoryTable({
           {reportColumns.map((report) => (
             <Fragment key={report.reportType}>
               <th className="table-cell">Cost</th>
+              {hasBillingMonth ? (
+                <th className="table-cell">Billing Month</th>
+              ) : null}
               <th className="table-cell">PO Number</th>
             </Fragment>
           ))}
@@ -1727,6 +1811,9 @@ function SonyBillingSummaryHistoryTable({
             {(row.reportValues ?? []).map((report) => (
               <Fragment key={`${row.movieId}-${report.reportType}`}>
                 <td className="table-cell">{formatSonyUsd(report.cost)}</td>
+                {hasBillingMonth ? (
+                  <td className="table-cell">{row.billingMonth ?? "-"}</td>
+                ) : null}
                 <td className="table-cell">{report.poNumber || "-"}</td>
               </Fragment>
             ))}
@@ -1760,10 +1847,12 @@ function SonyBillingSummaryHistoryWorkspace({
   clientId,
   activeReport,
   data,
+  searchParams,
 }: {
   clientId: string;
   activeReport: AmazonReportType;
   data: SonyBillingSummaryHistoryData;
+  searchParams: BillingReportPageSearchParams;
 }) {
   return (
     <div className="space-y-6">
@@ -1776,26 +1865,48 @@ function SonyBillingSummaryHistoryWorkspace({
         <ExportButtons
           clientId={clientId}
           reportType={activeReport}
-          filters={{ year: data.filters.year }}
+          filters={{
+            year: data.filters.year,
+            projectMonth: data.filters.projectMonth,
+            portalsMonth: data.filters.portalsMonth,
+          }}
         />
       </div>
 
-      <section className="table-wrap">
-        <div className="border-b border-slate-200 px-6 py-5">
-          <h2 className="section-title">Billing Summary</h2>
-          <p className="section-subtitle">
-            Titles which have not been marked Completed &amp; Billed.
-          </p>
-        </div>
-        <SonyBillingSummaryHistoryTable
-          data={data}
-          clientId={clientId}
-          rows={data.summaryRows}
-          includeAction
-        />
-      </section>
+      {(() => {
+        const pagination = getPaginatedBillingHistoryRows(
+          data.summaryRows,
+          searchParams,
+          "sony-billing-summary",
+        );
+        return (
+          <section
+            id="sony_billing_summary"
+            className="table-wrap scroll-mt-24"
+          >
+            <div className="border-b border-slate-200 px-6 py-5">
+              <h2 className="section-title">Billing Summary</h2>
+              <p className="section-subtitle">
+                Titles which have not been marked Completed &amp; Billed.
+              </p>
+            </div>
+            <SonyBillingSummaryHistoryTable
+              data={data}
+              clientId={clientId}
+              rows={pagination.page.items}
+              includeAction
+            />
+            <BillingHistoryPagination
+              clientId={clientId}
+              searchParams={searchParams}
+              sectionKey="sony-billing-summary"
+              pageData={pagination.page}
+            />
+          </section>
+        );
+      })()}
 
-      <section className="table-wrap">
+      <section className="table-wrap scroll-mt-24" id="sony_billing_history">
         <div className="border-b border-slate-200 px-6 py-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -1832,12 +1943,29 @@ function SonyBillingSummaryHistoryWorkspace({
             </AutoSubmitFilterForm>
           </div>
         </div>
-        <SonyBillingSummaryHistoryTable
-          data={data}
-          clientId={clientId}
-          rows={data.historyRows}
-          includeAction={false}
-        />
+        {(() => {
+          const pagination = getPaginatedBillingHistoryRows(
+            data.historyRows,
+            searchParams,
+            "sony-billing-history",
+          );
+          return (
+            <>
+              <SonyBillingSummaryHistoryTable
+                data={data}
+                clientId={clientId}
+                rows={pagination.page.items}
+                includeAction={false}
+              />
+              <BillingHistoryPagination
+                clientId={clientId}
+                searchParams={searchParams}
+                sectionKey="sony-billing-history"
+                pageData={pagination.page}
+              />
+            </>
+          );
+        })()}
       </section>
     </div>
   );
@@ -2242,6 +2370,144 @@ function FilmikBillingReportWorkspace({
   );
 }
 
+function WarnerPortalReportWorkspace({
+  clientId,
+  activeReport,
+  data,
+  searchParams,
+}: {
+  clientId: string;
+  activeReport: AmazonReportType;
+  data: WarnerPortalReportData;
+  searchParams: BillingReportPageSearchParams;
+}) {
+  return (
+    <div className="space-y-6">
+      <ReportTabs
+        clientId={clientId}
+        activeReport={activeReport}
+        clientName={data.client.name}
+      />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="section-title">{data.reportTitle}</h2>
+          <p className="section-subtitle">
+            Active Warner portal projects marked Add to Billing for the selected
+            month.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <BillingHistoryMonthFilter
+            clientId={clientId}
+            searchParams={searchParams}
+            paramName="month"
+            value={data.filters.month}
+          />
+          <ExportButtons
+            clientId={clientId}
+            reportType={activeReport}
+            filters={{ month: data.filters.month }}
+          />
+        </div>
+      </div>
+      <WarnerPortalProjectsTable rows={data.rows} />
+    </div>
+  );
+}
+
+function WarnerPortalProjectsTable({
+  rows,
+}: {
+  rows: WarnerPortalReportData["rows"];
+}) {
+  const portalRows = rows;
+
+  return (
+    <div className="table-wrap">
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">Project</th>
+            <th className="table-cell">Hours</th>
+            <th className="table-cell">Cost</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {portalRows.map((row) => (
+            <tr key={row.projectId}>
+              <td className="table-cell font-medium text-slate-900">
+                {row.projectName}
+              </td>
+              <td className="table-cell">{row.totalHours.toFixed(2)}</td>
+              <td className="table-cell">
+                <BillingHistoryCostCell value={row.cost} />
+              </td>
+            </tr>
+          ))}
+          {portalRows.length === 0 ? (
+            <tr>
+              <td
+                colSpan={3}
+                className="table-cell text-center text-sm text-slate-500"
+              >
+                No portal projects are available.
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function BillingHistoryMonthFilter({
+  clientId,
+  searchParams,
+  paramName,
+  value,
+  label = "Billing Month",
+}: {
+  clientId: string;
+  searchParams: BillingReportPageSearchParams;
+  paramName: string;
+  value: string;
+  label?: string;
+}) {
+  const hiddenEntries = Object.entries(searchParams).flatMap(
+    ([key, rawValue]) => {
+      if (key === paramName || key.startsWith("billingHistoryPage_")) return [];
+      const values = Array.isArray(rawValue)
+        ? rawValue
+        : rawValue
+          ? [rawValue]
+          : [];
+      return values.map((entryValue) => ({ key, value: entryValue }));
+    },
+  );
+
+  return (
+    <AutoSubmitFilterForm
+      method="get"
+      action={`/billing-reports/${clientId}`}
+      className="w-full sm:w-52"
+    >
+      {hiddenEntries.map(({ key, value }, index) => (
+        <input key={`${key}-${index}`} type="hidden" name={key} value={value} />
+      ))}
+      <label className="label" htmlFor={paramName}>
+        {label}
+      </label>
+      <input
+        id={paramName}
+        name={paramName}
+        type="month"
+        className="input"
+        defaultValue={value}
+      />
+    </AutoSubmitFilterForm>
+  );
+}
+
 function BillingHistoryFilters({
   clientId,
   activeReport,
@@ -2390,15 +2656,20 @@ function BillingHistoryProjectTable({
   activeReport,
   rows,
   includeAction,
+  poAssignmentMode,
 }: {
   data: BillingHistoryData;
   clientId: string;
   activeReport: AmazonReportType;
   rows: BillingHistoryData["summaryRows"];
   includeAction: boolean;
+  poAssignmentMode?: string;
 }) {
   const returnTo = `/billing-reports/${clientId}?report=${activeReport}&year=${data.filters.year}`;
-  const isTitleProject = data.client.poAssignmentMode === "TITLE_PROJECT";
+  const effectivePoAssignmentMode =
+    poAssignmentMode ?? data.client.poAssignmentMode;
+  const isTitleProject = effectivePoAssignmentMode === "TITLE_PROJECT";
+  const hasBillingMonth = rows.some((row) => row.billingMonth);
   return (
     <div className="table-wrap">
       <table className="table-base">
@@ -2416,6 +2687,9 @@ function BillingHistoryProjectTable({
               <th className="table-cell">Billing Model</th>
             ) : null}
             <th className="table-cell">Cost</th>
+            {hasBillingMonth ? (
+              <th className="table-cell">Billing Month</th>
+            ) : null}
             <th className="table-cell">PO Number</th>
             {includeAction ? <th className="table-cell">Action</th> : null}
           </tr>
@@ -2435,6 +2709,9 @@ function BillingHistoryProjectTable({
               <td className="table-cell">
                 <BillingHistoryCostCell value={row.cost} />
               </td>
+              {hasBillingMonth ? (
+                <td className="table-cell">{row.billingMonth ?? "-"}</td>
+              ) : null}
               <td className="table-cell">{row.poNumber || "-"}</td>
               {includeAction ? (
                 <td className="table-cell">
@@ -2443,6 +2720,8 @@ function BillingHistoryProjectTable({
                       projectId={row.projectId}
                       label="Billing Done"
                       returnTo={returnTo}
+                      billingMonth={row.billingMonth}
+                      amount={row.cost}
                     />
                   ) : (
                     "-"
@@ -2454,7 +2733,9 @@ function BillingHistoryProjectTable({
           {rows.length === 0 ? (
             <tr>
               <td
-                colSpan={(isTitleProject ? 4 : 4) + (includeAction ? 1 : 0)}
+                colSpan={
+                  4 + (hasBillingMonth ? 1 : 0) + (includeAction ? 1 : 0)
+                }
                 className="table-cell text-center text-sm text-slate-500"
               >
                 No billing records available.
@@ -2473,21 +2754,25 @@ function BillingHistoryDefaultTable({
   activeReport,
   rows,
   includeAction,
+  poAssignmentMode,
 }: {
   data: BillingHistoryData;
   clientId: string;
   activeReport: AmazonReportType;
   rows: BillingHistoryData["summaryRows"];
   includeAction: boolean;
+  poAssignmentMode?: string;
 }) {
   const returnTo = `/billing-reports/${clientId}?report=${activeReport}&year=${data.filters.year}`;
+  const effectivePoAssignmentMode =
+    poAssignmentMode ?? data.client.poAssignmentMode;
   return (
     <div className="table-wrap">
       <table className="table-base">
         <thead className="table-head">
           <tr>
             <th className="table-cell">
-              {data.client.poAssignmentMode === "BILLING_REPORT"
+              {effectivePoAssignmentMode === "BILLING_REPORT"
                 ? "Billing Report"
                 : "Title"}
             </th>
@@ -2525,6 +2810,8 @@ function BillingHistoryDefaultTable({
                       projectId={row.projectId}
                       label="Billing Done"
                       returnTo={returnTo}
+                      billingMonth={row.billingMonth}
+                      amount={row.cost}
                     />
                   ) : (
                     "-"
@@ -2536,7 +2823,7 @@ function BillingHistoryDefaultTable({
           {rows.length === 0 ? (
             <tr>
               <td
-                colSpan={includeAction ? 5 : 4}
+                colSpan={includeAction ? 6 : 5}
                 className="table-cell text-center text-sm text-slate-500"
               >
                 No billing records available.
@@ -2549,7 +2836,59 @@ function BillingHistoryDefaultTable({
   );
 }
 
-function BillingHistorySummaryTable({
+function BillingHistorySectionTable({
+  data,
+  clientId,
+  activeReport,
+  rows,
+  includeAction,
+  poAssignmentMode,
+}: {
+  data: BillingHistoryData;
+  clientId: string;
+  activeReport: AmazonReportType;
+  rows: BillingHistoryData["summaryRows"];
+  includeAction: boolean;
+  poAssignmentMode: string;
+}) {
+  if (poAssignmentMode === "TITLE_BILLING_REPORT") {
+    return (
+      <BillingHistoryTitleReportTable
+        data={data}
+        clientId={clientId}
+        activeReport={activeReport}
+        rows={rows}
+        includeAction={includeAction}
+      />
+    );
+  }
+
+  if (poAssignmentMode === "TITLE_PROJECT" || poAssignmentMode === "PROJECT") {
+    return (
+      <BillingHistoryProjectTable
+        data={data}
+        clientId={clientId}
+        activeReport={activeReport}
+        rows={rows}
+        includeAction={includeAction}
+        poAssignmentMode={poAssignmentMode}
+      />
+    );
+  }
+
+  return (
+    <BillingHistoryDefaultTable
+      data={data}
+      clientId={clientId}
+      activeReport={activeReport}
+      rows={rows}
+      includeAction={includeAction}
+      poAssignmentMode={poAssignmentMode}
+    />
+  );
+}
+
+/* function BillingHistorySummaryTable({
   data,
   clientId,
   activeReport,
@@ -2637,18 +2976,20 @@ function BillingHistoryTable({
       includeAction={false}
     />
   );
-}
+} */
 
 function BillingHistoryWorkspace({
   clientId,
   activeReport,
   clientName,
   data,
+  searchParams,
 }: {
   clientId: string;
   activeReport: AmazonReportType;
   clientName: string;
   data: BillingHistoryData;
+  searchParams: BillingReportPageSearchParams;
 }) {
   return (
     <div className="space-y-6">
@@ -2666,35 +3007,168 @@ function BillingHistoryWorkspace({
         <ExportButtons
           clientId={clientId}
           reportType={activeReport}
-          filters={{ year: data.filters.year }}
+          filters={{
+            year: data.filters.year,
+            projectMonth: data.filters.projectMonth,
+            portalsMonth: data.filters.portalsMonth,
+          }}
         />
       </div>
-      <section className="space-y-3">
-        <div>
-          <h2 className="section-title">Billing Summary</h2>
-          <p className="section-subtitle">
-            Pending billing records as per the client PO Assignment Mode.
-          </p>
-        </div>
-        <BillingHistorySummaryTable
-          data={data}
-          clientId={clientId}
-          activeReport={activeReport}
-        />
-      </section>
-      <section className="space-y-3">
-        <div>
-          <h2 className="section-title">
-            {data.client.name} Billing Summary & History
-          </h2>
-          <p className="section-subtitle">Year: {data.filters.year}</p>
-        </div>
-        <BillingHistoryTable
-          data={data}
-          clientId={clientId}
-          activeReport={activeReport}
-        />
-      </section>
+      {data.summarySections?.length
+        ? data.summarySections.map((section, index) => {
+            const pagination = getPaginatedBillingHistoryRows(
+              section.rows,
+              searchParams,
+              `summary-${section.key}`,
+            );
+            return (
+              <section
+                key={section.key}
+                id={normalizePaginationKey(`summary-${section.key}`)}
+                className="space-y-3 scroll-mt-24"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h2 className="section-title">{section.title}</h2>
+                    <p className="section-subtitle">
+                      {index === 0
+                        ? "Pending billing records as per the billing section PO Assignment Mode."
+                        : "Pending records for this billing section."}
+                    </p>
+                  </div>
+                  {section.monthFilterParam && section.monthFilterValue ? (
+                    <BillingHistoryMonthFilter
+                      clientId={clientId}
+                      searchParams={searchParams}
+                      paramName={section.monthFilterParam}
+                      value={section.monthFilterValue}
+                    />
+                  ) : null}
+                </div>
+                <BillingHistorySectionTable
+                  data={data}
+                  clientId={clientId}
+                  activeReport={activeReport}
+                  rows={pagination.page.items}
+                  includeAction
+                  poAssignmentMode={section.poAssignmentMode}
+                />
+                <BillingHistoryPagination
+                  clientId={clientId}
+                  searchParams={searchParams}
+                  sectionKey={`summary-${section.key}`}
+                  pageData={pagination.page}
+                />
+              </section>
+            );
+          })
+        : (() => {
+            const pagination = getPaginatedBillingHistoryRows(
+              data.summaryRows,
+              searchParams,
+              "billing-summary",
+            );
+            return (
+              <section id="billing_summary" className="space-y-3 scroll-mt-24">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h2 className="section-title">Billing Summary</h2>
+                    <p className="section-subtitle">
+                      Pending billing records as per the client PO Assignment
+                      Mode.
+                    </p>
+                  </div>
+                  {data.client.poAssignmentMode === "PROJECT" ? (
+                    <BillingHistoryMonthFilter
+                      clientId={clientId}
+                      searchParams={searchParams}
+                      paramName="projectMonth"
+                      value={data.filters.projectMonth}
+                    />
+                  ) : null}
+                </div>
+                <BillingHistorySectionTable
+                  data={data}
+                  clientId={clientId}
+                  activeReport={activeReport}
+                  rows={pagination.page.items}
+                  includeAction
+                  poAssignmentMode={data.client.poAssignmentMode}
+                />
+                <BillingHistoryPagination
+                  clientId={clientId}
+                  searchParams={searchParams}
+                  sectionKey="billing-summary"
+                  pageData={pagination.page}
+                />
+              </section>
+            );
+          })()}
+      {data.historySections?.length
+        ? data.historySections.map((section) => {
+            const pagination = getPaginatedBillingHistoryRows(
+              section.rows,
+              searchParams,
+              `history-${section.key}`,
+            );
+            return (
+              <section
+                key={section.key}
+                id={normalizePaginationKey(`history-${section.key}`)}
+                className="space-y-3 scroll-mt-24"
+              >
+                <div>
+                  <h2 className="section-title">{section.title}</h2>
+                  <p className="section-subtitle">Year: {data.filters.year}</p>
+                </div>
+                <BillingHistorySectionTable
+                  data={data}
+                  clientId={clientId}
+                  activeReport={activeReport}
+                  rows={pagination.page.items}
+                  includeAction={false}
+                  poAssignmentMode={section.poAssignmentMode}
+                />
+                <BillingHistoryPagination
+                  clientId={clientId}
+                  searchParams={searchParams}
+                  sectionKey={`history-${section.key}`}
+                  pageData={pagination.page}
+                />
+              </section>
+            );
+          })
+        : (() => {
+            const pagination = getPaginatedBillingHistoryRows(
+              data.historyRows,
+              searchParams,
+              "billing-history",
+            );
+            return (
+              <section id="billing_history" className="space-y-3 scroll-mt-24">
+                <div>
+                  <h2 className="section-title">
+                    {data.client.name} Billing Summary & History
+                  </h2>
+                  <p className="section-subtitle">Year: {data.filters.year}</p>
+                </div>
+                <BillingHistorySectionTable
+                  data={data}
+                  clientId={clientId}
+                  activeReport={activeReport}
+                  rows={pagination.page.items}
+                  includeAction={false}
+                  poAssignmentMode={data.client.poAssignmentMode}
+                />
+                <BillingHistoryPagination
+                  clientId={clientId}
+                  searchParams={searchParams}
+                  sectionKey="billing-history"
+                  pageData={pagination.page}
+                />
+              </section>
+            );
+          })()}
     </div>
   );
 }
@@ -2767,9 +3241,11 @@ function RoyalHistoryFilters({
 function RoyalHistoryWorkspace({
   clientId,
   data,
+  searchParams,
 }: {
   clientId: string;
   data: RoyalHistoryData;
+  searchParams: BillingReportPageSearchParams;
 }) {
   return (
     <div className="space-y-6">
@@ -2781,28 +3257,45 @@ function RoyalHistoryWorkspace({
         </h2>
         <p className="section-subtitle">Year: {data.filters.year}</p>
       </div>
-      {data.monthBlocks.map((block) => (
-        <section key={block.month} className="space-y-4">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900">
-              Month: {block.month}
-            </h3>
-            <p className="text-sm text-slate-500">
-              Billing date: {block.billingDate}
-            </p>
-          </div>
-          <RoyalBillingReportTable
-            data={{
-              client: data.client,
-              filters: { month: block.month },
-              rows: block.rows,
-              totals: block.totals,
-              isBilled: true,
-              billingDate: block.billingDate,
-            }}
-          />
-        </section>
-      ))}
+      {data.monthBlocks.map((block) => {
+        const pagination = getPaginatedBillingHistoryRows(
+          block.rows,
+          searchParams,
+          `royal-history-${block.month}`,
+        );
+        return (
+          <section
+            key={block.month}
+            id={normalizePaginationKey(`royal-history-${block.month}`)}
+            className="space-y-4 scroll-mt-24"
+          >
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">
+                Month: {block.month}
+              </h3>
+              <p className="text-sm text-slate-500">
+                Billing date: {block.billingDate}
+              </p>
+            </div>
+            <RoyalBillingReportTable
+              data={{
+                client: data.client,
+                filters: { month: block.month },
+                rows: pagination.page.items,
+                totals: block.totals,
+                isBilled: true,
+                billingDate: block.billingDate,
+              }}
+            />
+            <BillingHistoryPagination
+              clientId={clientId}
+              searchParams={searchParams}
+              sectionKey={`royal-history-${block.month}`}
+              pageData={pagination.page}
+            />
+          </section>
+        );
+      })}
       {data.monthBlocks.length === 0 ? (
         <div className="card p-6 text-sm text-slate-500">
           No billed months found for this year.
@@ -3428,6 +3921,7 @@ function GenericSummaryHistoryTable({
 }) {
   const isProjectMode = data.client.poAssignmentMode === "PROJECT";
   const isTitleProjectMode = data.client.poAssignmentMode === "TITLE_PROJECT";
+  const hasBillingMonth = rows.some((row) => row.billingMonth);
   const returnTo = `/billing-reports/${clientId}?report=billing-summary-history&year=${data.filters.year}`;
 
   if (isProjectMode || isTitleProjectMode) {
@@ -3447,6 +3941,9 @@ function GenericSummaryHistoryTable({
               <th className="table-cell">Billing Model</th>
             ) : null}
             <th className="table-cell">Cost</th>
+            {hasBillingMonth ? (
+              <th className="table-cell">Billing Month</th>
+            ) : null}
             <th className="table-cell">PO Number</th>
             {includeAction ? <th className="table-cell">Action</th> : null}
           </tr>
@@ -3468,6 +3965,9 @@ function GenericSummaryHistoryTable({
                   ? formatGenericUsd(row.cost)
                   : "-"}
               </td>
+              {hasBillingMonth ? (
+                <td className="table-cell">{row.billingMonth ?? "-"}</td>
+              ) : null}
               <td className="table-cell">{row.poNumber ?? "-"}</td>
               {includeAction ? (
                 <td className="table-cell">
@@ -3476,6 +3976,8 @@ function GenericSummaryHistoryTable({
                       projectId={row.projectId}
                       label="Billing Done"
                       returnTo={returnTo}
+                      billingMonth={row.billingMonth}
+                      amount={row.cost}
                     />
                   ) : (
                     "-"
@@ -3487,7 +3989,9 @@ function GenericSummaryHistoryTable({
           {rows.length === 0 ? (
             <tr>
               <td
-                colSpan={(isTitleProjectMode ? 4 : 4) + (includeAction ? 1 : 0)}
+                colSpan={
+                  4 + (hasBillingMonth ? 1 : 0) + (includeAction ? 1 : 0)
+                }
                 className="table-cell text-center text-sm text-slate-500"
               >
                 No billing records available.
@@ -3505,6 +4009,7 @@ function GenericSummaryHistoryTable({
         <tr>
           <th className="table-cell">Title</th>
           <th className="table-cell">Billing Region</th>
+          <th className="table-cell">Cost</th>
           <th className="table-cell">PO Number</th>
           {includeAction ? (
             <th className="table-cell">Status</th>
@@ -3521,6 +4026,9 @@ function GenericSummaryHistoryTable({
               {row.title}
             </td>
             <td className="table-cell">{row.billingRegions}</td>
+            <td className="table-cell">
+              {typeof row.cost === "number" ? formatGenericUsd(row.cost) : "-"}
+            </td>
             <td className="table-cell">{row.poNumber ?? "-"}</td>
             <td className="table-cell">
               {includeAction ? row.status : row.billingDate}
@@ -3543,7 +4051,7 @@ function GenericSummaryHistoryTable({
         {rows.length === 0 ? (
           <tr>
             <td
-              colSpan={includeAction ? 5 : 4}
+              colSpan={includeAction ? 6 : 5}
               className="table-cell text-center text-sm text-slate-500"
             >
               No billing records available.
@@ -3559,10 +4067,12 @@ function GenericBillingSummaryHistoryWorkspace({
   clientId,
   activeReport,
   data,
+  searchParams,
 }: {
   clientId: string;
   activeReport: AmazonReportType;
   data: GenericBillingSummaryHistoryData;
+  searchParams: BillingReportPageSearchParams;
 }) {
   return (
     <div className="space-y-6">
@@ -3576,24 +4086,58 @@ function GenericBillingSummaryHistoryWorkspace({
         <ExportButtons
           clientId={clientId}
           reportType={activeReport}
-          filters={{ year: data.filters.year }}
+          filters={{
+            year: data.filters.year,
+            projectMonth: data.filters.projectMonth,
+          }}
         />
       </div>
-      <section className="table-wrap">
-        <div className="border-b border-slate-200 px-6 py-5">
-          <h2 className="section-title">Billing Summary</h2>
-          <p className="section-subtitle">
-            Pending billing records as per the client PO Assignment Mode.
-          </p>
-        </div>
-        <GenericSummaryHistoryTable
-          data={data}
-          clientId={clientId}
-          rows={data.summaryRows}
-          includeAction
-        />
-      </section>
-      <section className="table-wrap">
+      {(() => {
+        const pagination = getPaginatedBillingHistoryRows(
+          data.summaryRows,
+          searchParams,
+          "generic-billing-summary",
+        );
+        return (
+          <section
+            id="generic_billing_summary"
+            className="table-wrap scroll-mt-24"
+          >
+            <div className="border-b border-slate-200 px-6 py-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="section-title">Billing Summary</h2>
+                  <p className="section-subtitle">
+                    Pending billing records as per the client PO Assignment
+                    Mode.
+                  </p>
+                </div>
+                {data.client.poAssignmentMode === "PROJECT" ? (
+                  <BillingHistoryMonthFilter
+                    clientId={clientId}
+                    searchParams={searchParams}
+                    paramName="projectMonth"
+                    value={data.filters.projectMonth}
+                  />
+                ) : null}
+              </div>
+            </div>
+            <GenericSummaryHistoryTable
+              data={data}
+              clientId={clientId}
+              rows={pagination.page.items}
+              includeAction
+            />
+            <BillingHistoryPagination
+              clientId={clientId}
+              searchParams={searchParams}
+              sectionKey="generic-billing-summary"
+              pageData={pagination.page}
+            />
+          </section>
+        );
+      })()}
+      <section id="generic_billing_history" className="table-wrap scroll-mt-24">
         <div className="border-b border-slate-200 px-6 py-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -3629,12 +4173,29 @@ function GenericBillingSummaryHistoryWorkspace({
             </AutoSubmitFilterForm>
           </div>
         </div>
-        <GenericSummaryHistoryTable
-          data={data}
-          clientId={clientId}
-          rows={data.historyRows}
-          includeAction={false}
-        />
+        {(() => {
+          const pagination = getPaginatedBillingHistoryRows(
+            data.historyRows,
+            searchParams,
+            "generic-billing-history",
+          );
+          return (
+            <>
+              <GenericSummaryHistoryTable
+                data={data}
+                clientId={clientId}
+                rows={pagination.page.items}
+                includeAction={false}
+              />
+              <BillingHistoryPagination
+                clientId={clientId}
+                searchParams={searchParams}
+                sectionKey="generic-billing-history"
+                pageData={pagination.page}
+              />
+            </>
+          );
+        })()}
       </section>
     </div>
   );
@@ -3871,6 +4432,13 @@ export default async function ClientBillingReportPage({
           filters: domesticFilters,
         })
       : null;
+  const warnerPortalReportData =
+    isWarnerBillingReportClient(client.name) && activeReport === "portals"
+      ? await getWarnerPortalReportData({
+          clientId,
+          month: getSearchParamValue(resolvedSearchParams, "month"),
+        })
+      : null;
   const sonyPicturesReportData =
     activeReportDefinition?.kind === "sony-movie"
       ? await getSonyPicturesReportData({
@@ -3991,12 +4559,20 @@ export default async function ClientBillingReportPage({
           activeReport={activeReport}
           clientName={client.name}
           data={billingHistoryData}
+          searchParams={resolvedSearchParams}
         />
       ) : universalBillingSummaryData ? (
         <UniversalBillingSummaryWorkspace
           clientId={clientId}
           activeReport={activeReport}
           data={universalBillingSummaryData}
+        />
+      ) : warnerPortalReportData ? (
+        <WarnerPortalReportWorkspace
+          clientId={clientId}
+          activeReport={activeReport}
+          data={warnerPortalReportData}
+          searchParams={resolvedSearchParams}
         />
       ) : sonyPicturesReportData ? (
         <SonyPicturesReportWorkspace
@@ -4015,12 +4591,14 @@ export default async function ClientBillingReportPage({
           clientId={clientId}
           activeReport={activeReport}
           data={sonyBillingSummaryHistoryData}
+          searchParams={resolvedSearchParams}
         />
       ) : genericBillingSummaryHistoryData ? (
         <GenericBillingSummaryHistoryWorkspace
           clientId={clientId}
           activeReport={activeReport}
           data={genericBillingSummaryHistoryData}
+          searchParams={resolvedSearchParams}
         />
       ) : royalBillingReportData ? (
         <RoyalBillingReportWorkspace
@@ -4028,7 +4606,11 @@ export default async function ClientBillingReportPage({
           data={royalBillingReportData}
         />
       ) : royalHistoryData ? (
-        <RoyalHistoryWorkspace clientId={clientId} data={royalHistoryData} />
+        <RoyalHistoryWorkspace
+          clientId={clientId}
+          data={royalHistoryData}
+          searchParams={resolvedSearchParams}
+        />
       ) : filmikBillingReportData ? (
         <FilmikBillingReportWorkspace
           clientId={clientId}

@@ -7,6 +7,9 @@ import {
   sanitizeFileSegment,
 } from "@/lib/billing-reports/amazon";
 import { getLensBillingAdjustments } from "@/lib/billing-reports/lens";
+import type { MovieStatus } from "@prisma/client";
+
+import { SONY_PICTURES_CLASSICS_CLIENT_ID } from "@/lib/billing-reports/config";
 
 const FOCUS_FEATURES_CLIENT_ID = "cmpuqhyhc002in22ivx3w9vvk";
 
@@ -28,6 +31,7 @@ export type GenericBillingReportOptions = {
   movieSpecific?: boolean;
   includeDeveloperCosts?: boolean;
   openDateRange?: boolean;
+  includeCompletedBilled?: boolean;
 };
 
 export type GenericBillingReportRow = {
@@ -64,7 +68,10 @@ export type GenericBillingReportTitleBlock = {
   totalCost: number;
 };
 
-export type GenericBillingSummaryHistoryFilters = { year: string };
+export type GenericBillingSummaryHistoryFilters = {
+  year: string;
+  projectMonth: string;
+};
 
 export type GenericBillingSummaryHistoryRow = {
   itemId: string;
@@ -77,6 +84,7 @@ export type GenericBillingSummaryHistoryRow = {
   titleStatus?: string;
   projectStatus?: string;
   billingModel?: string;
+  billingMonth?: string;
   billingRegions: string;
   billingDate: string;
   poNumber: string;
@@ -139,9 +147,15 @@ export function buildGenericBillingSummaryHistoryFilters(
   searchParams: URLSearchParams | Record<string, string | string[] | undefined>,
 ) {
   const currentYear = String(new Date().getFullYear());
+  const currentMonth = `${currentYear}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
   const suppliedYear = getParamValue(searchParams, "year") || currentYear;
+  const suppliedProjectMonth =
+    getParamValue(searchParams, "projectMonth") || currentMonth;
   return {
     year: /^\d{4}$/.test(suppliedYear) ? suppliedYear : currentYear,
+    projectMonth: /^\d{4}-\d{2}$/.test(suppliedProjectMonth)
+      ? suppliedProjectMonth
+      : currentMonth,
   } satisfies GenericBillingSummaryHistoryFilters;
 }
 
@@ -174,6 +188,89 @@ function formatBillingDate(value: Date | null) {
     month: "short",
     year: "numeric",
   }).format(value);
+}
+
+function parseYearMonth(value?: string | null) {
+  const now = new Date();
+  const fallback = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const safeValue = value && /^\d{4}-\d{2}$/.test(value) ? value : fallback;
+  const [yearText, monthText] = safeValue.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  return {
+    value: safeValue,
+    year,
+    month,
+    fromDate: `${safeValue}-01`,
+    toDate: new Date(year, month, 0).toISOString().slice(0, 10),
+  };
+}
+
+function getGenericReportTotal(data: GenericBillingReportData | null) {
+  if (!data) return 0;
+  if (data.titleBlocks?.length) {
+    return data.titleBlocks.reduce((sum, block) => sum + block.totalCost, 0);
+  }
+  return data.blocks.reduce(
+    (sum, block) =>
+      sum + block.rows.reduce((blockSum, row) => blockSum + row.cost, 0),
+    0,
+  );
+}
+
+function getProjectCostFromGenericReport(
+  data: GenericBillingReportData | null,
+  projectId: string,
+) {
+  if (!data) return 0;
+  const blocks = data.titleBlocks?.length
+    ? data.titleBlocks.flatMap((block) => block.blocks)
+    : data.blocks;
+  return blocks.reduce(
+    (sum, block) =>
+      sum +
+      block.rows
+        .filter((row) => row.projectId === projectId)
+        .reduce((blockSum, row) => blockSum + row.cost, 0),
+    0,
+  );
+}
+
+async function getGenericBillingCostForSummary({
+  clientId,
+  movieId,
+  projectId,
+  includeCompletedBilled = false,
+  billingMonth,
+}: {
+  clientId: string;
+  movieId?: string;
+  projectId?: string;
+  includeCompletedBilled?: boolean;
+  billingMonth?: string;
+}) {
+  const monthRange = billingMonth ? parseYearMonth(billingMonth) : null;
+  const defaults = getDefaultMonthRange();
+  const openDateRange =
+    clientId === SONY_PICTURES_CLASSICS_CLIENT_ID && !monthRange;
+  const data = await getGenericBillingReportData({
+    clientId,
+    filters: {
+      fromDate: openDateRange
+        ? ""
+        : (monthRange?.fromDate ?? defaults.fromDate),
+      toDate: openDateRange ? "" : (monthRange?.toDate ?? defaults.toDate),
+      movieId: movieId ?? "all",
+    },
+    options: {
+      movieSpecific: Boolean(movieId),
+      openDateRange,
+      includeCompletedBilled,
+    },
+  });
+
+  if (projectId) return getProjectCostFromGenericReport(data, projectId);
+  return getGenericReportTotal(data);
 }
 
 export async function getGenericBillingSummaryHistoryData({
@@ -239,6 +336,7 @@ export async function getGenericBillingSummaryHistoryData({
     name: true,
     status: true,
     billingModel: true,
+    billingCycle: true,
     billingDate: true,
     projectCost: true,
     perCountryCharges: true,
@@ -248,31 +346,69 @@ export async function getGenericBillingSummaryHistoryData({
   } as const;
 
   if (client.poAssignmentMode === "PROJECT") {
-    const [summaryProjects, historyProjects] = await Promise.all([
-      db.project.findMany({
-        where: {
-          clientId,
-          isActive: true,
-          addToBilling: true,
-          billingModel: { not: "FIXED_MONTHLY" },
-          status: { in: ["ACTIVE", "COMPLETED"] },
-        },
-        select: projectSelect,
-        orderBy: { name: "asc" },
-      }),
-      db.project.findMany({
-        where: {
-          clientId,
-          isActive: true,
-          addToBilling: true,
-          billingModel: { not: "FIXED_MONTHLY" },
-          status: "COMPLETED_BILLED",
-          billingDate: { gte: yearStart, lt: yearEnd },
-        },
-        select: projectSelect,
-        orderBy: [{ billingDate: "desc" }, { name: "asc" }],
-      }),
-    ]);
+    const projectMonthRange = parseYearMonth(filters.projectMonth);
+    const currentBillingMonth = projectMonthRange.month;
+    const currentBillingYear = projectMonthRange.year;
+    const [summaryProjects, oneTimeHistoryProjects, monthlyBillingRecords] =
+      await Promise.all([
+        db.project.findMany({
+          where: {
+            clientId,
+            isActive: true,
+            addToBilling: true,
+            OR: [
+              {
+                billingCycle: "MONTHLY",
+                status: { in: ["ACTIVE", "COMPLETED"] },
+              },
+              {
+                billingCycle: "ONE_TIME",
+                billingModel: { not: "FIXED_MONTHLY" },
+                status: { in: ["ACTIVE", "COMPLETED"] },
+              },
+            ],
+          },
+          select: projectSelect,
+          orderBy: { name: "asc" },
+        }),
+        db.project.findMany({
+          where: {
+            clientId,
+            isActive: true,
+            addToBilling: true,
+            billingCycle: "ONE_TIME",
+            billingModel: { not: "FIXED_MONTHLY" },
+            status: "COMPLETED_BILLED",
+            billingDate: { gte: yearStart, lt: yearEnd },
+          },
+          select: projectSelect,
+          orderBy: [{ billingDate: "desc" }, { name: "asc" }],
+        }),
+        db.billingRecord.findMany({
+          where: { clientId, projectId: { not: null }, billingYear: year },
+          include: {
+            project: { select: projectSelect },
+            purchaseOrder: { select: { poNumber: true } },
+          },
+          orderBy: [{ billingYear: "desc" }, { billingMonth: "desc" }],
+        }),
+      ]);
+    const billedMonthlyKeys = new Set(
+      monthlyBillingRecords
+        .filter((record) => record.billingMonth && record.billingYear)
+        .map(
+          (record) =>
+            `${record.projectId}:${record.billingYear}:${record.billingMonth}`,
+        ),
+    );
+    const pendingSummaryProjects = summaryProjects.filter(
+      (project) =>
+        project.billingCycle !== "MONTHLY" ||
+        !billedMonthlyKeys.has(
+          `${project.id}:${currentBillingYear}:${currentBillingMonth}`,
+        ),
+    );
+    const historyProjects = oneTimeHistoryProjects;
     const projectIds = [...summaryProjects, ...historyProjects].map(
       (project) => project.id,
     );
@@ -280,43 +416,104 @@ export async function getGenericBillingSummaryHistoryData({
       ? await db.purchaseOrderAssignment.findMany({
           where: {
             projectId: { in: projectIds },
+            OR: [
+              {
+                billingMonth: currentBillingMonth,
+                billingYear: currentBillingYear,
+              },
+              { billingMonth: null, billingYear: null },
+            ],
             purchaseOrder: { status: { not: "CANCELLED" } },
           },
           select: {
             projectId: true,
+            billingMonth: true,
+            billingYear: true,
             purchaseOrder: { select: { poNumber: true } },
           },
         })
       : [];
     const poByProject = new Map<string, string>();
     for (const assignment of poAssignments) {
-      if (assignment.projectId && !poByProject.has(assignment.projectId)) {
+      if (!assignment.projectId) continue;
+      const isMonthSpecific =
+        assignment.billingMonth === currentBillingMonth &&
+        assignment.billingYear === currentBillingYear;
+      if (isMonthSpecific || !poByProject.has(assignment.projectId)) {
         poByProject.set(
           assignment.projectId,
           assignment.purchaseOrder.poNumber,
         );
       }
     }
-    const mapProject = (
+    const mapProject = async (
       project: (typeof summaryProjects)[number],
-    ): GenericBillingSummaryHistoryRow => ({
-      itemId: project.id,
-      itemType: "PROJECT",
-      projectId: project.id,
-      title: project.name,
-      status: formatProjectStatus(project.status),
-      projectStatus: formatProjectStatus(project.status),
-      billingModel: formatProjectBillingModel(project.billingModel),
-      billingRegions: "Project",
-      billingDate: formatBillingDate(project.billingDate),
-      poNumber: poByProject.get(project.id) ?? "-",
-      cost: projectCostValue(project),
-    });
+      includeCompletedBilled = false,
+      monthly?: {
+        month: number;
+        year: number;
+        amount?: unknown;
+        poNumber?: string | null;
+        billingDate?: Date | null;
+      },
+    ): Promise<GenericBillingSummaryHistoryRow> => {
+      const calculatedCost = await getGenericBillingCostForSummary({
+        clientId,
+        projectId: project.id,
+        includeCompletedBilled,
+        billingMonth:
+          project.billingCycle === "MONTHLY"
+            ? projectMonthRange.value
+            : undefined,
+      });
+      return {
+        itemId: monthly
+          ? `${project.id}:${monthly.year}:${monthly.month}`
+          : project.id,
+        itemType: "PROJECT",
+        projectId: project.id,
+        title: project.name,
+        status: formatProjectStatus(project.status),
+        projectStatus: formatProjectStatus(project.status),
+        billingModel: formatProjectBillingModel(project.billingModel),
+        billingRegions: "Project",
+        billingDate: monthly?.billingDate
+          ? formatBillingDate(monthly.billingDate)
+          : formatBillingDate(project.billingDate),
+        billingMonth: monthly
+          ? `${monthly.year}-${String(monthly.month).padStart(2, "0")}`
+          : project.billingCycle === "MONTHLY"
+            ? `${currentBillingYear}-${String(currentBillingMonth).padStart(2, "0")}`
+            : undefined,
+        poNumber: monthly?.poNumber ?? poByProject.get(project.id) ?? "-",
+        cost: monthly
+          ? Number(monthly.amount ?? 0)
+          : calculatedCost || projectCostValue(project),
+      };
+    };
     return {
       client,
       filters,
-      summaryRows: summaryProjects.map(mapProject),
-      historyRows: historyProjects.map(mapProject),
+      summaryRows: await Promise.all(
+        pendingSummaryProjects.map((project) => mapProject(project)),
+      ),
+      historyRows: await Promise.all(
+        historyProjects
+          .map((project) => mapProject(project, true))
+          .concat(
+            monthlyBillingRecords
+              .filter((record) => record.project)
+              .map((record) =>
+                mapProject(record.project!, true, {
+                  month: record.billingMonth ?? 0,
+                  year: record.billingYear ?? year,
+                  amount: record.amount,
+                  poNumber: record.purchaseOrder?.poNumber ?? null,
+                  billingDate: record.billingDate,
+                }),
+              ),
+          ),
+      ),
     };
   }
 
@@ -386,7 +583,10 @@ export async function getGenericBillingSummaryHistoryData({
           poByPair.set(key, assignment.purchaseOrder.poNumber);
       }
     }
-    const mapEntries = (entries: typeof summaryEntries) => {
+    const mapEntries = async (
+      entries: typeof summaryEntries,
+      includeCompletedBilled = false,
+    ) => {
       const byPair = new Map<string, (typeof allTitleProjectEntries)[number]>();
 
       for (const entry of entries) {
@@ -395,36 +595,44 @@ export async function getGenericBillingSummaryHistoryData({
         byPair.set(`${entry.movie.id}:${entry.project.id}`, entry);
       }
 
-      return Array.from(byPair.values()).map(
-        (entry): GenericBillingSummaryHistoryRow => {
-          const movie = entry.movie;
-          const project = entry.project;
-          const key = `${movie.id}:${project.id}`;
+      return Promise.all(
+        Array.from(byPair.values()).map(
+          async (entry): Promise<GenericBillingSummaryHistoryRow> => {
+            const movie = entry.movie;
+            const project = entry.project;
+            const key = `${movie.id}:${project.id}`;
 
-          return {
-            itemId: key,
-            itemType: "TITLE_PROJECT",
-            movieId: movie.id,
-            projectId: project.id,
-            title: `${project.name} - ${movie.title}`,
-            projectName: project.name,
-            status: formatProjectStatus(project.status),
-            titleStatus: formatMovieStatus(movie.status),
-            projectStatus: formatProjectStatus(project.status),
-            billingModel: formatProjectBillingModel(project.billingModel),
-            billingRegions: formatBillingRegions(movie),
-            billingDate: formatBillingDate(project.billingDate),
-            poNumber: poByPair.get(key) ?? "-",
-            cost: projectCostValue(project),
-          };
-        },
+            return {
+              itemId: key,
+              itemType: "TITLE_PROJECT",
+              movieId: movie.id,
+              projectId: project.id,
+              title: `${project.name} - ${movie.title}`,
+              projectName: project.name,
+              status: formatProjectStatus(project.status),
+              titleStatus: formatMovieStatus(movie.status),
+              projectStatus: formatProjectStatus(project.status),
+              billingModel: formatProjectBillingModel(project.billingModel),
+              billingRegions: formatBillingRegions(movie),
+              billingDate: formatBillingDate(project.billingDate),
+              poNumber: poByPair.get(key) ?? "-",
+              cost:
+                (await getGenericBillingCostForSummary({
+                  clientId,
+                  movieId: movie.id,
+                  projectId: project.id,
+                  includeCompletedBilled,
+                })) || projectCostValue(project),
+            };
+          },
+        ),
       );
     };
     return {
       client,
       filters,
-      summaryRows: mapEntries(summaryEntries),
-      historyRows: mapEntries(historyEntries),
+      summaryRows: await mapEntries(summaryEntries),
+      historyRows: await mapEntries(historyEntries, true),
     };
   }
 
@@ -469,9 +677,10 @@ export async function getGenericBillingSummaryHistoryData({
     if (assignment.movieId && !poByMovie.has(assignment.movieId))
       poByMovie.set(assignment.movieId, assignment.purchaseOrder.poNumber);
   }
-  const mapRow = (
+  const mapRow = async (
     movie: (typeof summaryMovies)[number],
-  ): GenericBillingSummaryHistoryRow => ({
+    includeCompletedBilled = false,
+  ): Promise<GenericBillingSummaryHistoryRow> => ({
     itemId: movie.id,
     itemType: "TITLE",
     movieId: movie.id,
@@ -480,12 +689,19 @@ export async function getGenericBillingSummaryHistoryData({
     billingRegions: formatBillingRegions(movie),
     billingDate: formatBillingDate(movie.billingDate),
     poNumber: poByMovie.get(movie.id) ?? "-",
+    cost: await getGenericBillingCostForSummary({
+      clientId,
+      movieId: movie.id,
+      includeCompletedBilled,
+    }),
   });
   return {
     client,
     filters,
-    summaryRows: summaryMovies.map(mapRow),
-    historyRows: historyMovies.map(mapRow),
+    summaryRows: await Promise.all(summaryMovies.map((movie) => mapRow(movie))),
+    historyRows: await Promise.all(
+      historyMovies.map((movie) => mapRow(movie, true)),
+    ),
   };
 }
 
@@ -569,6 +785,10 @@ export async function getGenericBillingReportData({
   const movieSpecific = Boolean(options.movieSpecific);
   const includeDeveloperCosts = Boolean(options.includeDeveloperCosts);
   const openDateRange = Boolean(options.openDateRange);
+  const includeCompletedBilled = Boolean(options.includeCompletedBilled);
+  const allowedMovieStatuses: MovieStatus[] = includeCompletedBilled
+    ? ["WORKING", "COMPLETED", "COMPLETED_BILLED"]
+    : ["WORKING", "COMPLETED"];
 
   const client = await db.client.findUnique({
     where: { id: clientId },
@@ -614,7 +834,7 @@ export async function getGenericBillingReportData({
         where: {
           clientId,
           isActive: true,
-          status: { in: ["WORKING", "COMPLETED"] },
+          status: { in: allowedMovieStatuses },
           timeEntries: { some: { project: { clientId } } },
         },
         select: { id: true, title: true },
@@ -642,7 +862,7 @@ export async function getGenericBillingReportData({
       const titleData = await getGenericBillingReportData({
         clientId,
         filters: { ...filters, movieId: movie.id },
-        options: { ...options, openDateRange },
+        options: { ...options, openDateRange, includeCompletedBilled },
       });
       if (!titleData || !titleData.blocks.length) continue;
       titleBlocks.push({

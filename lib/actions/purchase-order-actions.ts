@@ -21,19 +21,38 @@ const purchaseOrderSchema = z.object({
   status: z.enum(["ACTIVE", "PROCESSED", "EXHAUSTED", "EXPIRED", "CANCELLED"]),
   documentUrl: z.string().trim().optional(),
   notes: z.string().trim().optional(),
-  assignmentMode: z.enum(["TITLE", "TITLE_BILLING_REPORT", "TITLE_PROJECT", "PROJECT", "BILLING_REPORT"]),
+  assignmentMode: z.enum([
+    "TITLE",
+    "TITLE_BILLING_REPORT",
+    "TITLE_PROJECT",
+    "PROJECT",
+    "BILLING_REPORT",
+  ]),
   movieIds: z.array(z.string()).optional(),
   projectId: z.string().optional(),
   billingReportType: z.string().optional(),
+  billingMonth: z.string().optional(),
 });
 
+function parseBillingMonth(value?: string) {
+  if (!value || !/^\d{4}-\d{2}$/.test(value))
+    return { billingMonth: null, billingYear: null };
+  return {
+    billingMonth: Number(value.slice(5, 7)),
+    billingYear: Number(value.slice(0, 4)),
+  };
+}
+
 function parseDate(value?: string) {
-  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00.000Z`) : null;
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(`${value}T00:00:00.000Z`)
+    : null;
 }
 
 async function requireCanManagePurchaseOrders() {
   const user = await requireUserForAction();
-  if (!canManagePurchaseOrders(user)) throw new Error("You are not allowed to manage Purchase Orders.");
+  if (!canManagePurchaseOrders(user))
+    throw new Error("You are not allowed to manage Purchase Orders.");
   return user;
 }
 
@@ -55,32 +74,76 @@ function getFormValues(formData: FormData) {
     movieIds,
     projectId: String(formData.get("projectId") ?? ""),
     billingReportType: String(formData.get("billingReportType") ?? ""),
+    billingMonth: String(formData.get("billingMonth") ?? ""),
   };
 }
 
-async function validateAssignmentPayload(data: z.infer<typeof purchaseOrderSchema>) {
-  const client = await db.client.findUnique({ where: { id: data.clientId }, select: { id: true, poAssignmentMode: true } });
+async function validateAssignmentPayload(
+  data: z.infer<typeof purchaseOrderSchema>,
+) {
+  const client = await db.client.findUnique({
+    where: { id: data.clientId },
+    select: { id: true, poAssignmentMode: true },
+  });
   if (!client) throw new Error("Selected client was not found.");
 
-  if (data.assignmentMode === "TITLE" || data.assignmentMode === "TITLE_BILLING_REPORT" || data.assignmentMode === "TITLE_PROJECT") {
-    if (!data.movieIds?.length) throw new Error("At least one Title is required for this PO assignment mode.");
-    const movies = await db.movie.findMany({ where: { id: { in: data.movieIds }, clientId: data.clientId }, select: { id: true } });
-    if (movies.length !== data.movieIds.length) throw new Error("One or more selected Titles do not belong to selected client.");
+  if (
+    data.assignmentMode === "TITLE" ||
+    data.assignmentMode === "TITLE_BILLING_REPORT" ||
+    data.assignmentMode === "TITLE_PROJECT"
+  ) {
+    if (!data.movieIds?.length)
+      throw new Error(
+        "At least one Title is required for this PO assignment mode.",
+      );
+    const movies = await db.movie.findMany({
+      where: { id: { in: data.movieIds }, clientId: data.clientId },
+      select: { id: true },
+    });
+    if (movies.length !== data.movieIds.length)
+      throw new Error(
+        "One or more selected Titles do not belong to selected client.",
+      );
   }
 
-  if ((data.assignmentMode === "TITLE_BILLING_REPORT" || data.assignmentMode === "BILLING_REPORT") && !data.billingReportType) throw new Error("Billing report type is required.");
+  if (
+    (data.assignmentMode === "TITLE_BILLING_REPORT" ||
+      data.assignmentMode === "BILLING_REPORT") &&
+    !data.billingReportType
+  )
+    throw new Error("Billing report type is required.");
 
-  if (data.assignmentMode === "TITLE_PROJECT" || data.assignmentMode === "PROJECT") {
+  if (
+    data.assignmentMode === "TITLE_PROJECT" ||
+    data.assignmentMode === "PROJECT"
+  ) {
     if (!data.projectId) throw new Error("Project is required.");
-    const project = await db.project.findFirst({ where: { id: data.projectId, clientId: data.clientId }, select: { id: true } });
-    if (!project) throw new Error("Selected project does not belong to selected client.");
+    const project = await db.project.findFirst({
+      where: { id: data.projectId, clientId: data.clientId },
+      select: { id: true, billingCycle: true },
+    });
+    if (!project)
+      throw new Error("Selected project does not belong to selected client.");
+    if (
+      project.billingCycle === "MONTHLY" &&
+      !/^\d{4}-\d{2}$/.test(data.billingMonth || "")
+    )
+      throw new Error("Billing month is required for monthly projects.");
   }
 }
 
-async function savePurchaseOrder(formData: FormData, mode: "create" | "update") {
+async function savePurchaseOrder(
+  formData: FormData,
+  mode: "create" | "update",
+) {
   await requireCanManagePurchaseOrders();
   const parsed = purchaseOrderSchema.safeParse(getFormValues(formData));
-  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message || "Invalid Purchase Order payload." };
+  if (!parsed.success)
+    return {
+      success: false,
+      error:
+        parsed.error.issues[0]?.message || "Invalid Purchase Order payload.",
+    };
   await validateAssignmentPayload(parsed.data);
 
   const poData = {
@@ -96,20 +159,45 @@ async function savePurchaseOrder(formData: FormData, mode: "create" | "update") 
     notes: parsed.data.notes || null,
   };
 
-  const purchaseOrder = mode === "create"
-    ? await db.purchaseOrder.create({ data: poData, select: { id: true } })
-    : await db.purchaseOrder.update({ where: { id: parsed.data.id }, data: poData, select: { id: true } });
+  const purchaseOrder =
+    mode === "create"
+      ? await db.purchaseOrder.create({ data: poData, select: { id: true } })
+      : await db.purchaseOrder.update({
+          where: { id: parsed.data.id },
+          data: poData,
+          select: { id: true },
+        });
 
-  await db.purchaseOrderAssignment.deleteMany({ where: { purchaseOrderId: purchaseOrder.id } });
-  const movieIds = parsed.data.assignmentMode === "PROJECT" || parsed.data.assignmentMode === "BILLING_REPORT" ? [null] : (parsed.data.movieIds ?? []);
+  await db.purchaseOrderAssignment.deleteMany({
+    where: { purchaseOrderId: purchaseOrder.id },
+  });
+  const movieIds =
+    parsed.data.assignmentMode === "PROJECT" ||
+    parsed.data.assignmentMode === "BILLING_REPORT"
+      ? [null]
+      : (parsed.data.movieIds ?? []);
+  const { billingMonth, billingYear } = parseBillingMonth(
+    parsed.data.billingMonth,
+  );
   await db.purchaseOrderAssignment.createMany({
     data: movieIds.map((movieId) => ({
       clientId: parsed.data.clientId,
       purchaseOrderId: purchaseOrder.id,
       assignmentMode: parsed.data.assignmentMode,
       movieId,
-      projectId: parsed.data.assignmentMode === "TITLE" || parsed.data.assignmentMode === "TITLE_BILLING_REPORT" || parsed.data.assignmentMode === "BILLING_REPORT" ? null : (parsed.data.projectId || null),
-      billingReportType: parsed.data.assignmentMode === "TITLE_BILLING_REPORT" || parsed.data.assignmentMode === "BILLING_REPORT" ? parsed.data.billingReportType || null : null,
+      projectId:
+        parsed.data.assignmentMode === "TITLE" ||
+        parsed.data.assignmentMode === "TITLE_BILLING_REPORT" ||
+        parsed.data.assignmentMode === "BILLING_REPORT"
+          ? null
+          : parsed.data.projectId || null,
+      billingReportType:
+        parsed.data.assignmentMode === "TITLE_BILLING_REPORT" ||
+        parsed.data.assignmentMode === "BILLING_REPORT"
+          ? parsed.data.billingReportType || null
+          : null,
+      billingMonth,
+      billingYear,
     })),
   });
 
@@ -118,16 +206,33 @@ async function savePurchaseOrder(formData: FormData, mode: "create" | "update") 
   return { success: true };
 }
 
-export async function createPurchaseOrderAction(_prevState: PurchaseOrderFormState, formData: FormData): Promise<PurchaseOrderFormState> {
-  try { return await savePurchaseOrder(formData, "create"); }
-  catch (error) { return { success: false, error: error instanceof Error ? error.message : "Something went wrong." }; }
+export async function createPurchaseOrderAction(
+  _prevState: PurchaseOrderFormState,
+  formData: FormData,
+): Promise<PurchaseOrderFormState> {
+  try {
+    return await savePurchaseOrder(formData, "create");
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Something went wrong.",
+    };
+  }
 }
 
-export async function updatePurchaseOrderAction(_prevState: PurchaseOrderFormState, formData: FormData): Promise<PurchaseOrderFormState> {
-  try { return await savePurchaseOrder(formData, "update"); }
-  catch (error) { return { success: false, error: error instanceof Error ? error.message : "Something went wrong." }; }
+export async function updatePurchaseOrderAction(
+  _prevState: PurchaseOrderFormState,
+  formData: FormData,
+): Promise<PurchaseOrderFormState> {
+  try {
+    return await savePurchaseOrder(formData, "update");
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Something went wrong.",
+    };
+  }
 }
-
 
 export async function deletePurchaseOrderAction(formData: FormData) {
   let redirectTo = "/purchase-orders";
@@ -149,7 +254,10 @@ export async function deletePurchaseOrderAction(formData: FormData) {
     revalidatePath("/purchase-orders");
     redirectTo = "/purchase-orders?deleteSuccess=Purchase%20Order%20deleted.";
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to delete Purchase Order.";
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to delete Purchase Order.";
     redirectTo = `/purchase-orders?deleteError=${encodeURIComponent(message)}`;
   }
 
