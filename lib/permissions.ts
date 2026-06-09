@@ -278,6 +278,7 @@ export function canAccessLeaveRequests(user: UserLike) {
 export function canManageManualAttendance(user: UserLike) {
   return (
     (isAdmin(user) && getFunctionalRole(user) === "OTHER") ||
+    (isAdmin(user) && getFunctionalRole(user) === "PROJECT_MANAGER") ||
     hasExtraMenuAccess(user, "attendance-history")
   );
 }
