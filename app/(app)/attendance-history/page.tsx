@@ -113,10 +113,6 @@ const scopedUserOptions = canAddManualLog || isAdminProjectManager(currentUser)
           (assignment) => assignment.employee,
         );
 
-        if (assignedUsers.length > 0) {
-          return assignedUsers;
-        }
-
         const selfUser = await db.user.findFirst({
           where: {
             AND: [
@@ -127,7 +123,17 @@ const scopedUserOptions = canAddManualLog || isAdminProjectManager(currentUser)
           select: userSelect,
         });
 
-        return selfUser ? [selfUser] : [];
+        const usersById = new Map<string, (typeof assignedUsers)[number]>();
+
+        if (selfUser) {
+          usersById.set(selfUser.id, selfUser);
+        }
+
+        for (const user of assignedUsers) {
+          usersById.set(user.id, user);
+        }
+
+        return Array.from(usersById.values());
       });
 
 const allowedUserIds = new Set(scopedUserOptions.map((user) => user.id));
