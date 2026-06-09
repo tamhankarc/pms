@@ -10,6 +10,7 @@ import type { Prisma } from "@prisma/client";
 import {
   canAddManualAttendance,
   canManageManualAttendance,
+  isAdminProjectManager,
 } from "@/lib/permissions";
 import {
   formatDateInIst,
@@ -84,7 +85,7 @@ const userSelect = {
   functionalRole: true,
 };
 
-const scopedUserOptions = canAddManualLog
+const scopedUserOptions = canAddManualLog || isAdminProjectManager(currentUser)
   ? await db.user.findMany({
       where: attendanceEligibleUserWhere,
       select: userSelect,
@@ -134,7 +135,7 @@ const allowedUserIds = new Set(scopedUserOptions.map((user) => user.id));
 const selectedUserId =
   params.userId && allowedUserIds.has(params.userId)
     ? params.userId
-    : canAddManualLog
+    : canAddManualLog || isAdminProjectManager(currentUser)
       ? ""
       : scopedUserOptions[0]?.id ?? "";
 
