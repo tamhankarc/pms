@@ -301,6 +301,7 @@ export function getSidebarItems(
         "leave-requests",
         ...(canAccessLeaveApprovals ? (["leave-approvals"] as MenuKey[]) : []),
         "leave-admin",
+        "attendance-history",
         "hr-reports",
         "announcements",
         "profile",

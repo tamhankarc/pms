@@ -23,6 +23,7 @@ const HR_ALLOWED_PATHS = [
   "/users",
   "/leave-requests",
   "/leave-approvals",
+  "/attendance-history",
   "/announcements",
   "/hr-reports",
   "/leave-admin",
