@@ -138,6 +138,7 @@ export function getBaseMenuKeysForUserType(
         "leave-approvals",
         "leave-admin",
         "hr-reports",
+        "attendance-history",
         "announcements",
         "profile",
         "change-password",
