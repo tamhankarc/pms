@@ -66,7 +66,6 @@ const MASTER_DATA_PATHS = [
 const TEAM_LEAD_BLOCKED_PATHS = [
   "/users",
   "/team-lead-assignments",
-  "/reports",
   "/leave-admin",
 ];
 

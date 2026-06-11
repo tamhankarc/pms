@@ -63,8 +63,8 @@ function formatRole(role?: FunctionalRoleCode | "UNASSIGNED" | null) {
     .join(" ");
 }
 
-function buildExportHref(type: string, params: Record<string, string | undefined>) {
-  const search = new URLSearchParams({ type });
+function buildExportHref(type: string, params: Record<string, string | undefined>, format: "xlsx" | "pdf") {
+  const search = new URLSearchParams({ type, format });
   for (const [key, value] of Object.entries(params)) {
     if (value) search.set(key, value);
   }
@@ -1061,9 +1061,14 @@ export default async function ReportsPage({
             <h2 className="section-title">Client-wise minutes</h2>
             <p className="section-subtitle">Grouped by client for the selected date range.</p>
           </div>
-          <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("client", clientSearch)}>
-            Export CSV
-          </Link>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("client", clientSearch, "xlsx")}>
+              Export Excel (xlsx)
+            </Link>
+            <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("client", clientSearch, "pdf")}>
+              Export PDF
+            </Link>
+          </div>
         </div>
         <div className="relative z-20 border-b border-slate-100 px-4 py-4">
           <AutoSubmitFilterForm className="flex flex-wrap items-end gap-3" method="get" action={`${reportsBasePath}#client-wise-hours`}>
@@ -1168,9 +1173,14 @@ export default async function ReportsPage({
             <h2 className="section-title">Project / Sub-Project-wise minutes</h2>
             <p className="section-subtitle">Grouped by client, project, and sub-project for the selected date range.</p>
           </div>
-          <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("project", projectSearch)}>
-            Export CSV
-          </Link>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("project", projectSearch, "xlsx")}>
+              Export Excel (xlsx)
+            </Link>
+            <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("project", projectSearch, "pdf")}>
+              Export PDF
+            </Link>
+          </div>
         </div>
         <div className="relative z-20 border-b border-slate-100 px-4 py-4">
           <ProjectHoursFilterForm action={reportsBasePath} anchor="#project-wise-hours" fromDate={projectFromDate} toDate={projectToDate} clientId={projectClientId} projectId={projectProjectId} clientOptions={clientOptions} projectOptions={projectOptions} preservedParams={projectPreservedParams} />
@@ -1205,9 +1215,14 @@ export default async function ReportsPage({
             <h2 className="section-title">Task-wise detailed minutes</h2>
             <p className="section-subtitle">Detailed task entries for the selected date range, project, and sub-project.</p>
           </div>
-          <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("task", taskSearch)}>
-            Export CSV
-          </Link>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("task", taskSearch, "xlsx")}>
+              Export Excel (xlsx)
+            </Link>
+            <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("task", taskSearch, "pdf")}>
+              Export PDF
+            </Link>
+          </div>
         </div>
         <div className="relative z-20 border-b border-slate-100 px-4 py-4">
           <TaskDetailFilterForm action={reportsBasePath} anchor="#task-wise-hours" fromDate={taskFromDate} toDate={taskToDate} clientId={taskClientId} projectId={taskProjectId} subProjectId={taskSubProjectId} countryId={taskCountryId} clientOptions={clientOptions} projectOptions={projectOptions} subProjectOptions={normalizedSubProjectOptions.map(({id,name,projectId,hideCountriesInEntries}) => ({id,name,projectId,hideCountriesInEntries}))} countryOptions={normalizedCountryOptions} countryEligibleClientOptions={countryEligibleClientOptions} countryEligibleProjectOptions={countryEligibleProjectOptions} countryEligibleSubProjectOptions={countryEligibleSubProjectOptions} movieId={taskMovieId} movieOptions={normalizedMovieOptions} movieEligibleClientOptions={movieClientOptions} movieEligibleProjectOptions={movieProjectOptions} movieEligibleSubProjectOptions={movieSubProjectOptions} preservedParams={taskPreservedParams} />
@@ -1246,9 +1261,14 @@ export default async function ReportsPage({
             <h2 className="section-title">Title-wise minutes</h2>
             <p className="section-subtitle">Grouped by movie, client, project, sub-project, and country for movie-enabled time-entry combinations only.</p>
           </div>
-          <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("movie", movieSearch)}>
-            Export CSV
-          </Link>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("movie", movieSearch, "xlsx")}>
+              Export Excel (xlsx)
+            </Link>
+            <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("movie", movieSearch, "pdf")}>
+              Export PDF
+            </Link>
+          </div>
         </div>
         <div className="relative z-20 border-b border-slate-100 px-4 py-4">
           <MovieMinutesFilterForm action={reportsBasePath} anchor="#movie-wise-minutes" fromDate={movieFromDate} toDate={movieToDate} movieId={movieMovieId} clientId={movieClientId} projectId={movieProjectId} subProjectId={movieSubProjectId} countryId={movieCountryId} movieOptions={normalizedMovieOptions} clientOptions={movieClientOptions} projectOptions={movieProjectOptions} subProjectOptions={movieSubProjectOptions} countryOptions={normalizedCountryOptions} preservedParams={moviePreservedParams} />
@@ -1290,9 +1310,14 @@ export default async function ReportsPage({
             <h2 className="section-title">Day-wise minutes</h2>
             <p className="section-subtitle">Grouped by work date for the selected filters.</p>
           </div>
-          <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("day", daySearch)}>
-            Export CSV
-          </Link>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("day", daySearch, "xlsx")}>
+              Export Excel (xlsx)
+            </Link>
+            <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("day", daySearch, "pdf")}>
+              Export PDF
+            </Link>
+          </div>
         </div>
         <div className="relative z-20 border-b border-slate-100 px-4 py-4">
           <ScopedMinutesFilterForm action={reportsBasePath} anchor="#day-wise-minutes" prefix="day" fromDate={dayFromDate} toDate={dayToDate} clientId={dayClientId} projectId={dayProjectId} subProjectId={daySubProjectId} countryId={dayCountryId} clientOptions={clientOptions} projectOptions={projectOptions} subProjectOptions={normalizedSubProjectOptions.map(({id,name,projectId,hideCountriesInEntries}) => ({id,name,projectId,hideCountriesInEntries}))} countryOptions={normalizedCountryOptions} countryEligibleClientOptions={countryEligibleClientOptions} countryEligibleProjectOptions={countryEligibleProjectOptions} countryEligibleSubProjectOptions={countryEligibleSubProjectOptions} movieId={dayMovieId} movieOptions={normalizedMovieOptions} movieEligibleClientOptions={movieClientOptions} movieEligibleProjectOptions={movieProjectOptions} movieEligibleSubProjectOptions={movieSubProjectOptions} preservedParams={dayPreservedParams} />
@@ -1336,9 +1361,14 @@ export default async function ReportsPage({
             <h2 className="section-title">Country-wise minutes</h2>
             <p className="section-subtitle">Grouped by country for the selected filters, limited to time-entry combinations where the country dropdown is enabled.</p>
           </div>
-          <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("country", countrySearch)}>
-            Export CSV
-          </Link>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("country", countrySearch, "xlsx")}>
+              Export Excel (xlsx)
+            </Link>
+            <Link className="btn-secondary whitespace-nowrap" href={buildExportHref("country", countrySearch, "pdf")}>
+              Export PDF
+            </Link>
+          </div>
         </div>
         <div className="relative z-20 border-b border-slate-100 px-4 py-4">
           <ScopedMinutesFilterForm action={reportsBasePath} anchor="#country-wise-minutes" prefix="country" fromDate={countryFromDate} toDate={countryToDate} clientId={countryClientId} projectId={countryProjectId} subProjectId={countrySubProjectId} countryId={countryCountryId} clientOptions={countryEligibleClientOptions} projectOptions={countryEligibleProjectOptions} subProjectOptions={countryEligibleSubProjectOptions} countryOptions={normalizedCountryOptions} countryEligibleClientOptions={countryEligibleClientOptions} countryEligibleProjectOptions={countryEligibleProjectOptions} countryEligibleSubProjectOptions={countryEligibleSubProjectOptions} movieId={countryMovieId} movieOptions={normalizedMovieOptions} movieEligibleClientOptions={movieClientOptions} movieEligibleProjectOptions={movieProjectOptions} movieEligibleSubProjectOptions={movieSubProjectOptions} preservedParams={countryPreservedParams} />

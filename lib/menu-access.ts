@@ -179,8 +179,39 @@ export function getBaseMenuKeysForUserType(
   }
 }
 
-export function getExtraMenuOptionsForUserType(userType: UserType | string) {
-  const defaults = new Set(getBaseMenuKeysForUserType(userType));
+function isRoleScopedManagerFunctionalRole(functionalRole?: string | null) {
+  return Boolean(
+    functionalRole &&
+      functionalRole !== "PROJECT_MANAGER" &&
+      functionalRole !== "GENERAL_MANAGER",
+  );
+}
+
+function getDefaultMenuKeysForExtraMenuOptions(
+  userType: UserType | string,
+  functionalRole?: string | null,
+): MenuKey[] {
+  if (userType === "MANAGER" && isRoleScopedManagerFunctionalRole(functionalRole)) {
+    return [
+      "dashboard",
+      "time-entries",
+      "estimates",
+      "leave-requests",
+      "profile",
+      "change-password",
+    ];
+  }
+
+  return getBaseMenuKeysForUserType(userType);
+}
+
+export function getExtraMenuOptionsForUserType(
+  userType: UserType | string,
+  functionalRole?: string | null,
+) {
+  const defaults = new Set(
+    getDefaultMenuKeysForExtraMenuOptions(userType, functionalRole),
+  );
   return menuItems.filter((item) => {
     if (defaults.has(item.key)) return false;
     if (item.key === "billing-reports") return false;

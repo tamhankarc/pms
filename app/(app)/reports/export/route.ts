@@ -1,3 +1,4 @@
+import ExcelJS from "exceljs";
 import type { FunctionalRoleCode } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -45,18 +46,6 @@ function formatRole(role?: FunctionalRoleCode | "UNASSIGNED" | null) {
     .join(" ");
 }
 
-function escapeCsvValue(value: string) {
-  const normalized = value.replace(/\r?\n|\r/g, " ");
-  if (/[",]/.test(normalized)) {
-    return `"${normalized.replace(/"/g, '""')}"`;
-  }
-  return normalized;
-}
-
-function toCsv(rows: string[][]) {
-  return rows.map((row) => row.map((cell) => escapeCsvValue(cell)).join(",")).join("\n");
-}
-
 function sanitizeFileSegment(value: string) {
   return value
     .trim()
@@ -76,9 +65,9 @@ function getTimestamp() {
   return `${yyyy}${mm}${dd}_${hh}${min}${ss}`;
 }
 
-function buildFileName(baseName: string, selectedClientName?: string) {
+function buildFileName(baseName: string, selectedClientName: string | undefined, extension: "xlsx" | "pdf") {
   const prefix = selectedClientName ? `${sanitizeFileSegment(selectedClientName)}_` : "";
-  return `${prefix}${baseName.replace(/-/g, "_")}_${getTimestamp()}.csv`;
+  return `${prefix}${baseName.replace(/-/g, "_")}_${getTimestamp()}.${extension}`;
 }
 
 function formatReportDate(date: Date) {
@@ -89,12 +78,111 @@ function formatReportDate(date: Date) {
   }).format(date);
 }
 
-function csvResponse(rows: string[][], baseName: string, selectedClientName?: string) {
-  const csv = toCsv(rows);
-  return new Response(csv, {
+async function buildExcelBuffer(rows: string[][], reportTitle: string) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "PMS";
+  const sheet = workbook.addWorksheet("Report");
+  sheet.addRow([reportTitle]);
+  sheet.addRow([]);
+  rows.forEach((row) => sheet.addRow(row));
+  sheet.getRow(1).font = { bold: true, size: 14 };
+  sheet.getRow(3).font = { bold: true };
+  const lastRow = sheet.lastRow;
+  if (lastRow && lastRow.number > 3) {
+    lastRow.font = { bold: true };
+  }
+  sheet.views = [{ state: "frozen", ySplit: 3 }];
+  sheet.columns.forEach((column) => {
+    let maxLength = 12;
+    column.eachCell?.({ includeEmpty: true }, (cell) => {
+      const value = cell.value === null || cell.value === undefined ? "" : String(cell.value);
+      maxLength = Math.max(maxLength, value.length + 2);
+    });
+    column.width = Math.min(Math.max(maxLength, 12), 45);
+  });
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
+function escapePdfText(value: string | number) {
+  return String(value)
+    .replaceAll("\\", "\\\\")
+    .replaceAll("(", "\\(")
+    .replaceAll(")", "\\)")
+    .replace(/[^ -~]/g, "-");
+}
+
+function buildSimplePdf(rows: string[][], reportTitle: string) {
+  const lines = [reportTitle, "", ...rows.map((row) => row.join(" | "))];
+  const pages: string[][] = [];
+  for (let index = 0; index < lines.length; index += 42) {
+    pages.push(lines.slice(index, index + 42));
+  }
+  if (pages.length === 0) pages.push([]);
+
+  const objects: string[] = [];
+  const pageIds: number[] = [];
+  const fontId = 3;
+  let nextId = 4;
+  for (const pageLines of pages) {
+    const content = [
+      "BT",
+      "/F1 6 Tf",
+      "24 805 Td",
+      ...pageLines.flatMap((line, index) =>
+        index === 0
+          ? [`(${escapePdfText(line.slice(0, 230))}) Tj`]
+          : ["0 -14 Td", `(${escapePdfText(line.slice(0, 230))}) Tj`],
+      ),
+      "ET",
+    ].join("\n");
+    const pageId = nextId++;
+    const contentId = nextId++;
+    pageIds.push(pageId);
+    objects[pageId] =
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 842] /Contents ${contentId} 0 R /Resources << /Font << /F1 ${fontId} 0 R >> >> >>`;
+    objects[contentId] =
+      `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`;
+  }
+  objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+  objects[2] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`;
+  objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
+
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  for (let id = 1; id < objects.length; id += 1) {
+    if (!objects[id]) continue;
+    offsets[id] = Buffer.byteLength(pdf);
+    pdf += `${id} 0 obj\n${objects[id]}\nendobj\n`;
+  }
+  const xref = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+  for (let id = 1; id < objects.length; id += 1) {
+    pdf += `${String(offsets[id] ?? 0).padStart(10, "0")} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return Buffer.from(pdf);
+}
+
+async function exportResponse(rows: string[][], baseName: string, selectedClientName: string | undefined, format: "xlsx" | "pdf") {
+  const reportTitle = baseName
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+  if (format === "pdf") {
+    return new Response(buildSimplePdf(rows, reportTitle), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${buildFileName(baseName, selectedClientName, "pdf")}"`,
+      },
+    });
+  }
+
+  const buffer = await buildExcelBuffer(rows, reportTitle);
+  return new Response(buffer, {
     headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${buildFileName(baseName, selectedClientName)}"`,
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="${buildFileName(baseName, selectedClientName, "xlsx")}"`,
     },
   });
 }
@@ -137,6 +225,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type") ?? "client";
+  const format = searchParams.get("format") === "pdf" ? "pdf" : "xlsx";
   const defaultMonthRange = getDefaultMonthRange();
   const defaultTodayRange = getTodayRange();
   const visibleProjects = await getVisibleProjects(user);
@@ -236,7 +325,7 @@ export async function GET(request: Request) {
     }, projectSortDir);
     const totalMinutes = rows.reduce((sum, row) => sum + row.totalMinutes, 0);
 
-    return csvResponse(
+    return exportResponse(
       [
         ["Client", "Project Name", "Sub-Project Name", "Mins"],
         ...rows.map((row) => [row.clientName, row.projectName, row.subProjectName, String(row.totalMinutes)]),
@@ -244,6 +333,7 @@ export async function GET(request: Request) {
       ],
       "project-subproject-minutes",
       projectClientId !== "all" ? clientNameById.get(projectClientId) : undefined,
+      format,
     );
   }
 
@@ -301,7 +391,7 @@ export async function GET(request: Request) {
     }, taskSortDir);
     const totalMinutes = rows.reduce((sum, entry) => sum + entry.minutesSpent, 0);
 
-    return csvResponse(
+    return exportResponse(
       [
         ["Client Name", "Project Name", "Sub-Project Name", "Task Name", "Task Description", "Movie", "Country Code", "Employee Role", "Mins"],
         ...rows.map((entry) => [
@@ -319,6 +409,7 @@ export async function GET(request: Request) {
       ],
       "task-wise-detailed-minutes",
       taskClientId !== "all" ? clientNameById.get(taskClientId) : undefined,
+      format,
     );
   }
 
@@ -398,7 +489,7 @@ export async function GET(request: Request) {
     }, movieSortDir);
     const totalMinutes = rows.reduce((sum, row) => sum + row.totalMinutes, 0);
 
-    return csvResponse(
+    return exportResponse(
       [
         ["Movie Name", "Client Name", "Project Name", "Sub-Project Name", "Country", "Mins"],
         ...rows.map((row) => [row.movieName, row.clientName, row.projectName, row.subProjectName, row.countryCode, String(row.totalMinutes)]),
@@ -406,6 +497,7 @@ export async function GET(request: Request) {
       ],
       "movie-wise-minutes",
       movieClientId !== "all" ? clientNameById.get(movieClientId) : undefined,
+      format,
     );
   }
 
@@ -477,7 +569,7 @@ export async function GET(request: Request) {
     }, daySortDir);
     const totalMinutes = rows.reduce((sum, row) => sum + row.totalMinutes, 0);
 
-    return csvResponse(
+    return exportResponse(
       [
         ["Date", "Client", "Project", "Sub-Project", "Movie", "Country", "Mins"],
         ...rows.map((row) => [formatReportDate(new Date(`${row.dateKey}T12:00:00`)), row.clientName, row.projectName, row.subProjectName, row.movieName, row.countryCode === "-" ? row.countryName : `${row.countryCode} - ${row.countryName}`, String(row.totalMinutes)]),
@@ -485,6 +577,7 @@ export async function GET(request: Request) {
       ],
       "day-wise-minutes",
       dayClientId !== "all" ? clientNameById.get(dayClientId) : undefined,
+      format,
     );
   }
 
@@ -555,7 +648,7 @@ export async function GET(request: Request) {
     }, countrySortDir);
     const totalMinutes = rows.reduce((sum, row) => sum + row.totalMinutes, 0);
 
-    return csvResponse(
+    return exportResponse(
       [
         ["Country", "Movie", "Client", "Project", "Sub-Project", "Mins"],
         ...rows.map((row) => [row.countryCode === "-" ? row.countryName : `${row.countryCode} - ${row.countryName}`, row.movieName, row.clientName, row.projectName, row.subProjectName, String(row.totalMinutes)]),
@@ -563,6 +656,7 @@ export async function GET(request: Request) {
       ],
       "country-wise-minutes",
       countryClientId !== "all" ? clientNameById.get(countryClientId) : undefined,
+      format,
     );
   }
 
@@ -606,7 +700,7 @@ export async function GET(request: Request) {
   }, clientSortDir);
   const totalMinutes = rows.reduce((sum, row) => sum + row.totalMinutes, 0);
 
-  return csvResponse(
+  return exportResponse(
     [
       ["Client", "Mins"],
       ...rows.map((row) => [row.clientName, String(row.totalMinutes)]),
@@ -614,5 +708,6 @@ export async function GET(request: Request) {
     ],
     "client-wise-minutes",
     clientClientId !== "all" ? clientNameById.get(clientClientId) : undefined,
+    format,
   );
 }

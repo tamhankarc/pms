@@ -998,29 +998,31 @@ export function buildAmazonReportFileName(
 
 export function buildWarnerPortalReportExcel(data: WarnerPortalReportData) {
   const hasHourlyRows = data.rows.some((row) => row.billingModel === "Hourly");
+  const isDvdSites = data.reportType === "dvd-sites";
   const worksheets = [
     worksheet(data.reportTitle, [
       excelRow([data.client.name]),
       excelRow(["Report", data.reportTitle]),
       excelRow(["Billing Month", data.filters.month]),
       excelRow([]),
-      excelRow(["Project", ...(hasHourlyRows ? ["Hours"] : []), "Cost"]),
+      excelRow(["Project", ...(isDvdSites ? ["Titles"] : []), ...(hasHourlyRows ? ["Hours"] : []), "Cost"]),
       ...data.rows.map((row) =>
         excelRow(
           [
             row.projectName,
+            ...(isDvdSites ? [row.titles.length ? row.titles.join(", ") : "-"] : []),
             ...(hasHourlyRows
               ? [row.billingModel === "Hourly" ? row.totalHours : "-"]
               : []),
             row.cost,
           ],
-          hasHourlyRows ? [1, 2] : [1],
+          hasHourlyRows ? [isDvdSites ? 2 : 1, isDvdSites ? 3 : 2] : [isDvdSites ? 2 : 1],
         ),
       ),
       excelRow([]),
       excelRow(
-        ["Total", ...(hasHourlyRows ? [data.totalHours] : []), data.totalCost],
-        hasHourlyRows ? [1, 2] : [1],
+        ["Total", ...(isDvdSites ? [""] : []), ...(hasHourlyRows ? [data.totalHours] : []), data.totalCost],
+        hasHourlyRows ? [isDvdSites ? 2 : 1, isDvdSites ? 3 : 2] : [isDvdSites ? 2 : 1],
       ),
     ]),
   ];
@@ -1031,15 +1033,15 @@ export function buildWarnerPortalReportExcel(data: WarnerPortalReportData) {
         excelRow([project.projectName]),
         excelRow(["Billing Month", data.filters.month]),
         excelRow([]),
-        excelRow(["Date", "Task Name", "Task Description", "Hours"]),
+        excelRow(["Date", ...(isDvdSites ? ["Title"] : []), "Task Name", "Task Description", "Hours"]),
         ...project.detailRows.map((row) =>
           excelRow(
-            [row.date, row.taskName, row.taskDescription, row.hours],
-            [3],
+            [row.date, ...(isDvdSites ? [row.title] : []), row.taskName, row.taskDescription, row.hours],
+            [isDvdSites ? 4 : 3],
           ),
         ),
         excelRow([]),
-        excelRow(["Total", "", "", project.totalHours], [3]),
+        excelRow(["Total", ...(isDvdSites ? [""] : []), "", "", project.totalHours], [isDvdSites ? 4 : 3]),
       ]),
     );
   }
@@ -1069,8 +1071,12 @@ export function buildWarnerPortalReportPdf(data: WarnerPortalReportData) {
     ),
   );
   const hasHourlyRows = data.rows.some((row) => row.billingModel === "Hourly");
+  const isDvdSites = data.reportType === "dvd-sites";
   const columns: PdfTableColumn[] = [
-    { header: "Project", width: hasHourlyRows ? 300 : 360 },
+    { header: "Project", width: isDvdSites ? 210 : hasHourlyRows ? 300 : 360 },
+    ...(isDvdSites
+      ? ([{ header: "Titles", width: hasHourlyRows ? 190 : 250 }] as PdfTableColumn[])
+      : []),
     ...(hasHourlyRows
       ? ([{ header: "Hours", width: 110, align: "right" }] as PdfTableColumn[])
       : []),
@@ -1081,10 +1087,11 @@ export function buildWarnerPortalReportPdf(data: WarnerPortalReportData) {
   const rows = data.rows.length
     ? data.rows.map((row) => [
         row.projectName,
-        row.totalHours.toFixed(2),
+        ...(isDvdSites ? [row.titles.length ? row.titles.join(", ") : "-"] : []),
+        ...(hasHourlyRows ? [row.totalHours.toFixed(2)] : []),
         formatUsd(row.cost),
       ])
-    : [["No projects are available.", "", ""]];
+    : [["No projects are available.", ...(isDvdSites ? [""] : []), ...(hasHourlyRows ? [""] : []), ""]];
   for (const row of rows) {
     drawTableRow(
       summaryCommands,
@@ -1102,8 +1109,9 @@ export function buildWarnerPortalReportPdf(data: WarnerPortalReportData) {
 
   const detailColumns: PdfTableColumn[] = [
     { header: "Date", width: 80 },
-    { header: "Task Name", width: 170 },
-    { header: "Task Description", width: 330 },
+    ...(isDvdSites ? ([{ header: "Title", width: 150 }] as PdfTableColumn[]) : []),
+    { header: "Task Name", width: isDvdSites ? 140 : 170 },
+    { header: "Task Description", width: isDvdSites ? 250 : 330 },
     { header: "Hours", width: 80, align: "right" },
   ];
   for (const project of data.rows) {
@@ -1130,11 +1138,12 @@ export function buildWarnerPortalReportPdf(data: WarnerPortalReportData) {
     const detailRows = project.detailRows.length
       ? project.detailRows.map((row) => [
           row.date,
+          ...(isDvdSites ? [row.title] : []),
           row.taskName,
           row.taskDescription,
           row.hours.toFixed(2),
         ])
-      : [["No time entries found.", "", "", ""]];
+      : [["No time entries found.", ...(isDvdSites ? [""] : []), "", "", ""]];
     for (const row of detailRows) {
       drawTableRow(
         commands,

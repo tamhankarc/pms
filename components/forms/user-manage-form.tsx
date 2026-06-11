@@ -165,7 +165,10 @@ export function UserManageForm({
     userType === "ACCOUNTS"
       ? (["BILLING"] as const)
       : operationalFunctionalRoles;
-  const extraMenuOptions = getExtraMenuOptionsForUserType(userType);
+  const extraMenuOptions = getExtraMenuOptionsForUserType(
+    userType,
+    functionalRole,
+  );
   const availableExtraMenuKeySet = new Set(
     extraMenuOptions.map((item) => item.key),
   );
@@ -174,7 +177,7 @@ export function UserManageForm({
     setUserType(nextUserType);
     setExtraMenuKeys((current) =>
       current.filter((key) =>
-        getExtraMenuOptionsForUserType(nextUserType).some(
+        getExtraMenuOptionsForUserType(nextUserType, functionalRole).some(
           (item) => item.key === key,
         ),
       ),
@@ -301,9 +304,18 @@ export function UserManageForm({
           <SearchableCombobox
             id="functionalRole"
             value={functionalRole}
-            onValueChange={(value) =>
-              setFunctionalRole(value as FunctionalRole)
-            }
+            onValueChange={(value) => {
+              const nextFunctionalRole = value as FunctionalRole;
+              setFunctionalRole(nextFunctionalRole);
+              setExtraMenuKeys((current) =>
+                current.filter((key) =>
+                  getExtraMenuOptionsForUserType(
+                    userType,
+                    nextFunctionalRole,
+                  ).some((item) => item.key === key),
+                ),
+              );
+            }}
             options={availableFunctionalRoles.map((role) => ({
               value: role,
               label: role.replaceAll("_", " "),

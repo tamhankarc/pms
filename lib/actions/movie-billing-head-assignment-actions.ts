@@ -83,30 +83,15 @@ async function requireCanManageMovieBillingHeads() {
   return user;
 }
 
-async function saveAssignments(data: z.infer<typeof schema>, replaceExisting: boolean, canEditCosts: boolean) {
+async function saveAssignments(data: z.infer<typeof schema>, canEditCosts: boolean) {
   const valid = await validateOptionalHeadForSelection(data.clientId, data.countryIds, data.movieId, data.billingHeadId);
   if (!valid.ok) return { success: false as const, error: valid.error };
-
-  const existingUnitsByCountry = new Map<string, number>();
-  if (replaceExisting && !canEditCosts && valid.costType === "PER_UNIT_COST") {
-    const existingRows = await db.movieBillingHeadAssignment.findMany({
-      where: { clientId: data.clientId, movieId: data.movieId, billingHeadId: data.billingHeadId },
-      select: { countryId: true, units: true },
-    });
-    for (const row of existingRows) existingUnitsByCountry.set(row.countryId, Number(row.units ?? 0));
-  }
-
-  if (replaceExisting) {
-    await db.movieBillingHeadAssignment.deleteMany({
-      where: { clientId: data.clientId, movieId: data.movieId, billingHeadId: data.billingHeadId },
-    });
-  }
 
   for (const countryId of data.countryIds) {
     const nextUnits = valid.costType === "PER_UNIT_COST"
       ? canEditCosts
         ? data.units ?? 0
-        : existingUnitsByCountry.get(countryId) ?? 0
+        : 0
       : null;
 
     await db.movieBillingHeadAssignment.upsert({
@@ -130,6 +115,112 @@ async function saveAssignments(data: z.infer<typeof schema>, replaceExisting: bo
   return { success: true as const };
 }
 
+async function updateAssignments(data: z.infer<typeof schema>, canEditCosts: boolean) {
+  if (!data.id) return { success: false as const, error: "Movie billing head is required." };
+
+  const existingAssignment = await db.movieBillingHeadAssignment.findUnique({
+    where: { id: data.id },
+    include: {
+      movie: { select: { status: true, title: true } },
+    },
+  });
+
+  if (!existingAssignment) {
+    return { success: false as const, error: "Movie billing head not found." };
+  }
+
+  if (existingAssignment.movie.status === "COMPLETED_BILLED") {
+    return {
+      success: false as const,
+      error: `This movie billing head belongs to the billed title ${existingAssignment.movie.title} and cannot be edited.`,
+    };
+  }
+
+  const valid = await validateOptionalHeadForSelection(data.clientId, data.countryIds, data.movieId, data.billingHeadId);
+  if (!valid.ok) return { success: false as const, error: valid.error };
+
+  const existingRows = await db.movieBillingHeadAssignment.findMany({
+    where: {
+      clientId: existingAssignment.clientId,
+      movieId: existingAssignment.movieId,
+      billingHeadId: existingAssignment.billingHeadId,
+    },
+    select: { id: true, countryId: true, units: true },
+  });
+  const existingUnitsByCountry = new Map<string, number>();
+  for (const row of existingRows) existingUnitsByCountry.set(row.countryId, Number(row.units ?? 0));
+
+  const [primaryCountryId, ...remainingCountryIds] = data.countryIds;
+  if (!primaryCountryId) return { success: false as const, error: "Select at least one country." };
+
+  const getNextUnits = (countryId: string) =>
+    valid.costType === "PER_UNIT_COST"
+      ? canEditCosts
+        ? data.units ?? 0
+        : existingUnitsByCountry.get(countryId) ?? Number(existingAssignment.units ?? 0)
+      : null;
+
+  await db.$transaction(async (tx) => {
+    await tx.movieBillingHeadAssignment.deleteMany({
+      where: {
+        clientId: existingAssignment.clientId,
+        movieId: existingAssignment.movieId,
+        billingHeadId: existingAssignment.billingHeadId,
+        NOT: { id: data.id },
+      },
+    });
+
+    await tx.movieBillingHeadAssignment.deleteMany({
+      where: {
+        clientId: data.clientId,
+        movieId: data.movieId,
+        billingHeadId: data.billingHeadId,
+        countryId: { in: data.countryIds },
+        NOT: { id: data.id },
+      },
+    });
+
+    await tx.movieBillingHeadAssignment.update({
+      where: { id: data.id },
+      data: {
+        clientId: data.clientId,
+        countryId: primaryCountryId,
+        movieId: data.movieId,
+        billingHeadId: data.billingHeadId,
+        units: getNextUnits(primaryCountryId),
+        isActive: data.isActive,
+      },
+    });
+
+    for (const countryId of remainingCountryIds) {
+      await tx.movieBillingHeadAssignment.upsert({
+        where: {
+          countryId_movieId_billingHeadId: {
+            countryId,
+            movieId: data.movieId,
+            billingHeadId: data.billingHeadId,
+          },
+        },
+        create: {
+          clientId: data.clientId,
+          countryId,
+          movieId: data.movieId,
+          billingHeadId: data.billingHeadId,
+          units: getNextUnits(countryId),
+          isActive: data.isActive,
+        },
+        update: {
+          clientId: data.clientId,
+          units: getNextUnits(countryId),
+          isActive: data.isActive,
+        },
+      });
+    }
+  });
+
+  return { success: true as const };
+}
+
 export async function createMovieBillingHeadAssignmentAction(_prevState: MovieBillingHeadAssignmentFormState, formData: FormData): Promise<MovieBillingHeadAssignmentFormState> {
   try {
     const user = await requireCanManageMovieBillingHeads();
@@ -143,7 +234,7 @@ export async function createMovieBillingHeadAssignmentAction(_prevState: MovieBi
     });
     if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message || "Invalid movie billing head payload." };
 
-    const saved = await saveAssignments(parsed.data, false, canViewCostData(user));
+    const saved = await saveAssignments(parsed.data, canViewCostData(user));
     if (!saved.success) return { success: false, error: saved.error };
 
     revalidatePath("/movie-billing-heads");
@@ -167,7 +258,7 @@ export async function updateMovieBillingHeadAssignmentAction(_prevState: MovieBi
     });
     if (!parsed.success || !parsed.data.id) return { success: false, error: parsed.success ? "Movie billing head is required." : parsed.error.issues[0]?.message };
 
-    const saved = await saveAssignments(parsed.data, true, canViewCostData(user));
+    const saved = await updateAssignments(parsed.data, canViewCostData(user));
     if (!saved.success) return { success: false, error: saved.error };
 
     revalidatePath("/movie-billing-heads");

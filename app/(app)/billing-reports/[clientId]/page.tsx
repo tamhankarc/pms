@@ -2570,6 +2570,7 @@ function WarnerPortalProjectsTable({
     `${reportKey}-summary`,
   );
   const hasHourlyRows = rows.some((row) => row.billingModel === "Hourly");
+  const isDvdSites = reportKey === "dvd-sites";
 
   return (
     <div className="space-y-6">
@@ -2582,6 +2583,7 @@ function WarnerPortalProjectsTable({
             <thead className="table-head">
               <tr>
                 <th className="table-cell">Project</th>
+                {isDvdSites ? <th className="table-cell">Titles</th> : null}
                 {hasHourlyRows ? <th className="table-cell">Hours</th> : null}
                 <th className="table-cell">Cost</th>
               </tr>
@@ -2595,6 +2597,11 @@ function WarnerPortalProjectsTable({
                     </div>
                     <ContactListAccordion contacts={row.contactPersons} />
                   </td>
+                  {isDvdSites ? (
+                    <td className="table-cell text-sm text-slate-700">
+                      {row.titles.length ? row.titles.join(", ") : "-"}
+                    </td>
+                  ) : null}
                   {hasHourlyRows ? (
                     <td className="table-cell">
                       {row.billingModel === "Hourly"
@@ -2610,7 +2617,7 @@ function WarnerPortalProjectsTable({
               {rows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={hasHourlyRows ? 3 : 2}
+                    colSpan={(hasHourlyRows ? 3 : 2) + (isDvdSites ? 1 : 0)}
                     className="table-cell text-center text-sm text-slate-500"
                   >
                     No projects are available.
@@ -2655,6 +2662,7 @@ function WarnerPortalProjectsTable({
                 <thead className="table-head">
                   <tr>
                     <th className="table-cell">Date</th>
+                    {isDvdSites ? <th className="table-cell">Title</th> : null}
                     <th className="table-cell">Task Name</th>
                     <th className="table-cell">Task Description</th>
                     <th className="table-cell">Hours</th>
@@ -2666,6 +2674,11 @@ function WarnerPortalProjectsTable({
                       <td className="table-cell whitespace-nowrap">
                         {row.date}
                       </td>
+                      {isDvdSites ? (
+                        <td className="table-cell text-sm text-slate-700">
+                          {row.title}
+                        </td>
+                      ) : null}
                       <td className="table-cell font-medium text-slate-900">
                         {row.taskName}
                       </td>
@@ -2676,7 +2689,7 @@ function WarnerPortalProjectsTable({
                   {project.detailRows.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={4}
+                        colSpan={isDvdSites ? 5 : 4}
                         className="table-cell text-center text-sm text-slate-500"
                       >
                         No time entries found for this project/month.

@@ -2067,6 +2067,7 @@ export type WarnerPortalProjectDetailRow = {
   id: string;
   projectId: string;
   date: string;
+  title: string;
   taskName: string;
   taskDescription: string;
   hours: number;
@@ -2081,6 +2082,7 @@ export type WarnerPortalProjectRow = {
   cost: number;
   poNumber: string;
   billingMonth: string;
+  titles: string[];
   contactPersons: Array<{ id?: string; name: string; email: string | null }>;
   detailRows: WarnerPortalProjectDetailRow[];
 };
@@ -2613,6 +2615,7 @@ export async function getWarnerPortalReportData({
           taskName: true,
           notes: true,
           minutesSpent: true,
+          movie: { select: { title: true } },
         },
         orderBy: [
           { project: { name: "asc" } },
@@ -2629,6 +2632,7 @@ export async function getWarnerPortalReportData({
       id: entry.id,
       projectId: entry.projectId,
       date: formatDisplayDate(entry.workDate),
+      title: entry.movie?.title || "-",
       taskName: entry.taskName || "-",
       taskDescription: entry.notes || "-",
       hours: Number(entry.minutesSpent ?? 0) / 60,
@@ -2648,6 +2652,14 @@ export async function getWarnerPortalReportData({
   const rows = await Promise.all(
     projects.map(async (project) => {
       const totalHours = (minutesByProject.get(project.id) ?? 0) / 60;
+      const projectDetailRows = detailRowsByProject.get(project.id) ?? [];
+      const titles = Array.from(
+        new Set(
+          projectDetailRows
+            .map((row) => row.title)
+            .filter((title) => title && title !== "-"),
+        ),
+      ).sort((a, b) => a.localeCompare(b));
       const calculatedCost = await getProjectBillingCostForSummary({
         clientId,
         projectId: project.id,
@@ -2666,8 +2678,9 @@ export async function getWarnerPortalReportData({
             : calculatedCost,
         poNumber: poByProject.get(project.id) ?? "-",
         billingMonth: monthRange.value,
+        titles,
         contactPersons: project.contactPersons,
-        detailRows: detailRowsByProject.get(project.id) ?? [],
+        detailRows: projectDetailRows,
       };
     }),
   );

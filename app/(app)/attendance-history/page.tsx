@@ -12,6 +12,7 @@ import {
   canAddManualAttendance,
   canManageManualAttendance,
   isAdminProjectManager,
+  isProjectManager,
 } from "@/lib/permissions";
 import {
   formatDateInIst,
@@ -86,7 +87,7 @@ const userSelect = {
   functionalRole: true,
 };
 
-const scopedUserOptions = canAddManualLog || isAdminProjectManager(currentUser)
+const scopedUserOptions = canAddManualLog || isAdminProjectManager(currentUser) || isProjectManager(currentUser)
   ? await db.user.findMany({
       where: attendanceEligibleUserWhere,
       select: userSelect,
@@ -142,7 +143,7 @@ const allowedUserIds = new Set(scopedUserOptions.map((user) => user.id));
 const selectedUserId =
   params.userId && allowedUserIds.has(params.userId)
     ? params.userId
-    : canAddManualLog || isAdminProjectManager(currentUser)
+    : canAddManualLog || isAdminProjectManager(currentUser) || isProjectManager(currentUser)
       ? ""
       : scopedUserOptions[0]?.id ?? "";
 
