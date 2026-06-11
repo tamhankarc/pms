@@ -56,6 +56,18 @@ function buildResetHref(action: string, anchor: string, params: PreservedParams)
   return query ? `${action}?${query}${anchor}` : `${action}${anchor}`;
 }
 
+const LOCKED_FILTER_BUTTON_CLASS = "border-dashed border-slate-300 bg-slate-50 text-slate-400";
+
+function LockedDependentFiltersNotice({ isVisible }: { isVisible: boolean }) {
+  if (!isVisible) return null;
+
+  return (
+    <div className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800">
+      Select a specific client to enable the other filters.
+    </div>
+  );
+}
+
 
 export function ProjectHoursFilterForm({
   action,
@@ -80,14 +92,15 @@ export function ProjectHoursFilterForm({
 }) {
   const [selectedClientId, setSelectedClientId] = useState(clientId);
   const [selectedProjectId, setSelectedProjectId] = useState(projectId);
+  const dependentFiltersEnabled = selectedClientId !== "all";
 
   const filteredProjects = useMemo(
-    () => projectOptions.filter((project) => (selectedClientId === "all" ? true : project.clientId === selectedClientId)),
-    [projectOptions, selectedClientId],
+    () => projectOptions.filter((project) => (dependentFiltersEnabled ? project.clientId === selectedClientId : false)),
+    [projectOptions, selectedClientId, dependentFiltersEnabled],
   );
 
   const isProjectAvailable = selectedProjectId === "all" || filteredProjects.some((project) => project.id === selectedProjectId);
-  const effectiveProjectId = isProjectAvailable ? selectedProjectId : "all";
+  const effectiveProjectId = dependentFiltersEnabled && isProjectAvailable ? selectedProjectId : "all";
 
   return (
     <AutoSubmitFilterForm className="relative z-20 flex flex-wrap items-end gap-3" method="get" action={`${action}${anchor}`}>
@@ -106,7 +119,7 @@ export function ProjectHoursFilterForm({
           onValueChange={(value) => {
             setSelectedClientId(value);
             const currentProject = projectOptions.find((project) => project.id === selectedProjectId);
-            if (currentProject && value !== "all" && currentProject.clientId !== value) {
+            if (value === "all" || (currentProject && currentProject.clientId !== value)) {
               setSelectedProjectId("all");
             }
           }}
@@ -119,12 +132,15 @@ export function ProjectHoursFilterForm({
           emptyLabel="No clients found."
         />
       </div>
+      <LockedDependentFiltersNotice isVisible={!dependentFiltersEnabled} />
       <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
         <SearchableCombobox
           id="projectProjectId"
           name="projectProjectId"
           value={effectiveProjectId}
           onValueChange={setSelectedProjectId}
+          disabled={!dependentFiltersEnabled}
+          buttonClassName={!dependentFiltersEnabled ? LOCKED_FILTER_BUTTON_CLASS : undefined}
           options={[
             { value: "all", label: "All projects" },
             ...filteredProjects.map((project) => ({ value: project.id, label: project.name })),
@@ -191,9 +207,10 @@ export function TaskDetailFilterForm({
   const [selectedSubProjectId, setSelectedSubProjectId] = useState(subProjectId);
   const [selectedCountryId, setSelectedCountryId] = useState(countryId);
   const [selectedMovieId, setSelectedMovieId] = useState(movieId);
+  const dependentFiltersEnabled = selectedClientId !== "all";
 
-  const useCountryEligibleOptions = selectedCountryId !== "all";
-  const useTitleEligibleOptions = selectedMovieId !== "all";
+  const useCountryEligibleOptions = dependentFiltersEnabled && selectedCountryId !== "all";
+  const useTitleEligibleOptions = dependentFiltersEnabled && selectedMovieId !== "all";
 
   const allowedClientIds = new Set<string>();
   if (useCountryEligibleOptions) countryEligibleClientOptions.forEach((client) => allowedClientIds.add(client.id));
@@ -234,8 +251,9 @@ export function TaskDetailFilterForm({
   const selectedSubProjectAllowsCountry =
     selectedSubProjectId === "all" || countryEligibleSubProjectOptions.some((subProject) => subProject.id === selectedSubProjectId);
   const countryDropdownEnabled =
-    selectedCountryId !== "all" ||
-    (selectedClientAllowsCountry && selectedProjectAllowsCountry && selectedSubProjectAllowsCountry);
+    dependentFiltersEnabled &&
+    (selectedCountryId !== "all" ||
+      (selectedClientAllowsCountry && selectedProjectAllowsCountry && selectedSubProjectAllowsCountry));
 
   const selectedClientAllowsTitle =
     selectedClientId === "all" || movieEligibleClientOptions.some((client) => client.id === selectedClientId);
@@ -244,30 +262,48 @@ export function TaskDetailFilterForm({
   const selectedSubProjectAllowsTitle =
     selectedSubProjectId === "all" || movieEligibleSubProjectOptions.some((subProject) => subProject.id === selectedSubProjectId);
   const movieDropdownEnabled =
-    selectedMovieId !== "all" ||
-    (selectedClientAllowsTitle && selectedProjectAllowsTitle && selectedSubProjectAllowsTitle);
+    dependentFiltersEnabled &&
+    (selectedMovieId !== "all" ||
+      (selectedClientAllowsTitle && selectedProjectAllowsTitle && selectedSubProjectAllowsTitle));
 
   const filteredTitles = useMemo(
-    () => movieOptions.filter((movie) => (selectedClientId === "all" ? true : movie.clientId === selectedClientId)),
-    [movieOptions, selectedClientId],
+    () =>
+      dependentFiltersEnabled
+        ? movieOptions.filter((movie) => movie.clientId === selectedClientId)
+        : [],
+    [movieOptions, selectedClientId, dependentFiltersEnabled],
   );
   const effectiveMovieId = movieDropdownEnabled && (selectedMovieId === "all" || filteredTitles.some((movie) => movie.id === selectedMovieId))
     ? selectedMovieId
     : "all";
 
   const filteredProjects = useMemo(
-    () => activeProjectOptions.filter((project) => (selectedClientId === "all" ? true : project.clientId === selectedClientId)),
-    [activeProjectOptions, selectedClientId],
+    () => activeProjectOptions.filter((project) => (dependentFiltersEnabled ? project.clientId === selectedClientId : false)),
+    [activeProjectOptions, selectedClientId, dependentFiltersEnabled],
   );
-  const effectiveProjectId = selectedProjectId === "all" || filteredProjects.some((project) => project.id === selectedProjectId)
+  const effectiveProjectId = dependentFiltersEnabled && (selectedProjectId === "all" || filteredProjects.some((project) => project.id === selectedProjectId))
     ? selectedProjectId
     : "all";
 
-  const filteredSubProjects = useMemo(
-    () => activeSubProjectOptions.filter((subProject) => (effectiveProjectId === "all" ? true : subProject.projectId === effectiveProjectId)),
-    [activeSubProjectOptions, effectiveProjectId],
+  const filteredProjectIds = useMemo(
+    () => new Set(filteredProjects.map((project) => project.id)),
+    [filteredProjects],
   );
-  const effectiveSubProjectId = selectedSubProjectId === "all" || filteredSubProjects.some((subProject) => subProject.id === selectedSubProjectId)
+
+  const filteredSubProjects = useMemo(
+    () =>
+      activeSubProjectOptions.filter((subProject) => {
+        if (effectiveProjectId !== "all") {
+          return subProject.projectId === effectiveProjectId;
+        }
+        if (selectedClientId !== "all") {
+          return filteredProjectIds.has(subProject.projectId);
+        }
+        return true;
+      }),
+    [activeSubProjectOptions, effectiveProjectId, filteredProjectIds, selectedClientId],
+  );
+  const effectiveSubProjectId = dependentFiltersEnabled && (selectedSubProjectId === "all" || filteredSubProjects.some((subProject) => subProject.id === selectedSubProjectId))
     ? selectedSubProjectId
     : "all";
 
@@ -288,12 +324,15 @@ export function TaskDetailFilterForm({
           onValueChange={(value) => {
             setSelectedClientId(value);
             const currentProject = activeProjectOptions.find((project) => project.id === selectedProjectId);
-            if (currentProject && value !== "all" && currentProject.clientId !== value) {
+            if (value === "all" || (currentProject && currentProject.clientId !== value)) {
               setSelectedProjectId("all");
               setSelectedSubProjectId("all");
             }
-            if (value !== "all" && !movieEligibleClientOptions.some((client) => client.id === value)) {
+            if (value === "all" || !movieEligibleClientOptions.some((client) => client.id === value)) {
               setSelectedMovieId("all");
+            }
+            if (value === "all" || !countryEligibleClientOptions.some((client) => client.id === value)) {
+              setSelectedCountryId("all");
             }
           }}
           options={[{ value: "all", label: "All clients" }, ...activeClientOptions.map((client) => ({ value: client.id, label: client.name }))]}
@@ -302,6 +341,7 @@ export function TaskDetailFilterForm({
           emptyLabel="No clients found."
         />
       </div>
+      <LockedDependentFiltersNotice isVisible={!dependentFiltersEnabled} />
       <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
         <SearchableCombobox
           id="taskProjectId"
@@ -323,6 +363,8 @@ export function TaskDetailFilterForm({
               }
             }
           }}
+          disabled={!dependentFiltersEnabled}
+          buttonClassName={!dependentFiltersEnabled ? LOCKED_FILTER_BUTTON_CLASS : undefined}
           options={[{ value: "all", label: "All projects" }, ...filteredProjects.map((project) => ({ value: project.id, label: project.name }))]}
           placeholder="All projects"
           searchPlaceholder="Search projects..."
@@ -340,6 +382,8 @@ export function TaskDetailFilterForm({
               setSelectedMovieId("all");
             }
           }}
+          disabled={!dependentFiltersEnabled}
+          buttonClassName={!dependentFiltersEnabled ? LOCKED_FILTER_BUTTON_CLASS : undefined}
           options={[{ value: "all", label: "All sub-projects" }, ...filteredSubProjects.map((subProject) => ({ value: subProject.id, label: subProject.name }))]}
           placeholder="All sub-projects"
           searchPlaceholder="Search sub-projects..."
@@ -363,7 +407,7 @@ export function TaskDetailFilterForm({
             }
           }}
           disabled={!movieDropdownEnabled}
-          buttonClassName={!movieDropdownEnabled ? "border-dashed border-slate-300 bg-slate-50 text-slate-400" : undefined}
+          buttonClassName={!movieDropdownEnabled ? LOCKED_FILTER_BUTTON_CLASS : undefined}
           options={[{ value: "all", label: "All titles" }, ...filteredTitles.map((movie) => ({ value: movie.id, label: movie.title, keywords: `${movie.title} ${movie.clientName}` }))]}
           placeholder="All titles"
           searchPlaceholder="Search titles..."
@@ -377,7 +421,7 @@ export function TaskDetailFilterForm({
           value={countryDropdownEnabled ? selectedCountryId : "all"}
           onValueChange={setSelectedCountryId}
           disabled={!countryDropdownEnabled}
-          buttonClassName={!countryDropdownEnabled ? "border-dashed border-slate-300 bg-slate-50 text-slate-400" : undefined}
+          buttonClassName={!countryDropdownEnabled ? LOCKED_FILTER_BUTTON_CLASS : undefined}
           options={[{ value: "all", label: "All countries" }, ...countryOptions.map((country) => ({ value: country.id, label: country.isoCode ? `${country.isoCode} - ${country.name}` : country.name, keywords: `${country.isoCode ?? ""} ${country.name}` }))]}
           placeholder="All countries"
           searchPlaceholder="Search countries..."
@@ -443,9 +487,10 @@ export function ScopedMinutesFilterForm({
   const [selectedSubProjectId, setSelectedSubProjectId] = useState(subProjectId);
   const [selectedCountryId, setSelectedCountryId] = useState(countryId);
   const [selectedMovieId, setSelectedMovieId] = useState(movieId);
+  const dependentFiltersEnabled = selectedClientId !== "all";
 
-  const useCountryEligibleOptions = selectedCountryId !== "all";
-  const useTitleEligibleOptions = selectedMovieId !== "all";
+  const useCountryEligibleOptions = dependentFiltersEnabled && selectedCountryId !== "all";
+  const useTitleEligibleOptions = dependentFiltersEnabled && selectedMovieId !== "all";
 
   const activeClientOptions = useMemo(() => {
     return clientOptions.filter((client) => {
@@ -478,8 +523,9 @@ export function ScopedMinutesFilterForm({
   const selectedSubProjectAllowsCountry =
     selectedSubProjectId === "all" || countryEligibleSubProjectOptions.some((subProject) => subProject.id === selectedSubProjectId);
   const countryDropdownEnabled =
-    selectedCountryId !== "all" ||
-    (selectedClientAllowsCountry && selectedProjectAllowsCountry && selectedSubProjectAllowsCountry);
+    dependentFiltersEnabled &&
+    (selectedCountryId !== "all" ||
+      (selectedClientAllowsCountry && selectedProjectAllowsCountry && selectedSubProjectAllowsCountry));
 
   const selectedClientAllowsTitle =
     selectedClientId === "all" || movieEligibleClientOptions.some((client) => client.id === selectedClientId);
@@ -488,32 +534,50 @@ export function ScopedMinutesFilterForm({
   const selectedSubProjectAllowsTitle =
     selectedSubProjectId === "all" || movieEligibleSubProjectOptions.some((subProject) => subProject.id === selectedSubProjectId);
   const movieDropdownEnabled =
-    selectedMovieId !== "all" ||
-    (selectedClientAllowsTitle && selectedProjectAllowsTitle && selectedSubProjectAllowsTitle);
+    dependentFiltersEnabled &&
+    (selectedMovieId !== "all" ||
+      (selectedClientAllowsTitle && selectedProjectAllowsTitle && selectedSubProjectAllowsTitle));
 
   const filteredTitles = useMemo(
-    () => movieOptions.filter((movie) => (selectedClientId === "all" ? true : movie.clientId === selectedClientId)),
-    [movieOptions, selectedClientId],
+    () =>
+      dependentFiltersEnabled
+        ? movieOptions.filter((movie) => movie.clientId === selectedClientId)
+        : [],
+    [movieOptions, selectedClientId, dependentFiltersEnabled],
   );
   const effectiveMovieId = movieDropdownEnabled && (selectedMovieId === "all" || filteredTitles.some((movie) => movie.id === selectedMovieId))
     ? selectedMovieId
     : "all";
 
   const filteredProjects = useMemo(
-    () => activeProjectOptions.filter((project) => (selectedClientId === "all" ? true : project.clientId === selectedClientId)),
-    [activeProjectOptions, selectedClientId],
+    () => activeProjectOptions.filter((project) => (dependentFiltersEnabled ? project.clientId === selectedClientId : false)),
+    [activeProjectOptions, selectedClientId, dependentFiltersEnabled],
   );
   const effectiveProjectId =
-    selectedProjectId === "all" || filteredProjects.some((project) => project.id === selectedProjectId)
+    dependentFiltersEnabled && (selectedProjectId === "all" || filteredProjects.some((project) => project.id === selectedProjectId))
       ? selectedProjectId
       : "all";
 
+  const filteredProjectIds = useMemo(
+    () => new Set(filteredProjects.map((project) => project.id)),
+    [filteredProjects],
+  );
+
   const filteredSubProjects = useMemo(
-    () => activeSubProjectOptions.filter((subProject) => (effectiveProjectId === "all" ? true : subProject.projectId === effectiveProjectId)),
-    [activeSubProjectOptions, effectiveProjectId],
+    () =>
+      activeSubProjectOptions.filter((subProject) => {
+        if (effectiveProjectId !== "all") {
+          return subProject.projectId === effectiveProjectId;
+        }
+        if (selectedClientId !== "all") {
+          return filteredProjectIds.has(subProject.projectId);
+        }
+        return true;
+      }),
+    [activeSubProjectOptions, effectiveProjectId, filteredProjectIds, selectedClientId],
   );
   const effectiveSubProjectId =
-    selectedSubProjectId === "all" || filteredSubProjects.some((subProject) => subProject.id === selectedSubProjectId)
+    dependentFiltersEnabled && (selectedSubProjectId === "all" || filteredSubProjects.some((subProject) => subProject.id === selectedSubProjectId))
       ? selectedSubProjectId
       : "all";
 
@@ -534,12 +598,15 @@ export function ScopedMinutesFilterForm({
           onValueChange={(value) => {
             setSelectedClientId(value);
             const currentProject = activeProjectOptions.find((project) => project.id === selectedProjectId);
-            if (currentProject && value !== "all" && currentProject.clientId !== value) {
+            if (value === "all" || (currentProject && currentProject.clientId !== value)) {
               setSelectedProjectId("all");
               setSelectedSubProjectId("all");
             }
-            if (value !== "all" && !movieEligibleClientOptions.some((client) => client.id === value)) {
+            if (value === "all" || !movieEligibleClientOptions.some((client) => client.id === value)) {
               setSelectedMovieId("all");
+            }
+            if (value === "all" || !countryEligibleClientOptions.some((client) => client.id === value)) {
+              setSelectedCountryId("all");
             }
           }}
           options={[{ value: "all", label: "All clients" }, ...activeClientOptions.map((client) => ({ value: client.id, label: client.name }))]}
@@ -548,6 +615,7 @@ export function ScopedMinutesFilterForm({
           emptyLabel="No clients found."
         />
       </div>
+      <LockedDependentFiltersNotice isVisible={!dependentFiltersEnabled} />
       <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
         <SearchableCombobox
           id={`${prefix}ProjectId`}
@@ -569,6 +637,8 @@ export function ScopedMinutesFilterForm({
               }
             }
           }}
+          disabled={!dependentFiltersEnabled}
+          buttonClassName={!dependentFiltersEnabled ? LOCKED_FILTER_BUTTON_CLASS : undefined}
           options={[{ value: "all", label: "All projects" }, ...filteredProjects.map((project) => ({ value: project.id, label: project.name }))]}
           placeholder="All projects"
           searchPlaceholder="Search projects..."
@@ -586,6 +656,8 @@ export function ScopedMinutesFilterForm({
               setSelectedMovieId("all");
             }
           }}
+          disabled={!dependentFiltersEnabled}
+          buttonClassName={!dependentFiltersEnabled ? LOCKED_FILTER_BUTTON_CLASS : undefined}
           options={[{ value: "all", label: "All sub-projects" }, ...filteredSubProjects.map((subProject) => ({ value: subProject.id, label: subProject.name }))]}
           placeholder="All sub-projects"
           searchPlaceholder="Search sub-projects..."
@@ -594,8 +666,8 @@ export function ScopedMinutesFilterForm({
       </div>
       <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
         <SearchableCombobox
-          id={`${prefix}TitleId`}
-          name={`${prefix}TitleId`}
+          id={`${prefix}MovieId`}
+          name={`${prefix}MovieId`}
           value={movieDropdownEnabled ? effectiveMovieId : "all"}
           onValueChange={(value) => {
             setSelectedMovieId(value);
@@ -609,7 +681,7 @@ export function ScopedMinutesFilterForm({
             }
           }}
           disabled={!movieDropdownEnabled}
-          buttonClassName={!movieDropdownEnabled ? "border-dashed border-slate-300 bg-slate-50 text-slate-400" : undefined}
+          buttonClassName={!movieDropdownEnabled ? LOCKED_FILTER_BUTTON_CLASS : undefined}
           options={[{ value: "all", label: "All titles" }, ...filteredTitles.map((movie) => ({ value: movie.id, label: movie.title, keywords: `${movie.title} ${movie.clientName}` }))]}
           placeholder="All titles"
           searchPlaceholder="Search titles..."
@@ -623,7 +695,7 @@ export function ScopedMinutesFilterForm({
           value={countryDropdownEnabled ? selectedCountryId : "all"}
           onValueChange={setSelectedCountryId}
           disabled={!countryDropdownEnabled}
-          buttonClassName={!countryDropdownEnabled ? "border-dashed border-slate-300 bg-slate-50 text-slate-400" : undefined}
+          buttonClassName={!countryDropdownEnabled ? LOCKED_FILTER_BUTTON_CLASS : undefined}
           options={[{ value: "all", label: "All countries" }, ...countryOptions.map((country) => ({ value: country.id, label: country.isoCode ? `${country.isoCode} - ${country.name}` : country.name, keywords: `${country.isoCode ?? ""} ${country.name}` }))]}
           placeholder="All countries"
           searchPlaceholder="Search countries..."
@@ -675,34 +747,52 @@ export function MovieMinutesFilterForm({
   const [selectedProjectId, setSelectedProjectId] = useState(projectId);
   const [selectedSubProjectId, setSelectedSubProjectId] = useState(subProjectId);
   const [selectedCountryId, setSelectedCountryId] = useState(countryId);
+  const dependentFiltersEnabled = selectedClientId !== "all";
 
   const filteredTitles = useMemo(
-    () => movieOptions.filter((movie) => (selectedClientId === "all" ? true : movie.clientId === selectedClientId)),
-    [movieOptions, selectedClientId],
+    () =>
+      dependentFiltersEnabled
+        ? movieOptions.filter((movie) => movie.clientId === selectedClientId)
+        : [],
+    [movieOptions, selectedClientId, dependentFiltersEnabled],
   );
 
   const effectiveMovieId =
-    selectedMovieId === "all" || filteredTitles.some((movie) => movie.id === selectedMovieId)
+    dependentFiltersEnabled && (selectedMovieId === "all" || filteredTitles.some((movie) => movie.id === selectedMovieId))
       ? selectedMovieId
       : "all";
 
   const filteredProjects = useMemo(
-    () => projectOptions.filter((project) => (selectedClientId === "all" ? true : project.clientId === selectedClientId)),
-    [projectOptions, selectedClientId],
+    () => projectOptions.filter((project) => (dependentFiltersEnabled ? project.clientId === selectedClientId : false)),
+    [projectOptions, selectedClientId, dependentFiltersEnabled],
   );
 
   const effectiveProjectId =
-    selectedProjectId === "all" || filteredProjects.some((project) => project.id === selectedProjectId)
+    dependentFiltersEnabled && (selectedProjectId === "all" || filteredProjects.some((project) => project.id === selectedProjectId))
       ? selectedProjectId
       : "all";
 
+  const filteredProjectIds = useMemo(
+    () => new Set(filteredProjects.map((project) => project.id)),
+    [filteredProjects],
+  );
+
   const filteredSubProjects = useMemo(
-    () => subProjectOptions.filter((subProject) => (effectiveProjectId === "all" ? true : subProject.projectId === effectiveProjectId)),
-    [subProjectOptions, effectiveProjectId],
+    () =>
+      subProjectOptions.filter((subProject) => {
+        if (effectiveProjectId !== "all") {
+          return subProject.projectId === effectiveProjectId;
+        }
+        if (selectedClientId !== "all") {
+          return filteredProjectIds.has(subProject.projectId);
+        }
+        return true;
+      }),
+    [subProjectOptions, effectiveProjectId, filteredProjectIds, selectedClientId],
   );
 
   const effectiveSubProjectId =
-    selectedSubProjectId === "all" || filteredSubProjects.some((subProject) => subProject.id === selectedSubProjectId)
+    dependentFiltersEnabled && (selectedSubProjectId === "all" || filteredSubProjects.some((subProject) => subProject.id === selectedSubProjectId))
       ? selectedSubProjectId
       : "all";
 
@@ -729,6 +819,8 @@ export function MovieMinutesFilterForm({
             setSelectedProjectId("all");
             setSelectedSubProjectId("all");
           }}
+          disabled={!dependentFiltersEnabled}
+          buttonClassName={!dependentFiltersEnabled ? LOCKED_FILTER_BUTTON_CLASS : undefined}
           options={[{ value: "all", label: "All titles" }, ...filteredTitles.map((movie) => ({ value: movie.id, label: movie.title, keywords: movie.clientName }))]}
           placeholder="All titles"
           searchPlaceholder="Search titles..."
@@ -743,13 +835,16 @@ export function MovieMinutesFilterForm({
           onValueChange={(value) => {
             setSelectedClientId(value);
             const currentProject = projectOptions.find((project) => project.id === selectedProjectId);
-            if (currentProject && value !== "all" && currentProject.clientId !== value) {
+            if (value === "all" || (currentProject && currentProject.clientId !== value)) {
               setSelectedProjectId("all");
               setSelectedSubProjectId("all");
             }
             const currentTitle = movieOptions.find((movie) => movie.id === selectedMovieId);
-            if (currentTitle && value !== "all" && currentTitle.clientId !== value) {
+            if (value === "all" || (currentTitle && currentTitle.clientId !== value)) {
               setSelectedMovieId("all");
+            }
+            if (value === "all") {
+              setSelectedCountryId("all");
             }
           }}
           options={[{ value: "all", label: "All clients" }, ...clientOptions.map((client) => ({ value: client.id, label: client.name }))]}
@@ -758,6 +853,7 @@ export function MovieMinutesFilterForm({
           emptyLabel="No clients found."
         />
       </div>
+      <LockedDependentFiltersNotice isVisible={!dependentFiltersEnabled} />
       <div className="w-full sm:w-[240px] md:w-[260px] lg:w-[280px]">
         <SearchableCombobox
           id="movieProjectId"
@@ -778,6 +874,8 @@ export function MovieMinutesFilterForm({
               setSelectedClientId(nextProject.clientId);
             }
           }}
+          disabled={!dependentFiltersEnabled}
+          buttonClassName={!dependentFiltersEnabled ? LOCKED_FILTER_BUTTON_CLASS : undefined}
           options={[{ value: "all", label: "All projects" }, ...filteredProjects.map((project) => ({ value: project.id, label: project.name }))]}
           placeholder="All projects"
           searchPlaceholder="Search projects..."
@@ -790,6 +888,8 @@ export function MovieMinutesFilterForm({
           name="movieSubProjectId"
           value={effectiveSubProjectId}
           onValueChange={setSelectedSubProjectId}
+          disabled={!dependentFiltersEnabled}
+          buttonClassName={!dependentFiltersEnabled ? LOCKED_FILTER_BUTTON_CLASS : undefined}
           options={[{ value: "all", label: "All sub-projects" }, ...filteredSubProjects.map((subProject) => ({ value: subProject.id, label: subProject.name }))]}
           placeholder="All sub-projects"
           searchPlaceholder="Search sub-projects..."
@@ -800,8 +900,10 @@ export function MovieMinutesFilterForm({
         <SearchableCombobox
           id="movieCountryId"
           name="movieCountryId"
-          value={selectedCountryId}
+          value={dependentFiltersEnabled ? selectedCountryId : "all"}
           onValueChange={setSelectedCountryId}
+          disabled={!dependentFiltersEnabled}
+          buttonClassName={!dependentFiltersEnabled ? LOCKED_FILTER_BUTTON_CLASS : undefined}
           options={[{ value: "all", label: "All countries" }, ...countryOptions.map((country) => ({ value: country.id, label: country.isoCode ? `${country.isoCode} - ${country.name}` : country.name, keywords: `${country.isoCode ?? ""} ${country.name}` }))]}
           placeholder="All countries"
           searchPlaceholder="Search countries..."
