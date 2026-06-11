@@ -128,6 +128,7 @@ function withLeaveItems(
 
   if (isHR(user)) {
     pushIfMissing("leave-admin");
+    pushIfMissing("attendance-history");
     pushIfMissing("hr-reports");
   }
 
