@@ -154,7 +154,10 @@ export function canDeleteProjects(user: UserLike) {
   return isAdmin(user) && getFunctionalRole(user) === "OTHER";
 }
 export function canAddManualAttendance(user: UserLike) {
-  return isAdmin(user) && getFunctionalRole(user) === "OTHER";
+  return (
+    (isAdmin(user) && getFunctionalRole(user) === "OTHER") ||
+    isHR(user)
+  );
 }
 export function canSeeAllProjects(user: UserLike) {
   return (
