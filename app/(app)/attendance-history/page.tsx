@@ -13,6 +13,7 @@ import {
   canManageManualAttendance,
   isAdminProjectManager,
   isProjectManager,
+  isRoleScopedManager,
 } from "@/lib/permissions";
 import {
   formatDateInIst,
@@ -125,7 +126,34 @@ const scopedUserOptions = canAddManualLog || isAdminProjectManager(currentUser) 
           select: userSelect,
         });
 
-        const usersById = new Map<string, (typeof assignedUsers)[number]>();
+        const currentUserFunctionalRole =
+          isRoleScopedManager(currentUser) &&
+          currentUser.functionalRole &&
+          currentUser.functionalRole !== "UNASSIGNED"
+            ? currentUser.functionalRole
+            : null;
+
+        const sameRoleTeamLeads = currentUserFunctionalRole
+          ? await db.user.findMany({
+              where: {
+                AND: [
+                  attendanceEligibleUserWhere,
+                  {
+                    userType: "TEAM_LEAD",
+                    functionalRole: currentUserFunctionalRole,
+                  },
+                ],
+              },
+              select: userSelect,
+              orderBy: [{ fullName: "asc" }],
+            })
+          : [];
+
+        const usersById = new Map<
+          string,
+          | (typeof assignedUsers)[number]
+          | (typeof sameRoleTeamLeads)[number]
+        >();
 
         if (selfUser) {
           usersById.set(selfUser.id, selfUser);
@@ -135,7 +163,13 @@ const scopedUserOptions = canAddManualLog || isAdminProjectManager(currentUser) 
           usersById.set(user.id, user);
         }
 
-        return Array.from(usersById.values());
+        for (const user of sameRoleTeamLeads) {
+          usersById.set(user.id, user);
+        }
+
+        return Array.from(usersById.values()).sort((a, b) =>
+          a.fullName.localeCompare(b.fullName),
+        );
       });
 
 const allowedUserIds = new Set(scopedUserOptions.map((user) => user.id));
