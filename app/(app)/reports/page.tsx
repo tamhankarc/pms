@@ -525,115 +525,130 @@ export default async function ReportsPage({
     buildDateRange(countryFromDate, countryToDate),
   ];
 
-  const [clientEntries, projectEntries, taskEntries, movieEntries, dayEntries, countryEntries] = await Promise.all([
-    db.timeEntry.findMany({
-      where: {
-        projectId: { in: safeProjectIds },
-        workDate: { gte: clientFromBoundary, lte: clientToBoundary },
-        ...(clientClientId !== "all" ? { project: { is: { clientId: clientClientId } } } : {}),
-        ...employeeWhereClause,
-      },
-      include: { project: { include: { client: true } } },
-      orderBy: [{ workDate: "desc" }],
-    }),
-    db.timeEntry.findMany({
-      where: {
-        projectId: { in: safeProjectIds },
-        workDate: { gte: projectFromBoundary, lte: projectToBoundary },
-        ...(projectClientId !== "all" ? { project: { is: { clientId: projectClientId } } } : {}),
-        ...(projectProjectId !== "all" ? { projectId: projectProjectId } : {}),
-        ...employeeWhereClause,
-      },
-      include: { project: { include: { client: true } }, subProject: true },
-      orderBy: [{ workDate: "desc" }],
-    }),
-    db.timeEntry.findMany({
-      where: {
-        projectId: { in: safeProjectIds },
-        workDate: { gte: taskFromBoundary, lte: taskToBoundary },
-        ...(taskClientId !== "all" ? { project: { is: { clientId: taskClientId } } } : {}),
-        ...(taskProjectId !== "all" ? { projectId: taskProjectId } : {}),
-        ...(taskSubProjectId !== "all" ? { subProjectId: taskSubProjectId } : {}),
-        ...(taskCountryId !== "all" ? { countryId: taskCountryId } : {}),
-        ...(taskMovieId !== "all" ? { movieId: taskMovieId } : {}),
-        ...employeeWhereClause,
-      },
-      include: {
-        employee: { select: { functionalRole: true } },
-        project: { include: { client: true } },
-        subProject: true,
-        country: true,
-        movie: true,
-      },
-      orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
-    }),
-    db.timeEntry.findMany({
-      where: {
-        projectId: { in: movieEligibleProjectIds.length ? movieEligibleProjectIds : ["__none__"] },
-        workDate: { gte: movieFromBoundary, lte: movieToBoundary },
-        movieId: { not: null },
-        project: {
-          is: {
-            client: { is: { showMoviesInEntries: true } },
-            hideMoviesInEntries: false,
-            ...(movieClientId !== "all" ? { clientId: movieClientId } : {}),
-          },
+  const clientEntries = activeReportSlug === "client-wise-minutes"
+    ? await db.timeEntry.findMany({
+        where: {
+          projectId: { in: safeProjectIds },
+          workDate: { gte: clientFromBoundary, lte: clientToBoundary },
+          ...(clientClientId !== "all" ? { project: { is: { clientId: clientClientId } } } : {}),
+          ...employeeWhereClause,
         },
-        OR: [{ subProjectId: null }, { subProject: { is: { hideMoviesInEntries: false } } }],
-        ...(movieMovieId !== "all" ? { movieId: movieMovieId } : {}),
-        ...(movieProjectId !== "all" ? { projectId: movieProjectId } : {}),
-        ...(movieSubProjectId !== "all" ? { subProjectId: movieSubProjectId } : {}),
-        ...(movieCountryId !== "all" ? { countryId: movieCountryId } : {}),
-        ...employeeWhereClause,
-      },
-      include: {
-        movie: true,
-        project: { include: { client: true } },
-        subProject: true,
-        country: true,
-      },
-      orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
-    }),
-    db.timeEntry.findMany({
-      where: {
-        projectId: { in: safeProjectIds },
-        workDate: { gte: dayFromBoundary, lte: dayToBoundary },
-        ...(dayClientId !== "all" ? { project: { is: { clientId: dayClientId } } } : {}),
-        ...(dayProjectId !== "all" ? { projectId: dayProjectId } : {}),
-        ...(daySubProjectId !== "all" ? { subProjectId: daySubProjectId } : {}),
-        ...(dayCountryId !== "all" ? { countryId: dayCountryId } : {}),
-        ...(dayMovieId !== "all" ? { movieId: dayMovieId } : {}),
-        ...employeeWhereClause,
-      },
-      include: {
-        project: { include: { client: true } },
-        subProject: true,
-        country: true,
-        movie: true,
-      },
-      orderBy: [{ workDate: "asc" }, { createdAt: "asc" }],
-    }),
-    db.timeEntry.findMany({
-      where: {
-        projectId: { in: countryEligibleProjectIds.length ? countryEligibleProjectIds : ["__none__"] },
-        workDate: { gte: countryFromBoundary, lte: countryToBoundary },
-        ...(countryClientId !== "all" ? { project: { is: { clientId: countryClientId } } } : {}),
-        ...(countryProjectId !== "all" ? { projectId: countryProjectId } : {}),
-        ...(countrySubProjectId !== "all" ? { subProjectId: countrySubProjectId } : {}),
-        ...(countryCountryId !== "all" ? { countryId: countryCountryId } : {}),
-        ...(countryMovieId !== "all" ? { movieId: countryMovieId } : {}),
-        OR: [{ subProjectId: null }, { subProject: { is: { hideCountriesInEntries: false } } }],
-        ...employeeWhereClause,
-      },
-      include: {
-        project: { include: { client: true } },
-        subProject: true,
-        country: true,
-        movie: true,
-      },
-      orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
-    }),
-  ]);
+        include: { project: { include: { client: true } } },
+        orderBy: [{ workDate: "desc" }],
+      })
+    : [];
+
+  const projectEntries = activeReportSlug === "project-wise-minutes"
+    ? await db.timeEntry.findMany({
+        where: {
+          projectId: { in: safeProjectIds },
+          workDate: { gte: projectFromBoundary, lte: projectToBoundary },
+          ...(projectClientId !== "all" ? { project: { is: { clientId: projectClientId } } } : {}),
+          ...(projectProjectId !== "all" ? { projectId: projectProjectId } : {}),
+          ...employeeWhereClause,
+        },
+        include: { project: { include: { client: true } }, subProject: true },
+        orderBy: [{ workDate: "desc" }],
+      })
+    : [];
+
+  const taskEntries = activeReportSlug === "task-wise-minutes"
+    ? await db.timeEntry.findMany({
+        where: {
+          projectId: { in: safeProjectIds },
+          workDate: { gte: taskFromBoundary, lte: taskToBoundary },
+          ...(taskClientId !== "all" ? { project: { is: { clientId: taskClientId } } } : {}),
+          ...(taskProjectId !== "all" ? { projectId: taskProjectId } : {}),
+          ...(taskSubProjectId !== "all" ? { subProjectId: taskSubProjectId } : {}),
+          ...(taskCountryId !== "all" ? { countryId: taskCountryId } : {}),
+          ...(taskMovieId !== "all" ? { movieId: taskMovieId } : {}),
+          ...employeeWhereClause,
+        },
+        include: {
+          employee: { select: { functionalRole: true } },
+          project: { include: { client: true } },
+          subProject: true,
+          country: true,
+          movie: true,
+        },
+        orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
+      })
+    : [];
+
+  const movieEntries = activeReportSlug === "movie-wise-minutes"
+    ? await db.timeEntry.findMany({
+        where: {
+          projectId: { in: movieEligibleProjectIds.length ? movieEligibleProjectIds : ["__none__"] },
+          workDate: { gte: movieFromBoundary, lte: movieToBoundary },
+          movieId: { not: null },
+          project: {
+            is: {
+              client: { is: { showMoviesInEntries: true } },
+              hideMoviesInEntries: false,
+              ...(movieClientId !== "all" ? { clientId: movieClientId } : {}),
+            },
+          },
+          OR: [{ subProjectId: null }, { subProject: { is: { hideMoviesInEntries: false } } }],
+          ...(movieMovieId !== "all" ? { movieId: movieMovieId } : {}),
+          ...(movieProjectId !== "all" ? { projectId: movieProjectId } : {}),
+          ...(movieSubProjectId !== "all" ? { subProjectId: movieSubProjectId } : {}),
+          ...(movieCountryId !== "all" ? { countryId: movieCountryId } : {}),
+          ...employeeWhereClause,
+        },
+        include: {
+          movie: true,
+          project: { include: { client: true } },
+          subProject: true,
+          country: true,
+        },
+        orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
+      })
+    : [];
+
+  const dayEntries = activeReportSlug === "day-wise-minutes"
+    ? await db.timeEntry.findMany({
+        where: {
+          projectId: { in: safeProjectIds },
+          workDate: { gte: dayFromBoundary, lte: dayToBoundary },
+          ...(dayClientId !== "all" ? { project: { is: { clientId: dayClientId } } } : {}),
+          ...(dayProjectId !== "all" ? { projectId: dayProjectId } : {}),
+          ...(daySubProjectId !== "all" ? { subProjectId: daySubProjectId } : {}),
+          ...(dayCountryId !== "all" ? { countryId: dayCountryId } : {}),
+          ...(dayMovieId !== "all" ? { movieId: dayMovieId } : {}),
+          ...employeeWhereClause,
+        },
+        include: {
+          project: { include: { client: true } },
+          subProject: true,
+          country: true,
+          movie: true,
+        },
+        orderBy: [{ workDate: "asc" }, { createdAt: "asc" }],
+      })
+    : [];
+
+  const countryEntries = activeReportSlug === "country-wise-minutes"
+    ? await db.timeEntry.findMany({
+        where: {
+          projectId: { in: countryEligibleProjectIds.length ? countryEligibleProjectIds : ["__none__"] },
+          workDate: { gte: countryFromBoundary, lte: countryToBoundary },
+          ...(countryClientId !== "all" ? { project: { is: { clientId: countryClientId } } } : {}),
+          ...(countryProjectId !== "all" ? { projectId: countryProjectId } : {}),
+          ...(countrySubProjectId !== "all" ? { subProjectId: countrySubProjectId } : {}),
+          ...(countryCountryId !== "all" ? { countryId: countryCountryId } : {}),
+          ...(countryMovieId !== "all" ? { movieId: countryMovieId } : {}),
+          OR: [{ subProjectId: null }, { subProject: { is: { hideCountriesInEntries: false } } }],
+          ...employeeWhereClause,
+        },
+        include: {
+          project: { include: { client: true } },
+          subProject: true,
+          country: true,
+          movie: true,
+        },
+        orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
+      })
+    : [];
 
   const clientMap = new Map<string, ClientHoursRow>();
   const projectMap = new Map<string, ProjectHoursRow>();

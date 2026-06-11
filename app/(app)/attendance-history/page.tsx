@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PlusCircle } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
@@ -294,6 +295,7 @@ const selectedUser = selectedUserId
                 <th className="table-cell">City/District</th>
                 <th className="table-cell">State</th>
                 <th className="table-cell">Coordinates</th>
+                {canAddManualLog ? <th className="table-cell text-right">Edit</th> : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -327,11 +329,26 @@ const selectedUser = selectedUserId
                   <td className="table-cell">
                     {Number(log.latitude).toFixed(7)}, {Number(log.longitude).toFixed(7)}
                   </td>
+                  {canAddManualLog ? (
+                    <td className="table-cell text-right">
+                      <Link
+                        className="btn-secondary inline-flex px-3 py-1.5 text-xs"
+                        href={`/attendance-history/${log.id}/edit?${new URLSearchParams({
+                          userId: selectedUserId,
+                          fromDate,
+                          toDate,
+                          ...(currentPage > 1 ? { page: String(currentPage) } : {}),
+                        }).toString()}`}
+                      >
+                        Edit
+                      </Link>
+                    </td>
+                  ) : null}
                 </tr>
               ))}
               {paginatedLogs.items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="table-cell text-center text-sm text-slate-500">
+                  <td colSpan={canAddManualLog ? 8 : 7} className="table-cell text-center text-sm text-slate-500">
                     {selectedUser ? "No attendance logs found for the selected range." : "Select a user to view logs."}
                   </td>
                 </tr>

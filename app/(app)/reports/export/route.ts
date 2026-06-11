@@ -402,7 +402,7 @@ export async function GET(request: Request) {
       [
         ["Movie Name", "Client Name", "Project Name", "Sub-Project Name", "Country", "Mins"],
         ...rows.map((row) => [row.movieName, row.clientName, row.projectName, row.subProjectName, row.countryCode, String(row.totalMinutes)]),
-        ["", "", "", "", "", "Total Time", formatMinutes(totalMinutes)],
+        ["", "", "", "", "Total Time", formatMinutes(totalMinutes)],
       ],
       "movie-wise-minutes",
       movieClientId !== "all" ? clientNameById.get(movieClientId) : undefined,
@@ -481,7 +481,7 @@ export async function GET(request: Request) {
       [
         ["Date", "Client", "Project", "Sub-Project", "Movie", "Country", "Mins"],
         ...rows.map((row) => [formatReportDate(new Date(`${row.dateKey}T12:00:00`)), row.clientName, row.projectName, row.subProjectName, row.movieName, row.countryCode === "-" ? row.countryName : `${row.countryCode} - ${row.countryName}`, String(row.totalMinutes)]),
-        ["", "", "", "", "", "Total Time", formatMinutes(totalMinutes)],
+        ["", "", "", "", "Total Time", formatMinutes(totalMinutes)],
       ],
       "day-wise-minutes",
       dayClientId !== "all" ? clientNameById.get(dayClientId) : undefined,

@@ -1,6 +1,6 @@
 import ReportsPage from "../page";
 
-type ReportSearchParams = Record<string, string | string[] | undefined>;
+type ReportSearchParams = Record<string, string | undefined>;
 
 export default async function ReportSlugPage({
   params,
