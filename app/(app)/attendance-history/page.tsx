@@ -291,7 +291,8 @@ const selectedUser = selectedUserId
                 <th className="table-cell">Shift</th>
                 <th className="table-cell">Action</th>
                 <th className="table-cell">Marked at</th>
-                <th className="table-cell">Location</th>
+                <th className="table-cell">City/District</th>
+                <th className="table-cell">State</th>
                 <th className="table-cell">Coordinates</th>
               </tr>
             </thead>
@@ -309,7 +310,17 @@ const selectedUser = selectedUserId
                     {formatDateInIst(log.markedAt)} · {formatTimeInIst(log.markedAt)}
                   </td>
                   <td className="table-cell">
-                    {[log.city, log.town, log.village, log.stateDistrict, log.state]
+                    {[log.city]
+                      .filter(Boolean)
+                      .join(", ") || 
+                      [log.town, log.village, log.stateDistrict]
+                      .filter(Boolean)
+                      .join(", ") ||
+                      "—"
+                      }
+                  </td>
+                  <td className="table-cell">
+                    {[log.state]
                       .filter(Boolean)
                       .join(", ") || "—"}
                   </td>
