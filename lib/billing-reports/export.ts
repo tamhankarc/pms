@@ -8,7 +8,10 @@ import {
   getExportTimestamp,
   sanitizeFileSegment,
 } from "@/lib/billing-reports/amazon";
-import { FILMIK_CLIENT_ID } from "@/lib/billing-reports/config";
+import {
+  AMAZON_STUDIOS_CLIENT_ID,
+  FILMIK_CLIENT_ID,
+} from "@/lib/billing-reports/config";
 import type {
   GenericBillingReportData,
   GenericBillingSummaryHistoryData,
@@ -1005,24 +1008,40 @@ export function buildWarnerPortalReportExcel(data: WarnerPortalReportData) {
       excelRow(["Report", data.reportTitle]),
       excelRow(["Billing Month", data.filters.month]),
       excelRow([]),
-      excelRow(["Project", ...(isDvdSites ? ["Titles"] : []), ...(hasHourlyRows ? ["Hours"] : []), "Cost"]),
+      excelRow([
+        "Project",
+        ...(isDvdSites ? ["Titles"] : []),
+        ...(hasHourlyRows ? ["Hours"] : []),
+        "Cost",
+      ]),
       ...data.rows.map((row) =>
         excelRow(
           [
             row.projectName,
-            ...(isDvdSites ? [row.titles.length ? row.titles.join(", ") : "-"] : []),
+            ...(isDvdSites
+              ? [row.titles.length ? row.titles.join(", ") : "-"]
+              : []),
             ...(hasHourlyRows
               ? [row.billingModel === "Hourly" ? row.totalHours : "-"]
               : []),
             row.cost,
           ],
-          hasHourlyRows ? [isDvdSites ? 2 : 1, isDvdSites ? 3 : 2] : [isDvdSites ? 2 : 1],
+          hasHourlyRows
+            ? [isDvdSites ? 2 : 1, isDvdSites ? 3 : 2]
+            : [isDvdSites ? 2 : 1],
         ),
       ),
       excelRow([]),
       excelRow(
-        ["Total", ...(isDvdSites ? [""] : []), ...(hasHourlyRows ? [data.totalHours] : []), data.totalCost],
-        hasHourlyRows ? [isDvdSites ? 2 : 1, isDvdSites ? 3 : 2] : [isDvdSites ? 2 : 1],
+        [
+          "Total",
+          ...(isDvdSites ? [""] : []),
+          ...(hasHourlyRows ? [data.totalHours] : []),
+          data.totalCost,
+        ],
+        hasHourlyRows
+          ? [isDvdSites ? 2 : 1, isDvdSites ? 3 : 2]
+          : [isDvdSites ? 2 : 1],
       ),
     ]),
   ];
@@ -1033,15 +1052,30 @@ export function buildWarnerPortalReportExcel(data: WarnerPortalReportData) {
         excelRow([project.projectName]),
         excelRow(["Billing Month", data.filters.month]),
         excelRow([]),
-        excelRow(["Date", ...(isDvdSites ? ["Title"] : []), "Task Name", "Task Description", "Hours"]),
+        excelRow([
+          "Date",
+          ...(isDvdSites ? ["Title"] : []),
+          "Task Name",
+          "Task Description",
+          "Hours",
+        ]),
         ...project.detailRows.map((row) =>
           excelRow(
-            [row.date, ...(isDvdSites ? [row.title] : []), row.taskName, row.taskDescription, row.hours],
+            [
+              row.date,
+              ...(isDvdSites ? [row.title] : []),
+              row.taskName,
+              row.taskDescription,
+              row.hours,
+            ],
             [isDvdSites ? 4 : 3],
           ),
         ),
         excelRow([]),
-        excelRow(["Total", ...(isDvdSites ? [""] : []), "", "", project.totalHours], [isDvdSites ? 4 : 3]),
+        excelRow(
+          ["Total", ...(isDvdSites ? [""] : []), "", "", project.totalHours],
+          [isDvdSites ? 4 : 3],
+        ),
       ]),
     );
   }
@@ -1075,7 +1109,9 @@ export function buildWarnerPortalReportPdf(data: WarnerPortalReportData) {
   const columns: PdfTableColumn[] = [
     { header: "Project", width: isDvdSites ? 210 : hasHourlyRows ? 300 : 360 },
     ...(isDvdSites
-      ? ([{ header: "Titles", width: hasHourlyRows ? 190 : 250 }] as PdfTableColumn[])
+      ? ([
+          { header: "Titles", width: hasHourlyRows ? 190 : 250 },
+        ] as PdfTableColumn[])
       : []),
     ...(hasHourlyRows
       ? ([{ header: "Hours", width: 110, align: "right" }] as PdfTableColumn[])
@@ -1087,11 +1123,20 @@ export function buildWarnerPortalReportPdf(data: WarnerPortalReportData) {
   const rows = data.rows.length
     ? data.rows.map((row) => [
         row.projectName,
-        ...(isDvdSites ? [row.titles.length ? row.titles.join(", ") : "-"] : []),
+        ...(isDvdSites
+          ? [row.titles.length ? row.titles.join(", ") : "-"]
+          : []),
         ...(hasHourlyRows ? [row.totalHours.toFixed(2)] : []),
         formatUsd(row.cost),
       ])
-    : [["No projects are available.", ...(isDvdSites ? [""] : []), ...(hasHourlyRows ? [""] : []), ""]];
+    : [
+        [
+          "No projects are available.",
+          ...(isDvdSites ? [""] : []),
+          ...(hasHourlyRows ? [""] : []),
+          "",
+        ],
+      ];
   for (const row of rows) {
     drawTableRow(
       summaryCommands,
@@ -1109,7 +1154,9 @@ export function buildWarnerPortalReportPdf(data: WarnerPortalReportData) {
 
   const detailColumns: PdfTableColumn[] = [
     { header: "Date", width: 80 },
-    ...(isDvdSites ? ([{ header: "Title", width: 150 }] as PdfTableColumn[]) : []),
+    ...(isDvdSites
+      ? ([{ header: "Title", width: 150 }] as PdfTableColumn[])
+      : []),
     { header: "Task Name", width: isDvdSites ? 140 : 170 },
     { header: "Task Description", width: isDvdSites ? 250 : 330 },
     { header: "Hours", width: 80, align: "right" },
@@ -3143,12 +3190,19 @@ function billingHistoryExcelRows(
 
   if (poAssignmentMode === "TITLE_PROJECT" || poAssignmentMode === "PROJECT") {
     const isTitleProject = poAssignmentMode === "TITLE_PROJECT";
-    const hideBillingModel = data.client.id === FILMIK_CLIENT_ID;
+    const isAmazonMonthlyRow =
+      data.client.id === AMAZON_STUDIOS_CLIENT_ID &&
+      rows.some((row) => row.billingReportType && row.movieId);
+    const hideBillingModel =
+      data.client.id === FILMIK_CLIENT_ID || isAmazonMonthlyRow;
     const hasBillingMonth = rows.some((row) => row.billingMonth);
+    const hasInvoiceNumber = rows.some((row) => row.invoiceNumber);
     const headers = [
-      isTitleProject
-        ? "Project - Title (Project Status)"
-        : "Project (Project Status)",
+      isAmazonMonthlyRow
+        ? "Title - Billing Report"
+        : isTitleProject
+          ? "Project - Title (Project Status)"
+          : "Project (Project Status)",
       ...(isTitleProject
         ? ["Title Status"]
         : hideBillingModel
@@ -3157,13 +3211,16 @@ function billingHistoryExcelRows(
       "Cost",
       ...(hasBillingMonth ? ["Billing Month"] : []),
       "PO Number",
-      ...(includeAction ? ["Action"] : []),
+      ...(hasInvoiceNumber ? ["Invoice Number"] : []),
+      ...(includeAction
+        ? [isAmazonMonthlyRow ? "Mark Month Billed" : "Billing Done"]
+        : []),
     ];
     return [
       excelRow(headers),
       ...rows.map((row) => {
         const values = [
-          `${row.itemName} (${row.projectStatus ?? row.status})`,
+          `${row.itemName} (${isAmazonMonthlyRow ? row.status : (row.projectStatus ?? row.status)})`,
           ...(isTitleProject
             ? [row.titleStatus ?? "-"]
             : hideBillingModel
@@ -3172,7 +3229,10 @@ function billingHistoryExcelRows(
           typeof row.cost === "number" ? row.cost : "-",
           ...(hasBillingMonth ? [row.billingMonth ?? "-"] : []),
           row.poNumber || "-",
-          ...(includeAction ? ["Billing Done"] : []),
+          ...(hasInvoiceNumber ? [row.invoiceNumber ?? "-"] : []),
+          ...(includeAction
+            ? [isAmazonMonthlyRow ? "Mark Month Billed" : "Billing Done"]
+            : []),
         ];
         const costIndex = isTitleProject || !hideBillingModel ? 2 : 1;
         return excelRow(
@@ -3320,26 +3380,38 @@ function billingHistoryPdfPage(
     poAssignmentMode === "PROJECT"
   ) {
     const isTitleProject = poAssignmentMode === "TITLE_PROJECT";
-    const hideBillingModel = data.client.id === FILMIK_CLIENT_ID;
+    const isAmazonMonthlyRow =
+      data.client.id === AMAZON_STUDIOS_CLIENT_ID &&
+      rows.some((row) => row.billingReportType && row.movieId);
+    const hideBillingModel =
+      data.client.id === FILMIK_CLIENT_ID || isAmazonMonthlyRow;
     const hasBillingMonth = rows.some((row) => row.billingMonth);
+    const hasInvoiceNumber = rows.some((row) => row.invoiceNumber);
     columns = [
       {
-        header: isTitleProject ? "Project - Title" : "Project",
-        width: hasBillingMonth ? 195 : 230,
+        header: isAmazonMonthlyRow
+          ? "Title - Billing Report"
+          : isTitleProject
+            ? "Project - Title"
+            : "Project",
+        width: hasBillingMonth ? 175 : 220,
       },
       ...(isTitleProject
-        ? ([{ header: "Title Status", width: 105 }] as PdfTableColumn[])
+        ? ([{ header: "Title Status", width: 90 }] as PdfTableColumn[])
         : hideBillingModel
           ? []
           : ([{ header: "Billing Model", width: 105 }] as PdfTableColumn[])),
-      { header: "Cost", width: 90, align: "right" },
+      { header: "Cost", width: 80, align: "right" },
       ...(hasBillingMonth
-        ? ([{ header: "Billing Month", width: 95 }] as PdfTableColumn[])
+        ? ([{ header: "Billing Month", width: 85 }] as PdfTableColumn[])
         : []),
-      { header: "PO Number", width: 120 },
+      { header: "PO Number", width: 105 },
+      ...(hasInvoiceNumber
+        ? ([{ header: "Invoice Number", width: 95 }] as PdfTableColumn[])
+        : []),
     ];
     tableRows = rows.map((row) => [
-      `${row.itemName} (${row.projectStatus ?? row.status})`,
+      `${row.itemName} (${isAmazonMonthlyRow ? row.status : (row.projectStatus ?? row.status)})`,
       ...(isTitleProject
         ? [row.titleStatus ?? "-"]
         : hideBillingModel
@@ -3348,6 +3420,7 @@ function billingHistoryPdfPage(
       typeof row.cost === "number" ? formatUsd(row.cost) : "-",
       ...(hasBillingMonth ? [row.billingMonth ?? "-"] : []),
       row.poNumber || "-",
+      ...(hasInvoiceNumber ? [row.invoiceNumber ?? "-"] : []),
     ]);
   } else {
     const hasBillingMonth = rows.some((row) => row.billingMonth);

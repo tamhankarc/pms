@@ -10,6 +10,7 @@ import { generateMovieCode } from "@/lib/project-code";
 
 const WARNER_CLIENT_ID = "cmn66av4j0001l104077m5vxz";
 const SONY_PICTURES_CLIENT_ID = "cmn66d3q40002l104n6wvefvl";
+const AMAZON_STUDIOS_CLIENT_ID = "cmnh294gs0000l504iifuarli";
 function canConfigureMovieBillingRegion(clientId: string) {
   return clientId === WARNER_CLIENT_ID || clientId === SONY_PICTURES_CLIENT_ID;
 }
@@ -507,6 +508,106 @@ export async function deleteMovieAction(formData: FormData) {
   }
 
   redirect(redirectTo);
+}
+
+export async function completeAmazonMonthlyBillingAction(formData: FormData) {
+  await requireCanManageMovies();
+
+  const movieId = String(formData.get("movieId") || "");
+  const billingReportType = String(formData.get("billingReportType") || "");
+  const billingMonthValue = String(formData.get("billingMonth") || "");
+  const billingDateValue = String(formData.get("billingDate") || "");
+  const invoiceNumber = String(formData.get("invoiceNumber") || "").trim();
+  const postedAmount = Number(formData.get("amount") || 0);
+  const returnTo = String(formData.get("returnTo") || "/billing-reports");
+
+  if (!movieId) throw new Error("Title is required.");
+  if (!["social-assets", "localization"].includes(billingReportType)) {
+    throw new Error("Invalid Amazon billing report.");
+  }
+  if (!/^\d{4}-\d{2}$/.test(billingMonthValue)) {
+    throw new Error("Billing month is required.");
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(billingDateValue)) {
+    throw new Error("Billing date is required.");
+  }
+  if (!invoiceNumber) throw new Error("Invoice number is required.");
+
+  const movie = await db.movie.findUnique({
+    where: { id: movieId },
+    select: { id: true, clientId: true, status: true },
+  });
+  if (!movie) throw new Error("Title not found.");
+  if (movie.clientId !== AMAZON_STUDIOS_CLIENT_ID) {
+    throw new Error("This action is only available for Amazon Studios.");
+  }
+  if (movie.status === "COMPLETED_BILLED") {
+    throw new Error(
+      "This title is already closed. Monthly billing cannot be added from pending summary.",
+    );
+  }
+
+  const [yearText, monthText] = billingMonthValue.split("-");
+  const billingYear = Number(yearText);
+  const billingMonth = Number(monthText);
+  const billingDate = new Date(`${billingDateValue}T00:00:00`);
+
+  const existingRecord = await db.billingRecord.findFirst({
+    where: {
+      clientId: AMAZON_STUDIOS_CLIENT_ID,
+      movieId,
+      billingReportType,
+      billingYear,
+      billingMonth,
+    },
+    select: { id: true },
+  });
+  if (existingRecord) {
+    throw new Error(
+      "This title/report has already been billed for the selected month.",
+    );
+  }
+
+  const { getBillingReportCalculatedCostForSummary } =
+    await import("@/lib/billing-reports/amazon");
+  const calculatedAmount = await getBillingReportCalculatedCostForSummary({
+    clientId: AMAZON_STUDIOS_CLIENT_ID,
+    reportType: billingReportType,
+    movieId,
+    billingMonth: billingMonthValue,
+  });
+  const amount = calculatedAmount > 0 ? calculatedAmount : postedAmount;
+
+  const matchingPo = await db.purchaseOrder.findFirst({
+    where: {
+      clientId: AMAZON_STUDIOS_CLIENT_ID,
+      status: { not: "CANCELLED" },
+      assignments: {
+        some: {
+          movieId,
+        },
+      },
+    },
+    select: { id: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  await db.billingRecord.create({
+    data: {
+      clientId: AMAZON_STUDIOS_CLIENT_ID,
+      movieId,
+      billingReportType,
+      billingMonth,
+      billingYear,
+      billingDate,
+      invoiceNumber,
+      amount: Number.isFinite(amount) ? amount : 0,
+      purchaseOrderId: matchingPo?.id ?? null,
+    },
+  });
+
+  revalidatePath("/billing-reports");
+  redirect(returnTo.startsWith("/") ? returnTo : "/billing-reports");
 }
 
 export async function completeMovieBillingAction(formData: FormData) {

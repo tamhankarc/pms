@@ -12,6 +12,7 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canViewBillingReports } from "@/lib/permissions";
 import {
+  completeAmazonMonthlyBillingAction,
   completeClientMonthBillingAction,
   completeMovieBillingAction,
 } from "@/lib/actions/movie-actions";
@@ -408,6 +409,77 @@ function MonthBillingDoneButton({
           </div>
           <button type="submit" className="btn-primary w-full">
             Billing Done
+          </button>
+        </form>
+      </div>
+    </details>
+  );
+}
+
+function AmazonMonthlyBillingDoneButton({
+  movieId,
+  billingReportType,
+  billingMonth,
+  amount,
+  returnTo,
+}: {
+  movieId: string;
+  billingReportType: string;
+  billingMonth: string;
+  amount?: number;
+  returnTo: string;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  return (
+    <details className="relative">
+      <summary className="btn-secondary list-none cursor-pointer select-none">
+        Mark Month Billed
+      </summary>
+      <div className="absolute right-0 z-20 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
+        <form action={completeAmazonMonthlyBillingAction} className="space-y-3">
+          <input type="hidden" name="movieId" value={movieId} />
+          <input
+            type="hidden"
+            name="billingReportType"
+            value={billingReportType}
+          />
+          <input type="hidden" name="billingMonth" value={billingMonth} />
+          <input type="hidden" name="returnTo" value={returnTo} />
+          {typeof amount === "number" ? (
+            <input type="hidden" name="amount" value={String(amount)} />
+          ) : null}
+          <div>
+            <label
+              className="label"
+              htmlFor={`amazonBillingDate-${movieId}-${billingReportType}-${billingMonth}`}
+            >
+              Billing date
+            </label>
+            <input
+              id={`amazonBillingDate-${movieId}-${billingReportType}-${billingMonth}`}
+              name="billingDate"
+              type="date"
+              className="input"
+              defaultValue={today}
+              required
+            />
+          </div>
+          <div>
+            <label
+              className="label"
+              htmlFor={`amazonInvoiceNumber-${movieId}-${billingReportType}-${billingMonth}`}
+            >
+              Invoice number
+            </label>
+            <input
+              id={`amazonInvoiceNumber-${movieId}-${billingReportType}-${billingMonth}`}
+              name="invoiceNumber"
+              className="input"
+              required
+            />
+          </div>
+          <button type="submit" className="btn-primary w-full">
+            Mark Month Billed
           </button>
         </form>
       </div>
@@ -1165,6 +1237,7 @@ function TimeEntryReportsWorkspace({
           data.filters.movieId !== "all" ? (
             <BillingDoneButton
               movieId={data.filters.movieId}
+              label="Close Title / PO"
               returnTo={`/billing-reports/${clientId}?report=${activeReport}&movieId=${data.filters.movieId}&fromDate=${data.filters.fromDate}&toDate=${data.filters.toDate}&assetTypeId=${data.filters.assetTypeId}`}
             />
           ) : null}
@@ -2917,21 +2990,27 @@ function BillingHistoryProjectTable({
   includeAction: boolean;
   poAssignmentMode?: string;
 }) {
-  const returnTo = `/billing-reports/${clientId}?report=${activeReport}&year=${data.filters.year}`;
+  const returnTo = `/billing-reports/${clientId}?report=${activeReport}&year=${data.filters.year}&projectMonth=${data.filters.projectMonth}`;
   const effectivePoAssignmentMode =
     poAssignmentMode ?? data.client.poAssignmentMode;
   const isTitleProject = effectivePoAssignmentMode === "TITLE_PROJECT";
-  const hideBillingModel = clientId === FILMIK_CLIENT_ID;
+  const isAmazonMonthlyRow = rows.some(
+    (row) => row.billingReportType && row.movieId,
+  );
+  const hideBillingModel = clientId === FILMIK_CLIENT_ID || isAmazonMonthlyRow;
   const hasBillingMonth = rows.some((row) => row.billingMonth);
+  const hasInvoiceNumber = rows.some((row) => row.invoiceNumber);
   return (
     <div className="table-wrap">
       <table className="table-base">
         <thead className="table-head">
           <tr>
             <th className="table-cell">
-              {isTitleProject
-                ? "Project - Title (Project Status)"
-                : "Project (Project Status)"}
+              {isAmazonMonthlyRow
+                ? "Title - Billing Report"
+                : isTitleProject
+                  ? "Project - Title (Project Status)"
+                  : "Project (Project Status)"}
             </th>
             {isTitleProject ? (
               <th className="table-cell">Title Status</th>
@@ -2944,6 +3023,9 @@ function BillingHistoryProjectTable({
               <th className="table-cell">Billing Month</th>
             ) : null}
             <th className="table-cell">PO Number</th>
+            {hasInvoiceNumber ? (
+              <th className="table-cell">Invoice Number</th>
+            ) : null}
             {includeAction ? <th className="table-cell">Action</th> : null}
           </tr>
         </thead>
@@ -2951,7 +3033,11 @@ function BillingHistoryProjectTable({
           {rows.map((row) => (
             <tr key={row.itemId}>
               <td className="table-cell font-medium text-slate-900">
-                {row.itemName} ({row.projectStatus ?? row.status})
+                {row.itemName} (
+                {isAmazonMonthlyRow
+                  ? row.status
+                  : (row.projectStatus ?? row.status)}
+                )
               </td>
               {isTitleProject ? (
                 <td className="table-cell">{row.titleStatus ?? "-"}</td>
@@ -2966,9 +3052,20 @@ function BillingHistoryProjectTable({
                 <td className="table-cell">{row.billingMonth ?? "-"}</td>
               ) : null}
               <td className="table-cell">{row.poNumber || "-"}</td>
+              {hasInvoiceNumber ? (
+                <td className="table-cell">{row.invoiceNumber ?? "-"}</td>
+              ) : null}
               {includeAction ? (
                 <td className="table-cell">
-                  {row.projectId ? (
+                  {row.billingReportType && row.movieId && row.billingMonth ? (
+                    <AmazonMonthlyBillingDoneButton
+                      movieId={row.movieId}
+                      billingReportType={row.billingReportType}
+                      billingMonth={row.billingMonth}
+                      amount={row.cost}
+                      returnTo={returnTo}
+                    />
+                  ) : row.projectId ? (
                     <ProjectBillingDoneButton
                       projectId={row.projectId}
                       label="Billing Done"
@@ -2990,6 +3087,7 @@ function BillingHistoryProjectTable({
                   3 +
                   (isTitleProject || !hideBillingModel ? 1 : 0) +
                   (hasBillingMonth ? 1 : 0) +
+                  (hasInvoiceNumber ? 1 : 0) +
                   (includeAction ? 1 : 0)
                 }
                 className="table-cell text-center text-sm text-slate-500"
@@ -3019,9 +3117,10 @@ function BillingHistoryDefaultTable({
   includeAction: boolean;
   poAssignmentMode?: string;
 }) {
-  const returnTo = `/billing-reports/${clientId}?report=${activeReport}&year=${data.filters.year}`;
+  const returnTo = `/billing-reports/${clientId}?report=${activeReport}&year=${data.filters.year}&projectMonth=${data.filters.projectMonth}`;
   const effectivePoAssignmentMode =
     poAssignmentMode ?? data.client.poAssignmentMode;
+  const isAmazonTitleClosure = clientId === "cmnh294gs0000l504iifuarli";
   return (
     <div className="table-wrap">
       <table className="table-base">
@@ -3058,7 +3157,11 @@ function BillingHistoryDefaultTable({
                   {row.itemType === "TITLE" && row.movieId ? (
                     <BillingDoneButton
                       movieId={row.movieId}
-                      label="Billing Done"
+                      label={
+                        isAmazonTitleClosure
+                          ? "Close Title / PO"
+                          : "Billing Done"
+                      }
                       returnTo={returnTo}
                     />
                   ) : row.itemType === "PROJECT" && row.projectId ? (
@@ -3336,8 +3439,8 @@ function BillingHistoryWorkspace({
                       Mode.
                     </p>
                   </div>
-                  {(data.client.poAssignmentMode === "PROJECT" ||
-                    clientId === FILMIK_CLIENT_ID) ? (
+                  {data.client.poAssignmentMode === "PROJECT" ||
+                  clientId === FILMIK_CLIENT_ID ? (
                     <BillingHistoryMonthFilter
                       clientId={clientId}
                       searchParams={searchParams}
@@ -3652,9 +3755,7 @@ function RoyalBillingReportTable({
             <th className="table-cell">Excess Hours</th>
             <th className="table-cell">Excess Cost</th>
             <th className="table-cell">Total Cost</th>
-            {includePoNumber ? (
-              <th className="table-cell">PO Number</th>
-            ) : null}
+            {includePoNumber ? <th className="table-cell">PO Number</th> : null}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -3797,7 +3898,8 @@ function RoyalBillingReportWorkspace({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="section-title">
-            {data.client.name} {activeReport === "billing-summary" ? "Summary" : "Billing"}
+            {data.client.name}{" "}
+            {activeReport === "billing-summary" ? "Summary" : "Billing"}
           </h2>
           <p className="section-subtitle">Month: {data.filters.month}</p>
         </div>
@@ -3805,7 +3907,9 @@ function RoyalBillingReportWorkspace({
           {activeReport === "social-assets" ? (
             <RoyalExportButtons clientId={clientId} data={data} />
           ) : null}
-          {activeReport === "social-assets" && selectedOlderMonth && !data.isBilled ? (
+          {activeReport === "social-assets" &&
+          selectedOlderMonth &&
+          !data.isBilled ? (
             <MonthBillingDoneButton
               clientId={clientId}
               month={data.filters.month}
