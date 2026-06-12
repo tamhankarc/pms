@@ -671,6 +671,7 @@ export async function getLeaveRequestsForUser(
     where: {
       userId,
       endDate: { gte: startUtc },
+      status: { not: "CANCELLED" },
     },
     include: {
       approver: {
@@ -687,7 +688,7 @@ export async function getLeaveRequestsForUser(
   const past = await db.leaveRequest.findMany({
     where: {
       userId,
-      endDate: { lt: startUtc },
+      OR: [{ endDate: { lt: startUtc } }, { status: "CANCELLED" }],
     },
     include: {
       approver: {

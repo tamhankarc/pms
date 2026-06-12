@@ -16,6 +16,7 @@ function getLeaveBreakupLabel(row: {
   unpaidDaysUsed?: unknown;
   totalLeaveDays?: unknown;
 }) {
+  if (row.status === "CANCELLED") return "-";
   if (row.status === "PENDING" || row.status === "RECONSIDER")
     return "Final breakup calculated on approval";
   if (row.status === "REJECTED") return "No balance deducted";

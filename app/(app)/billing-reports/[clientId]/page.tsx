@@ -10,7 +10,7 @@ import { WarnerDeliverableFiltersClient } from "@/components/billing-reports/war
 import { UniversalTimeEntryFilters } from "@/components/billing-reports/universal-time-entry-filters";
 import { BillingDonePopover } from "@/components/billing-reports/billing-done-popover";
 import { NoScrollFilter } from "@/components/billing-reports/no-scroll-filter";
-import { AmazonTitleClosureButton } from "@/components/billing-reports/amazon-title-closure-button";
+import { AmazonTitleClosureTable as AmazonTitleClosureTableClient } from "@/components/billing-reports/amazon-title-closure-table";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canViewBillingReports } from "@/lib/permissions";
@@ -3363,64 +3363,12 @@ function AmazonTitleClosureTable({
 }) {
   const returnTo = `/billing-reports/${clientId}?report=${activeReport}&projectMonth=${data.filters.projectMonth}&amazonHistoryMonth=${data.filters.amazonHistoryMonth}&closedTitlesYear=${data.filters.closedTitlesYear}`;
   return (
-    <div className="table-wrap">
-      <table className="table-base">
-        <thead className="table-head">
-          <tr>
-            <th className="table-cell">Title</th>
-            <th className="table-cell">PO Number</th>
-            <th className="table-cell">Total Cost</th>
-            {includeAction ? (
-              <th className="table-cell">Status</th>
-            ) : (
-              <th className="table-cell">Billing Date</th>
-            )}
-            {includeAction ? <th className="table-cell">Action</th> : null}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {rows.map((row) => (
-            <tr key={row.itemId}>
-              <td className="table-cell font-medium text-slate-900">
-                {row.titleName ?? row.itemName}
-              </td>
-              <td className="table-cell">{row.poNumber || "-"}</td>
-              <td className="table-cell font-semibold text-slate-900">
-                <BillingHistoryCostCell value={row.totalCost ?? row.cost} />
-              </td>
-              <td className="table-cell">
-                {includeAction ? row.status : row.billingDate}
-              </td>
-              {includeAction ? (
-                <td className="table-cell">
-                  {row.movieId ? (
-                    <AmazonTitleClosureButton
-                      movieId={row.movieId}
-                      returnTo={returnTo}
-                      allMonthsBilled={row.allMonthsBilled ?? false}
-                      unbilledMonthsMessage={row.unbilledMonthsMessage}
-                      action={completeAmazonTitleClosureAction}
-                    />
-                  ) : (
-                    "-"
-                  )}
-                </td>
-              ) : null}
-            </tr>
-          ))}
-          {rows.length === 0 ? (
-            <tr>
-              <td
-                colSpan={includeAction ? 5 : 4}
-                className="table-cell text-center text-sm text-slate-500"
-              >
-                No title / PO records available.
-              </td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
-    </div>
+    <AmazonTitleClosureTableClient
+      rows={rows}
+      includeAction={includeAction}
+      returnTo={returnTo}
+      action={completeAmazonTitleClosureAction}
+    />
   );
 }
 
