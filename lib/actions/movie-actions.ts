@@ -519,10 +519,16 @@ export async function completeAmazonMonthlyBillingAction(formData: FormData) {
   const billingDateValue = String(formData.get("billingDate") || "");
   const invoiceNumber = String(formData.get("invoiceNumber") || "").trim();
   const postedAmount = Number(formData.get("amount") || 0);
+  const postedSocialAssetsCost = Number(formData.get("socialAssetsCost") || 0);
+  const postedLocalizationCost = Number(formData.get("localizationCost") || 0);
   const returnTo = String(formData.get("returnTo") || "/billing-reports");
 
   if (!movieId) throw new Error("Title is required.");
-  if (!["social-assets", "localization"].includes(billingReportType)) {
+  if (
+    !["social-assets", "localization", "amazon-month"].includes(
+      billingReportType,
+    )
+  ) {
     throw new Error("Invalid Amazon billing report.");
   }
   if (!/^\d{4}-\d{2}$/.test(billingMonthValue)) {
@@ -552,32 +558,6 @@ export async function completeAmazonMonthlyBillingAction(formData: FormData) {
   const billingMonth = Number(monthText);
   const billingDate = new Date(`${billingDateValue}T00:00:00`);
 
-  const existingRecord = await db.billingRecord.findFirst({
-    where: {
-      clientId: AMAZON_STUDIOS_CLIENT_ID,
-      movieId,
-      billingReportType,
-      billingYear,
-      billingMonth,
-    },
-    select: { id: true },
-  });
-  if (existingRecord) {
-    throw new Error(
-      "This title/report has already been billed for the selected month.",
-    );
-  }
-
-  const { getBillingReportCalculatedCostForSummary } =
-    await import("@/lib/billing-reports/amazon");
-  const calculatedAmount = await getBillingReportCalculatedCostForSummary({
-    clientId: AMAZON_STUDIOS_CLIENT_ID,
-    reportType: billingReportType,
-    movieId,
-    billingMonth: billingMonthValue,
-  });
-  const amount = calculatedAmount > 0 ? calculatedAmount : postedAmount;
-
   const matchingPo = await db.purchaseOrder.findFirst({
     where: {
       clientId: AMAZON_STUDIOS_CLIENT_ID,
@@ -592,20 +572,167 @@ export async function completeAmazonMonthlyBillingAction(formData: FormData) {
     orderBy: { createdAt: "desc" },
   });
 
-  await db.billingRecord.create({
-    data: {
+  const { getBillingReportCalculatedCostForSummary } =
+    await import("@/lib/billing-reports/amazon");
+
+  const reportTypes =
+    billingReportType === "amazon-month"
+      ? (["social-assets", "localization"] as const)
+      : ([billingReportType] as const);
+
+  let createdCount = 0;
+  for (const reportType of reportTypes) {
+    const existingRecord = await db.billingRecord.findFirst({
+      where: {
+        clientId: AMAZON_STUDIOS_CLIENT_ID,
+        movieId,
+        billingReportType: reportType,
+        billingYear,
+        billingMonth,
+      },
+      select: { id: true },
+    });
+    if (existingRecord) continue;
+
+    const calculatedAmount = await getBillingReportCalculatedCostForSummary({
+      clientId: AMAZON_STUDIOS_CLIENT_ID,
+      reportType,
+      movieId,
+      billingMonth: billingMonthValue,
+    });
+    const fallbackAmount =
+      reportType === "social-assets"
+        ? postedSocialAssetsCost
+        : reportType === "localization"
+          ? postedLocalizationCost
+          : postedAmount;
+    const amount = calculatedAmount > 0 ? calculatedAmount : fallbackAmount;
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+
+    await db.billingRecord.create({
+      data: {
+        clientId: AMAZON_STUDIOS_CLIENT_ID,
+        movieId,
+        billingReportType: reportType,
+        billingMonth,
+        billingYear,
+        billingDate,
+        invoiceNumber,
+        amount,
+        purchaseOrderId: matchingPo?.id ?? null,
+      },
+    });
+    createdCount += 1;
+  }
+
+  if (createdCount === 0) {
+    throw new Error(
+      "This title has already been billed for the selected month, or there is no billable amount.",
+    );
+  }
+
+  revalidatePath("/billing-reports");
+  redirect(returnTo.startsWith("/") ? returnTo : "/billing-reports");
+}
+
+export async function completeAmazonTitleClosureAction(formData: FormData) {
+  await requireCanManageMovies();
+
+  const movieId = String(formData.get("movieId") || "");
+  const returnTo = String(formData.get("returnTo") || "/billing-reports");
+  if (!movieId) throw new Error("Title is required.");
+
+  const movie = await db.movie.findUnique({
+    where: { id: movieId },
+    select: { id: true, clientId: true },
+  });
+  if (!movie) throw new Error("Title not found.");
+  if (movie.clientId !== AMAZON_STUDIOS_CLIENT_ID) {
+    throw new Error("This action is only available for Amazon Studios.");
+  }
+
+  const reportTypeByProjectName = new Map([
+    ["AMZ Social QC", "social-assets"],
+    ["AMZ Social Localization", "localization"],
+  ]);
+  const amazonTimeEntries = await db.timeEntry.findMany({
+    where: {
+      movieId,
+      project: {
+        clientId: AMAZON_STUDIOS_CLIENT_ID,
+        isActive: true,
+        addToBilling: true,
+        name: { in: Array.from(reportTypeByProjectName.keys()) },
+      },
+    },
+    select: {
+      workDate: true,
+      project: { select: { name: true } },
+      assetType: { select: { cost: true } },
+    },
+  });
+  const requiredBillingKeys = new Set<string>();
+  for (const entry of amazonTimeEntries) {
+    const reportType = reportTypeByProjectName.get(entry.project.name);
+    const cost = Number(entry.assetType?.cost ?? 0);
+    if (!reportType || cost <= 0) continue;
+    requiredBillingKeys.add(
+      `${entry.workDate.getFullYear()}-${String(entry.workDate.getMonth() + 1).padStart(2, "0")}:${reportType}`,
+    );
+  }
+
+  const existingBillingRecords = await db.billingRecord.findMany({
+    where: {
       clientId: AMAZON_STUDIOS_CLIENT_ID,
       movieId,
-      billingReportType,
-      billingMonth,
-      billingYear,
-      billingDate,
-      invoiceNumber,
-      amount: Number.isFinite(amount) ? amount : 0,
-      purchaseOrderId: matchingPo?.id ?? null,
+      billingReportType: { in: ["social-assets", "localization"] },
+      billingYear: { not: null },
+      billingMonth: { not: null },
+    },
+    select: {
+      billingYear: true,
+      billingMonth: true,
+      billingReportType: true,
+    },
+  });
+  const billedKeys = new Set(
+    existingBillingRecords
+      .filter(
+        (record) =>
+          record.billingYear && record.billingMonth && record.billingReportType,
+      )
+      .map(
+        (record) =>
+          `${record.billingYear}-${String(record.billingMonth).padStart(2, "0")}:${record.billingReportType}`,
+      ),
+  );
+  const pendingMonths = Array.from(requiredBillingKeys)
+    .filter((key) => !billedKeys.has(key))
+    .map((key) => key.split(":")[0]);
+  if (pendingMonths.length > 0) {
+    throw new Error(
+      `Please mark all months billed before closing this title / PO. Pending month(s): ${Array.from(new Set(pendingMonths)).sort().join(", ")}.`,
+    );
+  }
+
+  await db.movie.update({
+    where: { id: movieId },
+    data: {
+      status: "COMPLETED_BILLED",
+      billingDate: new Date(),
     },
   });
 
+  await db.purchaseOrder.updateMany({
+    where: {
+      clientId: AMAZON_STUDIOS_CLIENT_ID,
+      assignments: { some: { movieId } },
+    },
+    data: { status: "PROCESSED" },
+  });
+
+  revalidatePath("/movies");
+  revalidatePath(`/movies/${movieId}`);
   revalidatePath("/billing-reports");
   redirect(returnTo.startsWith("/") ? returnTo : "/billing-reports");
 }

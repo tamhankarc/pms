@@ -2032,6 +2032,8 @@ export type BillingHistoryFilters = {
   portalsMonth: string;
   dvdMonth: string;
   newsletterMonth: string;
+  amazonHistoryMonth: string;
+  closedTitlesYear: string;
 };
 
 export type BillingHistoryReportValue = {
@@ -2059,6 +2061,11 @@ export type BillingHistoryRow = {
   billingModel?: string;
   billingMonth?: string;
   cost?: number;
+  socialAssetsCost?: number;
+  localizationCost?: number;
+  totalCost?: number;
+  allMonthsBilled?: boolean;
+  unbilledMonthsMessage?: string;
   reportValues?: BillingHistoryReportValue[];
   movieId?: string;
   projectId?: string;
@@ -2114,6 +2121,10 @@ export type BillingHistorySection = {
   rows: BillingHistoryRow[];
   monthFilterParam?: string;
   monthFilterValue?: string;
+  monthFilterLabel?: string;
+  yearFilterParam?: string;
+  yearFilterValue?: string;
+  yearFilterLabel?: string;
 };
 
 export type BillingHistoryData = {
@@ -2143,6 +2154,8 @@ export function buildBillingHistoryFilters(
   const portalsMonth = getValue("portalsMonth") || projectMonth;
   const dvdMonth = getValue("dvdMonth") || portalsMonth;
   const newsletterMonth = getValue("newsletterMonth") || projectMonth;
+  const amazonHistoryMonth = getValue("amazonHistoryMonth") || projectMonth;
+  const closedTitlesYear = getValue("closedTitlesYear") || year;
   return {
     year: /^\d{4}$/.test(year) ? year : currentYear,
     projectMonth: /^\d{4}-\d{2}$/.test(projectMonth)
@@ -2155,6 +2168,12 @@ export function buildBillingHistoryFilters(
     newsletterMonth: /^\d{4}-\d{2}$/.test(newsletterMonth)
       ? newsletterMonth
       : currentMonth,
+    amazonHistoryMonth: /^\d{4}-\d{2}$/.test(amazonHistoryMonth)
+      ? amazonHistoryMonth
+      : currentMonth,
+    closedTitlesYear: /^\d{4}$/.test(closedTitlesYear)
+      ? closedTitlesYear
+      : currentYear,
   } satisfies BillingHistoryFilters;
 }
 
@@ -2710,9 +2729,6 @@ export async function getWarnerPortalReportData({
 async function getAmazonMonthlyBillingHistoryData({
   client,
   filters,
-  year,
-  start,
-  end,
   movieSelect,
   poNumberByMovie,
   projectMonthRange,
@@ -2744,167 +2760,305 @@ async function getAmazonMonthlyBillingHistoryData({
   projectMonthRange: ReturnType<typeof parseYearMonth>;
 }): Promise<BillingHistoryData> {
   const clientId = client.id;
+  const historyMonthRange = parseYearMonth(filters.amazonHistoryMonth);
+  const closedTitlesYear = Number(filters.closedTitlesYear);
+  const closedTitlesStart = new Date(closedTitlesYear, 0, 1);
+  const closedTitlesEnd = new Date(closedTitlesYear + 1, 0, 1);
   const reportDefinitions = Object.entries(AMAZON_REPORTS).filter(
     ([reportType, definition]) =>
       reportType !== "billing-history" && definition?.kind === "time-entry",
   ) as Array<[AmazonReportType, BillingReportDefinition]>;
+  const reportTypes = reportDefinitions.map(([reportType]) => reportType);
+  const reportTypeByProjectName = new Map(
+    reportDefinitions.map(([reportType, definition]) => [
+      definition.projectName,
+      reportType,
+    ]),
+  );
 
-  const [summaryMovies, monthBillingRecords, yearBillingRecords, closedMovies] =
-    await Promise.all([
-      db.movie.findMany({
-        where: {
-          clientId,
-          isActive: true,
-          status: { in: ["WORKING", "COMPLETED"] },
-        },
-        select: movieSelect,
-        orderBy: { title: "asc" },
-      }),
-      db.billingRecord.findMany({
-        where: {
-          clientId,
-          movieId: { not: null },
-          billingReportType: {
-            in: reportDefinitions.map(([reportType]) => reportType),
-          },
-          billingYear: projectMonthRange.year,
-          billingMonth: projectMonthRange.month,
-        },
-        select: {
-          movieId: true,
-          billingReportType: true,
-        },
-      }),
-      db.billingRecord.findMany({
-        where: {
-          clientId,
-          movieId: { not: null },
-          billingReportType: {
-            in: reportDefinitions.map(([reportType]) => reportType),
-          },
-          billingDate: { gte: start, lt: end },
-        },
-        include: {
-          movie: { select: movieSelect },
-          purchaseOrder: { select: { poNumber: true } },
-        },
-        orderBy: [
-          { billingYear: "desc" },
-          { billingMonth: "desc" },
-          { billingDate: "desc" },
-        ],
-      }),
-      db.movie.findMany({
-        where: {
-          clientId,
-          isActive: true,
-          status: "COMPLETED_BILLED",
-          billingDate: { gte: start, lt: end },
-        },
-        select: movieSelect,
-        orderBy: [{ billingDate: "desc" }, { title: "asc" }],
-      }),
-    ]);
+  const [
+    summaryMovies,
+    summaryMonthBillingRecords,
+    historyMonthBillingRecords,
+    closedMovies,
+  ] = await Promise.all([
+    db.movie.findMany({
+      where: {
+        clientId,
+        isActive: true,
+        status: { in: ["WORKING", "COMPLETED"] },
+      },
+      select: movieSelect,
+      orderBy: { title: "asc" },
+    }),
+    db.billingRecord.findMany({
+      where: {
+        clientId,
+        movieId: { not: null },
+        billingReportType: { in: reportTypes },
+        billingYear: projectMonthRange.year,
+        billingMonth: projectMonthRange.month,
+      },
+      select: {
+        movieId: true,
+        billingReportType: true,
+        amount: true,
+      },
+    }),
+    db.billingRecord.findMany({
+      where: {
+        clientId,
+        movieId: { not: null },
+        billingReportType: { in: reportTypes },
+        billingYear: historyMonthRange.year,
+        billingMonth: historyMonthRange.month,
+      },
+      include: {
+        movie: { select: movieSelect },
+        purchaseOrder: { select: { poNumber: true } },
+      },
+      orderBy: [{ billingReportType: "asc" }, { billingDate: "asc" }],
+    }),
+    db.movie.findMany({
+      where: {
+        clientId,
+        isActive: true,
+        status: "COMPLETED_BILLED",
+        billingDate: { gte: closedTitlesStart, lt: closedTitlesEnd },
+      },
+      select: movieSelect,
+      orderBy: [{ billingDate: "desc" }, { title: "asc" }],
+    }),
+  ]);
 
-  const alreadyBilledKeys = new Set(
-    monthBillingRecords
+  const relevantMovieIds = Array.from(
+    new Set([
+      ...summaryMovies.map((movie) => movie.id),
+      ...closedMovies.map((movie) => movie.id),
+    ]),
+  );
+
+  const [allAmazonTimeEntries, allAmazonBillingRecords] = await Promise.all([
+    relevantMovieIds.length
+      ? db.timeEntry.findMany({
+          where: {
+            movieId: { in: relevantMovieIds },
+            project: {
+              clientId,
+              isActive: true,
+              addToBilling: true,
+              name: { in: Array.from(reportTypeByProjectName.keys()) },
+            },
+          },
+          select: {
+            movieId: true,
+            workDate: true,
+            project: { select: { name: true } },
+            assetType: { select: { cost: true } },
+          },
+        })
+      : Promise.resolve([]),
+    relevantMovieIds.length
+      ? db.billingRecord.findMany({
+          where: {
+            clientId,
+            movieId: { in: relevantMovieIds },
+            billingReportType: { in: reportTypes },
+            billingYear: { not: null },
+            billingMonth: { not: null },
+          },
+          select: {
+            movieId: true,
+            billingReportType: true,
+            billingYear: true,
+            billingMonth: true,
+            amount: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const workCostByMovieMonthReport = new Map<string, number>();
+  const workMonthsByMovie = new Map<string, Set<string>>();
+  const workTotalByMovie = new Map<string, number>();
+  for (const entry of allAmazonTimeEntries) {
+    const reportType = reportTypeByProjectName.get(entry.project.name);
+    if (!entry.movieId || !reportType) continue;
+    const yearMonth = `${entry.workDate.getFullYear()}-${String(entry.workDate.getMonth() + 1).padStart(2, "0")}`;
+    const cost = Number(entry.assetType?.cost ?? 0);
+    if (cost <= 0) continue;
+    const key = `${entry.movieId}:${yearMonth}:${reportType}`;
+    workCostByMovieMonthReport.set(
+      key,
+      (workCostByMovieMonthReport.get(key) ?? 0) + cost,
+    );
+    if (!workMonthsByMovie.has(entry.movieId)) {
+      workMonthsByMovie.set(entry.movieId, new Set());
+    }
+    workMonthsByMovie.get(entry.movieId)?.add(yearMonth);
+    workTotalByMovie.set(
+      entry.movieId,
+      (workTotalByMovie.get(entry.movieId) ?? 0) + cost,
+    );
+  }
+
+  const billedKeys = new Set<string>();
+  const billedTotalByMovie = new Map<string, number>();
+  for (const record of allAmazonBillingRecords) {
+    if (
+      !record.movieId ||
+      !record.billingReportType ||
+      !record.billingYear ||
+      !record.billingMonth
+    )
+      continue;
+    const yearMonth = `${record.billingYear}-${String(record.billingMonth).padStart(2, "0")}`;
+    billedKeys.add(
+      `${record.movieId}:${yearMonth}:${record.billingReportType}`,
+    );
+    billedTotalByMovie.set(
+      record.movieId,
+      (billedTotalByMovie.get(record.movieId) ?? 0) +
+        Number(record.amount ?? 0),
+    );
+  }
+
+  const summaryAlreadyBilledKeys = new Set(
+    summaryMonthBillingRecords
       .filter((record) => record.movieId && record.billingReportType)
       .map((record) => `${record.movieId}:${record.billingReportType}`),
   );
 
   const summaryRows: BillingHistoryRow[] = [];
   for (const movie of summaryMovies) {
-    for (const [reportType, definition] of reportDefinitions) {
-      const cost = await getBillingReportCalculatedCostForSummary({
-        clientId,
-        reportType,
-        movieId: movie.id,
-        billingMonth: projectMonthRange.value,
-      });
-      if (cost <= 0) continue;
-      if (alreadyBilledKeys.has(`${movie.id}:${reportType}`)) continue;
+    const socialAssetsCost = summaryAlreadyBilledKeys.has(
+      `${movie.id}:social-assets`,
+    )
+      ? 0
+      : await getBillingReportCalculatedCostForSummary({
+          clientId,
+          reportType: "social-assets",
+          movieId: movie.id,
+          billingMonth: projectMonthRange.value,
+        });
+    const localizationCost = summaryAlreadyBilledKeys.has(
+      `${movie.id}:localization`,
+    )
+      ? 0
+      : await getBillingReportCalculatedCostForSummary({
+          clientId,
+          reportType: "localization",
+          movieId: movie.id,
+          billingMonth: projectMonthRange.value,
+        });
+    const totalCost =
+      Number(socialAssetsCost || 0) + Number(localizationCost || 0);
+    if (totalCost <= 0) continue;
 
-      summaryRows.push({
-        itemId: `${movie.id}:${reportType}:${projectMonthRange.value}`,
-        itemType: "TITLE_PROJECT",
-        itemName: `${movie.title} - ${definition.title}`,
-        titleName: movie.title,
-        projectName: definition.title,
-        movieId: movie.id,
-        billingReportType: reportType,
-        billingRegion: definition.title,
-        billingDate: "-",
-        billingMonth: projectMonthRange.value,
-        poNumber: poNumberByMovie.get(movie.id) ?? "-",
-        status: "Pending Monthly Billing",
-        titleStatus: formatEntityStatus(movie.status),
-        projectStatus: definition.title,
-        cost: Number.isFinite(cost) ? cost : 0,
-        timeEntryCount: movie._count.timeEntries,
-        movieBillingHeadCount: movie._count.movieBillingHeadAssignments,
-      });
-    }
+    summaryRows.push({
+      itemId: `${movie.id}:amazon-month:${projectMonthRange.value}`,
+      itemType: "TITLE_PROJECT",
+      itemName: movie.title,
+      titleName: movie.title,
+      movieId: movie.id,
+      billingReportType: "amazon-month",
+      billingRegion: "Amazon Monthly Billing",
+      billingDate: "-",
+      billingMonth: projectMonthRange.value,
+      poNumber: poNumberByMovie.get(movie.id) ?? "-",
+      status: "Pending Monthly Billing",
+      titleStatus: formatEntityStatus(movie.status),
+      projectStatus: "Amazon Monthly Billing",
+      socialAssetsCost: Number.isFinite(socialAssetsCost)
+        ? socialAssetsCost
+        : 0,
+      localizationCost: Number.isFinite(localizationCost)
+        ? localizationCost
+        : 0,
+      totalCost,
+      cost: totalCost,
+      reportValues: [
+        {
+          reportType: "social-assets",
+          reportTitle: "Social Assets",
+          cost: Number.isFinite(socialAssetsCost) ? socialAssetsCost : 0,
+          poNumber: poNumberByMovie.get(movie.id) ?? "-",
+          billingMonth: projectMonthRange.value,
+        },
+        {
+          reportType: "localization",
+          reportTitle: "Localization",
+          cost: Number.isFinite(localizationCost) ? localizationCost : 0,
+          poNumber: poNumberByMovie.get(movie.id) ?? "-",
+          billingMonth: projectMonthRange.value,
+        },
+      ],
+      timeEntryCount: movie._count.timeEntries,
+      movieBillingHeadCount: movie._count.movieBillingHeadAssignments,
+    });
   }
 
-  const historyRows = yearBillingRecords
-    .filter(
-      (record) => record.movie && record.movieId && record.billingReportType,
-    )
-    .map((record): BillingHistoryRow => {
-      const reportTitle = getReportLabel(record.billingReportType ?? "");
-      const billingMonth =
-        record.billingYear && record.billingMonth
-          ? `${record.billingYear}-${String(record.billingMonth).padStart(2, "0")}`
-          : undefined;
-      return {
-        itemId: `${record.id}`,
-        itemType: "TITLE_PROJECT",
-        itemName: `${record.movie?.title ?? "-"} - ${reportTitle}`,
-        titleName: record.movie?.title ?? "-",
-        projectName: reportTitle,
-        movieId: record.movieId ?? undefined,
-        billingReportType: record.billingReportType ?? undefined,
-        billingRegion: reportTitle,
-        billingDate: formatDisplayDate(record.billingDate),
-        billingMonth,
-        poNumber:
-          record.purchaseOrder?.poNumber ??
-          poNumberByMovie.get(record.movieId ?? "") ??
-          "-",
-        invoiceNumber: record.invoiceNumber ?? undefined,
-        status: "Billed",
-        titleStatus: record.movie
-          ? formatEntityStatus(record.movie.status)
-          : "-",
-        projectStatus: reportTitle,
-        cost: Number(record.amount ?? 0),
-        timeEntryCount: record.movie?._count.timeEntries ?? 0,
-        movieBillingHeadCount:
-          record.movie?._count.movieBillingHeadAssignments ?? 0,
-      };
-    });
-
-  const titleClosureRows = summaryMovies.map(
-    (movie): BillingHistoryRow => ({
-      itemId: `amazon-title-close:${movie.id}`,
-      itemType: "TITLE",
-      itemName: movie.title,
-      movieId: movie.id,
-      billingRegion: formatMovieBillingRegions(movie),
-      billingDate: movie.billingDate
-        ? formatDisplayDate(movie.billingDate)
-        : "-",
-      poNumber: poNumberByMovie.get(movie.id) ?? "-",
-      status: formatEntityStatus(movie.status),
-      titleStatus: formatEntityStatus(movie.status),
-      timeEntryCount: movie._count.timeEntries,
-      movieBillingHeadCount: movie._count.movieBillingHeadAssignments,
-    }),
+  const historyByMovie = new Map<string, BillingHistoryRow>();
+  for (const record of historyMonthBillingRecords) {
+    if (!record.movie || !record.movieId || !record.billingReportType) continue;
+    const existing = historyByMovie.get(record.movieId) ?? {
+      itemId: `amazon-history:${record.movieId}:${historyMonthRange.value}`,
+      itemType: "TITLE_PROJECT" as const,
+      itemName: record.movie.title,
+      titleName: record.movie.title,
+      movieId: record.movieId,
+      billingReportType: "amazon-month",
+      billingRegion: "Amazon Monthly Billing",
+      billingDate: formatDisplayDate(record.billingDate),
+      billingMonth: historyMonthRange.value,
+      poNumber:
+        record.purchaseOrder?.poNumber ??
+        poNumberByMovie.get(record.movieId) ??
+        "-",
+      status: "Billed",
+      titleStatus: formatEntityStatus(record.movie.status),
+      projectStatus: "Amazon Monthly Billing",
+      socialAssetsCost: 0,
+      localizationCost: 0,
+      totalCost: 0,
+      cost: 0,
+      timeEntryCount: record.movie._count.timeEntries,
+      movieBillingHeadCount: record.movie._count.movieBillingHeadAssignments,
+    };
+    const amount = Number(record.amount ?? 0);
+    if (record.billingReportType === "social-assets") {
+      existing.socialAssetsCost = (existing.socialAssetsCost ?? 0) + amount;
+    } else if (record.billingReportType === "localization") {
+      existing.localizationCost = (existing.localizationCost ?? 0) + amount;
+    }
+    existing.totalCost =
+      (existing.socialAssetsCost ?? 0) + (existing.localizationCost ?? 0);
+    existing.cost = existing.totalCost;
+    historyByMovie.set(record.movieId, existing);
+  }
+  const historyRows = Array.from(historyByMovie.values()).sort((a, b) =>
+    a.itemName.localeCompare(b.itemName),
   );
 
-  const closedTitleRows = closedMovies.map(
-    (movie): BillingHistoryRow => ({
-      itemId: `amazon-title-closed:${movie.id}`,
+  function buildClosureRow(
+    movie: (typeof summaryMovies)[number],
+    prefix: string,
+  ): BillingHistoryRow {
+    const workKeys = Array.from(workCostByMovieMonthReport.keys()).filter(
+      (key) => key.startsWith(`${movie.id}:`),
+    );
+    const unbilledMonthLabels = Array.from(
+      new Set(
+        workKeys
+          .filter((key) => !billedKeys.has(key))
+          .map((key) => key.split(":")[1]),
+      ),
+    ).sort();
+    const allMonthsBilled = unbilledMonthLabels.length === 0;
+    const totalCost =
+      billedTotalByMovie.get(movie.id) ?? workTotalByMovie.get(movie.id) ?? 0;
+    return {
+      itemId: `${prefix}:${movie.id}`,
       itemType: "TITLE",
       itemName: movie.title,
       movieId: movie.id,
@@ -2915,9 +3069,22 @@ async function getAmazonMonthlyBillingHistoryData({
       poNumber: poNumberByMovie.get(movie.id) ?? "-",
       status: formatEntityStatus(movie.status),
       titleStatus: formatEntityStatus(movie.status),
+      totalCost,
+      cost: totalCost,
+      allMonthsBilled,
+      unbilledMonthsMessage: allMonthsBilled
+        ? undefined
+        : `Please mark all months billed before closing this title / PO. Pending month(s): ${unbilledMonthLabels.join(", ")}.`,
       timeEntryCount: movie._count.timeEntries,
       movieBillingHeadCount: movie._count.movieBillingHeadAssignments,
-    }),
+    };
+  }
+
+  const titleClosureRows = summaryMovies.map((movie) =>
+    buildClosureRow(movie, "amazon-title-close"),
+  );
+  const closedTitleRows = closedMovies.map((movie) =>
+    buildClosureRow(movie, "amazon-title-closed"),
   );
 
   return {
@@ -2932,6 +3099,7 @@ async function getAmazonMonthlyBillingHistoryData({
         rows: summaryRows,
         monthFilterParam: "projectMonth",
         monthFilterValue: filters.projectMonth,
+        monthFilterLabel: "Billing Month",
       },
       {
         key: "amazon-title-closure",
@@ -2946,12 +3114,18 @@ async function getAmazonMonthlyBillingHistoryData({
         title: "Monthly Billing History",
         poAssignmentMode: "TITLE_PROJECT",
         rows: historyRows,
+        monthFilterParam: "amazonHistoryMonth",
+        monthFilterValue: filters.amazonHistoryMonth,
+        monthFilterLabel: "Billing Month",
       },
       {
         key: "amazon-closed-titles",
         title: "Closed Titles / POs",
         poAssignmentMode: "TITLE",
         rows: closedTitleRows,
+        yearFilterParam: "closedTitlesYear",
+        yearFilterValue: filters.closedTitlesYear,
+        yearFilterLabel: "Year",
       },
     ],
     historyRows,

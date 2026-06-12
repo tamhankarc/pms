@@ -8,11 +8,15 @@ import { ContactListAccordion } from "@/components/ui/contact-list-accordion";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { WarnerDeliverableFiltersClient } from "@/components/billing-reports/warner-deliverable-filters";
 import { UniversalTimeEntryFilters } from "@/components/billing-reports/universal-time-entry-filters";
+import { BillingDonePopover } from "@/components/billing-reports/billing-done-popover";
+import { NoScrollFilter } from "@/components/billing-reports/no-scroll-filter";
+import { AmazonTitleClosureButton } from "@/components/billing-reports/amazon-title-closure-button";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canViewBillingReports } from "@/lib/permissions";
 import {
   completeAmazonMonthlyBillingAction,
+  completeAmazonTitleClosureAction,
   completeClientMonthBillingAction,
   completeMovieBillingAction,
 } from "@/lib/actions/movie-actions";
@@ -256,50 +260,45 @@ function BillingDoneButton({
 }) {
   const today = new Date().toISOString().slice(0, 10);
   return (
-    <details className="relative">
-      <summary className="btn-secondary list-none cursor-pointer select-none">
-        {label}
-      </summary>
-      <div className="absolute right-0 z-20 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
-        <form action={completeMovieBillingAction} className="space-y-3">
-          <input type="hidden" name="movieId" value={movieId} />
-          <input type="hidden" name="returnTo" value={returnTo} />
-          {billingMonth ? (
-            <input type="hidden" name="billingMonth" value={billingMonth} />
-          ) : null}
-          {typeof amount === "number" ? (
-            <input type="hidden" name="amount" value={String(amount)} />
-          ) : null}
-          <div>
-            <label className="label" htmlFor={`billingDate-${movieId}`}>
-              Billing date
-            </label>
-            <input
-              id={`billingDate-${movieId}`}
-              name="billingDate"
-              type="date"
-              className="input"
-              defaultValue={today}
-              required
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor={`invoiceNumber-${movieId}`}>
-              Invoice number
-            </label>
-            <input
-              id={`invoiceNumber-${movieId}`}
-              name="invoiceNumber"
-              className="input"
-              required
-            />
-          </div>
-          <button type="submit" className="btn-primary w-full">
-            Billing Done
-          </button>
-        </form>
-      </div>
-    </details>
+    <BillingDonePopover label={label}>
+      <form action={completeMovieBillingAction} className="space-y-3">
+        <input type="hidden" name="movieId" value={movieId} />
+        <input type="hidden" name="returnTo" value={returnTo} />
+        {billingMonth ? (
+          <input type="hidden" name="billingMonth" value={billingMonth} />
+        ) : null}
+        {typeof amount === "number" ? (
+          <input type="hidden" name="amount" value={String(amount)} />
+        ) : null}
+        <div>
+          <label className="label" htmlFor={`billingDate-${movieId}`}>
+            Billing date
+          </label>
+          <input
+            id={`billingDate-${movieId}`}
+            name="billingDate"
+            type="date"
+            className="input"
+            defaultValue={today}
+            required
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor={`invoiceNumber-${movieId}`}>
+            Invoice number
+          </label>
+          <input
+            id={`invoiceNumber-${movieId}`}
+            name="invoiceNumber"
+            className="input"
+            required
+          />
+        </div>
+        <button type="submit" className="btn-primary w-full">
+          Billing Done
+        </button>
+      </form>
+    </BillingDonePopover>
   );
 }
 
@@ -318,56 +317,48 @@ function ProjectBillingDoneButton({
 }) {
   const today = new Date().toISOString().slice(0, 10);
   return (
-    <details className="relative">
-      <summary className="btn-secondary list-none cursor-pointer select-none">
-        {label}
-      </summary>
-      <div className="absolute right-0 z-20 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
-        <form action={completeProjectBillingAction} className="space-y-3">
-          <input type="hidden" name="projectId" value={projectId} />
-          <input type="hidden" name="returnTo" value={returnTo} />
-          {billingMonth ? (
-            <input type="hidden" name="billingMonth" value={billingMonth} />
-          ) : null}
-          {typeof amount === "number" ? (
-            <input type="hidden" name="amount" value={String(amount)} />
-          ) : null}
-          <div>
-            <label
-              className="label"
-              htmlFor={`projectBillingDate-${projectId}`}
-            >
-              Billing date
-            </label>
-            <input
-              id={`projectBillingDate-${projectId}`}
-              name="billingDate"
-              type="date"
-              className="input"
-              defaultValue={today}
-              required
-            />
-          </div>
-          <div>
-            <label
-              className="label"
-              htmlFor={`projectInvoiceNumber-${projectId}`}
-            >
-              Invoice number
-            </label>
-            <input
-              id={`projectInvoiceNumber-${projectId}`}
-              name="invoiceNumber"
-              className="input"
-              required
-            />
-          </div>
-          <button type="submit" className="btn-primary w-full">
-            Billing Done
-          </button>
-        </form>
-      </div>
-    </details>
+    <BillingDonePopover label={label}>
+      <form action={completeProjectBillingAction} className="space-y-3">
+        <input type="hidden" name="projectId" value={projectId} />
+        <input type="hidden" name="returnTo" value={returnTo} />
+        {billingMonth ? (
+          <input type="hidden" name="billingMonth" value={billingMonth} />
+        ) : null}
+        {typeof amount === "number" ? (
+          <input type="hidden" name="amount" value={String(amount)} />
+        ) : null}
+        <div>
+          <label className="label" htmlFor={`projectBillingDate-${projectId}`}>
+            Billing date
+          </label>
+          <input
+            id={`projectBillingDate-${projectId}`}
+            name="billingDate"
+            type="date"
+            className="input"
+            defaultValue={today}
+            required
+          />
+        </div>
+        <div>
+          <label
+            className="label"
+            htmlFor={`projectInvoiceNumber-${projectId}`}
+          >
+            Invoice number
+          </label>
+          <input
+            id={`projectInvoiceNumber-${projectId}`}
+            name="invoiceNumber"
+            className="input"
+            required
+          />
+        </div>
+        <button type="submit" className="btn-primary w-full">
+          Billing Done
+        </button>
+      </form>
+    </BillingDonePopover>
   );
 }
 
@@ -382,108 +373,107 @@ function MonthBillingDoneButton({
 }) {
   const today = new Date().toISOString().slice(0, 10);
   return (
-    <details className="relative">
-      <summary className="btn-secondary list-none cursor-pointer select-none">
-        Billing Done
-      </summary>
-      <div className="absolute right-0 z-20 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
-        <form action={completeClientMonthBillingAction} className="space-y-3">
-          <input type="hidden" name="clientId" value={clientId} />
-          <input type="hidden" name="month" value={month} />
-          <input type="hidden" name="returnTo" value={returnTo} />
-          <div>
-            <label
-              className="label"
-              htmlFor={`billingDate-${clientId}-${month}`}
-            >
-              Billing date
-            </label>
-            <input
-              id={`billingDate-${clientId}-${month}`}
-              name="billingDate"
-              type="date"
-              className="input"
-              defaultValue={today}
-              required
-            />
-          </div>
-          <button type="submit" className="btn-primary w-full">
-            Billing Done
-          </button>
-        </form>
-      </div>
-    </details>
+    <BillingDonePopover label="Billing Done">
+      <form action={completeClientMonthBillingAction} className="space-y-3">
+        <input type="hidden" name="clientId" value={clientId} />
+        <input type="hidden" name="month" value={month} />
+        <input type="hidden" name="returnTo" value={returnTo} />
+        <div>
+          <label className="label" htmlFor={`billingDate-${clientId}-${month}`}>
+            Billing date
+          </label>
+          <input
+            id={`billingDate-${clientId}-${month}`}
+            name="billingDate"
+            type="date"
+            className="input"
+            defaultValue={today}
+            required
+          />
+        </div>
+        <button type="submit" className="btn-primary w-full">
+          Billing Done
+        </button>
+      </form>
+    </BillingDonePopover>
   );
 }
 
 function AmazonMonthlyBillingDoneButton({
   movieId,
-  billingReportType,
   billingMonth,
-  amount,
+  socialAssetsCost,
+  localizationCost,
+  totalCost,
   returnTo,
 }: {
   movieId: string;
-  billingReportType: string;
   billingMonth: string;
-  amount?: number;
+  socialAssetsCost?: number;
+  localizationCost?: number;
+  totalCost?: number;
   returnTo: string;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   return (
-    <details className="relative">
-      <summary className="btn-secondary list-none cursor-pointer select-none">
-        Mark Month Billed
-      </summary>
-      <div className="absolute right-0 z-20 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
-        <form action={completeAmazonMonthlyBillingAction} className="space-y-3">
-          <input type="hidden" name="movieId" value={movieId} />
+    <BillingDonePopover label="Mark Month Billed">
+      <form action={completeAmazonMonthlyBillingAction} className="space-y-3">
+        <input type="hidden" name="movieId" value={movieId} />
+        <input type="hidden" name="billingReportType" value="amazon-month" />
+        <input type="hidden" name="billingMonth" value={billingMonth} />
+        <input type="hidden" name="returnTo" value={returnTo} />
+        {typeof socialAssetsCost === "number" ? (
           <input
             type="hidden"
-            name="billingReportType"
-            value={billingReportType}
+            name="socialAssetsCost"
+            value={String(socialAssetsCost)}
           />
-          <input type="hidden" name="billingMonth" value={billingMonth} />
-          <input type="hidden" name="returnTo" value={returnTo} />
-          {typeof amount === "number" ? (
-            <input type="hidden" name="amount" value={String(amount)} />
-          ) : null}
-          <div>
-            <label
-              className="label"
-              htmlFor={`amazonBillingDate-${movieId}-${billingReportType}-${billingMonth}`}
-            >
-              Billing date
-            </label>
-            <input
-              id={`amazonBillingDate-${movieId}-${billingReportType}-${billingMonth}`}
-              name="billingDate"
-              type="date"
-              className="input"
-              defaultValue={today}
-              required
-            />
-          </div>
-          <div>
-            <label
-              className="label"
-              htmlFor={`amazonInvoiceNumber-${movieId}-${billingReportType}-${billingMonth}`}
-            >
-              Invoice number
-            </label>
-            <input
-              id={`amazonInvoiceNumber-${movieId}-${billingReportType}-${billingMonth}`}
-              name="invoiceNumber"
-              className="input"
-              required
-            />
-          </div>
-          <button type="submit" className="btn-primary w-full">
-            Mark Month Billed
-          </button>
-        </form>
-      </div>
-    </details>
+        ) : null}
+        {typeof localizationCost === "number" ? (
+          <input
+            type="hidden"
+            name="localizationCost"
+            value={String(localizationCost)}
+          />
+        ) : null}
+        {typeof totalCost === "number" ? (
+          <input type="hidden" name="amount" value={String(totalCost)} />
+        ) : null}
+        <div>
+          <label
+            className="label"
+            htmlFor={`amazonBillingDate-${movieId}-${billingMonth}`}
+          >
+            Billing date
+          </label>
+          <input
+            id={`amazonBillingDate-${movieId}-${billingMonth}`}
+            name="billingDate"
+            type="date"
+            className="input"
+            defaultValue={today}
+            required
+          />
+        </div>
+        <div>
+          <label
+            className="label"
+            htmlFor={`amazonInvoiceNumber-${movieId}-${billingMonth}`}
+          >
+            Invoice number
+          </label>
+          <input
+            id={`amazonInvoiceNumber-${movieId}-${billingMonth}`}
+            name="invoiceNumber"
+            className="input"
+            required
+          />
+        </div>
+        <button type="submit" className="btn-primary w-full">
+          Mark Month Billed
+        </button>
+      </form>
+    </BillingDonePopover>
   );
 }
 
@@ -529,6 +519,8 @@ function ExportButtons({
     portalsMonth?: string;
     dvdMonth?: string;
     newsletterMonth?: string;
+    amazonHistoryMonth?: string;
+    closedTitlesYear?: string;
   };
 }) {
   const query = buildQueryString({
@@ -2798,7 +2790,7 @@ function BillingHistoryMonthFilter({
   value: string;
   label?: string;
 }) {
-  const hiddenEntries = Object.entries(searchParams).flatMap(
+  const hiddenInputs = Object.entries(searchParams).flatMap(
     ([key, rawValue]) => {
       if (key === paramName || key.startsWith("billingHistoryPage_")) return [];
       const values = Array.isArray(rawValue)
@@ -2806,30 +2798,60 @@ function BillingHistoryMonthFilter({
         : rawValue
           ? [rawValue]
           : [];
-      return values.map((entryValue) => ({ key, value: entryValue }));
+      return values.map((entryValue) => ({ name: key, value: entryValue }));
     },
   );
 
   return (
-    <AutoSubmitFilterForm
-      method="get"
+    <NoScrollFilter
       action={`/billing-reports/${clientId}`}
       className="w-full sm:w-52"
-    >
-      {hiddenEntries.map(({ key, value }, index) => (
-        <input key={`${key}-${index}`} type="hidden" name={key} value={value} />
-      ))}
-      <label className="label" htmlFor={paramName}>
-        {label}
-      </label>
-      <input
-        id={paramName}
-        name={paramName}
-        type="month"
-        className="input"
-        defaultValue={value}
-      />
-    </AutoSubmitFilterForm>
+      label={label}
+      name={paramName}
+      value={value}
+      type="month"
+      hiddenInputs={hiddenInputs}
+    />
+  );
+}
+
+function BillingHistoryYearFilter({
+  clientId,
+  searchParams,
+  paramName,
+  value,
+  label = "Year",
+}: {
+  clientId: string;
+  searchParams: BillingReportPageSearchParams;
+  paramName: string;
+  value: string;
+  label?: string;
+}) {
+  const hiddenInputs = Object.entries(searchParams).flatMap(
+    ([key, rawValue]) => {
+      if (key === paramName || key.startsWith("billingHistoryPage_")) return [];
+      const values = Array.isArray(rawValue)
+        ? rawValue
+        : rawValue
+          ? [rawValue]
+          : [];
+      return values.map((entryValue) => ({ name: key, value: entryValue }));
+    },
+  );
+
+  return (
+    <NoScrollFilter
+      action={`/billing-reports/${clientId}`}
+      className="w-full sm:w-40"
+      label={label}
+      name={paramName}
+      value={value}
+      type="number"
+      min="2000"
+      max="2100"
+      hiddenInputs={hiddenInputs}
+    />
   );
 }
 
@@ -3060,9 +3082,10 @@ function BillingHistoryProjectTable({
                   {row.billingReportType && row.movieId && row.billingMonth ? (
                     <AmazonMonthlyBillingDoneButton
                       movieId={row.movieId}
-                      billingReportType={row.billingReportType}
                       billingMonth={row.billingMonth}
-                      amount={row.cost}
+                      socialAssetsCost={row.socialAssetsCost}
+                      localizationCost={row.localizationCost}
+                      totalCost={row.totalCost ?? row.cost}
                       returnTo={returnTo}
                     />
                   ) : row.projectId ? (
@@ -3195,6 +3218,212 @@ function BillingHistoryDefaultTable({
   );
 }
 
+function AmazonMonthlyBillingSummaryTable({
+  data,
+  clientId,
+  activeReport,
+  rows,
+  includeAction,
+}: {
+  data: BillingHistoryData;
+  clientId: string;
+  activeReport: AmazonReportType;
+  rows: BillingHistoryData["summaryRows"];
+  includeAction: boolean;
+}) {
+  const returnTo = `/billing-reports/${clientId}?report=${activeReport}&projectMonth=${data.filters.projectMonth}&amazonHistoryMonth=${data.filters.amazonHistoryMonth}&closedTitlesYear=${data.filters.closedTitlesYear}`;
+  return (
+    <div className="table-wrap">
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">Title</th>
+            <th className="table-cell">Billing Month</th>
+            <th className="table-cell">PO Number</th>
+            <th className="table-cell">Social Assets Cost</th>
+            <th className="table-cell">Localization Cost</th>
+            <th className="table-cell">Total Cost</th>
+            {includeAction ? <th className="table-cell">Action</th> : null}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map((row) => (
+            <tr key={row.itemId}>
+              <td className="table-cell font-medium text-slate-900">
+                {row.titleName ?? row.itemName}
+              </td>
+              <td className="table-cell">{row.billingMonth ?? "-"}</td>
+              <td className="table-cell">{row.poNumber || "-"}</td>
+              <td className="table-cell">
+                <BillingHistoryCostCell value={row.socialAssetsCost} />
+              </td>
+              <td className="table-cell">
+                <BillingHistoryCostCell value={row.localizationCost} />
+              </td>
+              <td className="table-cell font-semibold text-slate-900">
+                <BillingHistoryCostCell value={row.totalCost ?? row.cost} />
+              </td>
+              {includeAction ? (
+                <td className="table-cell">
+                  {row.movieId && row.billingMonth ? (
+                    <AmazonMonthlyBillingDoneButton
+                      movieId={row.movieId}
+                      billingMonth={row.billingMonth}
+                      socialAssetsCost={row.socialAssetsCost}
+                      localizationCost={row.localizationCost}
+                      totalCost={row.totalCost ?? row.cost}
+                      returnTo={returnTo}
+                    />
+                  ) : (
+                    "-"
+                  )}
+                </td>
+              ) : null}
+            </tr>
+          ))}
+          {rows.length === 0 ? (
+            <tr>
+              <td
+                colSpan={includeAction ? 7 : 6}
+                className="table-cell text-center text-sm text-slate-500"
+              >
+                No monthly billing records available.
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AmazonMonthlyBillingHistoryTable({
+  rows,
+}: {
+  rows: BillingHistoryData["summaryRows"];
+}) {
+  return (
+    <div className="table-wrap">
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">Title</th>
+            <th className="table-cell">PO Number</th>
+            <th className="table-cell">Social Assets Cost</th>
+            <th className="table-cell">Localization Cost</th>
+            <th className="table-cell">Total Cost</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map((row) => (
+            <tr key={row.itemId}>
+              <td className="table-cell font-medium text-slate-900">
+                {row.titleName ?? row.itemName}
+              </td>
+              <td className="table-cell">{row.poNumber || "-"}</td>
+              <td className="table-cell">
+                <BillingHistoryCostCell value={row.socialAssetsCost} />
+              </td>
+              <td className="table-cell">
+                <BillingHistoryCostCell value={row.localizationCost} />
+              </td>
+              <td className="table-cell font-semibold text-slate-900">
+                <BillingHistoryCostCell value={row.totalCost ?? row.cost} />
+              </td>
+            </tr>
+          ))}
+          {rows.length === 0 ? (
+            <tr>
+              <td
+                colSpan={5}
+                className="table-cell text-center text-sm text-slate-500"
+              >
+                No monthly billing history found for this month.
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AmazonTitleClosureTable({
+  data,
+  clientId,
+  activeReport,
+  rows,
+  includeAction,
+}: {
+  data: BillingHistoryData;
+  clientId: string;
+  activeReport: AmazonReportType;
+  rows: BillingHistoryData["summaryRows"];
+  includeAction: boolean;
+}) {
+  const returnTo = `/billing-reports/${clientId}?report=${activeReport}&projectMonth=${data.filters.projectMonth}&amazonHistoryMonth=${data.filters.amazonHistoryMonth}&closedTitlesYear=${data.filters.closedTitlesYear}`;
+  return (
+    <div className="table-wrap">
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">Title</th>
+            <th className="table-cell">PO Number</th>
+            <th className="table-cell">Total Cost</th>
+            {includeAction ? (
+              <th className="table-cell">Status</th>
+            ) : (
+              <th className="table-cell">Billing Date</th>
+            )}
+            {includeAction ? <th className="table-cell">Action</th> : null}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map((row) => (
+            <tr key={row.itemId}>
+              <td className="table-cell font-medium text-slate-900">
+                {row.titleName ?? row.itemName}
+              </td>
+              <td className="table-cell">{row.poNumber || "-"}</td>
+              <td className="table-cell font-semibold text-slate-900">
+                <BillingHistoryCostCell value={row.totalCost ?? row.cost} />
+              </td>
+              <td className="table-cell">
+                {includeAction ? row.status : row.billingDate}
+              </td>
+              {includeAction ? (
+                <td className="table-cell">
+                  {row.movieId ? (
+                    <AmazonTitleClosureButton
+                      movieId={row.movieId}
+                      returnTo={returnTo}
+                      allMonthsBilled={row.allMonthsBilled ?? false}
+                      unbilledMonthsMessage={row.unbilledMonthsMessage}
+                      action={completeAmazonTitleClosureAction}
+                    />
+                  ) : (
+                    "-"
+                  )}
+                </td>
+              ) : null}
+            </tr>
+          ))}
+          {rows.length === 0 ? (
+            <tr>
+              <td
+                colSpan={includeAction ? 5 : 4}
+                className="table-cell text-center text-sm text-slate-500"
+              >
+                No title / PO records available.
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function BillingHistorySectionTable({
   data,
   clientId,
@@ -3202,6 +3431,7 @@ function BillingHistorySectionTable({
   rows,
   includeAction,
   poAssignmentMode,
+  sectionKey,
 }: {
   data: BillingHistoryData;
   clientId: string;
@@ -3209,7 +3439,38 @@ function BillingHistorySectionTable({
   rows: BillingHistoryData["summaryRows"];
   includeAction: boolean;
   poAssignmentMode: string;
+  sectionKey?: string;
 }) {
+  if (clientId === "cmnh294gs0000l504iifuarli") {
+    if (sectionKey === "amazon-monthly-billing") {
+      return (
+        <AmazonMonthlyBillingSummaryTable
+          data={data}
+          clientId={clientId}
+          activeReport={activeReport}
+          rows={rows}
+          includeAction={includeAction}
+        />
+      );
+    }
+    if (sectionKey === "amazon-monthly-billing-history") {
+      return <AmazonMonthlyBillingHistoryTable rows={rows} />;
+    }
+    if (
+      sectionKey === "amazon-title-closure" ||
+      sectionKey === "amazon-closed-titles"
+    ) {
+      return (
+        <AmazonTitleClosureTable
+          data={data}
+          clientId={clientId}
+          activeReport={activeReport}
+          rows={rows}
+          includeAction={includeAction}
+        />
+      );
+    }
+  }
   if (poAssignmentMode === "TITLE_BILLING_REPORT") {
     return (
       <BillingHistoryTitleReportTable
@@ -3358,11 +3619,13 @@ function BillingHistoryWorkspace({
         clientName={clientName}
       />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <BillingHistoryFilters
-          clientId={clientId}
-          activeReport={activeReport}
-          data={data}
-        />
+        {clientId === "cmnh294gs0000l504iifuarli" ? null : (
+          <BillingHistoryFilters
+            clientId={clientId}
+            activeReport={activeReport}
+            data={data}
+          />
+        )}
         <ExportButtons
           clientId={clientId}
           reportType={activeReport}
@@ -3372,6 +3635,8 @@ function BillingHistoryWorkspace({
             portalsMonth: data.filters.portalsMonth,
             dvdMonth: data.filters.dvdMonth,
             newsletterMonth: data.filters.newsletterMonth,
+            amazonHistoryMonth: data.filters.amazonHistoryMonth,
+            closedTitlesYear: data.filters.closedTitlesYear,
           }}
         />
       </div>
@@ -3403,6 +3668,7 @@ function BillingHistoryWorkspace({
                       searchParams={searchParams}
                       paramName={section.monthFilterParam}
                       value={section.monthFilterValue}
+                      label={section.monthFilterLabel ?? "Billing Month"}
                     />
                   ) : null}
                 </div>
@@ -3413,6 +3679,7 @@ function BillingHistoryWorkspace({
                   rows={pagination.page.items}
                   includeAction
                   poAssignmentMode={section.poAssignmentMode}
+                  sectionKey={section.key}
                 />
                 <BillingHistoryPagination
                   clientId={clientId}
@@ -3479,9 +3746,34 @@ function BillingHistoryWorkspace({
                 id={normalizePaginationKey(`history-${section.key}`)}
                 className="space-y-3 scroll-mt-24"
               >
-                <div>
-                  <h2 className="section-title">{section.title}</h2>
-                  <p className="section-subtitle">Year: {data.filters.year}</p>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h2 className="section-title">{section.title}</h2>
+                    <p className="section-subtitle">
+                      {section.monthFilterValue
+                        ? `Month: ${section.monthFilterValue}`
+                        : section.yearFilterValue
+                          ? `Year: ${section.yearFilterValue}`
+                          : `Year: ${data.filters.year}`}
+                    </p>
+                  </div>
+                  {section.monthFilterParam && section.monthFilterValue ? (
+                    <BillingHistoryMonthFilter
+                      clientId={clientId}
+                      searchParams={searchParams}
+                      paramName={section.monthFilterParam}
+                      value={section.monthFilterValue}
+                      label={section.monthFilterLabel ?? "Billing Month"}
+                    />
+                  ) : section.yearFilterParam && section.yearFilterValue ? (
+                    <BillingHistoryYearFilter
+                      clientId={clientId}
+                      searchParams={searchParams}
+                      paramName={section.yearFilterParam}
+                      value={section.yearFilterValue}
+                      label={section.yearFilterLabel ?? "Year"}
+                    />
+                  ) : null}
                 </div>
                 <BillingHistorySectionTable
                   data={data}
@@ -3490,6 +3782,7 @@ function BillingHistoryWorkspace({
                   rows={pagination.page.items}
                   includeAction={false}
                   poAssignmentMode={section.poAssignmentMode}
+                  sectionKey={section.key}
                 />
                 <BillingHistoryPagination
                   clientId={clientId}
