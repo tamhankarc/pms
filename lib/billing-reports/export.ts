@@ -228,6 +228,14 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
       ]
     : [];
 
+  const summaryTotalAssets = data.summaryRows.reduce(
+    (sum, row) => sum + Number(row.totalAssets ?? 0),
+    0,
+  );
+  const summaryTotalCost = data.summaryRows.reduce(
+    (sum, row) => sum + Number(row.totalCost ?? 0),
+    0,
+  );
   const summaryRows = !isUniversal
     ? [
         excelRow([`${data.reportTitle} Summary`]),
@@ -235,6 +243,9 @@ export function buildAmazonReportExcel(data: AmazonBillingReportData) {
         ...data.summaryRows.map((row) =>
           excelRow([row.assetType, row.totalAssets, row.totalCost], [1, 2]),
         ),
+        ...(data.summaryRows.length
+          ? [excelRow(["Total", summaryTotalAssets, summaryTotalCost], [1, 2])]
+          : []),
       ]
     : [];
 
@@ -808,11 +819,30 @@ function buildSummaryPages(
           ),
         ],
       ]
-    : data.summaryRows.map((row) => [
-        row.assetType,
-        row.totalAssets,
-        formatUsd(row.totalCost),
-      ]);
+    : [
+        ...data.summaryRows.map((row) => [
+          row.assetType,
+          row.totalAssets,
+          formatUsd(row.totalCost),
+        ]),
+        ...(data.summaryRows.length
+          ? [
+              [
+                "Total",
+                data.summaryRows.reduce(
+                  (sum, row) => sum + Number(row.totalAssets ?? 0),
+                  0,
+                ),
+                formatUsd(
+                  data.summaryRows.reduce(
+                    (sum, row) => sum + Number(row.totalCost ?? 0),
+                    0,
+                  ),
+                ),
+              ],
+            ]
+          : []),
+      ];
   const pageStreams: string[] = [];
   const x = MARGIN_X;
   const startY = TOP_Y - 54;
@@ -3157,12 +3187,188 @@ export function buildRoyalBillingReportPdf(data: RoyalBillingData) {
 
 export { getRoyalBillingReportFileName };
 
+function isAmazonBillingHistoryData(data: BillingHistoryData) {
+  return data.client.id === AMAZON_STUDIOS_CLIENT_ID;
+}
+
+function amazonBillingSectionExcelRows(
+  sectionKey: string | undefined,
+  rows: BillingHistoryData["summaryRows"],
+  includeAction: boolean,
+) {
+  if (sectionKey === "amazon-monthly-billing") {
+    return [
+      excelRow([
+        "Title",
+        "Billing Month",
+        "PO Number",
+        "Social Assets Cost",
+        "Localization Cost",
+        "Total Cost",
+        ...(includeAction ? ["Action"] : []),
+      ]),
+      ...rows.map((row) =>
+        excelRow(
+          [
+            row.titleName ?? row.itemName,
+            row.billingMonth ?? "-",
+            row.poNumber || "-",
+            row.socialAssetsCost ?? 0,
+            row.localizationCost ?? 0,
+            row.totalCost ?? row.cost ?? 0,
+            ...(includeAction ? ["Mark Month Billed"] : []),
+          ],
+          [3, 4, 5],
+        ),
+      ),
+    ];
+  }
+
+  if (sectionKey === "amazon-monthly-billing-history") {
+    return [
+      excelRow([
+        "Title",
+        "PO Number",
+        "Social Assets Cost",
+        "Localization Cost",
+        "Total Cost",
+      ]),
+      ...rows.map((row) =>
+        excelRow(
+          [
+            row.titleName ?? row.itemName,
+            row.poNumber || "-",
+            row.socialAssetsCost ?? 0,
+            row.localizationCost ?? 0,
+            row.totalCost ?? row.cost ?? 0,
+          ],
+          [2, 3, 4],
+        ),
+      ),
+    ];
+  }
+
+  if (
+    sectionKey === "amazon-title-closure" ||
+    sectionKey === "amazon-closed-titles"
+  ) {
+    return [
+      excelRow([
+        "Title",
+        "PO Number",
+        "Total Cost",
+        includeAction ? "Status" : "Billing Date",
+        ...(includeAction ? ["Action"] : []),
+      ]),
+      ...rows.map((row) =>
+        excelRow(
+          [
+            row.titleName ?? row.itemName,
+            row.poNumber || "-",
+            row.totalCost ?? row.cost ?? 0,
+            includeAction ? row.status : row.billingDate,
+            ...(includeAction ? ["Close Title / PO"] : []),
+          ],
+          [2],
+        ),
+      ),
+    ];
+  }
+
+  return null;
+}
+
+function amazonBillingSectionPdfLayout(
+  sectionKey: string | undefined,
+  rows: BillingHistoryData["summaryRows"],
+  includeAction: boolean,
+): { columns: PdfTableColumn[]; rows: PdfTableRow[] } | null {
+  if (sectionKey === "amazon-monthly-billing") {
+    return {
+      columns: [
+        { header: "Title", width: 145 },
+        { header: "Billing Month", width: 80 },
+        { header: "PO Number", width: 95 },
+        { header: "Social Assets", width: 95, align: "right" },
+        { header: "Localization", width: 95, align: "right" },
+        { header: "Total Cost", width: 90, align: "right" },
+        ...(includeAction
+          ? ([{ header: "Action", width: 110 }] as PdfTableColumn[])
+          : []),
+      ],
+      rows: rows.map((row) => [
+        row.titleName ?? row.itemName,
+        row.billingMonth ?? "-",
+        row.poNumber || "-",
+        formatUsd(row.socialAssetsCost ?? 0),
+        formatUsd(row.localizationCost ?? 0),
+        formatUsd(row.totalCost ?? row.cost ?? 0),
+        ...(includeAction ? ["Mark Month Billed"] : []),
+      ]),
+    };
+  }
+
+  if (sectionKey === "amazon-monthly-billing-history") {
+    return {
+      columns: [
+        { header: "Title", width: 220 },
+        { header: "PO Number", width: 120 },
+        { header: "Social Assets", width: 110, align: "right" },
+        { header: "Localization", width: 110, align: "right" },
+        { header: "Total Cost", width: 110, align: "right" },
+      ],
+      rows: rows.map((row) => [
+        row.titleName ?? row.itemName,
+        row.poNumber || "-",
+        formatUsd(row.socialAssetsCost ?? 0),
+        formatUsd(row.localizationCost ?? 0),
+        formatUsd(row.totalCost ?? row.cost ?? 0),
+      ]),
+    };
+  }
+
+  if (
+    sectionKey === "amazon-title-closure" ||
+    sectionKey === "amazon-closed-titles"
+  ) {
+    return {
+      columns: [
+        { header: "Title", width: 230 },
+        { header: "PO Number", width: 130 },
+        { header: "Total Cost", width: 110, align: "right" },
+        { header: includeAction ? "Status" : "Billing Date", width: 110 },
+        ...(includeAction
+          ? ([{ header: "Action", width: 120 }] as PdfTableColumn[])
+          : []),
+      ],
+      rows: rows.map((row) => [
+        row.titleName ?? row.itemName,
+        row.poNumber || "-",
+        formatUsd(row.totalCost ?? row.cost ?? 0),
+        includeAction ? row.status : row.billingDate,
+        ...(includeAction ? ["Close Title / PO"] : []),
+      ]),
+    };
+  }
+
+  return null;
+}
+
 function billingHistoryExcelRows(
   data: BillingHistoryData,
   rows: BillingHistoryData["summaryRows"],
   includeAction = false,
   poAssignmentMode = data.client.poAssignmentMode,
+  sectionKey?: string,
 ) {
+  if (isAmazonBillingHistoryData(data)) {
+    const amazonRows = amazonBillingSectionExcelRows(
+      sectionKey,
+      rows,
+      includeAction,
+    );
+    if (amazonRows) return amazonRows;
+  }
   if (poAssignmentMode === "TITLE_BILLING_REPORT") {
     const reportColumns = rows[0]?.reportValues ?? [];
     const headers = [
@@ -3278,19 +3484,42 @@ function billingHistoryExcelRows(
   ];
 }
 
+function billingHistorySectionFilterRows(
+  data: BillingHistoryData,
+  section?: {
+    key?: string;
+    monthFilterLabel?: string;
+    monthFilterValue?: string;
+    yearFilterLabel?: string;
+    yearFilterValue?: string;
+  },
+) {
+  if (isAmazonBillingHistoryData(data)) {
+    if (section?.monthFilterValue) {
+      return [excelRow([section.monthFilterLabel ?? "Billing Month", section.monthFilterValue])];
+    }
+    if (section?.yearFilterValue) {
+      return [excelRow([section.yearFilterLabel ?? "Year", section.yearFilterValue])];
+    }
+    return [];
+  }
+  return [excelRow(["Year", data.filters.year])];
+}
+
 export function buildBillingHistoryReportExcel(data: BillingHistoryData) {
   const summaryWorksheets = data.summarySections?.length
     ? data.summarySections.map((section) =>
         worksheet(section.title, [
           excelRow([data.client.name]),
           excelRow(["Report", section.title]),
-          excelRow(["Year", data.filters.year]),
+          ...billingHistorySectionFilterRows(data, section),
           excelRow([]),
           ...billingHistoryExcelRows(
             data,
             section.rows,
             true,
             section.poAssignmentMode,
+            section.key,
           ),
         ]),
       )
@@ -3298,7 +3527,7 @@ export function buildBillingHistoryReportExcel(data: BillingHistoryData) {
         worksheet("Billing Summary", [
           excelRow([data.client.name]),
           excelRow(["Report", "Billing Summary"]),
-          excelRow(["Year", data.filters.year]),
+          ...billingHistorySectionFilterRows(data),
           excelRow([]),
           ...billingHistoryExcelRows(data, data.summaryRows, true),
         ]),
@@ -3309,13 +3538,14 @@ export function buildBillingHistoryReportExcel(data: BillingHistoryData) {
         worksheet(section.title, [
           excelRow([data.client.name]),
           excelRow(["Report", section.title]),
-          excelRow(["Year", data.filters.year]),
+          ...billingHistorySectionFilterRows(data, section),
           excelRow([]),
           ...billingHistoryExcelRows(
             data,
             section.rows,
             false,
             section.poAssignmentMode,
+            section.key,
           ),
         ]),
       )
@@ -3323,7 +3553,7 @@ export function buildBillingHistoryReportExcel(data: BillingHistoryData) {
         worksheet("Billing History", [
           excelRow([data.client.name]),
           excelRow(["Report", "Billing Summary & History"]),
-          excelRow(["Year", data.filters.year]),
+          ...billingHistorySectionFilterRows(data),
           excelRow([]),
           ...billingHistoryExcelRows(data, data.historyRows),
         ]),
@@ -3343,19 +3573,39 @@ function billingHistoryPdfPage(
   rows: BillingHistoryData["summaryRows"],
   includeAction = false,
   poAssignmentMode = data.client.poAssignmentMode,
+  section?: {
+    key?: string;
+    monthFilterLabel?: string;
+    monthFilterValue?: string;
+    yearFilterLabel?: string;
+    yearFilterValue?: string;
+  },
 ) {
   const commands: string[] = [];
   commands.push(textCommand(title, MARGIN_X, TOP_Y, 15, true));
   commands.push(
     textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true),
   );
-  commands.push(
-    textCommand(`Year: ${data.filters.year}`, MARGIN_X, TOP_Y - 38, 9),
-  );
+  const filterLabel = isAmazonBillingHistoryData(data)
+    ? section?.monthFilterValue
+      ? `${section.monthFilterLabel ?? "Billing Month"}: ${section.monthFilterValue}`
+      : section?.yearFilterValue
+        ? `${section.yearFilterLabel ?? "Year"}: ${section.yearFilterValue}`
+        : ""
+    : `Year: ${data.filters.year}`;
+  if (filterLabel) {
+    commands.push(textCommand(filterLabel, MARGIN_X, TOP_Y - 38, 9));
+  }
 
   let columns: PdfTableColumn[];
   let tableRows: PdfTableRow[];
-  if (poAssignmentMode === "TITLE_BILLING_REPORT") {
+  const amazonLayout = isAmazonBillingHistoryData(data)
+    ? amazonBillingSectionPdfLayout(section?.key, rows, includeAction)
+    : null;
+  if (amazonLayout) {
+    columns = amazonLayout.columns;
+    tableRows = amazonLayout.rows;
+  } else if (poAssignmentMode === "TITLE_BILLING_REPORT") {
     const reportColumns = rows[0]?.reportValues ?? [];
     columns = [
       { header: "Title Name", width: 170 },
@@ -3468,6 +3718,7 @@ export function buildBillingHistoryReportPdf(data: BillingHistoryData) {
           section.rows,
           true,
           section.poAssignmentMode,
+          section,
         ),
       )
     : [billingHistoryPdfPage(data, "Billing Summary", data.summaryRows, true)];
@@ -3480,6 +3731,7 @@ export function buildBillingHistoryReportPdf(data: BillingHistoryData) {
           section.rows,
           false,
           section.poAssignmentMode,
+          section,
         ),
       )
     : [
@@ -3497,7 +3749,10 @@ export function getBillingHistoryReportFileName(
   data: BillingHistoryData,
   extension: "xls" | "pdf",
 ) {
-  return `${sanitizeFileSegment(data.client.name)}_Billing_Summary_History_${data.filters.year}_${getExportTimestamp()}.${extension}`;
+  const periodSegment = isAmazonBillingHistoryData(data)
+    ? sanitizeFileSegment(data.filters.projectMonth || "monthly")
+    : data.filters.year;
+  return `${sanitizeFileSegment(data.client.name)}_Billing_Summary_History_${periodSegment}_${getExportTimestamp()}.${extension}`;
 }
 
 function genericSummaryHistoryExcelRows(
