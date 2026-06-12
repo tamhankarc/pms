@@ -14,7 +14,8 @@ import {
 export async function GET(request: Request) {
   const user = await getSession();
   if (!user) return new Response("Unauthorized", { status: 401 });
-  if (!canViewHRReports(user)) return new Response("Forbidden", { status: 403 });
+  if (!canViewHRReports(user))
+    return new Response("Forbidden", { status: 403 });
 
   try {
     const params = new URL(request.url).searchParams;
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
     }
 
     if (format === "pdf") {
-      return new Response(buildHRReportPdf(data), {
+      return new Response(buildHRReportPdf(data, user.fullName || user.name), {
         headers: {
           "Content-Type": "application/pdf",
           "Content-Disposition": `attachment; filename="${getHRReportFileName(data, "pdf")}"`,
@@ -48,13 +49,16 @@ export async function GET(request: Request) {
       });
     }
 
-    return new Response(await buildHRReportWorkbook(data), {
-      headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="${getHRReportFileName(data, "xlsx")}"`,
+    return new Response(
+      await buildHRReportWorkbook(data, user.fullName || user.name),
+      {
+        headers: {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="${getHRReportFileName(data, "xlsx")}"`,
+        },
       },
-    });
+    );
   } catch (error) {
     return new Response(
       error instanceof Error ? error.message : "Unable to generate HR report.",
