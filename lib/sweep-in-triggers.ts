@@ -74,7 +74,14 @@ function getActiveUserWhereForSelection(user: SessionUser): Prisma.UserWhereInpu
   const markInOutEligibleWhere: Prisma.UserWhereInput = {
     isActive: true,
     userType: {
-      notIn: ["ADMIN", "ACCOUNTS", "OPERATIONS", "REPORT_VIEWER", "HR"],
+      notIn: [
+        "ADMIN",
+        "MANAGER",
+        "ACCOUNTS",
+        "OPERATIONS",
+        "REPORT_VIEWER",
+        "HR",
+      ],
     },
   };
 
@@ -118,7 +125,16 @@ export async function getSweepInSelectableUsers(
         teamLeadId: user.id,
         employee: {
           isActive: true,
-          userType: { notIn: ["ADMIN", "ACCOUNTS", "OPERATIONS", "REPORT_VIEWER", "HR"] },
+          userType: {
+            notIn: [
+              "ADMIN",
+              "MANAGER",
+              "ACCOUNTS",
+              "OPERATIONS",
+              "REPORT_VIEWER",
+              "HR",
+            ],
+          },
         },
       },
       include: {
