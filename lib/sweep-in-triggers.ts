@@ -3,6 +3,7 @@ import type { SessionUser } from "@/lib/auth";
 import {
   canMarkAttendance,
   isAdmin,
+  isAdminProjectManager,
   isProjectManager,
   isRoleScopedManager,
 } from "@/lib/permissions";
@@ -31,6 +32,7 @@ export type SweepInSelectableUser = Prisma.UserGetPayload<{
 export function getSweepInAccessLevel(user: SessionUser): SweepInAccessLevel {
   if (user.userType === "HR") return "view";
   if (isAdmin(user) && user.functionalRole === "OTHER") return "edit";
+  if (isAdminProjectManager(user)) return "create";
   if (isRoleScopedManager(user) || isProjectManager(user)) return "create";
   return "none";
 }
@@ -40,8 +42,7 @@ export function canViewSweepInTriggers(user: SessionUser) {
 }
 
 export function canCreateSweepInTriggers(user: SessionUser) {
-  const access = getSweepInAccessLevel(user);
-  return access === "create" || access === "edit";
+  return getSweepInAccessLevel(user) === "create";
 }
 
 export function canEditSweepInTriggers(user: SessionUser) {
@@ -49,9 +50,13 @@ export function canEditSweepInTriggers(user: SessionUser) {
   return access === "create" || access === "edit";
 }
 
+export function canFullyEditSweepInTriggers(user: SessionUser) {
+  return (isAdmin(user) && user.functionalRole === "OTHER") || isAdminProjectManager(user);
+}
+
 export function canEditSweepInTriggerRecord(user: SessionUser, createdById: string) {
   return canEditSweepInTriggers(user) && (
-    (isAdmin(user) && user.functionalRole === "OTHER") ||
+    canFullyEditSweepInTriggers(user) ||
     createdById === user.id
   );
 }
@@ -85,6 +90,7 @@ function getActiveUserWhereForSelection(user: SessionUser): Prisma.UserWhereInpu
 
   const canSeeAllScopedUsers =
     (isAdmin(user) && user.functionalRole === "OTHER") ||
+    isAdminProjectManager(user) ||
     isProjectManager(user);
 
   if (canSeeAllScopedUsers) {

@@ -222,7 +222,9 @@ export async function middleware(request: NextRequest) {
   if (pathname === "/sweep-in-triggers" || pathname.startsWith("/sweep-in-triggers/")) {
     const canAccessSweepIn =
       session?.userType === "HR" ||
-      (session?.userType === "ADMIN" && session.functionalRole === "OTHER") ||
+      (session?.userType === "ADMIN" &&
+        (session.functionalRole === "OTHER" ||
+          session.functionalRole === "PROJECT_MANAGER")) ||
       (session?.userType === "MANAGER" &&
         session.functionalRole !== "GENERAL_MANAGER");
     if (!canAccessSweepIn) {
