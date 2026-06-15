@@ -3,8 +3,12 @@ import type { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
+  canAddManualAttendance,
   canManageManualAttendance,
   canViewAttendanceHistory,
+  isAdminProjectManager,
+  isProjectManager,
+  isRoleScopedManager,
 } from "@/lib/permissions";
 import {
   formatDateInIst,
@@ -180,14 +184,109 @@ export async function GET(request: Request) {
   };
 
   const requestedUserId = searchParams.get("userId") ?? "";
-  const selectedUserId = canSelectAttendanceUser ? requestedUserId : currentUser.id;
+  const canAddManualLog = canAddManualAttendance(currentUser);
+
+  const scopedUserOptions = canSelectAttendanceUser
+    ? canAddManualLog || isAdminProjectManager(currentUser) || isProjectManager(currentUser)
+      ? await db.user.findMany({
+          where: attendanceEligibleUserWhere,
+          select: { id: true },
+        })
+      : await db.employeeTeamLead
+          .findMany({
+            where: {
+              teamLeadId: currentUser.id,
+              employee: attendanceEligibleUserWhere,
+            },
+            include: {
+              employee: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  username: true,
+                  email: true,
+                  employeeCode: true,
+                  userType: true,
+                  functionalRole: true,
+                },
+              },
+            },
+          })
+          .then(async (assignments) => {
+            const assignedUsers = assignments.map((assignment) => assignment.employee);
+
+            const selfUser = await db.user.findFirst({
+              where: {
+                AND: [{ id: currentUser.id }, attendanceEligibleUserWhere],
+              },
+              select: {
+                id: true,
+                fullName: true,
+                username: true,
+                email: true,
+                employeeCode: true,
+                userType: true,
+                functionalRole: true,
+              },
+            });
+
+            const currentUserFunctionalRole =
+              isRoleScopedManager(currentUser) &&
+              currentUser.functionalRole &&
+              currentUser.functionalRole !== "UNASSIGNED"
+                ? currentUser.functionalRole
+                : null;
+
+            const sameRoleTeamLeads = currentUserFunctionalRole
+              ? await db.user.findMany({
+                  where: {
+                    AND: [
+                      attendanceEligibleUserWhere,
+                      {
+                        userType: "TEAM_LEAD",
+                        functionalRole: currentUserFunctionalRole,
+                      },
+                    ],
+                  },
+                  select: {
+                    id: true,
+                    fullName: true,
+                    username: true,
+                    email: true,
+                    employeeCode: true,
+                    userType: true,
+                    functionalRole: true,
+                  },
+                  orderBy: [{ fullName: "asc" }],
+                })
+              : [];
+
+            const usersById = new Map<string, { id: string }>();
+            if (selfUser) usersById.set(selfUser.id, selfUser);
+            for (const user of assignedUsers) usersById.set(user.id, user);
+            for (const user of sameRoleTeamLeads) usersById.set(user.id, user);
+            return Array.from(usersById.values());
+          })
+    : [];
+
+  const allowedUserIds = new Set(scopedUserOptions.map((user) => user.id));
+  const selectedUserId = canSelectAttendanceUser
+    ? requestedUserId && allowedUserIds.has(requestedUserId)
+      ? requestedUserId
+      : canAddManualLog || isAdminProjectManager(currentUser) || isProjectManager(currentUser)
+        ? ""
+        : scopedUserOptions[0]?.id ?? ""
+    : currentUser.id;
+
   if (!selectedUserId) return new Response("Select a user before exporting.", { status: 400 });
 
   const selectedUser = await db.user.findFirst({
     where: {
       AND: [
         { id: selectedUserId, isActive: true },
-        canSelectAttendanceUser ? attendanceEligibleUserWhere : { id: currentUser.id },
+        canSelectAttendanceUser
+          ? { id: { in: Array.from(allowedUserIds) } }
+          : { id: currentUser.id },
       ],
     },
     select: {

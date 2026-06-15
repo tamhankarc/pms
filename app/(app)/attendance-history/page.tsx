@@ -12,6 +12,9 @@ import {
   canAddManualAttendance,
   canManageManualAttendance,
   canViewAttendanceHistory,
+  isAdminProjectManager,
+  isProjectManager,
+  isRoleScopedManager,
 } from "@/lib/permissions";
 import {
   formatDateInIst,
@@ -89,11 +92,89 @@ const userSelect = {
 };
 
 const scopedUserOptions = canSelectAttendanceUser
-  ? await db.user.findMany({
-      where: attendanceEligibleUserWhere,
-      select: userSelect,
-      orderBy: [{ fullName: "asc" }],
-    })
+  ? canAddManualLog || isAdminProjectManager(currentUser) || isProjectManager(currentUser)
+    ? await db.user.findMany({
+        where: attendanceEligibleUserWhere,
+        select: userSelect,
+        orderBy: [{ fullName: "asc" }],
+      })
+    : await db.employeeTeamLead
+        .findMany({
+          where: {
+            teamLeadId: currentUser.id,
+            employee: attendanceEligibleUserWhere,
+          },
+          include: {
+            employee: {
+              select: userSelect,
+            },
+          },
+          orderBy: {
+            employee: {
+              fullName: "asc",
+            },
+          },
+        })
+        .then(async (assignments) => {
+          const assignedUsers = assignments.map(
+            (assignment) => assignment.employee,
+          );
+
+          const selfUser = await db.user.findFirst({
+            where: {
+              AND: [
+                { id: currentUser.id },
+                attendanceEligibleUserWhere,
+              ],
+            },
+            select: userSelect,
+          });
+
+          const currentUserFunctionalRole =
+            isRoleScopedManager(currentUser) &&
+            currentUser.functionalRole &&
+            currentUser.functionalRole !== "UNASSIGNED"
+              ? currentUser.functionalRole
+              : null;
+
+          const sameRoleTeamLeads = currentUserFunctionalRole
+            ? await db.user.findMany({
+                where: {
+                  AND: [
+                    attendanceEligibleUserWhere,
+                    {
+                      userType: "TEAM_LEAD",
+                      functionalRole: currentUserFunctionalRole,
+                    },
+                  ],
+                },
+                select: userSelect,
+                orderBy: [{ fullName: "asc" }],
+              })
+            : [];
+
+          const usersById = new Map<
+            string,
+            | (typeof assignedUsers)[number]
+            | (typeof sameRoleTeamLeads)[number]
+          >();
+
+          if (selfUser) {
+            usersById.set(selfUser.id, selfUser);
+          }
+
+          for (const user of assignedUsers) {
+            usersById.set(user.id, user);
+          }
+
+          for (const user of sameRoleTeamLeads) {
+            usersById.set(user.id, user);
+          }
+
+          return Array.from(usersById.values()).sort((a, b) =>
+            a.fullName.localeCompare(b.fullName),
+          );
+        })
   : [];
 
 const allowedUserIds = new Set(scopedUserOptions.map((user) => user.id));
@@ -101,7 +182,9 @@ const allowedUserIds = new Set(scopedUserOptions.map((user) => user.id));
 const selectedUserId = canSelectAttendanceUser
   ? params.userId && allowedUserIds.has(params.userId)
     ? params.userId
-    : ""
+    : canAddManualLog || isAdminProjectManager(currentUser) || isProjectManager(currentUser)
+      ? ""
+      : scopedUserOptions[0]?.id ?? ""
   : currentUser.id;
 
 const selectedUser = selectedUserId
