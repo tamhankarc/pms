@@ -39,7 +39,8 @@ export function canViewSweepInTriggers(user: SessionUser) {
 }
 
 export function canCreateSweepInTriggers(user: SessionUser) {
-  return getSweepInAccessLevel(user) === "create";
+  const access = getSweepInAccessLevel(user);
+  return access === "create" || access === "edit";
 }
 
 export function canEditSweepInTriggers(user: SessionUser) {
@@ -70,24 +71,31 @@ export function getAttendanceDateStartUtc(dateKey: string) {
 }
 
 function getActiveUserWhereForSelection(user: SessionUser): Prisma.UserWhereInput {
-  if (isAdmin(user) && user.functionalRole === "OTHER") {
-    return {
-      isActive: true,
-      userType: { notIn: ["ADMIN", "ACCOUNTS", "OPERATIONS", "REPORT_VIEWER", "HR"] },
-    };
+  const markInOutEligibleWhere: Prisma.UserWhereInput = {
+    isActive: true,
+    userType: {
+      notIn: ["ADMIN", "ACCOUNTS", "OPERATIONS", "REPORT_VIEWER", "HR"],
+    },
+  };
+
+  const canSeeAllEligibleUsers =
+    (isAdmin(user) && user.functionalRole === "OTHER") ||
+    isProjectManager(user);
+
+  if (canSeeAllEligibleUsers) {
+    return markInOutEligibleWhere;
   }
 
-  const orFilters: Prisma.UserWhereInput[] = [];
+  const orFilters: Prisma.UserWhereInput[] = [{ id: user.id }];
 
   if (user.functionalRole && user.functionalRole !== "UNASSIGNED") {
-    orFilters.push({ functionalRole: user.functionalRole as FunctionalRoleCode });
+    orFilters.push({
+      functionalRole: user.functionalRole as FunctionalRoleCode,
+    });
   }
 
-  orFilters.push({ id: user.id });
-
   return {
-    isActive: true,
-    userType: { notIn: ["ADMIN", "ACCOUNTS", "OPERATIONS", "REPORT_VIEWER", "HR"] },
+    ...markInOutEligibleWhere,
     OR: orFilters,
   };
 }

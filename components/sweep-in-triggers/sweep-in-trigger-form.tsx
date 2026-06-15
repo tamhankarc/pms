@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import type { SearchableComboboxOption } from "@/components/ui/searchable-combobox";
 
@@ -31,10 +31,6 @@ export function SweepInTriggerForm({
 }: Props) {
   const [triggerDate, setTriggerDate] = useState(defaultDate);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>(defaultUserIds);
-
-  useEffect(() => {
-    setSelectedUserIds(defaultUserIds);
-  }, [defaultUserIds]);
 
   const selectedDateLabel = useMemo(() => {
     if (!triggerDate) return "Select a date before selecting users.";
