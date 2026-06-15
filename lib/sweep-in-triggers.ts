@@ -1,6 +1,7 @@
 import type { FunctionalRoleCode, Prisma } from "@prisma/client";
 import type { SessionUser } from "@/lib/auth";
 import {
+  canMarkAttendance,
   isAdmin,
   isProjectManager,
   isRoleScopedManager,
@@ -71,26 +72,16 @@ export function getAttendanceDateStartUtc(dateKey: string) {
 }
 
 function getActiveUserWhereForSelection(user: SessionUser): Prisma.UserWhereInput {
-  const markInOutEligibleWhere: Prisma.UserWhereInput = {
+  const activeUserWhere: Prisma.UserWhereInput = {
     isActive: true,
-    userType: {
-      notIn: [
-        "ADMIN",
-        "MANAGER",
-        "ACCOUNTS",
-        "OPERATIONS",
-        "REPORT_VIEWER",
-        "HR",
-      ],
-    },
   };
 
-  const canSeeAllEligibleUsers =
+  const canSeeAllScopedUsers =
     (isAdmin(user) && user.functionalRole === "OTHER") ||
     isProjectManager(user);
 
-  if (canSeeAllEligibleUsers) {
-    return markInOutEligibleWhere;
+  if (canSeeAllScopedUsers) {
+    return activeUserWhere;
   }
 
   const orFilters: Prisma.UserWhereInput[] = [{ id: user.id }];
@@ -102,7 +93,7 @@ function getActiveUserWhereForSelection(user: SessionUser): Prisma.UserWhereInpu
   }
 
   return {
-    ...markInOutEligibleWhere,
+    ...activeUserWhere,
     OR: orFilters,
   };
 }
@@ -125,16 +116,6 @@ export async function getSweepInSelectableUsers(
         teamLeadId: user.id,
         employee: {
           isActive: true,
-          userType: {
-            notIn: [
-              "ADMIN",
-              "MANAGER",
-              "ACCOUNTS",
-              "OPERATIONS",
-              "REPORT_VIEWER",
-              "HR",
-            ],
-          },
         },
       },
       include: {
@@ -163,7 +144,9 @@ export async function getSweepInSelectableUsers(
 
   const usersById = new Map<string, SweepInSelectableUser>();
   for (const option of [...baseUsers, ...assignedUsers, ...explicitlyIncluded]) {
-    usersById.set(option.id, option);
+    if (canMarkAttendance(option)) {
+      usersById.set(option.id, option);
+    }
   }
 
   return Array.from(usersById.values()).sort((a, b) =>
