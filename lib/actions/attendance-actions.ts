@@ -14,6 +14,7 @@ import {
   isMarkOutWindow,
 } from "@/lib/ist";
 import { getLeaveBalanceForUser } from "@/lib/ems-queries";
+import { getSweepInMarkInOverride } from "@/lib/sweep-in-triggers";
 
 type MarkAttendanceActionResult = {
   success: boolean;
@@ -101,11 +102,17 @@ export async function markAttendanceAction(
       location?.state ||
       null;
 
+    const sweepInMarkedAt =
+      actionType === "MARK_IN"
+        ? await getSweepInMarkInOverride(user.id, startUtc)
+        : null;
+
     await db.attendanceLog.create({
       data: {
         userId: user.id,
         attendanceDate: startUtc,
         type: actionType,
+        markedAt: sweepInMarkedAt ?? now,
         latitude,
         longitude,
         city,

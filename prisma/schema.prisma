@@ -238,6 +238,8 @@ model User {
   leaveApprovalsAssignedBy LeaveApproverAssignment[]        @relation("LeaveApproverAssignedBy")
   leaveYearProfiles        LeaveYearProfile[]
   announcementRecipients   DashboardAnnouncementRecipient[]
+  sweepInTriggersCreated SweepInTrigger[]     @relation("SweepInTriggerCreatedBy")
+  sweepInTriggerSelections SweepInTriggerUser[] @relation("SweepInTriggerUser")
 
   @@index([userType, isActive])
   @@index([functionalRole, isActive])
@@ -971,6 +973,36 @@ model AttendanceLog {
 
   @@index([userId, attendanceDate])
   @@index([attendanceDate, type])
+}
+
+model SweepInTrigger {
+  id          String   @id @default(cuid())
+  triggerDate DateTime
+  triggerTime String   @db.VarChar(5)
+  markInAt    DateTime
+  notes       String   @db.Text
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy User                 @relation("SweepInTriggerCreatedBy", fields: [createdById], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  users     SweepInTriggerUser[]
+
+  @@index([triggerDate])
+  @@index([createdById])
+}
+
+model SweepInTriggerUser {
+  id        String   @id @default(cuid())
+  triggerId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  trigger SweepInTrigger @relation(fields: [triggerId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user    User           @relation("SweepInTriggerUser", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([triggerId, userId])
+  @@index([userId])
 }
 
 model LeaveRequest {

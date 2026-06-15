@@ -46,6 +46,11 @@ export const menuItems = [
     href: "/attendance-history",
     label: "Attendance History",
   },
+  {
+    key: "sweep-in-triggers",
+    href: "/sweep-in-triggers",
+    label: "Sweep-In Triggers",
+  },
   { key: "hr-reports", href: "/hr-reports", label: "HR Reports" },
   { key: "announcements", href: "/announcements", label: "Announcements" },
   { key: "clients", href: "/clients", label: "Clients" },
@@ -139,6 +144,7 @@ export function getBaseMenuKeysForUserType(
         "leave-admin",
         "hr-reports",
         "attendance-history",
+        "sweep-in-triggers",
         "announcements",
         "profile",
         "change-password",
@@ -164,6 +170,16 @@ export function getBaseMenuKeysForUserType(
         "change-password",
       ];
     case "MANAGER":
+      return [
+        "dashboard",
+        "time-entries",
+        "estimates",
+        "team-lead-assignments",
+        "reports",
+        "sweep-in-triggers",
+        "profile",
+        "change-password",
+      ];
     case "REPORT_VIEWER":
       return [
         "dashboard",

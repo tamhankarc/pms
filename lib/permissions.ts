@@ -287,6 +287,16 @@ export function canManageManualAttendance(user: UserLike) {
   );
 }
 
+
+export function canViewSweepInTriggers(user: UserLike) {
+  return (
+    isRoleScopedManager(user) ||
+    isProjectManager(user) ||
+    getUserType(user) === "HR" ||
+    (isAdmin(user) && getFunctionalRole(user) === "OTHER")
+  );
+}
+
 export function canAssignApprovers(user: UserLike) {
   return canViewEMSAdminDashboard(user);
 }

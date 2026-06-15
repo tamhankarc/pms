@@ -24,6 +24,7 @@ const HR_ALLOWED_PATHS = [
   "/leave-requests",
   "/leave-approvals",
   "/attendance-history",
+  "/sweep-in-triggers",
   "/announcements",
   "/hr-reports",
   "/leave-admin",
@@ -212,6 +213,19 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith("/reports/"))
   ) {
     return NextResponse.redirect(new URL("/billing-reports", request.url));
+  }
+
+
+  if (pathname === "/sweep-in-triggers" || pathname.startsWith("/sweep-in-triggers/")) {
+    const canAccessSweepIn =
+      session?.userType === "HR" ||
+      (session?.userType === "ADMIN" && session.functionalRole === "OTHER") ||
+      (session?.userType === "MANAGER" &&
+        session.functionalRole !== "GENERAL_MANAGER");
+    if (!canAccessSweepIn) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+    return NextResponse.next();
   }
 
   if (

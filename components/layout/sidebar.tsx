@@ -33,6 +33,7 @@ import {
   canManageCountries,
   canManageLanguages,
   canManageManualAttendance,
+  canViewSweepInTriggers,
   canManageUsers,
   isHR,
   isOperations,
@@ -79,6 +80,7 @@ const iconByMenuKey: Record<
   "leave-approvals": CheckCheck,
   "leave-admin": CalendarDays,
   "attendance-history": TimerReset,
+  "sweep-in-triggers": TimerReset,
   "hr-reports": BarChart3,
   announcements: Bell,
   profile: UserCog,
@@ -162,6 +164,7 @@ const fullItems: SidebarNavItem[] = getItemsByKeys([
   "reports",
   "hr-reports",
   "attendance-history",
+  "sweep-in-triggers",
   "profile",
   "change-password",
 ]);
@@ -272,8 +275,16 @@ export function getSidebarItems(
     const scopedItems = filterAccess(teamLeadItems, user).filter(
       (item) => !isMasterDataHref(item.href),
     );
+    const withSweepInItems = isRoleScopedManager(user)
+      ? [
+          ...scopedItems,
+          ...getItemsByKeys(["sweep-in-triggers"]).filter(
+            (item) => !scopedItems.some((entry) => entry.key === item.key),
+          ),
+        ]
+      : scopedItems;
     return appendExtraMenus(
-      withLeaveItems(scopedItems, user, canAccessLeaveApprovals),
+      withLeaveItems(withSweepInItems, user, canAccessLeaveApprovals),
       user,
     );
   }
@@ -302,6 +313,7 @@ export function getSidebarItems(
         ...(canAccessLeaveApprovals ? (["leave-approvals"] as MenuKey[]) : []),
         "leave-admin",
         "attendance-history",
+        "sweep-in-triggers",
         "hr-reports",
         "announcements",
         "profile",
@@ -349,6 +361,9 @@ export function getSidebarItems(
     )
       return false;
     if (item.href === "/attendance-history" && !canManageManualAttendance(user)) {
+      return false;
+    }
+    if (item.href === "/sweep-in-triggers" && !canViewSweepInTriggers(user)) {
       return false;
     }
     return true;
