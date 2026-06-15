@@ -1,7 +1,7 @@
 import { getSession } from "@/lib/auth";
 import { canViewEMSAdminDashboard } from "@/lib/permissions";
 import { getAdminDashboardData } from "@/lib/ems-queries";
-import { formatTimeInIst, isWeekendDateKey } from "@/lib/ist";
+import { formatMarkOutTimeInIst, formatTimeInIst, isWeekendDateKey } from "@/lib/ist";
 
 function normalizeDateInput(value: string | null) {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
@@ -77,7 +77,7 @@ export async function GET(request: Request) {
       (row.functionalRole ?? "UNASSIGNED").replaceAll("_", " "),
       row.shift === "NIGHT" ? "Night" : "Day",
       formatTimeInIst(row.markIn?.markedAt ?? null),
-      formatTimeInIst(row.markOut?.markedAt ?? null),
+      formatMarkOutTimeInIst(row.markOut?.markedAt ?? null, attendanceDate, row.shift),
       row.city || "—",
     ]),
   ];

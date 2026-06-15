@@ -32,7 +32,7 @@ import {
   canAccessLeaveRequests,
   canManageCountries,
   canManageLanguages,
-  canManageManualAttendance,
+  canViewAttendanceHistory,
   canViewSweepInTriggers,
   canManageUsers,
   isHR,
@@ -360,7 +360,7 @@ export function getSidebarItems(
       user.userType !== "OPERATIONS"
     )
       return false;
-    if (item.href === "/attendance-history" && !canManageManualAttendance(user)) {
+    if (item.href === "/attendance-history" && !canViewAttendanceHistory(user)) {
       return false;
     }
     if (item.href === "/sweep-in-triggers" && !canViewSweepInTriggers(user)) {

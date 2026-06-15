@@ -49,6 +49,13 @@ export function canEditSweepInTriggers(user: SessionUser) {
   return access === "create" || access === "edit";
 }
 
+export function canEditSweepInTriggerRecord(user: SessionUser, createdById: string) {
+  return canEditSweepInTriggers(user) && (
+    (isAdmin(user) && user.functionalRole === "OTHER") ||
+    createdById === user.id
+  );
+}
+
 export function isDateKey(value: string) {
   return SWEEP_IN_DATE_REGEX.test(value);
 }

@@ -7,6 +7,7 @@ import { requireUserForAction } from "@/lib/auth";
 import {
   buildIstDateTimeUtc,
   canCreateSweepInTriggers,
+  canEditSweepInTriggerRecord,
   canEditSweepInTriggers,
   getAttendanceDateStartUtc,
   getSweepInSelectableUsers,
@@ -163,6 +164,10 @@ export async function updateSweepInTriggerAction(formData: FormData) {
 
   if (!existing) {
     redirectWithMessage("/sweep-in-triggers", "error", "Sweep-in trigger was not found or is outside your access scope.");
+  }
+
+  if (!canEditSweepInTriggerRecord(currentUser, existing.createdById)) {
+    redirectWithMessage("/sweep-in-triggers", "error", "You can edit only sweep-in triggers created by you.");
   }
 
   const existingUserIds = existing.users.map((user) => user.userId);

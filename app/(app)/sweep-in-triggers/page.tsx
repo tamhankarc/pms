@@ -8,6 +8,7 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
   canCreateSweepInTriggers,
+  canEditSweepInTriggerRecord,
   canEditSweepInTriggers,
   canViewSweepInTriggers,
   getVisibleSweepInTriggerWhere,
@@ -102,7 +103,9 @@ export default async function SweepInTriggersPage({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {items.map((trigger) => (
+            {items.map((trigger) => {
+              const canEditTrigger = canEditSweepInTriggerRecord(currentUser, trigger.createdById);
+              return (
               <tr key={trigger.id}>
                 <td className="table-cell font-medium text-slate-900">
                   {formatDateInIst(trigger.triggerDate)}
@@ -119,17 +122,22 @@ export default async function SweepInTriggersPage({
                 <td className="table-cell">{formatDateInIst(trigger.updatedAt)} {formatTimeInIst(trigger.updatedAt)}</td>
                 {canEdit ? (
                   <td className="table-cell">
-                    <Link
-                      href={`/sweep-in-triggers/${trigger.id}`}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-                    >
-                      <Edit className="h-3.5 w-3.5" />
-                      Edit
-                    </Link>
+                    {canEditTrigger ? (
+                      <Link
+                        href={`/sweep-in-triggers/${trigger.id}`}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                        Edit
+                      </Link>
+                    ) : (
+                      <span className="text-sm text-slate-400">—</span>
+                    )}
                   </td>
                 ) : null}
               </tr>
-            ))}
+              );
+            })}
             {items.length === 0 ? (
               <tr>
                 <td colSpan={canEdit ? 8 : 7} className="table-cell text-center text-sm text-slate-500">

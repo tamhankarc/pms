@@ -117,6 +117,7 @@ export function getBaseMenuKeysForUserType(
     case "OPERATIONS":
       return [
         "dashboard",
+        "attendance-history",
         "clients",
         "movies",
         "newsletters",
@@ -150,13 +151,14 @@ export function getBaseMenuKeysForUserType(
         "change-password",
       ];
     case "ACCOUNTS":
-      return ["billing-reports", "change-password"];
+      return ["billing-reports", "attendance-history", "change-password"];
     case "EMPLOYEE":
       return [
         "dashboard",
         "time-entries",
         "estimates",
         "leave-requests",
+        "attendance-history",
         "profile",
         "change-password",
       ];
@@ -166,6 +168,7 @@ export function getBaseMenuKeysForUserType(
         "time-entries",
         "estimates",
         "leave-requests",
+        "attendance-history",
         "profile",
         "change-password",
       ];
@@ -176,6 +179,7 @@ export function getBaseMenuKeysForUserType(
         "estimates",
         "team-lead-assignments",
         "reports",
+        "attendance-history",
         "sweep-in-triggers",
         "profile",
         "change-password",
@@ -187,6 +191,7 @@ export function getBaseMenuKeysForUserType(
         "estimates",
         "team-lead-assignments",
         "reports",
+        "attendance-history",
         "profile",
         "change-password",
       ];

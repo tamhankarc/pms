@@ -6,6 +6,7 @@ import { getOrCreateLeaveYearProfile } from "@/lib/ems-queries";
 import { canMarkAttendance } from "@/lib/permissions";
 import {
   formatDateInIst,
+  formatMarkOutTimeInIst,
   formatTimeInIst,
   getDayBoundsUtcFromIstDateKey,
   getIstDateKey,
@@ -327,7 +328,7 @@ export async function getHRReportData(
             shift: shiftLabel(rowShift),
             status: presence,
             inTime: formatTimeInIst(attendance?.markIn?.markedAt),
-            outTime: formatTimeInIst(attendance?.markOut?.markedAt),
+            outTime: formatMarkOutTimeInIst(attendance?.markOut?.markedAt, dateKey, rowShift),
             total: formatDuration(
               attendance?.markIn?.markedAt,
               attendance?.markOut?.markedAt,

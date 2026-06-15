@@ -59,6 +59,27 @@ export function formatDateInIst(date: Date | string | null | undefined) {
   }).format(value);
 }
 
+export function formatMarkOutTimeInIst(
+  date: Date | string | null | undefined,
+  attendanceDate?: Date | string | null,
+  shift: AttendanceShift = "DAY",
+) {
+  const formatted = formatTimeInIst(date);
+  if (!date || !attendanceDate || shift !== "DAY") return formatted;
+
+  const markedAt = typeof date === "string" ? new Date(date) : date;
+  const attendanceDateKey =
+    typeof attendanceDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(attendanceDate)
+      ? attendanceDate
+      : getIstDateKey(typeof attendanceDate === "string" ? new Date(attendanceDate) : attendanceDate);
+
+  if (getIstDateKey(markedAt) > attendanceDateKey) {
+    return `${formatted} (Next Day)`;
+  }
+
+  return formatted;
+}
+
 export function getAttendanceWorkDateKey(date: Date = new Date(), shift: AttendanceShift = "DAY") {
   const ist = toIstDate(date);
   const hours = ist.getUTCHours();

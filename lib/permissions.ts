@@ -287,6 +287,10 @@ export function canManageManualAttendance(user: UserLike) {
   );
 }
 
+export function canViewAttendanceHistory(user: UserLike) {
+  return Boolean(getUserType(user));
+}
+
 
 export function canViewSweepInTriggers(user: UserLike) {
   return (

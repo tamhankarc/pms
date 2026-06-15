@@ -5,6 +5,7 @@ import { updateSweepInTriggerAction } from "@/lib/actions/sweep-in-trigger-actio
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
+  canEditSweepInTriggerRecord,
   canEditSweepInTriggers,
   getSweepInSelectableUsers,
   getVisibleSweepInTriggerWhere,
@@ -57,6 +58,10 @@ export default async function EditSweepInTriggerPage({
   });
 
   if (!trigger) redirect("/sweep-in-triggers?error=Sweep-in+trigger+was+not+found.");
+
+  if (!canEditSweepInTriggerRecord(currentUser, trigger.createdById)) {
+    redirect("/sweep-in-triggers?error=You+can+edit+only+sweep-in+triggers+created+by+you.");
+  }
 
   const selectedUserIds = trigger.users.map((row) => row.userId);
   const users = await getSweepInSelectableUsers(currentUser, selectedUserIds);

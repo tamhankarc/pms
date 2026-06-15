@@ -55,6 +55,7 @@ import {
 } from "@/lib/ems-queries";
 import {
   formatDateInIst,
+  formatMarkOutTimeInIst,
   formatTimeInIst,
   getInitialCalendarStartMonth,
   getIstDateKey,
@@ -624,8 +625,10 @@ export default async function DashboardPage({
             <StatCard
               label="Today mark-out"
               value={
-                formatTimeInIst(
+                formatMarkOutTimeInIst(
                   employeeSnapshot.attendanceStatus.markOut?.markedAt ?? null,
+                  todayKey,
+                  shift,
                 ) || "Not marked"
               }
               icon={<TimerReset className="h-5 w-5" />}
@@ -650,8 +653,10 @@ export default async function DashboardPage({
             markInAt={formatTimeInIst(
               employeeSnapshot.attendanceStatus.markIn?.markedAt ?? null,
             )}
-            markOutAt={formatTimeInIst(
+            markOutAt={formatMarkOutTimeInIst(
               employeeSnapshot.attendanceStatus.markOut?.markedAt ?? null,
+              todayKey,
+              shift,
             )}
             city={
               employeeSnapshot.attendanceStatus.markOut?.city ??
@@ -871,7 +876,7 @@ export default async function DashboardPage({
                       {formatTimeInIst(row.markIn?.markedAt ?? null)}
                     </td>
                     <td className="table-cell">
-                      {formatTimeInIst(row.markOut?.markedAt ?? null)}
+                      {formatMarkOutTimeInIst(row.markOut?.markedAt ?? null, attendanceDate, row.shift)}
                     </td>
                     <td className="table-cell">{row.city || "—"}</td>
                   </tr>

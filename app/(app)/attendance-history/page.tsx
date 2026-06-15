@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { PlusCircle } from "lucide-react";
+import { Download, PlusCircle } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -11,12 +11,11 @@ import type { Prisma } from "@prisma/client";
 import {
   canAddManualAttendance,
   canManageManualAttendance,
-  isAdminProjectManager,
-  isProjectManager,
-  isRoleScopedManager,
+  canViewAttendanceHistory,
 } from "@/lib/permissions";
 import {
   formatDateInIst,
+  formatMarkOutTimeInIst,
   formatTimeInIst,
   getDayBoundsUtcFromIstDateKey,
   getIstDateKey,
@@ -52,7 +51,8 @@ export default async function AttendanceHistoryPage({
   }>;
 }) {
   const currentUser = await requireUser();
-  if (!canManageManualAttendance(currentUser)) redirect("/dashboard");
+  if (!canViewAttendanceHistory(currentUser)) redirect("/dashboard");
+  const canSelectAttendanceUser = canManageManualAttendance(currentUser);
   const canAddManualLog = canAddManualAttendance(currentUser);
 
   const params = (await searchParams) ?? {};
@@ -88,98 +88,21 @@ const userSelect = {
   functionalRole: true,
 };
 
-const scopedUserOptions = canAddManualLog || isAdminProjectManager(currentUser) || isProjectManager(currentUser)
+const scopedUserOptions = canSelectAttendanceUser
   ? await db.user.findMany({
       where: attendanceEligibleUserWhere,
       select: userSelect,
       orderBy: [{ fullName: "asc" }],
     })
-  : await db.employeeTeamLead
-      .findMany({
-        where: {
-          teamLeadId: currentUser.id,
-          employee: attendanceEligibleUserWhere,
-        },
-        include: {
-          employee: {
-            select: userSelect,
-          },
-        },
-        orderBy: {
-          employee: {
-            fullName: "asc",
-          },
-        },
-      })
-      .then(async (assignments) => {
-        const assignedUsers = assignments.map(
-          (assignment) => assignment.employee,
-        );
-
-        const selfUser = await db.user.findFirst({
-          where: {
-            AND: [
-              { id: currentUser.id },
-              attendanceEligibleUserWhere,
-            ],
-          },
-          select: userSelect,
-        });
-
-        const currentUserFunctionalRole =
-          isRoleScopedManager(currentUser) &&
-          currentUser.functionalRole &&
-          currentUser.functionalRole !== "UNASSIGNED"
-            ? currentUser.functionalRole
-            : null;
-
-        const sameRoleTeamLeads = currentUserFunctionalRole
-          ? await db.user.findMany({
-              where: {
-                AND: [
-                  attendanceEligibleUserWhere,
-                  {
-                    userType: "TEAM_LEAD",
-                    functionalRole: currentUserFunctionalRole,
-                  },
-                ],
-              },
-              select: userSelect,
-              orderBy: [{ fullName: "asc" }],
-            })
-          : [];
-
-        const usersById = new Map<
-          string,
-          | (typeof assignedUsers)[number]
-          | (typeof sameRoleTeamLeads)[number]
-        >();
-
-        if (selfUser) {
-          usersById.set(selfUser.id, selfUser);
-        }
-
-        for (const user of assignedUsers) {
-          usersById.set(user.id, user);
-        }
-
-        for (const user of sameRoleTeamLeads) {
-          usersById.set(user.id, user);
-        }
-
-        return Array.from(usersById.values()).sort((a, b) =>
-          a.fullName.localeCompare(b.fullName),
-        );
-      });
+  : [];
 
 const allowedUserIds = new Set(scopedUserOptions.map((user) => user.id));
 
-const selectedUserId =
-  params.userId && allowedUserIds.has(params.userId)
+const selectedUserId = canSelectAttendanceUser
+  ? params.userId && allowedUserIds.has(params.userId)
     ? params.userId
-    : canAddManualLog || isAdminProjectManager(currentUser) || isProjectManager(currentUser)
-      ? ""
-      : scopedUserOptions[0]?.id ?? "";
+    : ""
+  : currentUser.id;
 
 const selectedUser = selectedUserId
   ? await db.user.findFirst({
@@ -189,11 +112,13 @@ const selectedUser = selectedUserId
             id: selectedUserId,
             isActive: true,
           },
-          {
-            id: {
-              in: Array.from(allowedUserIds),
-            },
-          },
+          canSelectAttendanceUser
+            ? {
+                id: {
+                  in: Array.from(allowedUserIds),
+                },
+              }
+            : { id: currentUser.id },
         ],
       },
       select: {
@@ -243,7 +168,7 @@ const selectedUser = selectedUserId
     <div className="space-y-8">
       <PageHeader
         title="Attendance History"
-        description="Review selected user attendance logs and manually add one Mark-In or Mark-Out entry when correction is required."
+        description="Review attendance logs. Users with attendance-history access can choose a user; all other users can view their own history only."
       />
 
       {params.success ? (
@@ -259,28 +184,41 @@ const selectedUser = selectedUserId
       ) : null}
 
       <section className="card p-6">
-        <h2 className="section-title">Select user and date range</h2>
-        <p className="section-subtitle">Only active attendance-eligible users are listed.</p>
+        <h2 className="section-title">{canSelectAttendanceUser ? "Select user and date range" : "Select date range"}</h2>
+        <p className="section-subtitle">
+          {canSelectAttendanceUser
+            ? "Only active attendance-eligible users are listed."
+            : "You can view your own attendance history for the selected range."}
+        </p>
 
-        <form data-auto-submit-filter="true" className="mt-5 grid gap-4 md:grid-cols-[minmax(260px,1.4fr)_repeat(2,minmax(150px,0.6fr))_auto] md:items-end">
-          <div>
-            <label htmlFor="attendance-user" className="form-label">
-              User
-            </label>
-            <SearchableCombobox
-              id="attendance-user"
-              name="userId"
-              options={scopedUserOptions.map((option) => ({
-                value: option.id,
-                label: `${option.fullName}${option.employeeCode ? ` (${option.employeeCode})` : ""}`,
-                keywords: `${option.username} ${option.email} ${option.employeeCode ?? ""} ${option.userType} ${option.functionalRole ?? ""}`,
-              }))}
-              defaultValue={selectedUserId}
-              placeholder="Search and select user"
-              searchPlaceholder="Search by name, username, email, employee code"
-              emptyLabel="No matching users found."
-            />
-          </div>
+        <form
+          data-auto-submit-filter="true"
+          className={
+            canSelectAttendanceUser
+              ? "mt-5 grid gap-4 md:grid-cols-[minmax(260px,1.4fr)_repeat(2,minmax(150px,0.6fr))_auto] md:items-end"
+              : "mt-5 grid gap-4 md:grid-cols-[repeat(2,minmax(150px,0.6fr))_auto] md:items-end"
+          }
+        >
+          {canSelectAttendanceUser ? (
+            <div>
+              <label htmlFor="attendance-user" className="form-label">
+                User
+              </label>
+              <SearchableCombobox
+                id="attendance-user"
+                name="userId"
+                options={scopedUserOptions.map((option) => ({
+                  value: option.id,
+                  label: `${option.fullName}${option.employeeCode ? ` (${option.employeeCode})` : ""}`,
+                  keywords: `${option.username} ${option.email} ${option.employeeCode ?? ""} ${option.userType} ${option.functionalRole ?? ""}`,
+                }))}
+                defaultValue={selectedUserId}
+                placeholder="Search and select user"
+                searchPlaceholder="Search by name, username, email, employee code"
+                emptyLabel="No matching users found."
+              />
+            </div>
+          ) : null}
 
           <div>
             <label htmlFor="fromDate" className="form-label">
@@ -312,11 +250,37 @@ const selectedUser = selectedUserId
                 : "Select a user to view attendance logs."}
             </p>
           </div>
-          {selectedUser ? (
-            <span className="inline-flex w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-              Current shift: {getShiftLabel(currentShift)}
-            </span>
-          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {selectedUser ? (
+              <>
+                <span className="inline-flex w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                  Current shift: {getShiftLabel(currentShift)}
+                </span>
+                <Link
+                  className="btn-secondary inline-flex items-center gap-2 whitespace-nowrap"
+                  href={`/attendance-history/export?${new URLSearchParams({
+                    ...(canSelectAttendanceUser && selectedUserId ? { userId: selectedUserId } : {}),
+                    fromDate,
+                    toDate,
+                    format: "xlsx",
+                  }).toString()}`}
+                >
+                  <Download className="h-4 w-4" /> Export Excel (xlsx)
+                </Link>
+                <Link
+                  className="btn-secondary inline-flex items-center gap-2 whitespace-nowrap"
+                  href={`/attendance-history/export?${new URLSearchParams({
+                    ...(canSelectAttendanceUser && selectedUserId ? { userId: selectedUserId } : {}),
+                    fromDate,
+                    toDate,
+                    format: "pdf",
+                  }).toString()}`}
+                >
+                  <Download className="h-4 w-4" /> Export PDF
+                </Link>
+              </>
+            ) : null}
+          </div>
         </div>
 
         <div className="mt-5 overflow-x-auto">
@@ -344,7 +308,9 @@ const selectedUser = selectedUserId
                     </span>
                   </td>
                   <td className="table-cell">
-                    {formatDateInIst(log.markedAt)} · {formatTimeInIst(log.markedAt)}
+                    {formatDateInIst(log.markedAt)} · {log.type === "MARK_OUT"
+                      ? formatMarkOutTimeInIst(log.markedAt, log.attendanceDate, getShiftForLog(log.attendanceDate))
+                      : formatTimeInIst(log.markedAt)}
                   </td>
                   <td className="table-cell">
                     {[log.city]
@@ -398,7 +364,11 @@ const selectedUser = selectedUserId
           totalPages={paginatedLogs.totalPages}
           totalItems={paginatedLogs.totalItems}
           pageSize={paginatedLogs.pageSize}
-          searchParams={{ userId: selectedUserId || undefined, fromDate, toDate }}
+          searchParams={{
+            ...(canSelectAttendanceUser ? { userId: selectedUserId || undefined } : {}),
+            fromDate,
+            toDate,
+          }}
         />
       </section>
 
