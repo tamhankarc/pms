@@ -131,7 +131,7 @@ export default async function SweepInTriggersPage({
                         Edit
                       </Link>
                     ) : (
-                      <span className="text-sm text-slate-400">—</span>
+                      <span className="text-sm text-slate-400">Â—</span>
                     )}
                   </td>
                 ) : null}
