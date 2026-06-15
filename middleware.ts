@@ -9,6 +9,7 @@ const EMPLOYEE_ALLOWED_PATHS = [
   "/estimates",
   "/leave-requests",
   "/leave-approvals",
+  "/attendance-history",
   "/profile",
   "/change-password",
 ];
@@ -136,6 +137,8 @@ const MENU_ROUTE_PREFIXES: Record<string, string> = {
   "leave-requests": "/leave-requests",
   "leave-approvals": "/leave-approvals",
   "leave-admin": "/leave-admin",
+  "attendance-history": "/attendance-history",
+  "sweep-in-triggers": "/sweep-in-triggers",
   announcements: "/announcements",
   profile: "/profile",
   "billing-reports": "/billing-reports",

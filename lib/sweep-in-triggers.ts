@@ -162,7 +162,7 @@ export async function getSweepInSelectableUsers(
 }
 
 export function canSeeAllSweepInTriggers(user: SessionUser) {
-  return user.userType === "HR" || (isAdmin(user) && user.functionalRole === "OTHER");
+  return canViewSweepInTriggers(user);
 }
 
 export async function getVisibleSweepInTriggerWhere(
@@ -170,17 +170,7 @@ export async function getVisibleSweepInTriggerWhere(
 ): Promise<Prisma.SweepInTriggerWhereInput> {
   if (canSeeAllSweepInTriggers(user)) return {};
 
-  const selectableUsers = await getSweepInSelectableUsers(user);
-  const selectableUserIds = selectableUsers.map((option) => option.id);
-
-  return {
-    OR: [
-      { createdById: user.id },
-      selectableUserIds.length
-        ? { users: { some: { userId: { in: selectableUserIds } } } }
-        : { id: "__none__" },
-    ],
-  };
+  return { id: "__none__" };
 }
 
 export async function getSweepInMarkInOverride(userId: string, attendanceDate: Date) {
