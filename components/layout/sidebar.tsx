@@ -185,6 +185,7 @@ const teamLeadItems: SidebarNavItem[] = getItemsByKeys([
   "user-assignments",
   "time-entries",
   "estimates",
+  "attendance-history",
   "profile",
   "change-password",
 ]);
@@ -193,6 +194,7 @@ const employeeItems: SidebarNavItem[] = getItemsByKeys([
   "dashboard",
   "time-entries",
   "estimates",
+  "attendance-history",
   "profile",
   "change-password",
 ]);
@@ -213,12 +215,14 @@ const operationsItems: SidebarNavItem[] = getItemsByKeys([
   "user-assignments",
   "contact-persons",
   "purchase-orders",
+  "attendance-history",
   "profile",
   "change-password",
 ]);
 
 const accountsItems: SidebarNavItem[] = getItemsByKeys([
   "billing-reports",
+  "attendance-history",
   "change-password",
 ]);
 const accountsBillingItems = accountsItems;
