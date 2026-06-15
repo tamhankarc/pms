@@ -297,7 +297,8 @@ export function canViewSweepInTriggers(user: UserLike) {
     isRoleScopedManager(user) ||
     isProjectManager(user) ||
     getUserType(user) === "HR" ||
-    (isAdmin(user) && getFunctionalRole(user) === "OTHER")
+    (isAdmin(user) && getFunctionalRole(user) === "OTHER") ||
+    (isAdmin(user) && getFunctionalRole(user) === "PROJECT_MANAGER")
   );
 }
 
