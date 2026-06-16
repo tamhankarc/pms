@@ -100,6 +100,8 @@ export function TimeEntryEditForm({
   languages,
   projects,
   subProjects,
+  currentUserId,
+  canCurrentUserBypassProjectAssignment = false,
   allowUnassignedSubProjects = false,
 }: {
   entry: {
@@ -132,6 +134,8 @@ export function TimeEntryEditForm({
   languages: LanguageOption[];
   projects: TimeEntryProjectOption[];
   subProjects: TimeEntrySubProjectOption[];
+  currentUserId?: string;
+  canCurrentUserBypassProjectAssignment?: boolean;
   allowUnassignedSubProjects?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(
@@ -165,10 +169,12 @@ export function TimeEntryEditForm({
     [projects, selectedClientId],
   );
 
-  const bypassAssignmentForEntryEmployee =
+  const bypassAssignmentForEntryEmployee = Boolean(
     allowUnassignedSubProjects &&
-    (entry.employeeUserType === "MANAGER" ||
-      entry.employeeUserType === "TEAM_LEAD");
+    canCurrentUserBypassProjectAssignment &&
+    currentUserId &&
+    entry.employeeId === currentUserId,
+  );
 
   const selectedProjectOption = projects.find(
     (project) => project.id === selectedProjectId,

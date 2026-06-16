@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
 import {
   canFullyModerateProject,
+  canLogOwnTimeWithoutProjectAssignment,
   isManager,
   isRoleScopedManager,
 } from "@/lib/permissions";
@@ -237,19 +238,16 @@ async function validateSubProjectUsage({
   projectId,
   subProjectId,
   employeeId,
+  requireAssignment,
 }: {
   projectId: string;
   subProjectId?: string;
   employeeId: string;
+  requireAssignment?: boolean;
 }) {
   if (!subProjectId) return { valid: true as const };
 
-  const employee = await db.user.findUnique({
-    where: { id: employeeId },
-    select: { userType: true },
-  });
-
-  const requiresAssignment = employee?.userType === "EMPLOYEE";
+  const requiresAssignment = requireAssignment ?? true;
 
   const hasProjectAssignment = requiresAssignment
     ? Boolean(
@@ -286,36 +284,32 @@ async function validateSubProjectUsage({
       };
 }
 
-async function employeeCanUseProject(projectId: string, employeeId: string) {
-  const employee = await db.user.findUnique({
-    where: { id: employeeId },
-    select: { userType: true },
-  });
-
-  if (!employee) return false;
-
+async function userIsAssignedToProjectOrSubProject(
+  projectId: string,
+  userId: string,
+) {
   const project = await db.project.findFirst({
     where: {
       id: projectId,
       isActive: true,
-      status: { in: ["ACTIVE"] },
-      ...(employee.userType === "EMPLOYEE"
-        ? {
-            OR: [
-              { assignedUsers: { some: { userId: employeeId } } },
-              {
-                subProjects: {
-                  some: { assignments: { some: { userId: employeeId } } },
-                },
-              },
-            ],
-          }
-        : {}),
+      status: "ACTIVE",
+      OR: [
+        { assignedUsers: { some: { userId } } },
+        {
+          subProjects: {
+            some: { assignments: { some: { userId } } },
+          },
+        },
+      ],
     },
     select: { id: true },
   });
 
   return Boolean(project);
+}
+
+async function employeeCanUseProject(projectId: string, employeeId: string) {
+  return userIsAssignedToProjectOrSubProject(projectId, employeeId);
 }
 
 async function validateClientFieldRequirements(
@@ -641,16 +635,23 @@ export async function createTimeEntryAction(
       };
     }
 
-    const employeeCanUseSelectedProject = await employeeCanUseProject(
-      parsed.data.projectId,
-      employeeId,
-    );
-    if (!employeeCanUseSelectedProject) {
-      return {
-        success: false,
-        error:
-          "Selected employee cannot use the chosen project. Please select a project assigned to that person.",
-      };
+    const isOwnTimeEntry = employeeId === user.id;
+    const canBypassOwnProjectAssignment =
+      isOwnTimeEntry && canLogOwnTimeWithoutProjectAssignment(user);
+
+    if (!canBypassOwnProjectAssignment) {
+      const employeeCanUseSelectedProject = await employeeCanUseProject(
+        parsed.data.projectId,
+        employeeId,
+      );
+      if (!employeeCanUseSelectedProject) {
+        return {
+          success: false,
+          error: isOwnTimeEntry
+            ? "You can only use projects assigned to you for this time entry."
+            : "Selected employee cannot use the chosen project. Please select a project assigned to that person.",
+        };
+      }
     }
 
     const fieldCheck = await validateClientFieldRequirements(
@@ -671,21 +672,25 @@ export async function createTimeEntryAction(
       return { success: false, error: fieldCheck.error };
     }
 
-    const canUseProject = await userCanLogAgainstProject(
-      user,
-      parsed.data.projectId,
-    );
-    if (!canUseProject && !canFullyModerateProject(user)) {
-      return {
-        success: false,
-        error: "You can only use projects assigned to you for this time entry.",
-      };
+    if (isOwnTimeEntry && !canBypassOwnProjectAssignment) {
+      const canUseProject = await userCanLogAgainstProject(
+        user,
+        parsed.data.projectId,
+      );
+      if (!canUseProject && !canFullyModerateProject(user)) {
+        return {
+          success: false,
+          error:
+            "You can only use projects assigned to you for this time entry.",
+        };
+      }
     }
 
     const subProjectCheck = await validateSubProjectUsage({
       projectId: parsed.data.projectId,
       subProjectId: parsed.data.subProjectId,
       employeeId,
+      requireAssignment: !canBypassOwnProjectAssignment,
     });
     if (!subProjectCheck.valid) {
       return { success: false, error: subProjectCheck.error };
@@ -836,16 +841,23 @@ export async function updateTimeEntryAction(
       };
     }
 
-    const employeeCanUseSelectedProject = await employeeCanUseProject(
-      parsed.data.projectId,
-      entry.employeeId,
-    );
-    if (!employeeCanUseSelectedProject) {
-      return {
-        success: false,
-        error:
-          "Selected employee cannot use the chosen project. Please select a project assigned to that person.",
-      };
+    const isOwnTimeEntry = entry.employeeId === user.id;
+    const canBypassOwnProjectAssignment =
+      isOwnTimeEntry && canLogOwnTimeWithoutProjectAssignment(user);
+
+    if (!canBypassOwnProjectAssignment) {
+      const employeeCanUseSelectedProject = await employeeCanUseProject(
+        parsed.data.projectId,
+        entry.employeeId,
+      );
+      if (!employeeCanUseSelectedProject) {
+        return {
+          success: false,
+          error: isOwnTimeEntry
+            ? "You can only use projects assigned to you for this time entry."
+            : "Selected employee cannot use the chosen project. Please select a project assigned to that person.",
+        };
+      }
     }
 
     const fieldCheck = await validateClientFieldRequirements(
@@ -866,21 +878,25 @@ export async function updateTimeEntryAction(
       return { success: false, error: fieldCheck.error };
     }
 
-    const canUseProject = await userCanLogAgainstProject(
-      user,
-      parsed.data.projectId,
-    );
-    if (!canUseProject && !canFullyModerateProject(user)) {
-      return {
-        success: false,
-        error: "You can only use projects assigned to you for this time entry.",
-      };
+    if (isOwnTimeEntry && !canBypassOwnProjectAssignment) {
+      const canUseProject = await userCanLogAgainstProject(
+        user,
+        parsed.data.projectId,
+      );
+      if (!canUseProject && !canFullyModerateProject(user)) {
+        return {
+          success: false,
+          error:
+            "You can only use projects assigned to you for this time entry.",
+        };
+      }
     }
 
     const subProjectCheck = await validateSubProjectUsage({
       projectId: parsed.data.projectId,
       subProjectId: parsed.data.subProjectId,
       employeeId: entry.employeeId,
+      requireAssignment: !canBypassOwnProjectAssignment,
     });
     if (!subProjectCheck.valid) {
       return { success: false, error: subProjectCheck.error };

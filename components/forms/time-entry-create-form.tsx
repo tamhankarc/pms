@@ -106,6 +106,8 @@ export function TimeEntryCreateForm({
   languages,
   assignableEmployees = [],
   defaultEmployeeId,
+  currentUserId,
+  canCurrentUserBypassProjectAssignment = false,
   allowUnassignedSubProjects = false,
 }: {
   projects: TimeEntryProjectOption[];
@@ -119,6 +121,8 @@ export function TimeEntryCreateForm({
   languages: LanguageOption[];
   assignableEmployees?: TimeEntryEmployeeOption[];
   defaultEmployeeId?: string;
+  currentUserId?: string;
+  canCurrentUserBypassProjectAssignment?: boolean;
   allowUnassignedSubProjects?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(
@@ -151,13 +155,12 @@ export function TimeEntryCreateForm({
   const [selectedSubProjectId, setSelectedSubProjectId] = useState("");
   const [selectedMovieId, setSelectedMovieId] = useState("");
 
-  const selectedEmployee = assignableEmployees.find(
-    (employee) => employee.id === selectedEmployeeId,
-  );
-  const bypassAssignmentForSelectedEmployee =
+  const bypassAssignmentForSelectedEmployee = Boolean(
     allowUnassignedSubProjects &&
-    (selectedEmployee?.userType === "MANAGER" ||
-      selectedEmployee?.userType === "TEAM_LEAD");
+    canCurrentUserBypassProjectAssignment &&
+    currentUserId &&
+    selectedEmployeeId === currentUserId,
+  );
 
   const filteredProjects = useMemo(
     () =>
@@ -191,7 +194,7 @@ export function TimeEntryCreateForm({
   );
   const selectedEmployeeHasProjectAssignment = Boolean(
     selectedEmployeeId &&
-      selectedProjectOption?.assignedUserIds.includes(selectedEmployeeId),
+    selectedProjectOption?.assignedUserIds.includes(selectedEmployeeId),
   );
 
   const filteredSubProjects = useMemo(
@@ -271,33 +274,33 @@ export function TimeEntryCreateForm({
   );
   const showCountryField = Boolean(
     selectedProject?.showCountriesInTimeEntries &&
-      !selectedProject?.hideCountriesInEntries &&
-      !selectedSubProject?.hideCountriesInEntries,
+    !selectedProject?.hideCountriesInEntries &&
+    !selectedSubProject?.hideCountriesInEntries,
   );
   const showTitleField = Boolean(
     selectedProject?.showMoviesInEntries &&
-      !selectedProject?.hideMoviesInEntries &&
-      !selectedSubProject?.hideMoviesInEntries,
+    !selectedProject?.hideMoviesInEntries &&
+    !selectedSubProject?.hideMoviesInEntries,
   );
   const showAssetTypeField = Boolean(
     selectedProject?.showAssetTypesInEntries &&
-      !selectedProject?.hideAssetTypesInEntries &&
-      !selectedSubProject?.hideAssetTypesInEntries,
+    !selectedProject?.hideAssetTypesInEntries &&
+    !selectedSubProject?.hideAssetTypesInEntries,
   );
   const showLensTypeField = Boolean(
     selectedProject?.showLensTypesInEntries &&
-      !selectedProject?.hideLensTypesInEntries &&
-      !selectedSubProject?.hideLensTypesInEntries,
+    !selectedProject?.hideLensTypesInEntries &&
+    !selectedSubProject?.hideLensTypesInEntries,
   );
   const showAssetNameField = Boolean(
     selectedProject?.showAssetNamesInEntries &&
-      !selectedProject?.hideAssetNamesInEntries &&
-      !selectedSubProject?.hideAssetNamesInEntries,
+    !selectedProject?.hideAssetNamesInEntries &&
+    !selectedSubProject?.hideAssetNamesInEntries,
   );
   const showNewsletterField = Boolean(
     selectedProject?.showNewslettersInEntries &&
-      !selectedProject?.hideNewslettersInEntries &&
-      !selectedSubProject?.hideNewslettersInEntries,
+    !selectedProject?.hideNewslettersInEntries &&
+    !selectedSubProject?.hideNewslettersInEntries,
   );
   const showLanguageField = Boolean(selectedProject?.showLanguagesInEntries);
   const countryRequired = showCountryField;

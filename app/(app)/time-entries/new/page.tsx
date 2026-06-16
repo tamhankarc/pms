@@ -6,10 +6,11 @@ import { db } from "@/lib/db";
 import { getVisibleProjects } from "@/lib/queries";
 import { TimeEntryCreateForm } from "@/components/forms/time-entry-create-form";
 import {
+  canAccessMenuItem,
   canFullyModerateProject,
+  canLogOwnTimeWithoutProjectAssignment,
   isManager,
   isRoleScopedManager,
-  canAccessMenuItem,
 } from "@/lib/permissions";
 
 export default async function NewTimeEntryPage() {
@@ -250,6 +251,10 @@ export default async function NewTimeEntryPage() {
           }))}
           assignableEmployees={dedupedAssignableEmployees}
           defaultEmployeeId={defaultEmployeeId}
+          currentUserId={user.id}
+          canCurrentUserBypassProjectAssignment={canLogOwnTimeWithoutProjectAssignment(
+            user,
+          )}
           allowUnassignedSubProjects
         />
       </div>

@@ -110,6 +110,10 @@ export function isPmLike(user: UserLike) {
   );
 }
 
+export function canLogOwnTimeWithoutProjectAssignment(user: UserLike) {
+  return isTeamLead(user) || isRoleScopedManager(user) || isPmLike(user);
+}
+
 export function canComprehensivelyModerateProject(user: UserLike) {
   return isAdmin(user) || isManager(user) || isHR(user);
 }
@@ -154,10 +158,7 @@ export function canDeleteProjects(user: UserLike) {
   return isAdmin(user) && getFunctionalRole(user) === "OTHER";
 }
 export function canAddManualAttendance(user: UserLike) {
-  return (
-    (isAdmin(user) && getFunctionalRole(user) === "OTHER") ||
-    isHR(user)
-  );
+  return (isAdmin(user) && getFunctionalRole(user) === "OTHER") || isHR(user);
 }
 export function canSeeAllProjects(user: UserLike) {
   return (
@@ -290,7 +291,6 @@ export function canManageManualAttendance(user: UserLike) {
 export function canViewAttendanceHistory(user: UserLike) {
   return Boolean(getUserType(user));
 }
-
 
 export function canViewSweepInTriggers(user: UserLike) {
   return (

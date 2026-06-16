@@ -5,9 +5,10 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getVisibleProjects } from "@/lib/queries";
 import {
-  canFullyModerateProject,
-  isManager,
   canAccessMenuItem,
+  canFullyModerateProject,
+  canLogOwnTimeWithoutProjectAssignment,
+  isManager,
 } from "@/lib/permissions";
 import { TimeEntryEditForm } from "@/components/forms/time-entry-edit-form";
 
@@ -235,6 +236,10 @@ export default async function EditTimeEntryPage({
                 (assignment) => assignment.userId,
               ),
             }))}
+            currentUserId={user.id}
+            canCurrentUserBypassProjectAssignment={canLogOwnTimeWithoutProjectAssignment(
+              user,
+            )}
             subProjects={allSubProjects.map((subProject) => ({
               id: subProject.id,
               name: subProject.name,
