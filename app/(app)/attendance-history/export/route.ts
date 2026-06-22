@@ -57,10 +57,6 @@ function buildFileName(
   return `attendance_history_${sanitizeFileSegment(userName)}_${fromDate}_to_${toDate}_${getTimestamp()}.${extension}`;
 }
 
-function getShiftLabel(value?: string | null) {
-  return value === "NIGHT" ? "Night" : "Day";
-}
-
 function getActionLabel(value: string) {
   return value === "MARK_OUT" ? "Mark-Out" : "Mark-In";
 }
@@ -97,39 +93,53 @@ function formatCoordinates(latitude: unknown, longitude: unknown) {
     : "—";
 }
 
-function getGoogleLocationStatus(log: {
-  googleLatitude: unknown;
-  googleLongitude: unknown;
-  googleError: string | null;
+function getAddressDetails({
+  city,
+  district,
+  town,
+  village,
+  state,
+  address,
+}: {
+  city?: string | null;
+  district?: string | null;
+  town?: string | null;
+  village?: string | null;
+  state?: string | null;
+  address?: string | null;
 }) {
-  const coordinates = formatCoordinates(
-    log.googleLatitude,
-    log.googleLongitude,
-  );
-  if (coordinates !== "—") return coordinates;
-  return log.googleError ? `Error: ${log.googleError}` : "—";
+  return [
+    `City: ${city || "—"}`,
+    `District: ${district || "—"}`,
+    `Town: ${town || "—"}`,
+    `Village: ${village || "—"}`,
+    `State: ${state || "—"}`,
+    `Address: ${address || "—"}`,
+  ].join(" | ");
 }
 
-function getGoogleAddressDetails(log: {
-  googleCity: string | null;
-  googleDistrict: string | null;
-  googleTown: string | null;
-  googleVillage: string | null;
-  googleState: string | null;
-  googleFormattedAddress: string | null;
+function joinCoordinatesAndAddress({
+  coordinates,
+  accuracy,
+  difference,
+  error,
+  addressDetails,
+}: {
+  coordinates: string;
+  accuracy?: string;
+  difference?: string;
+  error?: string | null;
+  addressDetails: string;
 }) {
-  const details = [
-    log.googleCity ? `City: ${log.googleCity}` : null,
-    log.googleDistrict ? `District: ${log.googleDistrict}` : null,
-    log.googleTown ? `Town: ${log.googleTown}` : null,
-    log.googleVillage ? `Village: ${log.googleVillage}` : null,
-    log.googleState ? `State: ${log.googleState}` : null,
-    log.googleFormattedAddress
-      ? `Address: ${log.googleFormattedAddress}`
-      : null,
-  ].filter((detail): detail is string => Boolean(detail));
-
-  return details.length ? details.join(" | ") : "—";
+  return [
+    `Co-Ordinates: ${coordinates}`,
+    accuracy && accuracy !== "—" ? `Accuracy: ${accuracy}` : null,
+    difference && difference !== "—" ? `Difference: ${difference}` : null,
+    addressDetails,
+    error ? `Note: ${error}` : null,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(" | ");
 }
 
 function escapePdfText(value: string | number) {
@@ -410,55 +420,83 @@ export async function GET(request: Request) {
   const rows: string[][] = [
     [
       "Attendance date",
-      "Shift",
       "Action",
       "Marked at",
-      "City/District",
-      "State",
       ...(canSeeLocationComparison
         ? [
-            "Browser Coordinates",
-            "Browser Accuracy",
-            "Google Coordinates",
-            "Google Accuracy",
-            "Google City",
-            "Google District",
-            "Google Town",
-            "Google Village",
-            "Google State",
-            "Google Address Details",
-            "Difference",
+            "Browser Co-Ordinates & Address",
+            "Geocoding API Co-Ordinates & Address",
+            "Geolocation API Co-Ordinates & Address",
           ]
-        : []),
+        : ["City/District", "State", "Coordinates"]),
     ],
     ...logs.map((log) => {
       const shift = getShiftForLog(log.attendanceDate);
-      return [
+      const markedAt = `${formatDateInIst(log.markedAt)} · ${
+        log.type === "MARK_OUT"
+          ? formatMarkOutTimeInIst(log.markedAt, log.attendanceDate, shift)
+          : formatTimeInIst(log.markedAt)
+      }`;
+
+      const baseColumns = [
         formatDateInIst(log.attendanceDate),
-        getShiftLabel(shift),
         getActionLabel(log.type),
-        `${formatDateInIst(log.markedAt)} · ${
-          log.type === "MARK_OUT"
-            ? formatMarkOutTimeInIst(log.markedAt, log.attendanceDate, shift)
-            : formatTimeInIst(log.markedAt)
-        }`,
-        getLocation(log),
-        log.state || "—",
-        ...(canSeeLocationComparison
-          ? [
-              formatCoordinates(log.latitude, log.longitude),
-              formatMeters(log.browserAccuracy),
-              getGoogleLocationStatus(log),
-              formatMeters(log.googleAccuracy),
-              log.googleCity || "—",
-              log.googleDistrict || "—",
-              log.googleTown || "—",
-              log.googleVillage || "—",
-              log.googleState || "—",
-              getGoogleAddressDetails(log),
-              formatMeters(log.locationDistanceMeters),
-            ]
-          : []),
+        markedAt,
+      ];
+
+      if (!canSeeLocationComparison) {
+        return [
+          ...baseColumns,
+          getLocation(log),
+          log.state || "—",
+          formatCoordinates(log.latitude, log.longitude),
+        ];
+      }
+
+      return [
+        ...baseColumns,
+        joinCoordinatesAndAddress({
+          coordinates: formatCoordinates(log.latitude, log.longitude),
+          accuracy: formatMeters(log.browserAccuracy),
+          addressDetails: getAddressDetails({
+            city: log.city,
+            district: log.stateDistrict,
+            town: log.town,
+            village: log.village,
+            state: log.state,
+            address: log.browserFormattedAddress,
+          }),
+        }),
+        joinCoordinatesAndAddress({
+          coordinates: formatCoordinates(log.googleLatitude, log.googleLongitude),
+          accuracy: formatMeters(log.googleAccuracy),
+          difference: formatMeters(log.locationDistanceMeters),
+          error: log.googleError,
+          addressDetails: getAddressDetails({
+            city: log.googleCity,
+            district: log.googleDistrict,
+            town: log.googleTown,
+            village: log.googleVillage,
+            state: log.googleState,
+            address: log.googleFormattedAddress,
+          }),
+        }),
+        joinCoordinatesAndAddress({
+          coordinates: formatCoordinates(
+            log.geolocationLatitude,
+            log.geolocationLongitude,
+          ),
+          accuracy: formatMeters(log.geolocationAccuracy),
+          error: log.geolocationError,
+          addressDetails: getAddressDetails({
+            city: log.geolocationCity,
+            district: log.geolocationDistrict,
+            town: log.geolocationTown,
+            village: log.geolocationVillage,
+            state: log.geolocationState,
+            address: log.geolocationFormattedAddress,
+          }),
+        }),
       ];
     }),
   ];

@@ -34,6 +34,34 @@ function toDate(value: FormDataEntryValue | null) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function calculateDistanceMeters(
+  latitudeA: number,
+  longitudeA: number,
+  latitudeB: number | null,
+  longitudeB: number | null,
+) {
+  if (latitudeB === null || longitudeB === null) return null;
+
+  const earthRadiusMeters = 6371000;
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const deltaLatitude = toRadians(latitudeB - latitudeA);
+  const deltaLongitude = toRadians(longitudeB - longitudeA);
+  const startLatitude = toRadians(latitudeA);
+  const endLatitude = toRadians(latitudeB);
+
+  const haversine =
+    Math.sin(deltaLatitude / 2) ** 2 +
+    Math.cos(startLatitude) *
+      Math.cos(endLatitude) *
+      Math.sin(deltaLongitude / 2) ** 2;
+
+  return (
+    2 *
+    earthRadiusMeters *
+    Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
+  );
+}
+
 function getCurrentIstYear() {
   return Number(
     new Intl.DateTimeFormat("en-CA", {
@@ -61,6 +89,14 @@ export async function markAttendanceAction(
     const longitude = toNumber(formData.get("longitude"));
     const browserAccuracy = toNumber(formData.get("browserAccuracy"));
     const browserCapturedAt = toDate(formData.get("browserCapturedAt"));
+    const geolocationLatitude = toNumber(formData.get("geolocationLatitude"));
+    const geolocationLongitude = toNumber(formData.get("geolocationLongitude"));
+    const geolocationAccuracy = toNumber(formData.get("geolocationAccuracy"));
+    const geolocationCapturedAt = toDate(formData.get("geolocationCapturedAt"));
+    const geolocationErrorFromClient =
+      typeof formData.get("geolocationError") === "string"
+        ? String(formData.get("geolocationError"))
+        : null;
     const leaveBalance = await getLeaveBalanceForUser(
       user.id,
       getCurrentIstYear(),
@@ -137,6 +173,21 @@ export async function markAttendanceAction(
       longitude,
     );
 
+    const geolocationAddressDetails =
+      geolocationLatitude !== null && geolocationLongitude !== null
+        ? await getGoogleAddressDetailsForCoordinates(
+            geolocationLatitude,
+            geolocationLongitude,
+          )
+        : null;
+
+    const locationDistanceMeters = calculateDistanceMeters(
+      latitude,
+      longitude,
+      googleAddressDetails.latitude,
+      googleAddressDetails.longitude,
+    );
+
     const sweepInMarkedAt =
       actionType === "MARK_IN"
         ? await getSweepInMarkInOverride(user.id, startUtc)
@@ -152,8 +203,9 @@ export async function markAttendanceAction(
         longitude,
         browserAccuracy,
         browserCapturedAt,
-        googleLatitude: null,
-        googleLongitude: null,
+        browserFormattedAddress: location?.formattedAddress ?? null,
+        googleLatitude: googleAddressDetails.latitude,
+        googleLongitude: googleAddressDetails.longitude,
         googleAccuracy: null,
         googleCapturedAt: googleAddressDetails.capturedAt,
         googleError: googleAddressDetails.error,
@@ -163,7 +215,22 @@ export async function markAttendanceAction(
         googleVillage: googleAddressDetails.village,
         googleState: googleAddressDetails.state,
         googleFormattedAddress: googleAddressDetails.formattedAddress,
-        locationDistanceMeters: null,
+        geolocationLatitude,
+        geolocationLongitude,
+        geolocationAccuracy,
+        geolocationCapturedAt,
+        geolocationError:
+          geolocationErrorFromClient ||
+          geolocationAddressDetails?.error ||
+          null,
+        geolocationCity: geolocationAddressDetails?.city ?? null,
+        geolocationDistrict: geolocationAddressDetails?.district ?? null,
+        geolocationTown: geolocationAddressDetails?.town ?? null,
+        geolocationVillage: geolocationAddressDetails?.village ?? null,
+        geolocationState: geolocationAddressDetails?.state ?? null,
+        geolocationFormattedAddress:
+          geolocationAddressDetails?.formattedAddress ?? null,
+        locationDistanceMeters,
         city,
         town: location?.town ?? null,
         village: location?.village ?? null,

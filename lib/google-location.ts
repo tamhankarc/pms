@@ -1,4 +1,6 @@
 type GoogleAddressDetails = {
+  latitude: number | null;
+  longitude: number | null;
   city: string | null;
   district: string | null;
   town: string | null;
@@ -14,6 +16,12 @@ type GoogleGeocodingResponse = {
   error_message?: string;
   results?: Array<{
     formatted_address?: string;
+    geometry?: {
+      location?: {
+        lat?: number;
+        lng?: number;
+      };
+    };
     address_components?: Array<{
       long_name?: string;
       types?: string[];
@@ -50,6 +58,8 @@ export async function getGoogleAddressDetailsForCoordinates(
 
   if (!apiKey) {
     return {
+      latitude: null,
+      longitude: null,
       city: null,
       district: null,
       town: null,
@@ -73,6 +83,8 @@ export async function getGoogleAddressDetailsForCoordinates(
 
     if (!response.ok) {
       return {
+        latitude: null,
+        longitude: null,
         city: null,
         district: null,
         town: null,
@@ -93,6 +105,8 @@ export async function getGoogleAddressDetailsForCoordinates(
       payload.status !== "ZERO_RESULTS"
     ) {
       return {
+        latitude: null,
+        longitude: null,
         city: null,
         district: null,
         town: null,
@@ -108,7 +122,10 @@ export async function getGoogleAddressDetailsForCoordinates(
     const components = firstResult?.address_components;
 
     if (!components?.length) {
+      const googleLocation = firstResult?.geometry?.location;
       return {
+        latitude: typeof googleLocation?.lat === "number" ? googleLocation.lat : null,
+        longitude: typeof googleLocation?.lng === "number" ? googleLocation.lng : null,
         city: null,
         district: null,
         town: null,
@@ -137,7 +154,11 @@ export async function getGoogleAddressDetailsForCoordinates(
       "administrative_area_level_1",
     ]);
 
+    const googleLocation = firstResult?.geometry?.location;
+
     return {
+      latitude: typeof googleLocation?.lat === "number" ? googleLocation.lat : null,
+      longitude: typeof googleLocation?.lng === "number" ? googleLocation.lng : null,
       city,
       district,
       town,
@@ -149,6 +170,8 @@ export async function getGoogleAddressDetailsForCoordinates(
     };
   } catch (error) {
     return {
+      latitude: null,
+      longitude: null,
       city: null,
       district: null,
       town: null,

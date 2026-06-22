@@ -4,6 +4,7 @@ export type ReverseGeocodeLocation = {
   village: string | null;
   stateDistrict: string | null;
   state: string | null;
+  formattedAddress: string | null;
 };
 
 export async function reverseGeocodeLocation(latitude: number, longitude: number): Promise<ReverseGeocodeLocation | null> {
@@ -25,6 +26,7 @@ export async function reverseGeocodeLocation(latitude: number, longitude: number
 
     if (!response.ok) return null;
     const data = (await response.json()) as {
+      display_name?: string;
       address?: {
         city?: string;
         town?: string;
@@ -41,6 +43,7 @@ export async function reverseGeocodeLocation(latitude: number, longitude: number
       village: data.address?.village ?? null,
       stateDistrict: data.address?.state_district ?? data.address?.county ?? null,
       state: data.address?.state ?? null,
+      formattedAddress: data.display_name ?? null,
     };
   } catch {
     return null;

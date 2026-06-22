@@ -65,25 +65,51 @@ function formatCoordinates(latitude: unknown, longitude: unknown) {
     : null;
 }
 
-function formatGoogleAddressDetails(log: {
-  googleCity: string | null;
-  googleDistrict: string | null;
-  googleTown: string | null;
-  googleVillage: string | null;
-  googleState: string | null;
-  googleFormattedAddress: string | null;
+
+function formatAddressLabel(value: string | null | undefined) {
+  return value?.trim() || "—";
+}
+
+function AddressDetailsBlock({
+  title,
+  coordinates,
+  accuracy,
+  distance,
+  error,
+  city,
+  district,
+  town,
+  village,
+  state,
+  address,
+}: {
+  title: string;
+  coordinates: string | null;
+  accuracy?: string | null;
+  distance?: string | null;
+  error?: string | null;
+  city?: string | null;
+  district?: string | null;
+  town?: string | null;
+  village?: string | null;
+  state?: string | null;
+  address?: string | null;
 }) {
-  const details = [
-    log.googleCity ? `City: ${log.googleCity}` : null,
-    log.googleDistrict ? `District: ${log.googleDistrict}` : null,
-    log.googleTown ? `Town: ${log.googleTown}` : null,
-    log.googleVillage ? `Village: ${log.googleVillage}` : null,
-    log.googleState ? `State: ${log.googleState}` : null,
-  ].filter((detail): detail is string => Boolean(detail));
-
-  if (details.length === 0 && !log.googleFormattedAddress) return null;
-
-  return { details, formattedAddress: log.googleFormattedAddress };
+  return (
+    <div className="min-w-72 space-y-1 text-sm text-slate-700">
+      <div className="font-semibold text-slate-800">{title}</div>
+      <div>Co-Ordinates: {coordinates ?? "—"}</div>
+      {accuracy ? <div>Accuracy: {accuracy}</div> : null}
+      {distance ? <div>Difference: {distance}</div> : null}
+      <div>City: {formatAddressLabel(city)}</div>
+      <div>District: {formatAddressLabel(district)}</div>
+      <div>Town: {formatAddressLabel(town)}</div>
+      <div>Village: {formatAddressLabel(village)}</div>
+      <div>State: {formatAddressLabel(state)}</div>
+      <div>Address: {formatAddressLabel(address)}</div>
+      {error ? <div className="text-xs text-amber-700">Note: {error}</div> : null}
+    </div>
+  );
 }
 
 export default async function AttendanceHistoryPage({
@@ -448,168 +474,146 @@ export default async function AttendanceHistoryPage({
             <thead className="table-head">
               <tr>
                 <th className="table-cell">Attendance date</th>
-                <th className="table-cell">Shift</th>
                 <th className="table-cell">Action</th>
                 <th className="table-cell">Marked at</th>
-                <th className="table-cell">City/District</th>
-                <th className="table-cell">State</th>
                 {canSeeLocationComparison ? (
-                  <th className="table-cell">Browser Coordinates</th>
-                ) : null}
-                {canSeeLocationComparison ? (
-                  <th className="table-cell">Location Comparison</th>
-                ) : null}
+                  <>
+                    <th className="table-cell">Browser Co-Ordinates & Address</th>
+                    <th className="table-cell">Geocoding API Co-Ordinates & Address</th>
+                    <th className="table-cell">Geolocation API Co-Ordinates & Address</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="table-cell">City/District</th>
+                    <th className="table-cell">State</th>
+                    <th className="table-cell">Coordinates</th>
+                  </>
+                )}
                 {canAddManualLog ? (
                   <th className="table-cell text-right">Edit</th>
                 ) : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {paginatedLogs.items.map((log) => (
-                <tr key={log.id}>
-                  <td className="table-cell">
-                    {formatDateInIst(log.attendanceDate)}
-                  </td>
-                  <td className="table-cell">
-                    {getShiftLabel(getShiftForLog(log.attendanceDate))}
-                  </td>
-                  <td className="table-cell">
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                      {getActionLabel(log.type)}
-                    </span>
-                  </td>
-                  <td className="table-cell">
-                    {formatDateInIst(log.markedAt)} ·{" "}
-                    {log.type === "MARK_OUT"
-                      ? formatMarkOutTimeInIst(
-                          log.markedAt,
-                          log.attendanceDate,
-                          getShiftForLog(log.attendanceDate),
-                        )
-                      : formatTimeInIst(log.markedAt)}
-                  </td>
-                  <td className="table-cell">
-                    {[log.city].filter(Boolean).join(", ") ||
-                      [log.town, log.village, log.stateDistrict]
-                        .filter(Boolean)
-                        .join(", ") ||
-                      "—"}
-                  </td>
-                  <td className="table-cell">
-                    {[log.state].filter(Boolean).join(", ") || "—"}
-                  </td>
-                  {canSeeLocationComparison ? (
+              {paginatedLogs.items.map((log) => {
+                const shift = getShiftForLog(log.attendanceDate);
+                const markedAt =
+                  log.type === "MARK_OUT"
+                    ? formatMarkOutTimeInIst(
+                        log.markedAt,
+                        log.attendanceDate,
+                        shift,
+                      )
+                    : formatTimeInIst(log.markedAt);
+
+                return (
+                  <tr key={log.id}>
                     <td className="table-cell">
-                      <div>
-                        {formatCoordinates(log.latitude, log.longitude) ?? "—"}
-                      </div>
-                      {formatMeters(log.browserAccuracy) ? (
-                        <div className="mt-1 text-xs text-slate-500">
-                          Accuracy: {formatMeters(log.browserAccuracy)}
-                        </div>
-                      ) : null}
+                      {formatDateInIst(log.attendanceDate)}
                     </td>
-                  ) : null}
-                  {canSeeLocationComparison ? (
-                    <td className="table-cell min-w-64 text-sm text-slate-700">
-                      {formatCoordinates(
-                        log.googleLatitude,
-                        log.googleLongitude,
-                      ) || formatGoogleAddressDetails(log) ? (
-                        <div className="space-y-1">
-                          {formatCoordinates(
-                            log.googleLatitude,
-                            log.googleLongitude,
-                          ) ? (
-                            <div>
-                              Google:{" "}
-                              {formatCoordinates(
-                                log.googleLatitude,
-                                log.googleLongitude,
-                              )}
-                            </div>
-                          ) : null}
-                          {formatMeters(log.googleAccuracy) ? (
-                            <div>
-                              Google accuracy:{" "}
-                              {formatMeters(log.googleAccuracy)}
-                            </div>
-                          ) : null}
-                          {formatGoogleAddressDetails(log) ? (
-                            <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                              <div className="font-semibold text-slate-700">
-                                Google address details
-                              </div>
-                              {formatGoogleAddressDetails(log)?.details
-                                .length ? (
-                                <div className="mt-1 space-y-0.5">
-                                  {formatGoogleAddressDetails(log)?.details.map(
-                                    (detail) => (
-                                      <div key={detail}>{detail}</div>
-                                    ),
-                                  )}
-                                </div>
-                              ) : null}
-                              {formatGoogleAddressDetails(log)
-                                ?.formattedAddress ? (
-                                <div className="mt-1">
-                                  Address:{" "}
-                                  {
-                                    formatGoogleAddressDetails(log)
-                                      ?.formattedAddress
-                                  }
-                                </div>
-                              ) : null}
-                            </div>
-                          ) : null}
-                          {formatMeters(log.locationDistanceMeters) ? (
-                            <div>
-                              Difference:{" "}
-                              {formatMeters(log.locationDistanceMeters)}
-                            </div>
-                          ) : null}
-                          {log.googleError ? (
-                            <div className="text-xs text-amber-700">
-                              Google note: {log.googleError}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : log.googleError ? (
-                        <div className="text-xs text-amber-700">
-                          Google error: {log.googleError}
-                        </div>
-                      ) : (
-                        "—"
-                      )}
+                    <td className="table-cell">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                        {getActionLabel(log.type)}
+                      </span>
                     </td>
-                  ) : null}
-                  {canAddManualLog ? (
-                    <td className="table-cell text-right">
-                      <Link
-                        className="btn-secondary inline-flex px-3 py-1.5 text-xs"
-                        href={`/attendance-history/${log.id}/edit?${new URLSearchParams(
-                          {
-                            userId: selectedUserId,
-                            fromDate,
-                            toDate,
-                            ...(currentPage > 1
-                              ? { page: String(currentPage) }
-                              : {}),
-                          },
-                        ).toString()}`}
-                      >
-                        Edit
-                      </Link>
+                    <td className="table-cell">
+                      {formatDateInIst(log.markedAt)} · {markedAt}
                     </td>
-                  ) : null}
-                </tr>
-              ))}
+                    {canSeeLocationComparison ? (
+                      <>
+                        <td className="table-cell align-top">
+                          <AddressDetailsBlock
+                            title="Browser"
+                            coordinates={formatCoordinates(log.latitude, log.longitude)}
+                            accuracy={formatMeters(log.browserAccuracy)}
+                            city={log.city}
+                            district={log.stateDistrict}
+                            town={log.town}
+                            village={log.village}
+                            state={log.state}
+                            address={log.browserFormattedAddress}
+                          />
+                        </td>
+                        <td className="table-cell align-top">
+                          <AddressDetailsBlock
+                            title="Geocoding API"
+                            coordinates={formatCoordinates(
+                              log.googleLatitude,
+                              log.googleLongitude,
+                            )}
+                            accuracy={formatMeters(log.googleAccuracy)}
+                            distance={formatMeters(log.locationDistanceMeters)}
+                            error={log.googleError}
+                            city={log.googleCity}
+                            district={log.googleDistrict}
+                            town={log.googleTown}
+                            village={log.googleVillage}
+                            state={log.googleState}
+                            address={log.googleFormattedAddress}
+                          />
+                        </td>
+                        <td className="table-cell align-top">
+                          <AddressDetailsBlock
+                            title="Geolocation API"
+                            coordinates={formatCoordinates(
+                              log.geolocationLatitude,
+                              log.geolocationLongitude,
+                            )}
+                            accuracy={formatMeters(log.geolocationAccuracy)}
+                            error={log.geolocationError}
+                            city={log.geolocationCity}
+                            district={log.geolocationDistrict}
+                            town={log.geolocationTown}
+                            village={log.geolocationVillage}
+                            state={log.geolocationState}
+                            address={log.geolocationFormattedAddress}
+                          />
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="table-cell">
+                          {[log.city].filter(Boolean).join(", ") ||
+                            [log.town, log.village, log.stateDistrict]
+                              .filter(Boolean)
+                              .join(", ") ||
+                            "—"}
+                        </td>
+                        <td className="table-cell">
+                          {[log.state].filter(Boolean).join(", ") || "—"}
+                        </td>
+                        <td className="table-cell">
+                          {formatCoordinates(log.latitude, log.longitude) ?? "—"}
+                        </td>
+                      </>
+                    )}
+                    {canAddManualLog ? (
+                      <td className="table-cell text-right">
+                        <Link
+                          className="btn-secondary inline-flex px-3 py-1.5 text-xs"
+                          href={`/attendance-history/${log.id}/edit?${new URLSearchParams(
+                            {
+                              userId: selectedUserId,
+                              fromDate,
+                              toDate,
+                              ...(currentPage > 1
+                                ? { page: String(currentPage) }
+                                : {}),
+                            },
+                          ).toString()}`}
+                        >
+                          Edit
+                        </Link>
+                      </td>
+                    ) : null}
+                  </tr>
+                );
+              })}
               {paginatedLogs.items.length === 0 ? (
                 <tr>
                   <td
                     colSpan={
                       6 +
-                      (canSeeLocationComparison ? 2 : 0) +
                       (canAddManualLog ? 1 : 0)
                     }
                     className="table-cell text-center text-sm text-slate-500"
@@ -621,8 +625,7 @@ export default async function AttendanceHistoryPage({
                 </tr>
               ) : null}
             </tbody>
-          </table>
-        </div>
+          </table>        </div>
 
         <PaginationControls
           basePath="/attendance-history"

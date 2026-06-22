@@ -22,6 +22,92 @@ function isDesktopLikeDevice() {
   return !(mobileOrTablet || smallTouch);
 }
 
+type GoogleGeolocationCapture = {
+  latitude: number | null;
+  longitude: number | null;
+  accuracy: number | null;
+  capturedAt: string | null;
+  error: string | null;
+};
+
+function getGoogleGeolocationApiKey() {
+  return (
+    process.env.NEXT_PUBLIC_GOOGLE_GEOLOCATION_API_KEY ||
+    process.env.NEXT_PUBLIC_GOOGLE_GEOLOCATION_BROWSER_API_KEY ||
+    ""
+  ).trim();
+}
+
+async function captureGoogleGeolocation(): Promise<GoogleGeolocationCapture> {
+  const apiKey = getGoogleGeolocationApiKey();
+  const capturedAt = new Date().toISOString();
+
+  if (!apiKey) {
+    return {
+      latitude: null,
+      longitude: null,
+      accuracy: null,
+      capturedAt,
+      error: "NEXT_PUBLIC_GOOGLE_GEOLOCATION_API_KEY is not configured.",
+    };
+  }
+
+  try {
+    const response = await fetch(
+      `https://www.googleapis.com/geolocation/v1/geolocate?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ considerIp: true }),
+      },
+    );
+
+    const payload = (await response.json().catch(() => null)) as {
+      location?: { lat?: number; lng?: number };
+      accuracy?: number;
+      error?: { message?: string; status?: string };
+    } | null;
+
+    if (!response.ok || payload?.error) {
+      return {
+        latitude: null,
+        longitude: null,
+        accuracy: null,
+        capturedAt,
+        error:
+          payload?.error?.message ||
+          payload?.error?.status ||
+          `Google Geolocation failed with status ${response.status}.`,
+      };
+    }
+
+    return {
+      latitude:
+        typeof payload?.location?.lat === "number"
+          ? payload.location.lat
+          : null,
+      longitude:
+        typeof payload?.location?.lng === "number"
+          ? payload.location.lng
+          : null,
+      accuracy: typeof payload?.accuracy === "number" ? payload.accuracy : null,
+      capturedAt,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      latitude: null,
+      longitude: null,
+      accuracy: null,
+      capturedAt,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Google Geolocation request failed.",
+    };
+  }
+}
+
 export function AttendanceActionsCard({
   canMarkIn,
   canMarkOut,
@@ -69,6 +155,7 @@ export function AttendanceActionsCard({
         setPendingAction(actionType);
         startTransition(async () => {
           try {
+            const googleGeolocation = await captureGoogleGeolocation();
             const formData = new FormData();
             formData.set("actionType", actionType);
             formData.set("latitude", String(position.coords.latitude));
@@ -81,6 +168,33 @@ export function AttendanceActionsCard({
               new Date(position.timestamp).toISOString(),
             );
 
+            if (googleGeolocation.latitude !== null) {
+              formData.set(
+                "geolocationLatitude",
+                String(googleGeolocation.latitude),
+              );
+            }
+            if (googleGeolocation.longitude !== null) {
+              formData.set(
+                "geolocationLongitude",
+                String(googleGeolocation.longitude),
+              );
+            }
+            if (googleGeolocation.accuracy !== null) {
+              formData.set(
+                "geolocationAccuracy",
+                String(googleGeolocation.accuracy),
+              );
+            }
+            if (googleGeolocation.capturedAt) {
+              formData.set(
+                "geolocationCapturedAt",
+                googleGeolocation.capturedAt,
+              );
+            }
+            if (googleGeolocation.error) {
+              formData.set("geolocationError", googleGeolocation.error);
+            }
 
             const result = await markAttendanceAction(formData);
             if (!result.success) {
