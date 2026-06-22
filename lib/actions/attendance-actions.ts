@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { clearSession, requireUserForAction } from "@/lib/auth";
 import { canMarkAttendance } from "@/lib/permissions";
 import { reverseGeocodeLocation } from "@/lib/geo";
+import { getGoogleAddressDetailsForCoordinates } from "@/lib/google-location";
 import {
   getAttendanceWorkDateKey,
   getDayBoundsUtcFromIstDateKey,
@@ -31,33 +32,6 @@ function toDate(value: FormDataEntryValue | null) {
   if (typeof value !== "string" || !value.trim()) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function getDistanceMeters(
-  firstLatitude: number,
-  firstLongitude: number,
-  secondLatitude: number,
-  secondLongitude: number,
-) {
-  const earthRadiusMeters = 6_371_000;
-  const toRadians = (value: number) => (value * Math.PI) / 180;
-  const latitudeDelta = toRadians(secondLatitude - firstLatitude);
-  const longitudeDelta = toRadians(secondLongitude - firstLongitude);
-  const firstLatitudeRadians = toRadians(firstLatitude);
-  const secondLatitudeRadians = toRadians(secondLatitude);
-
-  const haversine =
-    Math.sin(latitudeDelta / 2) ** 2 +
-    Math.cos(firstLatitudeRadians) *
-      Math.cos(secondLatitudeRadians) *
-      Math.sin(longitudeDelta / 2) ** 2;
-  const centralAngle =
-    2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
-  return Math.round(earthRadiusMeters * centralAngle * 100) / 100;
-}
-
-function getTrimmedString(value: FormDataEntryValue | null) {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function getCurrentIstYear() {
@@ -87,31 +61,6 @@ export async function markAttendanceAction(
     const longitude = toNumber(formData.get("longitude"));
     const browserAccuracy = toNumber(formData.get("browserAccuracy"));
     const browserCapturedAt = toDate(formData.get("browserCapturedAt"));
-    const googleLatitude = toNumber(formData.get("googleLatitude"));
-    const googleLongitude = toNumber(formData.get("googleLongitude"));
-    const googleAccuracy = toNumber(formData.get("googleAccuracy"));
-    const googleCapturedAt = toDate(formData.get("googleCapturedAt"));
-    const googleError = getTrimmedString(formData.get("googleError"));
-    const googleCity = getTrimmedString(formData.get("googleCity"));
-    const googleDistrict = getTrimmedString(formData.get("googleDistrict"));
-    const googleTown = getTrimmedString(formData.get("googleTown"));
-    const googleVillage = getTrimmedString(formData.get("googleVillage"));
-    const googleState = getTrimmedString(formData.get("googleState"));
-    const googleFormattedAddress = getTrimmedString(
-      formData.get("googleFormattedAddress"),
-    );
-    const locationDistanceMeters =
-      latitude !== null &&
-      longitude !== null &&
-      googleLatitude !== null &&
-      googleLongitude !== null
-        ? getDistanceMeters(
-            latitude,
-            longitude,
-            googleLatitude,
-            googleLongitude,
-          )
-        : null;
     const leaveBalance = await getLeaveBalanceForUser(
       user.id,
       getCurrentIstYear(),
@@ -183,6 +132,11 @@ export async function markAttendanceAction(
       location?.state ||
       null;
 
+    const googleAddressDetails = await getGoogleAddressDetailsForCoordinates(
+      latitude,
+      longitude,
+    );
+
     const sweepInMarkedAt =
       actionType === "MARK_IN"
         ? await getSweepInMarkInOverride(user.id, startUtc)
@@ -198,18 +152,18 @@ export async function markAttendanceAction(
         longitude,
         browserAccuracy,
         browserCapturedAt,
-        googleLatitude,
-        googleLongitude,
-        googleAccuracy,
-        googleCapturedAt,
-        googleError,
-        googleCity,
-        googleDistrict,
-        googleTown,
-        googleVillage,
-        googleState,
-        googleFormattedAddress,
-        locationDistanceMeters,
+        googleLatitude: null,
+        googleLongitude: null,
+        googleAccuracy: null,
+        googleCapturedAt: googleAddressDetails.capturedAt,
+        googleError: googleAddressDetails.error,
+        googleCity: googleAddressDetails.city,
+        googleDistrict: googleAddressDetails.district,
+        googleTown: googleAddressDetails.town,
+        googleVillage: googleAddressDetails.village,
+        googleState: googleAddressDetails.state,
+        googleFormattedAddress: googleAddressDetails.formattedAddress,
+        locationDistanceMeters: null,
         city,
         town: location?.town ?? null,
         village: location?.village ?? null,

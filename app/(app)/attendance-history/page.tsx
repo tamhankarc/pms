@@ -515,15 +515,20 @@ export default async function AttendanceHistoryPage({
                       {formatCoordinates(
                         log.googleLatitude,
                         log.googleLongitude,
-                      ) ? (
+                      ) || formatGoogleAddressDetails(log) ? (
                         <div className="space-y-1">
-                          <div>
-                            Google:{" "}
-                            {formatCoordinates(
-                              log.googleLatitude,
-                              log.googleLongitude,
-                            )}
-                          </div>
+                          {formatCoordinates(
+                            log.googleLatitude,
+                            log.googleLongitude,
+                          ) ? (
+                            <div>
+                              Google:{" "}
+                              {formatCoordinates(
+                                log.googleLatitude,
+                                log.googleLongitude,
+                              )}
+                            </div>
+                          ) : null}
                           {formatMeters(log.googleAccuracy) ? (
                             <div>
                               Google accuracy:{" "}
@@ -561,6 +566,11 @@ export default async function AttendanceHistoryPage({
                             <div>
                               Difference:{" "}
                               {formatMeters(log.locationDistanceMeters)}
+                            </div>
+                          ) : null}
+                          {log.googleError ? (
+                            <div className="text-xs text-amber-700">
+                              Google note: {log.googleError}
                             </div>
                           ) : null}
                         </div>
