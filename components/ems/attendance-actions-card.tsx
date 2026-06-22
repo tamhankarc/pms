@@ -13,6 +13,68 @@ type Props = {
   shift: "DAY" | "NIGHT";
 };
 
+type GoogleGeolocationComparison = {
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  capturedAt?: string;
+  error?: string;
+};
+
+const googleGeolocationApiKey =
+  process.env.NEXT_PUBLIC_GOOGLE_GEOLOCATION_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+
+async function getGoogleGeolocationComparison(): Promise<GoogleGeolocationComparison> {
+  if (!googleGeolocationApiKey) return {};
+
+  try {
+    const response = await fetch(
+      `https://www.googleapis.com/geolocation/v1/geolocate?key=${encodeURIComponent(googleGeolocationApiKey)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ considerIp: true }),
+      },
+    );
+
+    const payload = (await response.json().catch(() => null)) as
+      | {
+          location?: { lat?: number; lng?: number };
+          accuracy?: number;
+          error?: { message?: string };
+        }
+      | null;
+
+    if (!response.ok) {
+      return {
+        capturedAt: new Date().toISOString(),
+        error: payload?.error?.message || `Google Geolocation failed with status ${response.status}.`,
+      };
+    }
+
+    const latitude = payload?.location?.lat;
+    const longitude = payload?.location?.lng;
+    if (typeof latitude !== "number" || !Number.isFinite(latitude) || typeof longitude !== "number" || !Number.isFinite(longitude)) {
+      return {
+        capturedAt: new Date().toISOString(),
+        error: "Google Geolocation did not return coordinates.",
+      };
+    }
+
+    return {
+      latitude,
+      longitude,
+      accuracy: typeof payload?.accuracy === "number" && Number.isFinite(payload.accuracy) ? payload.accuracy : undefined,
+      capturedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    return {
+      capturedAt: new Date().toISOString(),
+      error: error instanceof Error ? error.message : "Google Geolocation request failed.",
+    };
+  }
+}
+
 function isDesktopLikeDevice() {
   if (typeof window === "undefined") return true;
   const ua = navigator.userAgent || "";
@@ -54,14 +116,34 @@ export function AttendanceActionsCard({ canMarkIn, canMarkOut, markInAt, markOut
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const formData = new FormData();
-        formData.set("actionType", actionType);
-        formData.set("latitude", String(position.coords.latitude));
-        formData.set("longitude", String(position.coords.longitude));
-
         setPendingAction(actionType);
         startTransition(async () => {
           try {
+            const googleLocation = await getGoogleGeolocationComparison();
+            const formData = new FormData();
+            formData.set("actionType", actionType);
+            formData.set("latitude", String(position.coords.latitude));
+            formData.set("longitude", String(position.coords.longitude));
+            if (Number.isFinite(position.coords.accuracy)) {
+              formData.set("browserAccuracy", String(position.coords.accuracy));
+            }
+            formData.set("browserCapturedAt", new Date(position.timestamp).toISOString());
+            if (googleLocation.latitude !== undefined) {
+              formData.set("googleLatitude", String(googleLocation.latitude));
+            }
+            if (googleLocation.longitude !== undefined) {
+              formData.set("googleLongitude", String(googleLocation.longitude));
+            }
+            if (googleLocation.accuracy !== undefined) {
+              formData.set("googleAccuracy", String(googleLocation.accuracy));
+            }
+            if (googleLocation.capturedAt) {
+              formData.set("googleCapturedAt", googleLocation.capturedAt);
+            }
+            if (googleLocation.error) {
+              formData.set("googleError", googleLocation.error);
+            }
+
             const result = await markAttendanceAction(formData);
             if (!result.success) {
               const message = result.error || "Unable to mark attendance.";

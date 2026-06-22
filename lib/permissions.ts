@@ -160,6 +160,10 @@ export function canDeleteProjects(user: UserLike) {
 export function canAddManualAttendance(user: UserLike) {
   return (isAdmin(user) && getFunctionalRole(user) === "OTHER") || isHR(user);
 }
+
+export function canViewAttendanceLocationComparison(user: UserLike) {
+  return isAdmin(user) && getFunctionalRole(user) === "OTHER";
+}
 export function canSeeAllProjects(user: UserLike) {
   return (
     isAdmin(user) ||

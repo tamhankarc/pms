@@ -6,6 +6,7 @@ import {
   canAddManualAttendance,
   canManageManualAttendance,
   canViewAttendanceHistory,
+  canViewAttendanceLocationComparison,
   isAdminProjectManager,
   isProjectManager,
   isRoleScopedManager,
@@ -47,7 +48,12 @@ function getTimestamp() {
   return `${yyyy}${mm}${dd}_${hh}${min}${ss}`;
 }
 
-function buildFileName(userName: string, fromDate: string, toDate: string, extension: "xlsx" | "pdf") {
+function buildFileName(
+  userName: string,
+  fromDate: string,
+  toDate: string,
+  extension: "xlsx" | "pdf",
+) {
   return `attendance_history_${sanitizeFileSegment(userName)}_${fromDate}_to_${toDate}_${getTimestamp()}.${extension}`;
 }
 
@@ -72,6 +78,38 @@ function getLocation(log: {
   );
 }
 
+function formatDecimalNumber(value: unknown, fractionDigits: number) {
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed.toFixed(fractionDigits) : null;
+}
+
+function formatMeters(value: unknown) {
+  const formatted = formatDecimalNumber(value, 2);
+  return formatted ? `${formatted} m` : "—";
+}
+
+function formatCoordinates(latitude: unknown, longitude: unknown) {
+  const formattedLatitude = formatDecimalNumber(latitude, 7);
+  const formattedLongitude = formatDecimalNumber(longitude, 7);
+  return formattedLatitude && formattedLongitude
+    ? `${formattedLatitude}, ${formattedLongitude}`
+    : "—";
+}
+
+function getGoogleLocationStatus(log: {
+  googleLatitude: unknown;
+  googleLongitude: unknown;
+  googleError: string | null;
+}) {
+  const coordinates = formatCoordinates(
+    log.googleLatitude,
+    log.googleLongitude,
+  );
+  if (coordinates !== "—") return coordinates;
+  return log.googleError ? `Error: ${log.googleError}` : "—";
+}
+
 function escapePdfText(value: string | number) {
   return String(value)
     .replaceAll("\\", "\\\\")
@@ -93,7 +131,10 @@ async function buildExcelBuffer(rows: string[][], title: string) {
   sheet.columns.forEach((column) => {
     let maxLength = 12;
     column.eachCell?.({ includeEmpty: true }, (cell) => {
-      const value = cell.value === null || cell.value === undefined ? "" : String(cell.value);
+      const value =
+        cell.value === null || cell.value === undefined
+          ? ""
+          : String(cell.value);
       maxLength = Math.max(maxLength, value.length + 2);
     });
     column.width = Math.min(Math.max(maxLength, 12), 45);
@@ -156,7 +197,8 @@ function buildSimplePdf(rows: string[][], title: string) {
 export async function GET(request: Request) {
   const currentUser = await getSession();
   if (!currentUser) return new Response("Unauthorized", { status: 401 });
-  if (!canViewAttendanceHistory(currentUser)) return new Response("Forbidden", { status: 403 });
+  if (!canViewAttendanceHistory(currentUser))
+    return new Response("Forbidden", { status: 403 });
 
   const { searchParams } = new URL(request.url);
   const todayKey = getIstDateKey();
@@ -168,6 +210,8 @@ export async function GET(request: Request) {
     : todayKey;
   const format = searchParams.get("format") === "pdf" ? "pdf" : "xlsx";
   const canSelectAttendanceUser = canManageManualAttendance(currentUser);
+  const canSeeLocationComparison =
+    canViewAttendanceLocationComparison(currentUser);
 
   const attendanceEligibleUserWhere: Prisma.UserWhereInput = {
     isActive: true,
@@ -187,7 +231,9 @@ export async function GET(request: Request) {
   const canAddManualLog = canAddManualAttendance(currentUser);
 
   const scopedUserOptions = canSelectAttendanceUser
-    ? canAddManualLog || isAdminProjectManager(currentUser) || isProjectManager(currentUser)
+    ? canAddManualLog ||
+      isAdminProjectManager(currentUser) ||
+      isProjectManager(currentUser)
       ? await db.user.findMany({
           where: attendanceEligibleUserWhere,
           select: { id: true },
@@ -213,7 +259,9 @@ export async function GET(request: Request) {
             },
           })
           .then(async (assignments) => {
-            const assignedUsers = assignments.map((assignment) => assignment.employee);
+            const assignedUsers = assignments.map(
+              (assignment) => assignment.employee,
+            );
 
             const selfUser = await db.user.findFirst({
               where: {
@@ -273,12 +321,15 @@ export async function GET(request: Request) {
   const selectedUserId = canSelectAttendanceUser
     ? requestedUserId && allowedUserIds.has(requestedUserId)
       ? requestedUserId
-      : canAddManualLog || isAdminProjectManager(currentUser) || isProjectManager(currentUser)
+      : canAddManualLog ||
+          isAdminProjectManager(currentUser) ||
+          isProjectManager(currentUser)
         ? ""
-        : scopedUserOptions[0]?.id ?? ""
+        : (scopedUserOptions[0]?.id ?? "")
     : currentUser.id;
 
-  if (!selectedUserId) return new Response("Select a user before exporting.", { status: 400 });
+  if (!selectedUserId)
+    return new Response("Select a user before exporting.", { status: 400 });
 
   const selectedUser = await db.user.findFirst({
     where: {
@@ -301,7 +352,10 @@ export async function GET(request: Request) {
     },
   });
 
-  if (!selectedUser) return new Response("User was not found or is outside your access scope.", { status: 404 });
+  if (!selectedUser)
+    return new Response("User was not found or is outside your access scope.", {
+      status: 404,
+    });
 
   const rangeStart = getDayBoundsUtcFromIstDateKey(fromDate).startUtc;
   const rangeEnd = getDayBoundsUtcFromIstDateKey(toDate).endUtc;
@@ -315,17 +369,40 @@ export async function GET(request: Request) {
 
   const currentYear = Number(todayKey.slice(0, 4));
   const currentShift =
-    selectedUser.leaveYearProfiles.find((profile) => profile.year === currentYear)?.shift ??
+    selectedUser.leaveYearProfiles.find(
+      (profile) => profile.year === currentYear,
+    )?.shift ??
     selectedUser.leaveYearProfiles[0]?.shift ??
     "DAY";
-  const shiftByYear = new Map(selectedUser.leaveYearProfiles.map((profile) => [profile.year, profile.shift]));
+  const shiftByYear = new Map(
+    selectedUser.leaveYearProfiles.map((profile) => [
+      profile.year,
+      profile.shift,
+    ]),
+  );
   const getShiftForLog = (date: Date) => {
     const year = Number(getIstDateKey(date).slice(0, 4));
     return shiftByYear.get(year) ?? currentShift;
   };
 
   const rows: string[][] = [
-    ["Attendance date", "Shift", "Action", "Marked at", "City/District", "State", "Coordinates"],
+    [
+      "Attendance date",
+      "Shift",
+      "Action",
+      "Marked at",
+      "City/District",
+      "State",
+      ...(canSeeLocationComparison
+        ? [
+            "Browser Coordinates",
+            "Browser Accuracy",
+            "Google Coordinates",
+            "Google Accuracy",
+            "Difference",
+          ]
+        : []),
+    ],
     ...logs.map((log) => {
       const shift = getShiftForLog(log.attendanceDate);
       return [
@@ -339,13 +416,26 @@ export async function GET(request: Request) {
         }`,
         getLocation(log),
         log.state || "—",
-        `${Number(log.latitude).toFixed(7)}, ${Number(log.longitude).toFixed(7)}`,
+        ...(canSeeLocationComparison
+          ? [
+              formatCoordinates(log.latitude, log.longitude),
+              formatMeters(log.browserAccuracy),
+              getGoogleLocationStatus(log),
+              formatMeters(log.googleAccuracy),
+              formatMeters(log.locationDistanceMeters),
+            ]
+          : []),
       ];
     }),
   ];
 
   const title = `Attendance History - ${selectedUser.fullName} - ${fromDate} to ${toDate}`;
-  const fileName = buildFileName(selectedUser.fullName, fromDate, toDate, format);
+  const fileName = buildFileName(
+    selectedUser.fullName,
+    fromDate,
+    toDate,
+    format,
+  );
 
   if (format === "pdf") {
     return new Response(buildSimplePdf(rows, title), {
@@ -359,7 +449,8 @@ export async function GET(request: Request) {
   const buffer = await buildExcelBuffer(rows, title);
   return new Response(buffer, {
     headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Type":
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${fileName}"`,
     },
   });

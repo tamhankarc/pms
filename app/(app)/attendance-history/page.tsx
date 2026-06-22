@@ -12,6 +12,7 @@ import {
   canAddManualAttendance,
   canManageManualAttendance,
   canViewAttendanceHistory,
+  canViewAttendanceLocationComparison,
   isAdminProjectManager,
   isProjectManager,
   isRoleScopedManager,
@@ -23,7 +24,11 @@ import {
   getDayBoundsUtcFromIstDateKey,
   getIstDateKey,
 } from "@/lib/ist";
-import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
+import {
+  DEFAULT_PAGE_SIZE,
+  paginateItems,
+  parsePageParam,
+} from "@/lib/pagination";
 
 function isDateKey(value?: string) {
   return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
@@ -39,6 +44,25 @@ function getShiftLabel(value?: string | null) {
 
 function getActionLabel(value: string) {
   return value === "MARK_OUT" ? "Mark-Out" : "Mark-In";
+}
+
+function formatDecimalNumber(value: unknown, fractionDigits: number) {
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed.toFixed(fractionDigits) : null;
+}
+
+function formatMeters(value: unknown) {
+  const formatted = formatDecimalNumber(value, 2);
+  return formatted ? `${formatted} m` : null;
+}
+
+function formatCoordinates(latitude: unknown, longitude: unknown) {
+  const formattedLatitude = formatDecimalNumber(latitude, 7);
+  const formattedLongitude = formatDecimalNumber(longitude, 7);
+  return formattedLatitude && formattedLongitude
+    ? `${formattedLatitude}, ${formattedLongitude}`
+    : null;
 }
 
 export default async function AttendanceHistoryPage({
@@ -57,167 +81,170 @@ export default async function AttendanceHistoryPage({
   if (!canViewAttendanceHistory(currentUser)) redirect("/dashboard");
   const canSelectAttendanceUser = canManageManualAttendance(currentUser);
   const canAddManualLog = canAddManualAttendance(currentUser);
+  const canSeeLocationComparison =
+    canViewAttendanceLocationComparison(currentUser);
 
   const params = (await searchParams) ?? {};
   const todayKey = getIstDateKey();
 
   const fromDate = isDateKey(params.fromDate)
-  ? params.fromDate!
-  : getMonthStart(todayKey);
-const toDate = isDateKey(params.toDate) ? params.toDate! : todayKey;
-const currentPage = parsePageParam(params.page);
+    ? params.fromDate!
+    : getMonthStart(todayKey);
+  const toDate = isDateKey(params.toDate) ? params.toDate! : todayKey;
+  const currentPage = parsePageParam(params.page);
 
-const attendanceEligibleUserWhere: Prisma.UserWhereInput = {
-  isActive: true,
-  OR: [
-    { userType: "EMPLOYEE" },
-    { userType: "TEAM_LEAD" },
-    {
-      userType: "MANAGER",
-      functionalRole: {
-        notIn: ["PROJECT_MANAGER", "GENERAL_MANAGER"],
-      },
-    },
-  ],
-};
-
-const userSelect = {
-  id: true,
-  fullName: true,
-  username: true,
-  email: true,
-  employeeCode: true,
-  userType: true,
-  functionalRole: true,
-};
-
-const scopedUserOptions = canSelectAttendanceUser
-  ? canAddManualLog || isAdminProjectManager(currentUser) || isProjectManager(currentUser)
-    ? await db.user.findMany({
-        where: attendanceEligibleUserWhere,
-        select: userSelect,
-        orderBy: [{ fullName: "asc" }],
-      })
-    : await db.employeeTeamLead
-        .findMany({
-          where: {
-            teamLeadId: currentUser.id,
-            employee: attendanceEligibleUserWhere,
-          },
-          include: {
-            employee: {
-              select: userSelect,
-            },
-          },
-          orderBy: {
-            employee: {
-              fullName: "asc",
-            },
-          },
-        })
-        .then(async (assignments) => {
-          const assignedUsers = assignments.map(
-            (assignment) => assignment.employee,
-          );
-
-          const selfUser = await db.user.findFirst({
-            where: {
-              AND: [
-                { id: currentUser.id },
-                attendanceEligibleUserWhere,
-              ],
-            },
-            select: userSelect,
-          });
-
-          const currentUserFunctionalRole =
-            isRoleScopedManager(currentUser) &&
-            currentUser.functionalRole &&
-            currentUser.functionalRole !== "UNASSIGNED"
-              ? currentUser.functionalRole
-              : null;
-
-          const sameRoleTeamLeads = currentUserFunctionalRole
-            ? await db.user.findMany({
-                where: {
-                  AND: [
-                    attendanceEligibleUserWhere,
-                    {
-                      userType: "TEAM_LEAD",
-                      functionalRole: currentUserFunctionalRole,
-                    },
-                  ],
-                },
-                select: userSelect,
-                orderBy: [{ fullName: "asc" }],
-              })
-            : [];
-
-          const usersById = new Map<
-            string,
-            | (typeof assignedUsers)[number]
-            | (typeof sameRoleTeamLeads)[number]
-          >();
-
-          if (selfUser) {
-            usersById.set(selfUser.id, selfUser);
-          }
-
-          for (const user of assignedUsers) {
-            usersById.set(user.id, user);
-          }
-
-          for (const user of sameRoleTeamLeads) {
-            usersById.set(user.id, user);
-          }
-
-          return Array.from(usersById.values()).sort((a, b) =>
-            a.fullName.localeCompare(b.fullName),
-          );
-        })
-  : [];
-
-const allowedUserIds = new Set(scopedUserOptions.map((user) => user.id));
-
-const selectedUserId = canSelectAttendanceUser
-  ? params.userId && allowedUserIds.has(params.userId)
-    ? params.userId
-    : canAddManualLog || isAdminProjectManager(currentUser) || isProjectManager(currentUser)
-      ? ""
-      : scopedUserOptions[0]?.id ?? ""
-  : currentUser.id;
-
-const selectedUser = selectedUserId
-  ? await db.user.findFirst({
-      where: {
-        AND: [
-          {
-            id: selectedUserId,
-            isActive: true,
-          },
-          canSelectAttendanceUser
-            ? {
-                id: {
-                  in: Array.from(allowedUserIds),
-                },
-              }
-            : { id: currentUser.id },
-        ],
-      },
-      select: {
-        id: true,
-        fullName: true,
-        username: true,
-        email: true,
-        employeeCode: true,
-        leaveYearProfiles: {
-          select: { year: true, shift: true },
-          orderBy: { year: "desc" },
+  const attendanceEligibleUserWhere: Prisma.UserWhereInput = {
+    isActive: true,
+    OR: [
+      { userType: "EMPLOYEE" },
+      { userType: "TEAM_LEAD" },
+      {
+        userType: "MANAGER",
+        functionalRole: {
+          notIn: ["PROJECT_MANAGER", "GENERAL_MANAGER"],
         },
       },
-    })
-  : null;
-  
+    ],
+  };
+
+  const userSelect = {
+    id: true,
+    fullName: true,
+    username: true,
+    email: true,
+    employeeCode: true,
+    userType: true,
+    functionalRole: true,
+  };
+
+  const scopedUserOptions = canSelectAttendanceUser
+    ? canAddManualLog ||
+      isAdminProjectManager(currentUser) ||
+      isProjectManager(currentUser)
+      ? await db.user.findMany({
+          where: attendanceEligibleUserWhere,
+          select: userSelect,
+          orderBy: [{ fullName: "asc" }],
+        })
+      : await db.employeeTeamLead
+          .findMany({
+            where: {
+              teamLeadId: currentUser.id,
+              employee: attendanceEligibleUserWhere,
+            },
+            include: {
+              employee: {
+                select: userSelect,
+              },
+            },
+            orderBy: {
+              employee: {
+                fullName: "asc",
+              },
+            },
+          })
+          .then(async (assignments) => {
+            const assignedUsers = assignments.map(
+              (assignment) => assignment.employee,
+            );
+
+            const selfUser = await db.user.findFirst({
+              where: {
+                AND: [{ id: currentUser.id }, attendanceEligibleUserWhere],
+              },
+              select: userSelect,
+            });
+
+            const currentUserFunctionalRole =
+              isRoleScopedManager(currentUser) &&
+              currentUser.functionalRole &&
+              currentUser.functionalRole !== "UNASSIGNED"
+                ? currentUser.functionalRole
+                : null;
+
+            const sameRoleTeamLeads = currentUserFunctionalRole
+              ? await db.user.findMany({
+                  where: {
+                    AND: [
+                      attendanceEligibleUserWhere,
+                      {
+                        userType: "TEAM_LEAD",
+                        functionalRole: currentUserFunctionalRole,
+                      },
+                    ],
+                  },
+                  select: userSelect,
+                  orderBy: [{ fullName: "asc" }],
+                })
+              : [];
+
+            const usersById = new Map<
+              string,
+              | (typeof assignedUsers)[number]
+              | (typeof sameRoleTeamLeads)[number]
+            >();
+
+            if (selfUser) {
+              usersById.set(selfUser.id, selfUser);
+            }
+
+            for (const user of assignedUsers) {
+              usersById.set(user.id, user);
+            }
+
+            for (const user of sameRoleTeamLeads) {
+              usersById.set(user.id, user);
+            }
+
+            return Array.from(usersById.values()).sort((a, b) =>
+              a.fullName.localeCompare(b.fullName),
+            );
+          })
+    : [];
+
+  const allowedUserIds = new Set(scopedUserOptions.map((user) => user.id));
+
+  const selectedUserId = canSelectAttendanceUser
+    ? params.userId && allowedUserIds.has(params.userId)
+      ? params.userId
+      : canAddManualLog ||
+          isAdminProjectManager(currentUser) ||
+          isProjectManager(currentUser)
+        ? ""
+        : (scopedUserOptions[0]?.id ?? "")
+    : currentUser.id;
+
+  const selectedUser = selectedUserId
+    ? await db.user.findFirst({
+        where: {
+          AND: [
+            {
+              id: selectedUserId,
+              isActive: true,
+            },
+            canSelectAttendanceUser
+              ? {
+                  id: {
+                    in: Array.from(allowedUserIds),
+                  },
+                }
+              : { id: currentUser.id },
+          ],
+        },
+        select: {
+          id: true,
+          fullName: true,
+          username: true,
+          email: true,
+          employeeCode: true,
+          leaveYearProfiles: {
+            select: { year: true, shift: true },
+            orderBy: { year: "desc" },
+          },
+        },
+      })
+    : null;
+
   const rangeStart = getDayBoundsUtcFromIstDateKey(fromDate).startUtc;
   const rangeEnd = getDayBoundsUtcFromIstDateKey(toDate).endUtc;
 
@@ -231,15 +258,24 @@ const selectedUser = selectedUserId
       })
     : [];
 
-  const paginatedLogs = paginateItems(attendanceLogs, currentPage, DEFAULT_PAGE_SIZE);
+  const paginatedLogs = paginateItems(
+    attendanceLogs,
+    currentPage,
+    DEFAULT_PAGE_SIZE,
+  );
   const currentYear = Number(todayKey.slice(0, 4));
   const currentShift =
-    selectedUser?.leaveYearProfiles.find((profile) => profile.year === currentYear)?.shift ??
+    selectedUser?.leaveYearProfiles.find(
+      (profile) => profile.year === currentYear,
+    )?.shift ??
     selectedUser?.leaveYearProfiles[0]?.shift ??
     "DAY";
 
   const shiftByYear = new Map(
-    (selectedUser?.leaveYearProfiles ?? []).map((profile) => [profile.year, profile.shift]),
+    (selectedUser?.leaveYearProfiles ?? []).map((profile) => [
+      profile.year,
+      profile.shift,
+    ]),
   );
 
   function getShiftForLog(date: Date) {
@@ -267,7 +303,11 @@ const selectedUser = selectedUserId
       ) : null}
 
       <section className="card p-6">
-        <h2 className="section-title">{canSelectAttendanceUser ? "Select user and date range" : "Select date range"}</h2>
+        <h2 className="section-title">
+          {canSelectAttendanceUser
+            ? "Select user and date range"
+            : "Select date range"}
+        </h2>
         <p className="section-subtitle">
           {canSelectAttendanceUser
             ? "Only active attendance-eligible users are listed."
@@ -307,14 +347,26 @@ const selectedUser = selectedUserId
             <label htmlFor="fromDate" className="form-label">
               From date
             </label>
-            <input id="fromDate" name="fromDate" type="date" defaultValue={fromDate} className="input-field" />
+            <input
+              id="fromDate"
+              name="fromDate"
+              type="date"
+              defaultValue={fromDate}
+              className="input-field"
+            />
           </div>
 
           <div>
             <label htmlFor="toDate" className="form-label">
               To date
             </label>
-            <input id="toDate" name="toDate" type="date" defaultValue={toDate} className="input-field" />
+            <input
+              id="toDate"
+              name="toDate"
+              type="date"
+              defaultValue={toDate}
+              className="input-field"
+            />
           </div>
 
           <button type="submit" className="btn-primary">
@@ -342,7 +394,9 @@ const selectedUser = selectedUserId
                 <Link
                   className="btn-secondary inline-flex items-center gap-2 whitespace-nowrap"
                   href={`/attendance-history/export?${new URLSearchParams({
-                    ...(canSelectAttendanceUser && selectedUserId ? { userId: selectedUserId } : {}),
+                    ...(canSelectAttendanceUser && selectedUserId
+                      ? { userId: selectedUserId }
+                      : {}),
                     fromDate,
                     toDate,
                     format: "xlsx",
@@ -353,7 +407,9 @@ const selectedUser = selectedUserId
                 <Link
                   className="btn-secondary inline-flex items-center gap-2 whitespace-nowrap"
                   href={`/attendance-history/export?${new URLSearchParams({
-                    ...(canSelectAttendanceUser && selectedUserId ? { userId: selectedUserId } : {}),
+                    ...(canSelectAttendanceUser && selectedUserId
+                      ? { userId: selectedUserId }
+                      : {}),
                     fromDate,
                     toDate,
                     format: "pdf",
@@ -376,53 +432,113 @@ const selectedUser = selectedUserId
                 <th className="table-cell">Marked at</th>
                 <th className="table-cell">City/District</th>
                 <th className="table-cell">State</th>
-                <th className="table-cell">Coordinates</th>
-                {canAddManualLog ? <th className="table-cell text-right">Edit</th> : null}
+                {canSeeLocationComparison ? (
+                  <th className="table-cell">Browser Coordinates</th>
+                ) : null}
+                {canSeeLocationComparison ? (
+                  <th className="table-cell">Location Comparison</th>
+                ) : null}
+                {canAddManualLog ? (
+                  <th className="table-cell text-right">Edit</th>
+                ) : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {paginatedLogs.items.map((log) => (
                 <tr key={log.id}>
-                  <td className="table-cell">{formatDateInIst(log.attendanceDate)}</td>
-                  <td className="table-cell">{getShiftLabel(getShiftForLog(log.attendanceDate))}</td>
+                  <td className="table-cell">
+                    {formatDateInIst(log.attendanceDate)}
+                  </td>
+                  <td className="table-cell">
+                    {getShiftLabel(getShiftForLog(log.attendanceDate))}
+                  </td>
                   <td className="table-cell">
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
                       {getActionLabel(log.type)}
                     </span>
                   </td>
                   <td className="table-cell">
-                    {formatDateInIst(log.markedAt)} · {log.type === "MARK_OUT"
-                      ? formatMarkOutTimeInIst(log.markedAt, log.attendanceDate, getShiftForLog(log.attendanceDate))
+                    {formatDateInIst(log.markedAt)} ·{" "}
+                    {log.type === "MARK_OUT"
+                      ? formatMarkOutTimeInIst(
+                          log.markedAt,
+                          log.attendanceDate,
+                          getShiftForLog(log.attendanceDate),
+                        )
                       : formatTimeInIst(log.markedAt)}
                   </td>
                   <td className="table-cell">
-                    {[log.city]
-                      .filter(Boolean)
-                      .join(", ") || 
+                    {[log.city].filter(Boolean).join(", ") ||
                       [log.town, log.village, log.stateDistrict]
-                      .filter(Boolean)
-                      .join(", ") ||
-                      "—"
-                      }
+                        .filter(Boolean)
+                        .join(", ") ||
+                      "—"}
                   </td>
                   <td className="table-cell">
-                    {[log.state]
-                      .filter(Boolean)
-                      .join(", ") || "—"}
+                    {[log.state].filter(Boolean).join(", ") || "—"}
                   </td>
-                  <td className="table-cell">
-                    {Number(log.latitude).toFixed(7)}, {Number(log.longitude).toFixed(7)}
-                  </td>
+                  {canSeeLocationComparison ? (
+                    <td className="table-cell">
+                      <div>
+                        {formatCoordinates(log.latitude, log.longitude) ?? "—"}
+                      </div>
+                      {formatMeters(log.browserAccuracy) ? (
+                        <div className="mt-1 text-xs text-slate-500">
+                          Accuracy: {formatMeters(log.browserAccuracy)}
+                        </div>
+                      ) : null}
+                    </td>
+                  ) : null}
+                  {canSeeLocationComparison ? (
+                    <td className="table-cell min-w-64 text-sm text-slate-700">
+                      {formatCoordinates(
+                        log.googleLatitude,
+                        log.googleLongitude,
+                      ) ? (
+                        <div className="space-y-1">
+                          <div>
+                            Google:{" "}
+                            {formatCoordinates(
+                              log.googleLatitude,
+                              log.googleLongitude,
+                            )}
+                          </div>
+                          {formatMeters(log.googleAccuracy) ? (
+                            <div>
+                              Google accuracy:{" "}
+                              {formatMeters(log.googleAccuracy)}
+                            </div>
+                          ) : null}
+                          {formatMeters(log.locationDistanceMeters) ? (
+                            <div>
+                              Difference:{" "}
+                              {formatMeters(log.locationDistanceMeters)}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : log.googleError ? (
+                        <div className="text-xs text-amber-700">
+                          Google error: {log.googleError}
+                        </div>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  ) : null}
                   {canAddManualLog ? (
                     <td className="table-cell text-right">
                       <Link
                         className="btn-secondary inline-flex px-3 py-1.5 text-xs"
-                        href={`/attendance-history/${log.id}/edit?${new URLSearchParams({
-                          userId: selectedUserId,
-                          fromDate,
-                          toDate,
-                          ...(currentPage > 1 ? { page: String(currentPage) } : {}),
-                        }).toString()}`}
+                        href={`/attendance-history/${log.id}/edit?${new URLSearchParams(
+                          {
+                            userId: selectedUserId,
+                            fromDate,
+                            toDate,
+                            ...(currentPage > 1
+                              ? { page: String(currentPage) }
+                              : {}),
+                          },
+                        ).toString()}`}
                       >
                         Edit
                       </Link>
@@ -432,8 +548,17 @@ const selectedUser = selectedUserId
               ))}
               {paginatedLogs.items.length === 0 ? (
                 <tr>
-                  <td colSpan={canAddManualLog ? 8 : 7} className="table-cell text-center text-sm text-slate-500">
-                    {selectedUser ? "No attendance logs found for the selected range." : "Select a user to view logs."}
+                  <td
+                    colSpan={
+                      6 +
+                      (canSeeLocationComparison ? 2 : 0) +
+                      (canAddManualLog ? 1 : 0)
+                    }
+                    className="table-cell text-center text-sm text-slate-500"
+                  >
+                    {selectedUser
+                      ? "No attendance logs found for the selected range."
+                      : "Select a user to view logs."}
                   </td>
                 </tr>
               ) : null}
@@ -448,7 +573,9 @@ const selectedUser = selectedUserId
           totalItems={paginatedLogs.totalItems}
           pageSize={paginatedLogs.pageSize}
           searchParams={{
-            ...(canSelectAttendanceUser ? { userId: selectedUserId || undefined } : {}),
+            ...(canSelectAttendanceUser
+              ? { userId: selectedUserId || undefined }
+              : {}),
             fromDate,
             toDate,
           }}
@@ -463,11 +590,17 @@ const selectedUser = selectedUserId
             </div>
             <div>
               <h2 className="section-title">Add manual attendance log</h2>
-              <p className="section-subtitle">Add either Mark-In or Mark-Out. The form does not add both together.</p>
+              <p className="section-subtitle">
+                Add either Mark-In or Mark-Out. The form does not add both
+                together.
+              </p>
             </div>
           </div>
 
-          <form action={addManualAttendanceLogAction} className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <form
+            action={addManualAttendanceLogAction}
+            className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+          >
             <input type="hidden" name="userId" value={selectedUserId} />
             <input type="hidden" name="fromDate" value={fromDate} />
             <input type="hidden" name="toDate" value={toDate} />
@@ -475,7 +608,9 @@ const selectedUser = selectedUserId
             <div className="xl:col-span-2">
               <label className="form-label">Selected user</label>
               <div className="input-field flex items-center bg-slate-50 text-slate-700">
-                {selectedUser ? `${selectedUser.fullName} (${selectedUser.username})` : "Select a user above first"}
+                {selectedUser
+                  ? `${selectedUser.fullName} (${selectedUser.username})`
+                  : "Select a user above first"}
               </div>
             </div>
 
@@ -504,59 +639,118 @@ const selectedUser = selectedUserId
               <label htmlFor="attendanceDate" className="form-label">
                 Attendance/work date
               </label>
-              <input id="attendanceDate" name="attendanceDate" type="date" required defaultValue={todayKey} className="input-field" disabled={!selectedUser} />
+              <input
+                id="attendanceDate"
+                name="attendanceDate"
+                type="date"
+                required
+                defaultValue={todayKey}
+                className="input-field"
+                disabled={!selectedUser}
+              />
             </div>
 
             <div>
               <label htmlFor="markedAtDate" className="form-label">
                 Marked-at date (IST)
               </label>
-              <input id="markedAtDate" name="markedAtDate" type="date" required defaultValue={todayKey} className="input-field" disabled={!selectedUser} />
+              <input
+                id="markedAtDate"
+                name="markedAtDate"
+                type="date"
+                required
+                defaultValue={todayKey}
+                className="input-field"
+                disabled={!selectedUser}
+              />
             </div>
 
             <div>
               <label htmlFor="markedAtTime" className="form-label">
                 Marked-at time (IST)
               </label>
-              <input id="markedAtTime" name="markedAtTime" type="time" required className="input-field" disabled={!selectedUser} />
+              <input
+                id="markedAtTime"
+                name="markedAtTime"
+                type="time"
+                required
+                className="input-field"
+                disabled={!selectedUser}
+              />
             </div>
 
             <div>
               <label htmlFor="city" className="form-label">
                 City
               </label>
-              <input id="city" name="city" type="text" className="input-field" placeholder="Optional" disabled={!selectedUser} />
+              <input
+                id="city"
+                name="city"
+                type="text"
+                className="input-field"
+                placeholder="Optional"
+                disabled={!selectedUser}
+              />
             </div>
 
             <div>
               <label htmlFor="state" className="form-label">
                 State
               </label>
-              <input id="state" name="state" type="text" className="input-field" placeholder="Optional" disabled={!selectedUser} />
+              <input
+                id="state"
+                name="state"
+                type="text"
+                className="input-field"
+                placeholder="Optional"
+                disabled={!selectedUser}
+              />
             </div>
 
             <div>
               <label htmlFor="latitude" className="form-label">
                 Latitude
               </label>
-              <input id="latitude" name="latitude" type="number" step="0.0000001" className="input-field" placeholder="0.0000000" disabled={!selectedUser} />
+              <input
+                id="latitude"
+                name="latitude"
+                type="number"
+                step="0.0000001"
+                className="input-field"
+                placeholder="0.0000000"
+                disabled={!selectedUser}
+              />
             </div>
 
             <div>
               <label htmlFor="longitude" className="form-label">
                 Longitude
               </label>
-              <input id="longitude" name="longitude" type="number" step="0.0000001" className="input-field" placeholder="0.0000000" disabled={!selectedUser} />
+              <input
+                id="longitude"
+                name="longitude"
+                type="number"
+                step="0.0000001"
+                className="input-field"
+                placeholder="0.0000000"
+                disabled={!selectedUser}
+              />
             </div>
 
             <div className="md:col-span-2 xl:col-span-4">
               <p className="text-xs text-slate-500">
-                For night-shift Mark-Out after midnight, keep Attendance/work date as the shift start date and set Marked-at date to the next calendar date.
+                For night-shift Mark-Out after midnight, keep Attendance/work
+                date as the shift start date and set Marked-at date to the next
+                calendar date.
               </p>
             </div>
 
             <div className="md:col-span-2 xl:col-span-4">
-              <button type="submit" className="btn-primary" disabled={!selectedUser}>
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={!selectedUser}
+              >
                 Add attendance log
               </button>
             </div>

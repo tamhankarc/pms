@@ -455,7 +455,9 @@ export default async function DashboardPage({
   const attendanceRows = (adminDashboardData?.attendanceRows ?? [])
     .filter((row) => attendanceShift === "BOTH" || row.shift === attendanceShift)
     .filter((row) =>
-      attendanceMode === "present" ? Boolean(row.markIn) : !row.markIn,
+      attendanceMode === "present"
+        ? Boolean(row.markIn) || row.isOnLeave
+        : !row.markIn && !row.isOnLeave,
     );
   const attendancePagination = paginateItems(
     attendanceRows,
@@ -873,7 +875,7 @@ export default async function DashboardPage({
                       {row.shift === "NIGHT" ? "Night" : "Day"}
                     </td>
                     <td className="table-cell">
-                      {formatTimeInIst(row.markIn?.markedAt ?? null)}
+                      {row.isOnLeave ? "On Leave" : formatTimeInIst(row.markIn?.markedAt ?? null)}
                     </td>
                     <td className="table-cell">
                       {formatMarkOutTimeInIst(row.markOut?.markedAt ?? null, attendanceDate, row.shift)}

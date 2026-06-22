@@ -234,6 +234,7 @@ export async function getAdminDashboardData(
     },
     select: {
       id: true,
+      userId: true,
       leaveType: true,
       startDate: true,
       endDate: true,
@@ -252,6 +253,8 @@ export async function getAdminDashboardData(
     orderBy: [{ startDate: "asc" }, { user: { fullName: "asc" } }],
   });
 
+  const selectedDateLeaveUserIds = new Set(approvedLeaves.map((row) => row.userId));
+
   return {
     attendanceRows: employees.map((employee) => {
       const markIn =
@@ -268,6 +271,7 @@ export async function getAdminDashboardData(
         shift: employee.leaveYearProfiles[0]?.shift ?? "DAY",
         markIn,
         markOut,
+        isOnLeave: selectedDateLeaveUserIds.has(employee.id),
         city: markOut?.city || markIn?.city || null,
       };
     }),

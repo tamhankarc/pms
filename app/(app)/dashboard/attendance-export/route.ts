@@ -67,7 +67,9 @@ export async function GET(request: Request) {
   const rows = dashboardData.attendanceRows
     .filter((row) => attendanceShift === "BOTH" || row.shift === attendanceShift)
     .filter((row) =>
-      attendanceMode === "present" ? Boolean(row.markIn) : !row.markIn,
+      attendanceMode === "present"
+        ? Boolean(row.markIn) || row.isOnLeave
+        : !row.markIn && !row.isOnLeave,
     );
 
   const csvRows: string[][] = [
@@ -76,7 +78,7 @@ export async function GET(request: Request) {
       row.fullName,
       (row.functionalRole ?? "UNASSIGNED").replaceAll("_", " "),
       row.shift === "NIGHT" ? "Night" : "Day",
-      formatTimeInIst(row.markIn?.markedAt ?? null),
+      row.isOnLeave ? "On Leave" : formatTimeInIst(row.markIn?.markedAt ?? null),
       formatMarkOutTimeInIst(row.markOut?.markedAt ?? null, attendanceDate, row.shift),
       row.city || "—",
     ]),
