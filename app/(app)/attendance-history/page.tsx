@@ -65,6 +65,27 @@ function formatCoordinates(latitude: unknown, longitude: unknown) {
     : null;
 }
 
+function formatGoogleAddressDetails(log: {
+  googleCity: string | null;
+  googleDistrict: string | null;
+  googleTown: string | null;
+  googleVillage: string | null;
+  googleState: string | null;
+  googleFormattedAddress: string | null;
+}) {
+  const details = [
+    log.googleCity ? `City: ${log.googleCity}` : null,
+    log.googleDistrict ? `District: ${log.googleDistrict}` : null,
+    log.googleTown ? `Town: ${log.googleTown}` : null,
+    log.googleVillage ? `Village: ${log.googleVillage}` : null,
+    log.googleState ? `State: ${log.googleState}` : null,
+  ].filter((detail): detail is string => Boolean(detail));
+
+  if (details.length === 0 && !log.googleFormattedAddress) return null;
+
+  return { details, formattedAddress: log.googleFormattedAddress };
+}
+
 export default async function AttendanceHistoryPage({
   searchParams,
 }: {
@@ -507,6 +528,33 @@ export default async function AttendanceHistoryPage({
                             <div>
                               Google accuracy:{" "}
                               {formatMeters(log.googleAccuracy)}
+                            </div>
+                          ) : null}
+                          {formatGoogleAddressDetails(log) ? (
+                            <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                              <div className="font-semibold text-slate-700">
+                                Google address details
+                              </div>
+                              {formatGoogleAddressDetails(log)?.details
+                                .length ? (
+                                <div className="mt-1 space-y-0.5">
+                                  {formatGoogleAddressDetails(log)?.details.map(
+                                    (detail) => (
+                                      <div key={detail}>{detail}</div>
+                                    ),
+                                  )}
+                                </div>
+                              ) : null}
+                              {formatGoogleAddressDetails(log)
+                                ?.formattedAddress ? (
+                                <div className="mt-1">
+                                  Address:{" "}
+                                  {
+                                    formatGoogleAddressDetails(log)
+                                      ?.formattedAddress
+                                  }
+                                </div>
+                              ) : null}
                             </div>
                           ) : null}
                           {formatMeters(log.locationDistanceMeters) ? (

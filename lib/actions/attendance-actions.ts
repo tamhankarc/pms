@@ -51,7 +51,8 @@ function getDistanceMeters(
     Math.cos(firstLatitudeRadians) *
       Math.cos(secondLatitudeRadians) *
       Math.sin(longitudeDelta / 2) ** 2;
-  const centralAngle = 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+  const centralAngle =
+    2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
   return Math.round(earthRadiusMeters * centralAngle * 100) / 100;
 }
 
@@ -75,7 +76,10 @@ export async function markAttendanceAction(
     const user = await requireUserForAction();
 
     if (!canMarkAttendance(user)) {
-      return { success: false, error: "You do not have permission to mark attendance." };
+      return {
+        success: false,
+        error: "You do not have permission to mark attendance.",
+      };
     }
 
     const actionType = String(formData.get("actionType") || "");
@@ -88,11 +92,30 @@ export async function markAttendanceAction(
     const googleAccuracy = toNumber(formData.get("googleAccuracy"));
     const googleCapturedAt = toDate(formData.get("googleCapturedAt"));
     const googleError = getTrimmedString(formData.get("googleError"));
+    const googleCity = getTrimmedString(formData.get("googleCity"));
+    const googleDistrict = getTrimmedString(formData.get("googleDistrict"));
+    const googleTown = getTrimmedString(formData.get("googleTown"));
+    const googleVillage = getTrimmedString(formData.get("googleVillage"));
+    const googleState = getTrimmedString(formData.get("googleState"));
+    const googleFormattedAddress = getTrimmedString(
+      formData.get("googleFormattedAddress"),
+    );
     const locationDistanceMeters =
-      latitude !== null && longitude !== null && googleLatitude !== null && googleLongitude !== null
-        ? getDistanceMeters(latitude, longitude, googleLatitude, googleLongitude)
+      latitude !== null &&
+      longitude !== null &&
+      googleLatitude !== null &&
+      googleLongitude !== null
+        ? getDistanceMeters(
+            latitude,
+            longitude,
+            googleLatitude,
+            googleLongitude,
+          )
         : null;
-    const leaveBalance = await getLeaveBalanceForUser(user.id, getCurrentIstYear());
+    const leaveBalance = await getLeaveBalanceForUser(
+      user.id,
+      getCurrentIstYear(),
+    );
     const shift = leaveBalance.shift;
 
     if (latitude === null || longitude === null) {
@@ -117,20 +140,35 @@ export async function markAttendanceAction(
 
     if (actionType === "MARK_IN") {
       if (!isMarkInWindow(now, shift)) {
-        return { success: false, error: `${getMarkInWindowLabel(shift)} Mark-In is not allowed right now.` };
+        return {
+          success: false,
+          error: `${getMarkInWindowLabel(shift)} Mark-In is not allowed right now.`,
+        };
       }
       if (existing.some((row) => row.type === "MARK_IN")) {
-        return { success: false, error: "Mark-In is already recorded for this attendance day." };
+        return {
+          success: false,
+          error: "Mark-In is already recorded for this attendance day.",
+        };
       }
     } else if (actionType === "MARK_OUT") {
       if (!isMarkOutWindow(now, shift)) {
-        return { success: false, error: `${getMarkOutWindowLabel(shift)} Mark-Out is not allowed right now.` };
+        return {
+          success: false,
+          error: `${getMarkOutWindowLabel(shift)} Mark-Out is not allowed right now.`,
+        };
       }
       if (!existing.some((row) => row.type === "MARK_IN")) {
-        return { success: false, error: "Mark-In must be recorded before Mark-Out." };
+        return {
+          success: false,
+          error: "Mark-In must be recorded before Mark-Out.",
+        };
       }
       if (existing.some((row) => row.type === "MARK_OUT")) {
-        return { success: false, error: "Mark-Out is already recorded for this attendance day." };
+        return {
+          success: false,
+          error: "Mark-Out is already recorded for this attendance day.",
+        };
       }
     } else {
       return { success: false, error: "Invalid attendance action." };
@@ -165,6 +203,12 @@ export async function markAttendanceAction(
         googleAccuracy,
         googleCapturedAt,
         googleError,
+        googleCity,
+        googleDistrict,
+        googleTown,
+        googleVillage,
+        googleState,
+        googleFormattedAddress,
         locationDistanceMeters,
         city,
         town: location?.town ?? null,
@@ -180,7 +224,8 @@ export async function markAttendanceAction(
     console.error("markAttendanceAction failed", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unable to mark attendance.",
+      error:
+        error instanceof Error ? error.message : "Unable to mark attendance.",
     };
   }
 }

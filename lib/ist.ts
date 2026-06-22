@@ -107,7 +107,7 @@ export function isMarkInWindow(date: Date = new Date(), shift: AttendanceShift =
   if (shift === "NIGHT") {
     return total >= 21 * 60 || total <= 3 * 60;
   }
-  return total >= 8 * 60 + 30 && total <= 15 * 60;
+  return total >= 8 * 60 + 30 && total <= 17 * 60;
 }
 
 export function isMarkOutWindow(date: Date = new Date(), shift: AttendanceShift = "DAY") {

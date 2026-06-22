@@ -969,6 +969,12 @@ model AttendanceLog {
   googleAccuracy Decimal?              @db.Decimal(12, 2)
   googleCapturedAt DateTime?
   googleError    String?               @db.Text
+  googleCity     String?
+  googleDistrict String?
+  googleTown     String?
+  googleVillage  String?
+  googleState    String?
+  googleFormattedAddress String?       @db.Text
   locationDistanceMeters Decimal?      @db.Decimal(12, 2)
   city           String?
   town           String?

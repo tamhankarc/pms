@@ -110,6 +110,28 @@ function getGoogleLocationStatus(log: {
   return log.googleError ? `Error: ${log.googleError}` : "—";
 }
 
+function getGoogleAddressDetails(log: {
+  googleCity: string | null;
+  googleDistrict: string | null;
+  googleTown: string | null;
+  googleVillage: string | null;
+  googleState: string | null;
+  googleFormattedAddress: string | null;
+}) {
+  const details = [
+    log.googleCity ? `City: ${log.googleCity}` : null,
+    log.googleDistrict ? `District: ${log.googleDistrict}` : null,
+    log.googleTown ? `Town: ${log.googleTown}` : null,
+    log.googleVillage ? `Village: ${log.googleVillage}` : null,
+    log.googleState ? `State: ${log.googleState}` : null,
+    log.googleFormattedAddress
+      ? `Address: ${log.googleFormattedAddress}`
+      : null,
+  ].filter((detail): detail is string => Boolean(detail));
+
+  return details.length ? details.join(" | ") : "—";
+}
+
 function escapePdfText(value: string | number) {
   return String(value)
     .replaceAll("\\", "\\\\")
@@ -399,6 +421,12 @@ export async function GET(request: Request) {
             "Browser Accuracy",
             "Google Coordinates",
             "Google Accuracy",
+            "Google City",
+            "Google District",
+            "Google Town",
+            "Google Village",
+            "Google State",
+            "Google Address Details",
             "Difference",
           ]
         : []),
@@ -422,6 +450,12 @@ export async function GET(request: Request) {
               formatMeters(log.browserAccuracy),
               getGoogleLocationStatus(log),
               formatMeters(log.googleAccuracy),
+              log.googleCity || "—",
+              log.googleDistrict || "—",
+              log.googleTown || "—",
+              log.googleVillage || "—",
+              log.googleState || "—",
+              getGoogleAddressDetails(log),
               formatMeters(log.locationDistanceMeters),
             ]
           : []),
