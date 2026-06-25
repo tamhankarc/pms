@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { ChevronDown, Menu, X } from "lucide-react";
+import { ChevronDown, MapPin, Menu, X } from "lucide-react";
 import type { SessionUser } from "@/lib/auth";
 import {
   getSidebarItems,
@@ -30,6 +30,12 @@ export function MobileSidebar({
   const items = getSidebarItems(user, canAccessLeaveApprovals).filter((item) =>
     mobileAllowedMenuKeys.has(item.key),
   );
+  const canUseMobileLocationCheck =
+    user.userType === "EMPLOYEE" ||
+    user.userType === "TEAM_LEAD" ||
+    (user.userType === "MANAGER" &&
+      user.functionalRole !== "PROJECT_MANAGER" &&
+      user.functionalRole !== "GENERAL_MANAGER");
 
   useEffect(() => {
     setMounted(true);
@@ -73,6 +79,17 @@ export function MobileSidebar({
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-5">
+
+            {canUseMobileLocationCheck ? (
+              <Link
+                href="/mobile-location-correction"
+                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-slate-900 hover:text-white"
+                onClick={() => setOpen(false)}
+              >
+                <MapPin className="h-4 w-4 shrink-0" />
+                <span className="truncate">Location Check & Update</span>
+              </Link>
+            ) : null}
           {items.map((item) => {
             if (item.key === "billing-reports") {
               const Icon = item.icon;

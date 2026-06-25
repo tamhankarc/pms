@@ -33,7 +33,9 @@ const leaveSchema = z.object({
   startDate: z.string().min(1),
   endDate: z.string().min(1),
   reason: z.string().trim().min(1, "Reason is required.").max(3000),
-  approverIds: z.array(z.string().min(1)).min(1, "Select at least one approver."),
+  approverIds: z
+    .array(z.string().min(1))
+    .min(1, "Select at least one approver."),
   diwaliLeave: z.enum(["true", "false"]).optional(),
   daySelectionMode: z
     .enum(["FULL_DAYS", "HALF_DAYS", "CUSTOM"])
@@ -41,8 +43,25 @@ const leaveSchema = z.object({
   leaveDayTypesJson: z.string().optional(),
 });
 
-type DayDuration = "FULL_DAY" | "HALF_DAY";
+type DayDuration = "FULL_DAY" | "HALF_DAY" | "FIRST_HALF" | "SECOND_HALF";
 type DaySelectionMode = "FULL_DAYS" | "HALF_DAYS" | "CUSTOM";
+
+function normalizeDayDuration(value: string | undefined): DayDuration {
+  if (
+    value === "FIRST_HALF" ||
+    value === "SECOND_HALF" ||
+    value === "HALF_DAY"
+  ) {
+    return value;
+  }
+  return "FULL_DAY";
+}
+
+function isHalfDayDuration(value: DayDuration) {
+  return (
+    value === "HALF_DAY" || value === "FIRST_HALF" || value === "SECOND_HALF"
+  );
+}
 
 function parseDateRange(startDate: string, endDate: string) {
   const start = new Date(`${startDate}T00:00:00+05:30`);
@@ -85,10 +104,7 @@ async function getRequestEmployee(
       functionalRole: true,
     },
   });
-  if (
-    !target ||
-    !isLeaveAllowedUser(target)
-  ) {
+  if (!target || !isLeaveAllowedUser(target)) {
     throw new Error("Selected user is not eligible for leave requests.");
   }
   return target;
@@ -139,7 +155,7 @@ function parseCustomDurations(
     return Object.fromEntries(
       Object.entries(parsed).map(([key, value]) => [
         key,
-        value === "HALF_DAY" ? "HALF_DAY" : "FULL_DAY",
+        normalizeDayDuration(value),
       ]),
     );
   } catch {
@@ -157,9 +173,11 @@ function getDurationByDate(
   for (const key of keys) {
     durationByDate[key] =
       mode === "HALF_DAYS"
-        ? "HALF_DAY"
+        ? normalizeDayDuration(custom[key]) === "SECOND_HALF"
+          ? "SECOND_HALF"
+          : "FIRST_HALF"
         : mode === "CUSTOM"
-          ? custom[key] || "FULL_DAY"
+          ? normalizeDayDuration(custom[key])
           : "FULL_DAY";
   }
   return durationByDate;
@@ -167,7 +185,7 @@ function getDurationByDate(
 
 function sumSelectedWorkingDays(durationByDate: Record<string, DayDuration>) {
   return Object.values(durationByDate).reduce(
-    (total, type) => total + (type === "HALF_DAY" ? 0.5 : 1),
+    (total, type) => total + (isHalfDayDuration(type) ? 0.5 : 1),
     0,
   );
 }
@@ -321,7 +339,8 @@ export async function createLeaveRequestAction(
     )
       return {
         success: false,
-        error: "One or more selected approvers are not available for this employee.",
+        error:
+          "One or more selected approvers are not available for this employee.",
       };
     validateStartDateNotInPast(parsed.data.startDate);
     await validateBoundaryDates(
@@ -437,7 +456,8 @@ export async function updateLeaveRequestAction(
     )
       return {
         success: false,
-        error: "One or more selected approvers are not available for this employee.",
+        error:
+          "One or more selected approvers are not available for this employee.",
       };
     validateStartDateNotInPast(parsed.data.startDate);
     await validateBoundaryDates(
@@ -579,8 +599,16 @@ export async function reviewLeaveRequestAction(formData: FormData) {
     user.userType === "ADMIN" &&
     user.functionalRole === "PROJECT_MANAGER" &&
     assigned;
-  const selectedApproverIds = existing.selectedApprovers.map((row) => row.approverId);
-  if (!(selectedApproverIds.includes(user.id) || existing.approverId === user.id || adminPmApprover))
+  const selectedApproverIds = existing.selectedApprovers.map(
+    (row) => row.approverId,
+  );
+  if (
+    !(
+      selectedApproverIds.includes(user.id) ||
+      existing.approverId === user.id ||
+      adminPmApprover
+    )
+  )
     throw new Error(
       "Only one of the selected approvers or an Admin user with functional role Project Manager who is included in the approver list can approve, reject, or reconsider this leave request.",
     );

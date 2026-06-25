@@ -6,7 +6,7 @@ import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import type { LeaveFormState } from "@/lib/actions/leave-actions";
 
 const initialState: LeaveFormState = {};
-type Duration = "FULL_DAY" | "HALF_DAY";
+type DaySelection = "FULL_DAY" | "HALF_DAY" | "FIRST_HALF" | "SECOND_HALF";
 type SelectionMode = "FULL_DAYS" | "HALF_DAYS" | "CUSTOM";
 type FormContext = {
   id: string;
@@ -33,18 +33,35 @@ function nextDateKey(dateKey: string) {
   return date.toISOString().slice(0, 10);
 }
 
+function normalizeDaySelection(value: string | undefined): DaySelection {
+  if (
+    value === "FIRST_HALF" ||
+    value === "SECOND_HALF" ||
+    value === "HALF_DAY"
+  ) {
+    return value;
+  }
+  return "FULL_DAY";
+}
+
+function isHalfDaySelection(value: DaySelection) {
+  return (
+    value === "HALF_DAY" || value === "FIRST_HALF" || value === "SECOND_HALF"
+  );
+}
+
 function parseStoredDurations(raw?: string | null) {
-  if (!raw) return {} as Record<string, Duration>;
+  if (!raw) return {} as Record<string, DaySelection>;
   try {
     const data = JSON.parse(raw) as Record<string, string>;
     return Object.fromEntries(
       Object.entries(data).map(([date, type]) => [
         date,
-        type === "HALF_DAY" ? "HALF_DAY" : "FULL_DAY",
+        normalizeDaySelection(type),
       ]),
-    ) as Record<string, Duration>;
+    ) as Record<string, DaySelection>;
   } catch {
-    return {} as Record<string, Duration>;
+    return {} as Record<string, DaySelection>;
   }
 }
 
@@ -119,8 +136,13 @@ export function LeaveRequestForm({
   const [selectionMode, setSelectionMode] = useState<SelectionMode>(
     initialValues?.daySelectionMode ?? "FULL_DAYS",
   );
+  const [halfDaySelection, setHalfDaySelection] = useState<DaySelection>(() => {
+    const stored = parseStoredDurations(initialValues?.leaveDayTypesJson);
+    const firstHalfDay = Object.values(stored).find(isHalfDaySelection);
+    return firstHalfDay === "SECOND_HALF" ? "SECOND_HALF" : "FIRST_HALF";
+  });
   const [customDurations, setCustomDurations] = useState<
-    Record<string, Duration>
+    Record<string, DaySelection>
   >(() => parseStoredDurations(initialValues?.leaveDayTypesJson));
   const [boundaryError, setBoundaryError] = useState("");
   const [key, setKey] = useState(0);
@@ -146,16 +168,16 @@ export function LeaveRequestForm({
         workingDateKeys.map((date) => [
           date,
           selectionMode === "HALF_DAYS"
-            ? "HALF_DAY"
+            ? halfDaySelection
             : selectionMode === "CUSTOM"
               ? (customDurations[date] ?? "FULL_DAY")
               : "FULL_DAY",
         ]),
-      ) as Record<string, Duration>,
-    [workingDateKeys, selectionMode, customDurations],
+      ) as Record<string, DaySelection>,
+    [workingDateKeys, selectionMode, halfDaySelection, customDurations],
   );
   const calculatedDays = Object.values(effectiveDurations).reduce(
-    (sum, duration) => sum + (duration === "HALF_DAY" ? 0.5 : 1),
+    (sum, duration) => sum + (isHalfDaySelection(duration) ? 0.5 : 1),
     0,
   );
 
@@ -166,6 +188,7 @@ export function LeaveRequestForm({
       setStartDate(minDate);
       setEndDate(minDate);
       setSelectionMode("FULL_DAYS");
+      setHalfDaySelection("FIRST_HALF");
       setCustomDurations({});
       setBoundaryError("");
       setKey((value) => value + 1);
@@ -173,8 +196,12 @@ export function LeaveRequestForm({
   }, [mode, state?.success, minDate]);
 
   useEffect(() => {
-    const validApproverIds = new Set(activeApprovers.map((approver) => approver.id));
-    const filteredApproverIds = approverIds.filter((id) => validApproverIds.has(id));
+    const validApproverIds = new Set(
+      activeApprovers.map((approver) => approver.id),
+    );
+    const filteredApproverIds = approverIds.filter((id) =>
+      validApproverIds.has(id),
+    );
     if (filteredApproverIds.length !== approverIds.length) {
       setApproverIds(filteredApproverIds);
     }
@@ -206,7 +233,12 @@ export function LeaveRequestForm({
         value={requestedForUserId}
       />
       {approverIds.map((approverId) => (
-        <input key={approverId} type="hidden" name="approverIds" value={approverId} />
+        <input
+          key={approverId}
+          type="hidden"
+          name="approverIds"
+          value={approverId}
+        />
       ))}
       <input type="hidden" name="daySelectionMode" value={selectionMode} />
       <input
@@ -364,6 +396,29 @@ export function LeaveRequestForm({
             searchPlaceholder="Search leave durations..."
             emptyLabel="No leave duration found."
           />
+          {selectionMode === "HALF_DAYS" ? (
+            <div className="mt-3 max-w-xs">
+              <label className="label" htmlFor="halfDaySelection">
+                Half-day option
+              </label>
+              <SearchableCombobox
+                id="halfDaySelection"
+                value={halfDaySelection}
+                onValueChange={(value) =>
+                  setHalfDaySelection(
+                    value === "SECOND_HALF" ? "SECOND_HALF" : "FIRST_HALF",
+                  )
+                }
+                options={[
+                  { value: "FIRST_HALF", label: "First half" },
+                  { value: "SECOND_HALF", label: "Second half" },
+                ]}
+                placeholder="Select half-day option"
+                searchPlaceholder="Search half-day options..."
+                emptyLabel="No half-day option found."
+              />
+            </div>
+          ) : null}
           <p className="mt-2 text-sm text-slate-500">
             Total selected leave:{" "}
             <span className="font-semibold text-slate-900">
@@ -390,12 +445,13 @@ export function LeaveRequestForm({
                       onValueChange={(value) =>
                         setCustomDurations((current) => ({
                           ...current,
-                          [date]: value as Duration,
+                          [date]: normalizeDaySelection(value),
                         }))
                       }
                       options={[
                         { value: "FULL_DAY", label: "Full day" },
-                        { value: "HALF_DAY", label: "Half day" },
+                        { value: "FIRST_HALF", label: "First half" },
+                        { value: "SECOND_HALF", label: "Second half" },
                       ]}
                       placeholder="Select duration"
                       searchPlaceholder="Search durations..."

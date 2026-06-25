@@ -56,15 +56,19 @@ function employeeRequestLink(id: string) {
     : `/leave-requests#leave-request-${encodeURIComponent(id)}`;
 }
 
+function formatDaySelectionLabel(type: string) {
+  if (type === "FIRST_HALF") return "First half";
+  if (type === "SECOND_HALF") return "Second half";
+  if (type === "HALF_DAY") return "Half day";
+  return "Full day";
+}
+
 function formatDaySelections(json: string | null) {
   if (!json) return "Full day";
   try {
     const parsed = JSON.parse(json) as Record<string, string>;
     return Object.entries(parsed)
-      .map(
-        ([date, type]) =>
-          `${date}: ${type === "HALF_DAY" ? "Half day" : "Full day"}`,
-      )
+      .map(([date, type]) => `${date}: ${formatDaySelectionLabel(type)}`)
       .join("\n");
   } catch {
     return "Full day";

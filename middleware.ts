@@ -15,6 +15,7 @@ const EMPLOYEE_ALLOWED_PATHS = [
 ];
 const ACCOUNTS_ALLOWED_PATHS = ["/billing-reports", "/change-password"];
 const MOBILE_ALLOWED_PATHS = [
+  "/mobile-location-correction",
   "/leave-requests",
   "/profile",
   "/change-password",
@@ -139,6 +140,7 @@ const MENU_ROUTE_PREFIXES: Record<string, string> = {
   "leave-admin": "/leave-admin",
   "attendance-history": "/attendance-history",
   "sweep-in-triggers": "/sweep-in-triggers",
+  "mobile-location-correction": "/mobile-location-correction",
   announcements: "/announcements",
   profile: "/profile",
   "billing-reports": "/billing-reports",

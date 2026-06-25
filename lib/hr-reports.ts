@@ -10,6 +10,7 @@ import {
   formatTimeInIst,
   getDayBoundsUtcFromIstDateKey,
   getIstDateKey,
+  isWeekendDateKey,
 } from "@/lib/ist";
 
 export type HRReportType = "attendance" | "leaves" | "leave-counts";
@@ -154,7 +155,9 @@ function formatDuration(start?: Date, end?: Date) {
 
 function attendanceExportStatus(value: string) {
   if (value === "Present") return "P";
-  if (value === "Approved Leave") return "L";
+  if (value === "On Leave") return "L";
+  if (value === "Weekend") return "W";
+  if (value === "Official Holiday") return "H";
   if (value === "Exempted") return "Exempted";
   return "A";
 }
@@ -246,7 +249,7 @@ export async function getHRReportData(
     const years = Array.from(
       new Set(rangeDateKeys.map((dateKey) => Number(dateKey.slice(0, 4)))),
     );
-    const [users, logs, approvedLeaves] = await Promise.all([
+    const [users, logs, approvedLeaves, officialHolidays] = await Promise.all([
       db.user.findMany({
         where: userWhere,
         select: {
@@ -275,6 +278,12 @@ export async function getHRReportData(
         },
         select: { userId: true, startDate: true, endDate: true },
       }),
+      db.officialHoliday.findMany({
+        where: {
+          holidayDate: { gte: startUtc, lt: endUtc },
+        },
+        select: { holidayDate: true, shift: true },
+      }),
     ]);
     const logMap = new Map<
       string,
@@ -291,6 +300,18 @@ export async function getHRReportData(
       string,
       Array<{ start: string; end: string }>
     >();
+    const officialHolidayShiftsByDate = new Map<string, Set<string>>();
+    for (const holiday of officialHolidays) {
+      const dateKey = getIstDateKey(holiday.holidayDate);
+      const shifts =
+        officialHolidayShiftsByDate.get(dateKey) ?? new Set<string>();
+      shifts.add(holiday.shift);
+      officialHolidayShiftsByDate.set(dateKey, shifts);
+    }
+    const isOfficialHolidayForShift = (dateKey: string, shift: ShiftType) => {
+      const shifts = officialHolidayShiftsByDate.get(dateKey);
+      return Boolean(shifts?.has("BOTH") || shifts?.has(shift));
+    };
     for (const leave of approvedLeaves) {
       const items = approvedByUser.get(leave.userId) ?? [];
       items.push({
@@ -311,13 +332,19 @@ export async function getHRReportData(
         const onLeave = (approvedByUser.get(user.id) ?? []).some(
           (leave) => leave.start <= dateKey && leave.end >= dateKey,
         );
+        const isWeekend = isWeekendDateKey(dateKey);
+        const isOfficialHoliday = isOfficialHolidayForShift(dateKey, rowShift);
         const presence = !canMarkAttendance(user)
           ? "Exempted"
-          : attendance?.markIn
-            ? "Present"
-            : onLeave
-              ? "Approved Leave"
-              : "Absent";
+          : isOfficialHoliday
+            ? "Official Holiday"
+            : isWeekend
+              ? "Weekend"
+              : onLeave
+                ? "On Leave"
+                : attendance?.markIn
+                  ? "Present"
+                  : "Absent";
         return [
           {
             dateKey,
@@ -328,7 +355,11 @@ export async function getHRReportData(
             shift: shiftLabel(rowShift),
             status: presence,
             inTime: formatTimeInIst(attendance?.markIn?.markedAt),
-            outTime: formatMarkOutTimeInIst(attendance?.markOut?.markedAt, dateKey, rowShift),
+            outTime: formatMarkOutTimeInIst(
+              attendance?.markOut?.markedAt,
+              dateKey,
+              rowShift,
+            ),
             total: formatDuration(
               attendance?.markIn?.markedAt,
               attendance?.markOut?.markedAt,
