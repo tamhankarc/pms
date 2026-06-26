@@ -295,7 +295,7 @@ export async function getAdminDashboardData(
           getCityDistrictLabel(
             markOut?.googleCity || markIn?.googleCity || null,
             markOut?.googleDistrict || markIn?.googleDistrict || null,
-          ) ?? "",
+          ) ?? "—",
       };
     }),
     leaveRows: approvedLeaves,

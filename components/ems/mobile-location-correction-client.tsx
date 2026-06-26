@@ -51,34 +51,39 @@ function isMobileLikeDevice() {
   }
 
   const userAgent = navigator.userAgent || navigator.vendor || "";
-
   const isMobileUserAgent =
     /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(
       userAgent,
     );
-
   const hasTouch =
     "ontouchstart" in window ||
     navigator.maxTouchPoints > 0 ||
-    // @ts-expect-error - older Safari fallback
-    navigator.msMaxTouchPoints > 0;
-
+    ("msMaxTouchPoints" in navigator &&
+      Number((navigator as Navigator & { msMaxTouchPoints?: number }).msMaxTouchPoints) > 0);
   const isSmallScreen = window.matchMedia("(max-width: 768px)").matches;
 
   return isMobileUserAgent || (hasTouch && isSmallScreen);
 }
 
 function getClientErrorMessage(error: unknown, fallbackMessage: string) {
-  if (error instanceof GeolocationPositionError) {
-    switch (error.code) {
-      case error.PERMISSION_DENIED:
-        return "Location permission was denied. Please allow location access and try again.";
-      case error.POSITION_UNAVAILABLE:
-        return "Current location is unavailable. Please check GPS/location settings and try again.";
-      case error.TIMEOUT:
-        return "Getting current location timed out. Please try again.";
-      default:
-        return fallbackMessage;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof (error as { code?: unknown }).code === "number"
+  ) {
+    const code = (error as { code: number }).code;
+
+    if (code === 1) {
+      return "Location permission was denied. Please allow location access and try again.";
+    }
+
+    if (code === 2) {
+      return "Current location is unavailable. Please check GPS/location settings and try again.";
+    }
+
+    if (code === 3) {
+      return "Getting current location timed out. Please try again.";
     }
   }
 

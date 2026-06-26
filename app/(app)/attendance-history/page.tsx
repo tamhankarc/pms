@@ -84,6 +84,24 @@ function getCityDistrictLabel(city?: string | null, district?: string | null) {
   return normalizedCity || normalizedDistrict || "—";
 }
 
+function getVisibleCityDistrictLabel(log: {
+  googleCity?: string | null;
+  googleDistrict?: string | null;
+  city?: string | null;
+  stateDistrict?: string | null;
+}) {
+  const googleLabel = getCityDistrictLabel(log.googleCity, log.googleDistrict);
+  if (googleLabel !== "—") return googleLabel;
+  return getCityDistrictLabel(log.city, log.stateDistrict);
+}
+
+function getVisibleStateLabel(log: {
+  googleState?: string | null;
+  state?: string | null;
+}) {
+  return log.googleState?.trim() || log.state?.trim() || "—";
+}
+
 function AddressDetailsBlock({
   title,
   coordinates,
@@ -578,12 +596,9 @@ export default async function AttendanceHistoryPage({
                     ) : (
                       <>
                         <td className="table-cell">
-                          {getCityDistrictLabel(
-                            log.googleCity,
-                            log.googleDistrict,
-                          )}
+                          {getVisibleCityDistrictLabel(log)}
                         </td>
-                        <td className="table-cell">{log.googleState || "—"}</td>
+                        <td className="table-cell">{getVisibleStateLabel(log)}</td>
                         <td className="table-cell">
                           {formatCoordinates(log.latitude, log.longitude) ??
                             "—"}

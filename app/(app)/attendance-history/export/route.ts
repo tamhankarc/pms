@@ -76,6 +76,24 @@ function getCityDistrictLabel(city?: string | null, district?: string | null) {
   return normalizedCity || normalizedDistrict || "—";
 }
 
+function getVisibleCityDistrictLabel(log: {
+  googleCity?: string | null;
+  googleDistrict?: string | null;
+  city?: string | null;
+  stateDistrict?: string | null;
+}) {
+  const googleLabel = getCityDistrictLabel(log.googleCity, log.googleDistrict);
+  if (googleLabel !== "—") return googleLabel;
+  return getCityDistrictLabel(log.city, log.stateDistrict);
+}
+
+function getVisibleStateLabel(log: {
+  googleState?: string | null;
+  state?: string | null;
+}) {
+  return log.googleState?.trim() || log.state?.trim() || "—";
+}
+
 function formatDecimalNumber(value: unknown, fractionDigits: number) {
   if (value === null || value === undefined) return null;
   const parsed = Number(value);
@@ -448,8 +466,8 @@ export async function GET(request: Request) {
       if (!canSeeLocationComparison) {
         return [
           ...baseColumns,
-          getCityDistrictLabel(log.googleCity, log.googleDistrict),
-          log.googleState || "—",
+          getVisibleCityDistrictLabel(log),
+          getVisibleStateLabel(log),
           formatCoordinates(log.latitude, log.longitude),
         ];
       }
