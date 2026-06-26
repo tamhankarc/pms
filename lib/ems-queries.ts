@@ -12,18 +12,32 @@ import {
   isWeekendDateKey,
 } from "@/lib/ist";
 
+function getCityDistrictLabel(city?: string | null, district?: string | null) {
+  const normalizedCity = (city ?? "").trim();
+  const normalizedDistrict = (district ?? "").trim();
+
+  if (
+    normalizedCity &&
+    normalizedDistrict &&
+    normalizedCity.toLowerCase() !== normalizedDistrict.toLowerCase()
+  ) {
+    return `${normalizedCity}, ${normalizedDistrict}`;
+  }
+
+  return normalizedCity || normalizedDistrict || null;
+}
+
 export function isLeaveAllowedUser(user: {
   userType: string;
   functionalRole?: string | null;
   isActive?: boolean;
 }) {
   if (user.isActive === false) return false;
-  if (
-    ["OPERATIONS", "REPORT_VIEWER", "ACCOUNTS"].includes(user.userType)
-  )
+  if (["OPERATIONS", "REPORT_VIEWER", "ACCOUNTS"].includes(user.userType))
     return false;
   if (
-    ["ADMIN"].includes(user.userType) && user.functionalRole !== "PROJECT_MANAGER"
+    ["ADMIN"].includes(user.userType) &&
+    user.functionalRole !== "PROJECT_MANAGER"
   )
     return false;
   return true;
@@ -220,6 +234,9 @@ export async function getAdminDashboardData(
           village: true,
           stateDistrict: true,
           state: true,
+          googleCity: true,
+          googleDistrict: true,
+          googleState: true,
         },
       },
     },
@@ -253,7 +270,9 @@ export async function getAdminDashboardData(
     orderBy: [{ startDate: "asc" }, { user: { fullName: "asc" } }],
   });
 
-  const selectedDateLeaveUserIds = new Set(approvedLeaves.map((row) => row.userId));
+  const selectedDateLeaveUserIds = new Set(
+    approvedLeaves.map((row) => row.userId),
+  );
 
   return {
     attendanceRows: employees.map((employee) => {
@@ -272,7 +291,11 @@ export async function getAdminDashboardData(
         markIn,
         markOut,
         isOnLeave: selectedDateLeaveUserIds.has(employee.id),
-        city: markOut?.city || markIn?.city || null,
+        cityDistrict:
+          getCityDistrictLabel(
+            markOut?.googleCity || markIn?.googleCity || null,
+            markOut?.googleDistrict || markIn?.googleDistrict || null,
+          ) ?? "",
       };
     }),
     leaveRows: approvedLeaves,
@@ -598,7 +621,10 @@ export async function getAllowedLeaveRequestApproversForUser(userId: string) {
       }
     }
 
-    if (requester.userType === "EMPLOYEE" || requester.userType === "TEAM_LEAD") {
+    if (
+      requester.userType === "EMPLOYEE" ||
+      requester.userType === "TEAM_LEAD"
+    ) {
       const sameRoleAssignedRsm =
         isAssignedToEmployee(candidate.id) &&
         isRoleScopedManager(candidate) &&
@@ -623,7 +649,10 @@ export async function getAllowedLeaveRequestApproversForUser(userId: string) {
       (requester.functionalRole === "DEVELOPER" ||
         requester.functionalRole === "DESIGNER")
     ) {
-      if (isAssignedToEmployee(candidate.id) && isManagerProjectManager(candidate)) {
+      if (
+        isAssignedToEmployee(candidate.id) &&
+        isManagerProjectManager(candidate)
+      ) {
         return true;
       }
     }
@@ -682,7 +711,9 @@ export async function getLeaveRequestsForUser(
         select: { fullName: true, userType: true },
       },
       selectedApprovers: {
-        include: { approver: { select: { id: true, fullName: true, userType: true } } },
+        include: {
+          approver: { select: { id: true, fullName: true, userType: true } },
+        },
         orderBy: { approver: { fullName: "asc" } },
       },
     },
@@ -699,7 +730,9 @@ export async function getLeaveRequestsForUser(
         select: { fullName: true, userType: true },
       },
       selectedApprovers: {
-        include: { approver: { select: { id: true, fullName: true, userType: true } } },
+        include: {
+          approver: { select: { id: true, fullName: true, userType: true } },
+        },
         orderBy: { approver: { fullName: "asc" } },
       },
     },
@@ -753,7 +786,9 @@ export async function getLeaveApprovalsForUser(
         },
       },
       selectedApprovers: {
-        include: { approver: { select: { id: true, fullName: true, userType: true } } },
+        include: {
+          approver: { select: { id: true, fullName: true, userType: true } },
+        },
         orderBy: { approver: { fullName: "asc" } },
       },
     },

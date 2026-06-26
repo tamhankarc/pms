@@ -89,14 +89,6 @@ export async function markAttendanceAction(
     const longitude = toNumber(formData.get("longitude"));
     const browserAccuracy = toNumber(formData.get("browserAccuracy"));
     const browserCapturedAt = toDate(formData.get("browserCapturedAt"));
-    const geolocationLatitude = toNumber(formData.get("geolocationLatitude"));
-    const geolocationLongitude = toNumber(formData.get("geolocationLongitude"));
-    const geolocationAccuracy = toNumber(formData.get("geolocationAccuracy"));
-    const geolocationCapturedAt = toDate(formData.get("geolocationCapturedAt"));
-    const geolocationErrorFromClient =
-      typeof formData.get("geolocationError") === "string"
-        ? String(formData.get("geolocationError"))
-        : null;
     const leaveBalance = await getLeaveBalanceForUser(
       user.id,
       getCurrentIstYear(),
@@ -173,14 +165,6 @@ export async function markAttendanceAction(
       longitude,
     );
 
-    const geolocationAddressDetails =
-      geolocationLatitude !== null && geolocationLongitude !== null
-        ? await getGoogleAddressDetailsForCoordinates(
-            geolocationLatitude,
-            geolocationLongitude,
-          )
-        : null;
-
     const locationDistanceMeters = calculateDistanceMeters(
       latitude,
       longitude,
@@ -215,21 +199,6 @@ export async function markAttendanceAction(
         googleVillage: googleAddressDetails.village,
         googleState: googleAddressDetails.state,
         googleFormattedAddress: googleAddressDetails.formattedAddress,
-        geolocationLatitude,
-        geolocationLongitude,
-        geolocationAccuracy,
-        geolocationCapturedAt,
-        geolocationError:
-          geolocationErrorFromClient ||
-          geolocationAddressDetails?.error ||
-          null,
-        geolocationCity: geolocationAddressDetails?.city ?? null,
-        geolocationDistrict: geolocationAddressDetails?.district ?? null,
-        geolocationTown: geolocationAddressDetails?.town ?? null,
-        geolocationVillage: geolocationAddressDetails?.village ?? null,
-        geolocationState: geolocationAddressDetails?.state ?? null,
-        geolocationFormattedAddress:
-          geolocationAddressDetails?.formattedAddress ?? null,
         locationDistanceMeters,
         city,
         town: location?.town ?? null,

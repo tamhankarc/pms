@@ -1,7 +1,11 @@
 import { getSession } from "@/lib/auth";
 import { canViewEMSAdminDashboard } from "@/lib/permissions";
 import { getAdminDashboardData } from "@/lib/ems-queries";
-import { formatMarkOutTimeInIst, formatTimeInIst, isWeekendDateKey } from "@/lib/ist";
+import {
+  formatMarkOutTimeInIst,
+  formatTimeInIst,
+  isWeekendDateKey,
+} from "@/lib/ist";
 
 function normalizeDateInput(value: string | null) {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
@@ -37,25 +41,41 @@ function escapeCsvValue(value: string) {
 }
 
 function toCsv(rows: string[][]) {
-  return rows.map((row) => row.map((cell) => escapeCsvValue(cell)).join(",")).join("\n");
+  return rows
+    .map((row) => row.map((cell) => escapeCsvValue(cell)).join(","))
+    .join("\n");
 }
 
-function buildFileName(mode: "present" | "absent", attendanceDate: string, shift: "DAY" | "NIGHT" | "BOTH") {
-  const weekendSegment = isWeekendDateKey(attendanceDate) ? "_weekend_working" : "";
+function buildFileName(
+  mode: "present" | "absent",
+  attendanceDate: string,
+  shift: "DAY" | "NIGHT" | "BOTH",
+) {
+  const weekendSegment = isWeekendDateKey(attendanceDate)
+    ? "_weekend_working"
+    : "";
   const modeSegment = mode === "absent" ? "absentee_list" : "presentee_list";
-  const shiftSegment = shift === "BOTH" ? "both_shifts" : shift === "NIGHT" ? "night_shift" : "day_shift";
+  const shiftSegment =
+    shift === "BOTH"
+      ? "both_shifts"
+      : shift === "NIGHT"
+        ? "night_shift"
+        : "day_shift";
   return `${sanitizeFileSegment(modeSegment)}_${shiftSegment}${weekendSegment}_${attendanceDate}_${getTimestamp()}.csv`;
 }
 
 export async function GET(request: Request) {
   const user = await getSession();
   if (!user) return new Response("Unauthorized", { status: 401 });
-  if (!canViewEMSAdminDashboard(user)) return new Response("Forbidden", { status: 403 });
+  if (!canViewEMSAdminDashboard(user))
+    return new Response("Forbidden", { status: 403 });
 
   const { searchParams } = new URL(request.url);
   const attendanceDate = normalizeDateInput(searchParams.get("attendanceDate"));
-  if (!attendanceDate) return new Response("Invalid attendanceDate", { status: 400 });
-  const attendanceMode = searchParams.get("attendanceMode") === "absent" ? "absent" : "present";
+  if (!attendanceDate)
+    return new Response("Invalid attendanceDate", { status: 400 });
+  const attendanceMode =
+    searchParams.get("attendanceMode") === "absent" ? "absent" : "present";
   const attendanceShift =
     searchParams.get("attendanceShift") === "DAY"
       ? "DAY"
@@ -65,7 +85,9 @@ export async function GET(request: Request) {
 
   const dashboardData = await getAdminDashboardData(attendanceDate);
   const rows = dashboardData.attendanceRows
-    .filter((row) => attendanceShift === "BOTH" || row.shift === attendanceShift)
+    .filter(
+      (row) => attendanceShift === "BOTH" || row.shift === attendanceShift,
+    )
     .filter((row) =>
       attendanceMode === "present"
         ? Boolean(row.markIn) || row.isOnLeave
@@ -73,14 +95,27 @@ export async function GET(request: Request) {
     );
 
   const csvRows: string[][] = [
-    ["Employee", "Functional Role", "Shift", "In-Time", "Out-Time", "City"],
+    [
+      "Employee",
+      "Functional Role",
+      "Shift",
+      "In-Time",
+      "Out-Time",
+      "City/District",
+    ],
     ...rows.map((row) => [
       row.fullName,
       (row.functionalRole ?? "UNASSIGNED").replaceAll("_", " "),
       row.shift === "NIGHT" ? "Night" : "Day",
-      row.isOnLeave ? "On Leave" : formatTimeInIst(row.markIn?.markedAt ?? null),
-      formatMarkOutTimeInIst(row.markOut?.markedAt ?? null, attendanceDate, row.shift),
-      row.city || "—",
+      row.isOnLeave
+        ? "On Leave"
+        : formatTimeInIst(row.markIn?.markedAt ?? null),
+      formatMarkOutTimeInIst(
+        row.markOut?.markedAt ?? null,
+        attendanceDate,
+        row.shift,
+      ),
+      row.cityDistrict || "—",
     ]),
   ];
 

@@ -90,6 +90,21 @@ function normalizeDateInput(value?: string) {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
 }
 
+function getCityDistrictLabel(city?: string | null, district?: string | null) {
+  const normalizedCity = (city ?? "").trim();
+  const normalizedDistrict = (district ?? "").trim();
+
+  if (
+    normalizedCity &&
+    normalizedDistrict &&
+    normalizedCity.toLowerCase() !== normalizedDistrict.toLowerCase()
+  ) {
+    return `${normalizedCity}, ${normalizedDistrict}`;
+  }
+
+  return normalizedCity || normalizedDistrict || null;
+}
+
 function isWeekendAttendanceDate(dateKey: string) {
   const value = new Date(`${dateKey}T12:00:00`);
   const day = value.getDay();
@@ -453,7 +468,9 @@ export default async function DashboardPage({
     : false;
 
   const attendanceRows = (adminDashboardData?.attendanceRows ?? [])
-    .filter((row) => attendanceShift === "BOTH" || row.shift === attendanceShift)
+    .filter(
+      (row) => attendanceShift === "BOTH" || row.shift === attendanceShift,
+    )
     .filter((row) =>
       attendanceMode === "present"
         ? Boolean(row.markIn) || row.isOnLeave
@@ -660,11 +677,14 @@ export default async function DashboardPage({
               todayKey,
               shift,
             )}
-            city={
-              employeeSnapshot.attendanceStatus.markOut?.city ??
-              employeeSnapshot.attendanceStatus.markIn?.city ??
-              null
-            }
+            city={getCityDistrictLabel(
+              employeeSnapshot.attendanceStatus.markOut?.googleCity ??
+                employeeSnapshot.attendanceStatus.markIn?.googleCity ??
+                null,
+              employeeSnapshot.attendanceStatus.markOut?.googleDistrict ??
+                employeeSnapshot.attendanceStatus.markIn?.googleDistrict ??
+                null,
+            )}
             shift={shift}
           />
 
@@ -856,7 +876,7 @@ export default async function DashboardPage({
                   <th className="table-cell">Shift</th>
                   <th className="table-cell">In-Time</th>
                   <th className="table-cell">Out-Time</th>
-                  <th className="table-cell">City</th>
+                  <th className="table-cell">City/District</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -875,12 +895,18 @@ export default async function DashboardPage({
                       {row.shift === "NIGHT" ? "Night" : "Day"}
                     </td>
                     <td className="table-cell">
-                      {row.isOnLeave ? "On Leave" : formatTimeInIst(row.markIn?.markedAt ?? null)}
+                      {row.isOnLeave
+                        ? "On Leave"
+                        : formatTimeInIst(row.markIn?.markedAt ?? null)}
                     </td>
                     <td className="table-cell">
-                      {formatMarkOutTimeInIst(row.markOut?.markedAt ?? null, attendanceDate, row.shift)}
+                      {formatMarkOutTimeInIst(
+                        row.markOut?.markedAt ?? null,
+                        attendanceDate,
+                        row.shift,
+                      )}
                     </td>
-                    <td className="table-cell">{row.city || "—"}</td>
+                    <td className="table-cell">{row.cityDistrict || "—"}</td>
                   </tr>
                 ))}
                 {attendancePagination.totalItems === 0 ? (

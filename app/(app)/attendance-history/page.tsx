@@ -65,9 +65,23 @@ function formatCoordinates(latitude: unknown, longitude: unknown) {
     : null;
 }
 
-
 function formatAddressLabel(value: string | null | undefined) {
   return value?.trim() || "—";
+}
+
+function getCityDistrictLabel(city?: string | null, district?: string | null) {
+  const normalizedCity = (city ?? "").trim();
+  const normalizedDistrict = (district ?? "").trim();
+
+  if (
+    normalizedCity &&
+    normalizedDistrict &&
+    normalizedCity.toLowerCase() !== normalizedDistrict.toLowerCase()
+  ) {
+    return `${normalizedCity}, ${normalizedDistrict}`;
+  }
+
+  return normalizedCity || normalizedDistrict || "—";
 }
 
 function AddressDetailsBlock({
@@ -107,7 +121,9 @@ function AddressDetailsBlock({
       <div>Village: {formatAddressLabel(village)}</div>
       <div>State: {formatAddressLabel(state)}</div>
       <div>Address: {formatAddressLabel(address)}</div>
-      {error ? <div className="text-xs text-amber-700">Note: {error}</div> : null}
+      {error ? (
+        <div className="text-xs text-amber-700">Note: {error}</div>
+      ) : null}
     </div>
   );
 }
@@ -435,7 +451,7 @@ export default async function AttendanceHistoryPage({
           <div className="flex flex-wrap gap-2">
             {selectedUser ? (
               <>
-                <span className="inline-flex w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                <span className="inline-flex items-center w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
                   Current shift: {getShiftLabel(currentShift)}
                 </span>
                 <Link
@@ -478,9 +494,12 @@ export default async function AttendanceHistoryPage({
                 <th className="table-cell">Marked at</th>
                 {canSeeLocationComparison ? (
                   <>
-                    <th className="table-cell">Browser Co-Ordinates & Address</th>
-                    <th className="table-cell">Geocoding API Co-Ordinates & Address</th>
-                    <th className="table-cell">Geolocation API Co-Ordinates & Address</th>
+                    <th className="table-cell">
+                      Browser Co-Ordinates & Address
+                    </th>
+                    <th className="table-cell">
+                      Geocoding API Co-Ordinates & Address
+                    </th>
                   </>
                 ) : (
                   <>
@@ -524,7 +543,10 @@ export default async function AttendanceHistoryPage({
                         <td className="table-cell align-top">
                           <AddressDetailsBlock
                             title="Browser"
-                            coordinates={formatCoordinates(log.latitude, log.longitude)}
+                            coordinates={formatCoordinates(
+                              log.latitude,
+                              log.longitude,
+                            )}
                             accuracy={formatMeters(log.browserAccuracy)}
                             city={log.city}
                             district={log.stateDistrict}
@@ -552,38 +574,19 @@ export default async function AttendanceHistoryPage({
                             address={log.googleFormattedAddress}
                           />
                         </td>
-                        <td className="table-cell align-top">
-                          <AddressDetailsBlock
-                            title="Geolocation API"
-                            coordinates={formatCoordinates(
-                              log.geolocationLatitude,
-                              log.geolocationLongitude,
-                            )}
-                            accuracy={formatMeters(log.geolocationAccuracy)}
-                            error={log.geolocationError}
-                            city={log.geolocationCity}
-                            district={log.geolocationDistrict}
-                            town={log.geolocationTown}
-                            village={log.geolocationVillage}
-                            state={log.geolocationState}
-                            address={log.geolocationFormattedAddress}
-                          />
-                        </td>
                       </>
                     ) : (
                       <>
                         <td className="table-cell">
-                          {[log.city].filter(Boolean).join(", ") ||
-                            [log.town, log.village, log.stateDistrict]
-                              .filter(Boolean)
-                              .join(", ") ||
+                          {getCityDistrictLabel(
+                            log.googleCity,
+                            log.googleDistrict,
+                          )}
+                        </td>
+                        <td className="table-cell">{log.googleState || "—"}</td>
+                        <td className="table-cell">
+                          {formatCoordinates(log.latitude, log.longitude) ??
                             "—"}
-                        </td>
-                        <td className="table-cell">
-                          {[log.state].filter(Boolean).join(", ") || "—"}
-                        </td>
-                        <td className="table-cell">
-                          {formatCoordinates(log.latitude, log.longitude) ?? "—"}
                         </td>
                       </>
                     )}
@@ -613,7 +616,7 @@ export default async function AttendanceHistoryPage({
                 <tr>
                   <td
                     colSpan={
-                      6 +
+                      (canSeeLocationComparison ? 5 : 6) +
                       (canAddManualLog ? 1 : 0)
                     }
                     className="table-cell text-center text-sm text-slate-500"
@@ -625,7 +628,8 @@ export default async function AttendanceHistoryPage({
                 </tr>
               ) : null}
             </tbody>
-          </table>        </div>
+          </table>{" "}
+        </div>
 
         <PaginationControls
           basePath="/attendance-history"

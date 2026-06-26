@@ -61,17 +61,19 @@ function getActionLabel(value: string) {
   return value === "MARK_OUT" ? "Mark-Out" : "Mark-In";
 }
 
-function getLocation(log: {
-  city: string | null;
-  town: string | null;
-  village: string | null;
-  stateDistrict: string | null;
-}) {
-  return (
-    [log.city].filter(Boolean).join(", ") ||
-    [log.town, log.village, log.stateDistrict].filter(Boolean).join(", ") ||
-    "—"
-  );
+function getCityDistrictLabel(city?: string | null, district?: string | null) {
+  const normalizedCity = (city ?? "").trim();
+  const normalizedDistrict = (district ?? "").trim();
+
+  if (
+    normalizedCity &&
+    normalizedDistrict &&
+    normalizedCity.toLowerCase() !== normalizedDistrict.toLowerCase()
+  ) {
+    return `${normalizedCity}, ${normalizedDistrict}`;
+  }
+
+  return normalizedCity || normalizedDistrict || "—";
 }
 
 function formatDecimalNumber(value: unknown, fractionDigits: number) {
@@ -426,7 +428,6 @@ export async function GET(request: Request) {
         ? [
             "Browser Co-Ordinates & Address",
             "Geocoding API Co-Ordinates & Address",
-            "Geolocation API Co-Ordinates & Address",
           ]
         : ["City/District", "State", "Coordinates"]),
     ],
@@ -447,8 +448,8 @@ export async function GET(request: Request) {
       if (!canSeeLocationComparison) {
         return [
           ...baseColumns,
-          getLocation(log),
-          log.state || "—",
+          getCityDistrictLabel(log.googleCity, log.googleDistrict),
+          log.googleState || "—",
           formatCoordinates(log.latitude, log.longitude),
         ];
       }
@@ -468,7 +469,10 @@ export async function GET(request: Request) {
           }),
         }),
         joinCoordinatesAndAddress({
-          coordinates: formatCoordinates(log.googleLatitude, log.googleLongitude),
+          coordinates: formatCoordinates(
+            log.googleLatitude,
+            log.googleLongitude,
+          ),
           accuracy: formatMeters(log.googleAccuracy),
           difference: formatMeters(log.locationDistanceMeters),
           error: log.googleError,
@@ -479,22 +483,6 @@ export async function GET(request: Request) {
             village: log.googleVillage,
             state: log.googleState,
             address: log.googleFormattedAddress,
-          }),
-        }),
-        joinCoordinatesAndAddress({
-          coordinates: formatCoordinates(
-            log.geolocationLatitude,
-            log.geolocationLongitude,
-          ),
-          accuracy: formatMeters(log.geolocationAccuracy),
-          error: log.geolocationError,
-          addressDetails: getAddressDetails({
-            city: log.geolocationCity,
-            district: log.geolocationDistrict,
-            town: log.geolocationTown,
-            village: log.geolocationVillage,
-            state: log.geolocationState,
-            address: log.geolocationFormattedAddress,
           }),
         }),
       ];

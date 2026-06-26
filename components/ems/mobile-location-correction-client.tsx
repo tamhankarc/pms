@@ -45,124 +45,48 @@ type CheckLocationResult = {
   entries?: CorrectionEntry[];
 };
 
-type GoogleGeolocationCapture = {
-  latitude: number | null;
-  longitude: number | null;
-  accuracy: number | null;
-  capturedAt: string | null;
-  error: string | null;
-};
-
 function isMobileLikeDevice() {
-  if (typeof window === "undefined") return false;
-  const ua = navigator.userAgent || "";
-  const mobileOrTablet =
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-  const smallTouch = window.innerWidth < 1024 && navigator.maxTouchPoints > 0;
-  return mobileOrTablet || smallTouch;
-}
-
-function formatCoordinate(value: number | null) {
-  return value === null ? "—" : value.toFixed(7);
-}
-
-function formatAccuracy(value: number | null) {
-  return value === null ? "—" : `${Math.round(value)} m`;
-}
-
-function getClientErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
-}
-
-function formatCapturedAt(value: string | null) {
-  if (!value) return "—";
-  try {
-    return new Intl.DateTimeFormat("en-IN", {
-      dateStyle: "medium",
-      timeStyle: "short",
-      timeZone: "Asia/Kolkata",
-    }).format(new Date(value));
-  } catch {
-    return value;
-  }
-}
-
-function getGoogleGeolocationApiKey() {
-  return (
-    process.env.NEXT_PUBLIC_GOOGLE_GEOLOCATION_API_KEY ||
-    process.env.NEXT_PUBLIC_GOOGLE_GEOLOCATION_BROWSER_API_KEY ||
-    ""
-  ).trim();
-}
-
-async function captureGoogleGeolocation(): Promise<GoogleGeolocationCapture> {
-  const apiKey = getGoogleGeolocationApiKey();
-  const capturedAt = new Date().toISOString();
-
-  if (!apiKey) {
-    return {
-      latitude: null,
-      longitude: null,
-      accuracy: null,
-      capturedAt,
-      error: "NEXT_PUBLIC_GOOGLE_GEOLOCATION_API_KEY is not configured.",
-    };
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return false;
   }
 
-  try {
-    const response = await fetch(
-      `https://www.googleapis.com/geolocation/v1/geolocate?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ considerIp: true }),
-      },
+  const userAgent = navigator.userAgent || navigator.vendor || "";
+
+  const isMobileUserAgent =
+    /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(
+      userAgent,
     );
 
-    const payload = (await response.json().catch(() => null)) as {
-      location?: { lat?: number; lng?: number };
-      accuracy?: number;
-      error?: { message?: string; status?: string };
-    } | null;
+  const hasTouch =
+    "ontouchstart" in window ||
+    navigator.maxTouchPoints > 0 ||
+    // @ts-expect-error - older Safari fallback
+    navigator.msMaxTouchPoints > 0;
 
-    if (!response.ok || payload?.error) {
-      return {
-        latitude: null,
-        longitude: null,
-        accuracy: null,
-        capturedAt,
-        error:
-          payload?.error?.message ||
-          payload?.error?.status ||
-          `Google Geolocation failed with status ${response.status}.`,
-      };
+  const isSmallScreen = window.matchMedia("(max-width: 768px)").matches;
+
+  return isMobileUserAgent || (hasTouch && isSmallScreen);
+}
+
+function getClientErrorMessage(error: unknown, fallbackMessage: string) {
+  if (error instanceof GeolocationPositionError) {
+    switch (error.code) {
+      case error.PERMISSION_DENIED:
+        return "Location permission was denied. Please allow location access and try again.";
+      case error.POSITION_UNAVAILABLE:
+        return "Current location is unavailable. Please check GPS/location settings and try again.";
+      case error.TIMEOUT:
+        return "Getting current location timed out. Please try again.";
+      default:
+        return fallbackMessage;
     }
-
-    return {
-      latitude:
-        typeof payload?.location?.lat === "number"
-          ? payload.location.lat
-          : null,
-      longitude:
-        typeof payload?.location?.lng === "number"
-          ? payload.location.lng
-          : null,
-      accuracy: typeof payload?.accuracy === "number" ? payload.accuracy : null,
-      capturedAt,
-      error: null,
-    };
-  } catch (error) {
-    return {
-      latitude: null,
-      longitude: null,
-      accuracy: null,
-      capturedAt,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Google Geolocation request failed.",
-    };
   }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return fallbackMessage;
 }
 
 async function getMobileBrowserPosition() {
@@ -185,7 +109,6 @@ async function buildLocationFormData(
   actionType?: AttendanceActionTypeForCorrection,
 ) {
   const position = await getMobileBrowserPosition();
-  const googleGeolocation = await captureGoogleGeolocation();
   const formData = new FormData();
 
   if (actionType) formData.set("actionType", actionType);
@@ -196,23 +119,26 @@ async function buildLocationFormData(
   }
   formData.set("browserCapturedAt", new Date(position.timestamp).toISOString());
 
-  if (googleGeolocation.latitude !== null) {
-    formData.set("geolocationLatitude", String(googleGeolocation.latitude));
-  }
-  if (googleGeolocation.longitude !== null) {
-    formData.set("geolocationLongitude", String(googleGeolocation.longitude));
-  }
-  if (googleGeolocation.accuracy !== null) {
-    formData.set("geolocationAccuracy", String(googleGeolocation.accuracy));
-  }
-  if (googleGeolocation.capturedAt) {
-    formData.set("geolocationCapturedAt", googleGeolocation.capturedAt);
-  }
-  if (googleGeolocation.error) {
-    formData.set("geolocationError", googleGeolocation.error);
+  return formData;
+}
+
+function normalizeLocationPart(value?: string | null) {
+  return (value ?? "").trim();
+}
+
+function getCityDistrictLabel(location: LocationDisplay | null) {
+  if (!location) return "—";
+
+  const city = normalizeLocationPart(location.city);
+  const district = normalizeLocationPart(location.district);
+  const cityLower = city.toLowerCase();
+  const districtLower = district.toLowerCase();
+
+  if (city && district && cityLower !== districtLower) {
+    return `${city}, ${district}`;
   }
 
-  return formData;
+  return city || district || "—";
 }
 
 function LocationCityState({ location }: { location: LocationDisplay | null }) {
@@ -221,8 +147,8 @@ function LocationCityState({ location }: { location: LocationDisplay | null }) {
   return (
     <div className="space-y-1 text-sm text-slate-700">
       <p>
-        <span className="font-semibold text-slate-900">City:</span>{" "}
-        {location.city || "—"}
+        <span className="font-semibold text-slate-900">City/District:</span>{" "}
+        {getCityDistrictLabel(location)}
       </p>
       <p>
         <span className="font-semibold text-slate-900">State:</span>{" "}
@@ -295,9 +221,9 @@ function EntryCard({
             <div className="space-y-3">
               <p className="text-sm font-medium text-slate-800">
                 {entry.cityChanged && entry.stateChanged
-                  ? "City and State are different from the saved attendance location."
+                  ? "City/District and State are different from the saved attendance location."
                   : entry.cityChanged
-                    ? "City is different from the saved attendance location."
+                    ? "City/District is different from the saved attendance location."
                     : "State is different from the saved attendance location."}
               </p>
               <button
@@ -313,8 +239,8 @@ function EntryCard({
             </div>
           ) : (
             <p className="text-sm font-medium text-emerald-700">
-              City and State match the saved attendance location. No update is
-              required.
+              City/District and State match the saved attendance location. No
+              update is required.
             </p>
           )}
         </div>
@@ -428,7 +354,7 @@ export function MobileLocationCorrectionClient() {
         <p className="section-subtitle mt-2">
           Use this page on mobile to compare your current location with
           today&apos;s saved Mark-In / Mark-Out location. Update is available
-          only if the saved city or state is different and the relevant
+          only if the saved city/district or state is different and the relevant
           attendance window is currently open.
         </p>
         <button

@@ -88,6 +88,22 @@ function normalizeComparable(value?: string | null) {
   return (value ?? "").trim().toLowerCase();
 }
 
+function getCityDistrictLabel(city?: string | null, district?: string | null) {
+  const normalizedCity = (city ?? "").trim();
+  const normalizedDistrict = (district ?? "").trim();
+
+  if (
+    normalizedCity &&
+    normalizedDistrict &&
+    normalizeComparable(normalizedCity) !==
+      normalizeComparable(normalizedDistrict)
+  ) {
+    return `${normalizedCity}, ${normalizedDistrict}`;
+  }
+
+  return normalizedCity || normalizedDistrict || "";
+}
+
 function calculateDistanceMeters(
   latitudeA: number,
   longitudeA: number,
@@ -134,25 +150,32 @@ function decimalToNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function buildSavedLocationDisplay(log: Awaited<ReturnType<typeof getEligibleAttendanceLog>>): LocationDisplay | null {
+function buildSavedLocationDisplay(
+  log: Awaited<ReturnType<typeof getEligibleAttendanceLog>>,
+): LocationDisplay | null {
   if (!log) return null;
   return {
-    latitude: decimalToNumber(log.latitude),
-    longitude: decimalToNumber(log.longitude),
-    accuracy: decimalToNumber(log.browserAccuracy),
-    city: log.city ?? null,
-    district: log.stateDistrict ?? null,
-    town: log.town ?? null,
-    village: log.village ?? null,
-    state: log.state ?? null,
-    formattedAddress: log.browserFormattedAddress ?? null,
-    capturedAt: log.browserCapturedAt ? log.browserCapturedAt.toISOString() : null,
-    error: null,
+    latitude: decimalToNumber(log.googleLatitude),
+    longitude: decimalToNumber(log.googleLongitude),
+    accuracy: decimalToNumber(log.googleAccuracy),
+    city: log.googleCity ?? null,
+    district: log.googleDistrict ?? null,
+    town: log.googleTown ?? null,
+    village: log.googleVillage ?? null,
+    state: log.googleState ?? null,
+    formattedAddress: log.googleFormattedAddress ?? null,
+    capturedAt: log.googleCapturedAt
+      ? log.googleCapturedAt.toISOString()
+      : null,
+    error: log.googleError ?? null,
   };
 }
 
 async function getUserShift(userId: string) {
-  const leaveBalance = await getLeaveBalanceForUser(userId, getCurrentIstYear());
+  const leaveBalance = await getLeaveBalanceForUser(
+    userId,
+    getCurrentIstYear(),
+  );
   return leaveBalance.shift;
 }
 
@@ -177,17 +200,11 @@ async function resolveCurrentLocation(formData: FormData) {
   const longitude = toNumber(formData.get("longitude"));
   const browserAccuracy = toNumber(formData.get("browserAccuracy"));
   const browserCapturedAt = toDate(formData.get("browserCapturedAt"));
-  const geolocationLatitude = toNumber(formData.get("geolocationLatitude"));
-  const geolocationLongitude = toNumber(formData.get("geolocationLongitude"));
-  const geolocationAccuracy = toNumber(formData.get("geolocationAccuracy"));
-  const geolocationCapturedAt = toDate(formData.get("geolocationCapturedAt"));
-  const geolocationErrorFromClient =
-    typeof formData.get("geolocationError") === "string"
-      ? String(formData.get("geolocationError"))
-      : null;
 
   if (latitude === null || longitude === null) {
-    throw new Error("Mobile browser location is required. Please allow location access and try again.");
+    throw new Error(
+      "Mobile browser location is required. Please allow location access and try again.",
+    );
   }
 
   const browserAddress = await reverseGeocodeLocation(latitude, longitude);
@@ -202,13 +219,6 @@ async function resolveCurrentLocation(formData: FormData) {
     latitude,
     longitude,
   );
-  const geolocationAddress =
-    geolocationLatitude !== null && geolocationLongitude !== null
-      ? await getGoogleAddressDetailsForCoordinates(
-          geolocationLatitude,
-          geolocationLongitude,
-        )
-      : null;
 
   return {
     raw: {
@@ -219,12 +229,6 @@ async function resolveCurrentLocation(formData: FormData) {
       browserCity,
       browserAddress,
       geocodingAddress,
-      geolocationLatitude,
-      geolocationLongitude,
-      geolocationAccuracy,
-      geolocationCapturedAt,
-      geolocationErrorFromClient,
-      geolocationAddress,
     },
     browserDisplay: {
       latitude,
@@ -254,27 +258,24 @@ async function resolveCurrentLocation(formData: FormData) {
         : null,
       error: geocodingAddress.error,
     } satisfies LocationDisplay,
-    geolocationDisplay: {
-      latitude: geolocationLatitude,
-      longitude: geolocationLongitude,
-      accuracy: geolocationAccuracy,
-      city: geolocationAddress?.city ?? null,
-      district: geolocationAddress?.district ?? null,
-      town: geolocationAddress?.town ?? null,
-      village: geolocationAddress?.village ?? null,
-      state: geolocationAddress?.state ?? null,
-      formattedAddress: geolocationAddress?.formattedAddress ?? null,
-      capturedAt: geolocationCapturedAt ? geolocationCapturedAt.toISOString() : null,
-      error: geolocationErrorFromClient || geolocationAddress?.error || null,
-    } satisfies LocationDisplay,
+    geolocationDisplay: null,
   };
 }
 
-function isActionWindowOpen(actionType: AttendanceActionTypeForCorrection, now: Date, shift: "DAY" | "NIGHT") {
-  return actionType === "MARK_IN" ? isMarkInWindow(now, shift) : isMarkOutWindow(now, shift);
+function isActionWindowOpen(
+  actionType: AttendanceActionTypeForCorrection,
+  now: Date,
+  shift: "DAY" | "NIGHT",
+) {
+  return actionType === "MARK_IN"
+    ? isMarkInWindow(now, shift)
+    : isMarkOutWindow(now, shift);
 }
 
-function getWindowClosedReason(actionType: AttendanceActionTypeForCorrection, shift: "DAY" | "NIGHT") {
+function getWindowClosedReason(
+  actionType: AttendanceActionTypeForCorrection,
+  shift: "DAY" | "NIGHT",
+) {
   return actionType === "MARK_IN"
     ? `${getMarkInWindowLabel(shift)} Location correction for Mark-In is available only during this window.`
     : `${getMarkOutWindowLabel(shift)} Location correction for Mark-Out is available only during this window.`;
@@ -304,17 +305,29 @@ export async function checkMobileAttendanceLocationAction(
     for (const actionType of ["MARK_IN", "MARK_OUT"] as const) {
       const label = actionType === "MARK_IN" ? "Mark-In" : "Mark-Out";
       const windowOpen = isActionWindowOpen(actionType, now, shift);
-      const log = await getEligibleAttendanceLog(user.id, actionType, startUtc, endUtc);
+      const log = await getEligibleAttendanceLog(
+        user.id,
+        actionType,
+        startUtc,
+        endUtc,
+      );
       const saved = buildSavedLocationDisplay(log);
+      const savedCityDistrict = saved
+        ? getCityDistrictLabel(saved.city, saved.district)
+        : "";
+      const currentCityDistrict = getCityDistrictLabel(
+        currentLocation.geocodingDisplay.city,
+        currentLocation.geocodingDisplay.district,
+      );
       const cityChanged = Boolean(
         saved &&
-          normalizeComparable(saved.city) !==
-            normalizeComparable(currentLocation.browserDisplay.city),
+        normalizeComparable(savedCityDistrict) !==
+          normalizeComparable(currentCityDistrict),
       );
       const stateChanged = Boolean(
         saved &&
-          normalizeComparable(saved.state) !==
-            normalizeComparable(currentLocation.browserDisplay.state),
+        normalizeComparable(saved.state) !==
+          normalizeComparable(currentLocation.geocodingDisplay.state),
       );
 
       entries.push({
@@ -329,7 +342,7 @@ export async function checkMobileAttendanceLocationAction(
         attendanceDate: log ? formatDateInIst(log.attendanceDate) : null,
         markedAt: log ? formatTimeInIst(log.markedAt) : null,
         saved,
-        currentBrowser: currentLocation.browserDisplay,
+        currentBrowser: currentLocation.geocodingDisplay,
         currentGeocoding: currentLocation.geocodingDisplay,
         currentGeolocation: currentLocation.geolocationDisplay,
         cityChanged,
@@ -367,7 +380,9 @@ export async function updateMobileAttendanceLocationAction(
       };
     }
 
-    const actionType = String(formData.get("actionType") || "") as AttendanceActionTypeForCorrection;
+    const actionType = String(
+      formData.get("actionType") || "",
+    ) as AttendanceActionTypeForCorrection;
     if (actionType !== "MARK_IN" && actionType !== "MARK_OUT") {
       return { success: false, error: "Invalid attendance action." };
     }
@@ -384,7 +399,12 @@ export async function updateMobileAttendanceLocationAction(
 
     const workDateKey = getAttendanceWorkDateKey(now, shift);
     const { startUtc, endUtc } = getDayBoundsUtcFromIstDateKey(workDateKey);
-    const log = await getEligibleAttendanceLog(user.id, actionType, startUtc, endUtc);
+    const log = await getEligibleAttendanceLog(
+      user.id,
+      actionType,
+      startUtc,
+      endUtc,
+    );
 
     if (!log) {
       return {
@@ -424,18 +444,6 @@ export async function updateMobileAttendanceLocationAction(
         googleVillage: raw.geocodingAddress.village,
         googleState: raw.geocodingAddress.state,
         googleFormattedAddress: raw.geocodingAddress.formattedAddress,
-        geolocationLatitude: raw.geolocationLatitude,
-        geolocationLongitude: raw.geolocationLongitude,
-        geolocationAccuracy: raw.geolocationAccuracy,
-        geolocationCapturedAt: raw.geolocationCapturedAt,
-        geolocationError:
-          raw.geolocationErrorFromClient || raw.geolocationAddress?.error || null,
-        geolocationCity: raw.geolocationAddress?.city ?? null,
-        geolocationDistrict: raw.geolocationAddress?.district ?? null,
-        geolocationTown: raw.geolocationAddress?.town ?? null,
-        geolocationVillage: raw.geolocationAddress?.village ?? null,
-        geolocationState: raw.geolocationAddress?.state ?? null,
-        geolocationFormattedAddress: raw.geolocationAddress?.formattedAddress ?? null,
         locationDistanceMeters,
         city: raw.browserCity,
         town: raw.browserAddress?.town ?? null,
