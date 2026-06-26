@@ -86,6 +86,7 @@ export async function addManualAttendanceLogAction(formData: FormData) {
   const markedAtTime = getString(formData, "markedAtTime");
   const rawActionType = getString(formData, "actionType");
   const city = getString(formData, "city") || null;
+  const stateDistrict = getString(formData, "stateDistrict") || null;
   const state = getString(formData, "state") || null;
   const latitude = parseOptionalNumber(getString(formData, "latitude"), 0);
   const longitude = parseOptionalNumber(getString(formData, "longitude"), 0);
@@ -173,6 +174,7 @@ export async function addManualAttendanceLogAction(formData: FormData) {
       latitude,
       longitude,
       city,
+      stateDistrict,
       state,
     },
   });
@@ -206,6 +208,7 @@ export async function updateManualAttendanceLogAction(formData: FormData) {
   const markedAtTime = getString(formData, "markedAtTime");
   const rawActionType = getString(formData, "actionType");
   const city = getString(formData, "city") || null;
+  const stateDistrict = getString(formData, "stateDistrict") || null;
   const state = getString(formData, "state") || null;
   const latitude = parseOptionalNumber(getString(formData, "latitude"), 0);
   const longitude = parseOptionalNumber(getString(formData, "longitude"), 0);
@@ -304,6 +307,7 @@ export async function updateManualAttendanceLogAction(formData: FormData) {
       latitude,
       longitude,
       city,
+      stateDistrict,
       state,
     },
   });

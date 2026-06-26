@@ -152,6 +152,13 @@ export default async function EditAttendanceLogPage({
           </div>
 
           <div>
+            <label htmlFor="stateDistrict" className="form-label">
+              District
+            </label>
+            <input id="stateDistrict" name="stateDistrict" type="text" className="input-field" placeholder="Optional" defaultValue={log.stateDistrict ?? ""} />
+          </div>
+
+          <div>
             <label htmlFor="state" className="form-label">
               State
             </label>

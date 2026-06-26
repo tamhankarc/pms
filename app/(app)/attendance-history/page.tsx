@@ -774,6 +774,20 @@ export default async function AttendanceHistoryPage({
             </div>
 
             <div>
+              <label htmlFor="stateDistrict" className="form-label">
+                District
+              </label>
+              <input
+                id="stateDistrict"
+                name="stateDistrict"
+                type="text"
+                className="input-field"
+                placeholder="Optional"
+                disabled={!selectedUser}
+              />
+            </div>
+
+            <div>
               <label htmlFor="state" className="form-label">
                 State
               </label>
