@@ -72,10 +72,21 @@ export async function getGoogleAddressDetailsForCoordinates(
   }
 
   try {
+    const params = new URLSearchParams({
+      latlng: `${latitude},${longitude}`,
+      language: "en",
+      region: "in",
+      key: apiKey,
+    });
+
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(`${latitude},${longitude}`)}&key=${encodeURIComponent(apiKey)}`,
+      `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`,
       { method: "GET", cache: "no-store" },
     );
+    /*const response = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(`${latitude},${longitude}`)}&key=${encodeURIComponent(apiKey)}`,
+      { method: "GET", cache: "no-store" },
+    );*/
 
     const payload = (await response.json().catch(() => null)) as
       | GoogleGeocodingResponse

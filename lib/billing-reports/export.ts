@@ -3496,10 +3496,17 @@ function billingHistorySectionFilterRows(
 ) {
   if (isAmazonBillingHistoryData(data)) {
     if (section?.monthFilterValue) {
-      return [excelRow([section.monthFilterLabel ?? "Billing Month", section.monthFilterValue])];
+      return [
+        excelRow([
+          section.monthFilterLabel ?? "Billing Month",
+          section.monthFilterValue,
+        ]),
+      ];
     }
     if (section?.yearFilterValue) {
-      return [excelRow([section.yearFilterLabel ?? "Year", section.yearFilterValue])];
+      return [
+        excelRow([section.yearFilterLabel ?? "Year", section.yearFilterValue]),
+      ];
     }
     return [];
   }
@@ -3817,9 +3824,48 @@ function genericSummaryHistoryExcelRows(
   ];
 }
 
+function genericNonTitleProjectExcelRows(
+  rows: GenericBillingSummaryHistoryData["nonTitleProjectRows"],
+  includeAction = false,
+) {
+  const hasBillingMonth = rows.some((row) => row.billingMonth);
+  return [
+    excelRow([
+      "Project (Project Status)",
+      "Billing Model",
+      "Cost",
+      ...(hasBillingMonth ? ["Billing Month"] : []),
+      "PO Number",
+      ...(includeAction ? ["Action"] : []),
+    ]),
+    ...rows.map((row) => {
+      const values = [
+        `${row.title} (${row.projectStatus ?? row.status})`,
+        row.billingModel ?? "-",
+        typeof row.cost === "number" ? row.cost : "-",
+        ...(hasBillingMonth ? [row.billingMonth ?? "-"] : []),
+        row.poNumber || "-",
+        ...(includeAction ? ["Billing Done"] : []),
+      ];
+      return excelRow(values, typeof row.cost === "number" ? [2] : []);
+    }),
+  ];
+}
+
 export function buildGenericBillingSummaryHistoryExcel(
   data: GenericBillingSummaryHistoryData,
 ) {
+  const nonTitleProjectWorksheet = data.nonTitleProjectRows.length
+    ? `
+ ${worksheet("Project Billing Summary", [
+   excelRow([data.client.name]),
+   excelRow(["Report", "Project Billing Summary"]),
+   excelRow(["Billing Month", data.filters.projectMonth]),
+   excelRow([]),
+   ...genericNonTitleProjectExcelRows(data.nonTitleProjectRows, true),
+ ])}`
+    : "";
+
   return `<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
@@ -3830,6 +3876,7 @@ export function buildGenericBillingSummaryHistoryExcel(
    excelRow([]),
    ...genericSummaryHistoryExcelRows(data, data.summaryRows, true),
  ])}
+${nonTitleProjectWorksheet}
 
  ${worksheet("Billing History", [
    excelRow([data.client.name]),
@@ -3912,6 +3959,48 @@ function genericSummaryHistoryPdfPage(
   return commands.join("\n");
 }
 
+function genericNonTitleProjectPdfPage(
+  data: GenericBillingSummaryHistoryData,
+  title: string,
+  rows: GenericBillingSummaryHistoryData["nonTitleProjectRows"],
+) {
+  const commands: string[] = [
+    textCommand(title, MARGIN_X, TOP_Y, 15, true),
+    textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true),
+    textCommand(
+      `Billing Month: ${data.filters.projectMonth}`,
+      MARGIN_X,
+      TOP_Y - 38,
+      9,
+    ),
+  ];
+  const hasBillingMonth = rows.some((row) => row.billingMonth);
+  const columns: PdfTableColumn[] = [
+    { header: "Project", width: hasBillingMonth ? 200 : 235 },
+    { header: "Billing Model", width: 115 },
+    { header: "Cost", width: 90, align: "right" },
+    ...(hasBillingMonth
+      ? ([{ header: "Billing Month", width: 95 }] as PdfTableColumn[])
+      : []),
+    { header: "PO Number", width: 130 },
+  ];
+  const tableRows: PdfTableRow[] = rows.map((row) => [
+    `${row.title} (${row.projectStatus ?? row.status})`,
+    row.billingModel ?? "-",
+    typeof row.cost === "number" ? formatUsd(row.cost) : "-",
+    ...(hasBillingMonth ? [row.billingMonth ?? "-"] : []),
+    row.poNumber || "-",
+  ]);
+  drawTableHeader(commands, columns, MARGIN_X, TOP_Y - 84);
+  let y = TOP_Y - 84 - HEADER_HEIGHT;
+  for (const row of tableRows.length ? tableRows : [["No records available"]]) {
+    drawTableRow(commands, columns, row, MARGIN_X, y, DETAIL_ROW_HEIGHT, 6.5);
+    y -= DETAIL_ROW_HEIGHT;
+    if (y < 50) break;
+  }
+  return commands.join("\n");
+}
+
 export function buildGenericBillingSummaryHistoryPdf(
   data: GenericBillingSummaryHistoryData,
 ) {
@@ -3922,6 +4011,15 @@ export function buildGenericBillingSummaryHistoryPdf(
       data.summaryRows,
       true,
     ),
+    ...(data.nonTitleProjectRows.length
+      ? [
+          genericNonTitleProjectPdfPage(
+            data,
+            "Project Billing Summary",
+            data.nonTitleProjectRows,
+          ),
+        ]
+      : []),
     genericSummaryHistoryPdfPage(
       data,
       `${data.client.name} Billing Summary & History`,

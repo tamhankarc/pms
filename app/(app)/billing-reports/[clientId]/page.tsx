@@ -4759,6 +4759,76 @@ function GenericSummaryHistoryTable({
   );
 }
 
+function GenericNonTitleProjectSummaryTable({
+  clientId,
+  data,
+  rows,
+}: {
+  clientId: string;
+  data: GenericBillingSummaryHistoryData;
+  rows: GenericBillingSummaryHistoryData["nonTitleProjectRows"];
+}) {
+  const hasBillingMonth = rows.some((row) => row.billingMonth);
+  const returnTo = `/billing-reports/${clientId}?report=billing-summary-history&year=${data.filters.year}&projectMonth=${data.filters.projectMonth}`;
+
+  return (
+    <table className="table-base">
+      <thead className="table-head">
+        <tr>
+          <th className="table-cell">Project (Project Status)</th>
+          <th className="table-cell">Billing Model</th>
+          <th className="table-cell">Cost</th>
+          {hasBillingMonth ? (
+            <th className="table-cell">Billing Month</th>
+          ) : null}
+          <th className="table-cell">PO Number</th>
+          <th className="table-cell">Action</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-slate-100">
+        {rows.map((row) => (
+          <tr key={row.itemId}>
+            <td className="table-cell font-medium text-slate-900">
+              {row.title} ({row.projectStatus ?? row.status})
+            </td>
+            <td className="table-cell">{row.billingModel ?? "-"}</td>
+            <td className="table-cell">
+              {typeof row.cost === "number" ? formatGenericUsd(row.cost) : "-"}
+            </td>
+            {hasBillingMonth ? (
+              <td className="table-cell">{row.billingMonth ?? "-"}</td>
+            ) : null}
+            <td className="table-cell">{row.poNumber ?? "-"}</td>
+            <td className="table-cell">
+              {row.projectId ? (
+                <ProjectBillingDoneButton
+                  projectId={row.projectId}
+                  label="Billing Done"
+                  returnTo={returnTo}
+                  billingMonth={row.billingMonth}
+                  amount={row.cost}
+                />
+              ) : (
+                "-"
+              )}
+            </td>
+          </tr>
+        ))}
+        {rows.length === 0 ? (
+          <tr>
+            <td
+              colSpan={5 + (hasBillingMonth ? 1 : 0)}
+              className="table-cell text-center text-sm text-slate-500"
+            >
+              No non-title project billing records available.
+            </td>
+          </tr>
+        ) : null}
+      </tbody>
+    </table>
+  );
+}
+
 function GenericBillingSummaryHistoryWorkspace({
   clientId,
   activeReport,
@@ -4833,6 +4903,51 @@ function GenericBillingSummaryHistoryWorkspace({
           </section>
         );
       })()}
+      {data.nonTitleProjectRows.length
+        ? (() => {
+            const pagination = getPaginatedBillingHistoryRows(
+              data.nonTitleProjectRows,
+              searchParams,
+              "generic-non-title-project-billing-summary",
+            );
+            return (
+              <section
+                id="generic_non_title_project_billing_summary"
+                className="table-wrap scroll-mt-24"
+              >
+                <div className="border-b border-slate-200 px-6 py-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <h2 className="section-title">Project Billing Summary</h2>
+                      <p className="section-subtitle">
+                        Non-title projects using project-specific POs for this
+                        client. Projects already included in title-based billing
+                        are excluded.
+                      </p>
+                    </div>
+                    <BillingHistoryMonthFilter
+                      clientId={clientId}
+                      searchParams={searchParams}
+                      paramName="projectMonth"
+                      value={data.filters.projectMonth}
+                    />
+                  </div>
+                </div>
+                <GenericNonTitleProjectSummaryTable
+                  clientId={clientId}
+                  data={data}
+                  rows={pagination.page.items}
+                />
+                <BillingHistoryPagination
+                  clientId={clientId}
+                  searchParams={searchParams}
+                  sectionKey="generic-non-title-project-billing-summary"
+                  pageData={pagination.page}
+                />
+              </section>
+            );
+          })()
+        : null}
       <section id="generic_billing_history" className="table-wrap scroll-mt-24">
         <div className="border-b border-slate-200 px-6 py-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
