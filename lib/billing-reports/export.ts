@@ -3494,22 +3494,20 @@ function billingHistorySectionFilterRows(
     yearFilterValue?: string;
   },
 ) {
-  if (isAmazonBillingHistoryData(data)) {
-    if (section?.monthFilterValue) {
-      return [
-        excelRow([
-          section.monthFilterLabel ?? "Billing Month",
-          section.monthFilterValue,
-        ]),
-      ];
-    }
-    if (section?.yearFilterValue) {
-      return [
-        excelRow([section.yearFilterLabel ?? "Year", section.yearFilterValue]),
-      ];
-    }
-    return [];
+  if (section?.monthFilterValue) {
+    return [
+      excelRow([
+        section.monthFilterLabel ?? "Billing Month",
+        section.monthFilterValue,
+      ]),
+    ];
   }
+  if (section?.yearFilterValue) {
+    return [
+      excelRow([section.yearFilterLabel ?? "Year", section.yearFilterValue]),
+    ];
+  }
+  if (isAmazonBillingHistoryData(data)) return [];
   return [excelRow(["Year", data.filters.year])];
 }
 
@@ -3593,13 +3591,13 @@ function billingHistoryPdfPage(
   commands.push(
     textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true),
   );
-  const filterLabel = isAmazonBillingHistoryData(data)
-    ? section?.monthFilterValue
-      ? `${section.monthFilterLabel ?? "Billing Month"}: ${section.monthFilterValue}`
-      : section?.yearFilterValue
-        ? `${section.yearFilterLabel ?? "Year"}: ${section.yearFilterValue}`
-        : ""
-    : `Year: ${data.filters.year}`;
+  const filterLabel = section?.monthFilterValue
+    ? `${section.monthFilterLabel ?? "Billing Month"}: ${section.monthFilterValue}`
+    : section?.yearFilterValue
+      ? `${section.yearFilterLabel ?? "Year"}: ${section.yearFilterValue}`
+      : isAmazonBillingHistoryData(data)
+        ? ""
+        : `Year: ${data.filters.year}`;
   if (filterLabel) {
     commands.push(textCommand(filterLabel, MARGIN_X, TOP_Y - 38, 9));
   }
@@ -4091,6 +4089,35 @@ function sonyNewsletterSummaryHistoryExcelRows(
   ];
 }
 
+function sonyNonTitleProjectExcelRows(
+  rows: SonyBillingSummaryHistoryData["nonTitleProjectRows"],
+) {
+  const hasBillingMonth = rows.some((row) => row.billingMonth);
+  return [
+    excelRow([
+      "Project",
+      "Billing Model",
+      "Cost",
+      ...(hasBillingMonth ? ["Billing Month"] : []),
+      "PO Number",
+      "Action",
+    ]),
+    ...rows.map((row) =>
+      excelRow(
+        [
+          `${row.title ?? row.projectName} (${row.projectStatus ?? row.status})`,
+          row.billingModel ?? "-",
+          row.cost,
+          ...(hasBillingMonth ? [row.billingMonth ?? "-"] : []),
+          row.poNumber || "-",
+          "Billing Done",
+        ],
+        [2],
+      ),
+    ),
+  ];
+}
+
 export function buildSonyBillingSummaryHistoryExcel(
   data: SonyBillingSummaryHistoryData,
 ) {
@@ -4112,6 +4139,16 @@ export function buildSonyBillingSummaryHistoryExcel(
    excelRow([]),
    ...sonyNewsletterSummaryHistoryExcelRows(data.newsletterRows),
  ])}
+
+ ${data.nonTitleProjectRows.length
+   ? worksheet("Project Billing Summary", [
+       excelRow([data.client.name]),
+       excelRow(["Report", "Project Billing Summary"]),
+       excelRow(["Billing Month", data.filters.projectMonth ?? ""]),
+       excelRow([]),
+       ...sonyNonTitleProjectExcelRows(data.nonTitleProjectRows),
+     ])
+   : ""}
 
  ${worksheet("Billing History", [
    excelRow([data.client.name]),
@@ -4213,6 +4250,46 @@ function sonyNewsletterSummaryHistoryPdfPage(
   return commands.join("\n");
 }
 
+function sonyNonTitleProjectPdfPage(data: SonyBillingSummaryHistoryData) {
+  const commands: string[] = [
+    textCommand("Project Billing Summary", MARGIN_X, TOP_Y, 15, true),
+    textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true),
+    textCommand(
+      `Billing Month: ${data.filters.projectMonth ?? "-"}`,
+      MARGIN_X,
+      TOP_Y - 38,
+      9,
+    ),
+  ];
+  const hasBillingMonth = data.nonTitleProjectRows.some(
+    (row) => row.billingMonth,
+  );
+  const columns: PdfTableColumn[] = [
+    { header: "Project", width: hasBillingMonth ? 150 : 190 },
+    { header: "Billing Model", width: 95 },
+    { header: "Cost", width: 75, align: "right" },
+    ...(hasBillingMonth
+      ? ([{ header: "Billing Month", width: 85 }] as PdfTableColumn[])
+      : []),
+    { header: "PO Number", width: 110 },
+  ];
+  const tableRows: PdfTableRow[] = data.nonTitleProjectRows.map((row) => [
+    `${row.title ?? row.projectName} (${row.projectStatus ?? row.status})`,
+    row.billingModel ?? "-",
+    formatUsd(row.cost),
+    ...(hasBillingMonth ? [row.billingMonth ?? "-"] : []),
+    row.poNumber || "-",
+  ]);
+  drawTableHeader(commands, columns, MARGIN_X, TOP_Y - 84);
+  let y = TOP_Y - 84 - HEADER_HEIGHT;
+  for (const row of tableRows.length ? tableRows : [["No records available"]]) {
+    drawTableRow(commands, columns, row, MARGIN_X, y, DETAIL_ROW_HEIGHT, 6.5);
+    y -= DETAIL_ROW_HEIGHT;
+    if (y < 50) break;
+  }
+  return commands.join("\n");
+}
+
 export function buildSonyBillingSummaryHistoryPdf(
   data: SonyBillingSummaryHistoryData,
 ) {
@@ -4223,6 +4300,9 @@ export function buildSonyBillingSummaryHistoryPdf(
       "Newsletters",
       data.newsletterRows,
     ),
+    ...(data.nonTitleProjectRows.length
+      ? [sonyNonTitleProjectPdfPage(data)]
+      : []),
     sonySummaryHistoryPdfPage(
       data,
       `${data.client.name} Billing Summary & History`,

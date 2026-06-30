@@ -282,7 +282,11 @@ async function getNonTitleProjectBillingSummaryRows({
   excludedProjectIds?: string[];
 }): Promise<GenericBillingSummaryHistoryRow[]> {
   const projectMonthRange = parseYearMonth(filters.projectMonth);
-  const excludedProjectIdSet = new Set(excludedProjectIds.filter(Boolean));
+  const excludedProjectIdSet = new Set(
+    excludedProjectIds.filter((projectId): projectId is string =>
+      Boolean(projectId),
+    ),
+  );
 
   const formatProjectBillingModel = (value: string) =>
     ({
@@ -377,7 +381,9 @@ async function getNonTitleProjectBillingSummaryRows({
     select: { projectId: true },
   });
   const billedMonthlyProjectIds = new Set(
-    monthlyBillingRecords.map((record) => record.projectId).filter(Boolean),
+    monthlyBillingRecords
+      .map((record) => record.projectId)
+      .filter((projectId): projectId is string => Boolean(projectId)),
   );
 
   const pendingProjects = projects.filter(

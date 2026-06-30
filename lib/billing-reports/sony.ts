@@ -5,6 +5,11 @@ import {
   sanitizeFileSegment,
 } from "@/lib/billing-reports/amazon";
 import { getLensBillingAdjustments } from "@/lib/billing-reports/lens";
+import {
+  getNonTitleProjectBillingSummaryRows,
+  getProjectsConsideredByTitleRows,
+  type NonTitleProjectBillingSummaryRow,
+} from "@/lib/billing-reports/non-title-project-summary";
 import type { MovieStatus } from "@prisma/client";
 
 const SONY_TICKETING_PROJECT_ID = "cmnn1qrex000ll7043zm4uyti";
@@ -102,6 +107,7 @@ export type SonyBillingSummaryHistoryData = {
   client: { id: string; name: string };
   filters: SonyBillingSummaryHistoryFilters;
   summaryRows: SonyBillingSummaryHistoryRow[];
+  nonTitleProjectRows: NonTitleProjectBillingSummaryRow[];
   historyRows: SonyBillingSummaryHistoryRow[];
   newsletterRows: SonyBillingSummaryHistoryNewsletterRow[];
   newsletterHistoryRows: SonyBillingSummaryHistoryNewsletterRow[];
@@ -376,7 +382,9 @@ export async function getSonyPicturesReportData({
     }),
   ]);
   const moviesWithOtherProjectRows = new Set(
-    otherProjectEntryMovieIds.map((entry) => entry.movieId).filter(Boolean),
+    otherProjectEntryMovieIds
+    .map((entry) => entry.movieId)
+    .filter((movieId): movieId is string => Boolean(movieId)),
   );
   const movieOptions = rawMovieOptions.filter((movie) => {
     if (variant === "canada-other")
@@ -836,7 +844,7 @@ export async function getSonyBillingSummaryHistoryData({
 }): Promise<SonyBillingSummaryHistoryData | null> {
   const client = await db.client.findUnique({
     where: { id: clientId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, hourlyCost: true },
   });
   if (!client) return null;
   const year = Number(filters.year);
@@ -1012,10 +1020,28 @@ export async function getSonyBillingSummaryHistoryData({
     billingDate: formatDisplayDate(record.billingDate),
   }));
 
+  const consideredTitleProjectIds = await getProjectsConsideredByTitleRows({
+    clientId,
+    movieIds: allMovieIds,
+  });
+  const nonTitleProjectRows = await getNonTitleProjectBillingSummaryRows({
+    clientId,
+    clientHourlyCost: client.hourlyCost,
+    filters: { projectMonth: filters.projectMonth ?? newsletterMonth },
+    excludedProjectIds: Array.from(
+      new Set([
+        ...consideredTitleProjectIds,
+        SONY_TICKETING_PROJECT_ID,
+        SONY_NEWSLETTER_PROJECT_ID,
+      ]),
+    ),
+  });
+
   return {
     client,
     filters,
     summaryRows: await Promise.all(summaryMovies.map((movie) => mapRow(movie))),
+    nonTitleProjectRows,
     historyRows: await Promise.all(
       historyMovies.map((movie) => mapRow(movie, true)),
     ),
