@@ -61,7 +61,7 @@ export default async function ProjectDetailPage({
     ]);
   const [projectSpecialTypes] = await db.$queryRaw<
     Array<{
-      warnerProjectType?: "OTHER" | "PORTAL" | "DVD" | null;
+      warnerProjectType?: "OTHER" | "PORTAL" | "DVD" | "TICKETING" | null;
       sonyProjectType?: "OTHER" | "NEWSLETTERS" | null;
     }>
   >`SELECT warnerProjectType, sonyProjectType FROM Project WHERE id = ${project.id} LIMIT 1`;

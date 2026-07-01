@@ -151,11 +151,15 @@ export async function getNonTitleProjectBillingSummaryRows({
   clientHourlyCost,
   filters,
   excludedProjectIds = [],
+  billingCycle,
+  warnerProjectType,
 }: {
   clientId: string;
   clientHourlyCost: unknown;
   filters: NonTitleProjectBillingSummaryFilters;
   excludedProjectIds?: string[];
+  billingCycle?: "MONTHLY" | "ONE_TIME";
+  warnerProjectType?: "OTHER" | "PORTAL" | "DVD" | "TICKETING";
 }): Promise<NonTitleProjectBillingSummaryRow[]> {
   const projectMonthRange = parseYearMonth(filters.projectMonth);
   const excludedProjectIdSet = new Set(
@@ -185,6 +189,8 @@ export async function getNonTitleProjectBillingSummaryRows({
       clientId,
       isActive: true,
       addToBilling: true,
+      ...(billingCycle ? { billingCycle } : {}),
+      ...(warnerProjectType ? { warnerProjectType } : {}),
       ...(excludedProjectIds.length ? { id: { notIn: excludedProjectIds } } : {}),
       OR: [
         { hideMoviesInEntries: true },

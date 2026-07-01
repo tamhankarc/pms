@@ -46,7 +46,7 @@ type BillingModel =
   | "FIXED_PER_COUNTRY"
   | "FIXED_COST";
 type BillingCycle = "ONE_TIME" | "MONTHLY";
-type WarnerProjectType = "OTHER" | "PORTAL" | "DVD";
+type WarnerProjectType = "OTHER" | "PORTAL" | "DVD" | "TICKETING";
 type SonyProjectType = "OTHER" | "NEWSLETTERS";
 type ProjectStatus =
   | "DRAFT"
@@ -319,6 +319,7 @@ export function NewProjectForm({
                 { value: "OTHER", label: "Other" },
                 { value: "PORTAL", label: "Portal" },
                 { value: "DVD", label: "DVD" },
+                { value: "TICKETING", label: "Ticketing" },
               ]}
               placeholder="Select project type"
               searchPlaceholder="Search project types..."

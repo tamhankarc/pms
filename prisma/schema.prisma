@@ -48,6 +48,7 @@ enum WarnerProjectType {
   OTHER
   PORTAL
   DVD
+  TICKETING
 }
 
 enum SonyProjectType {

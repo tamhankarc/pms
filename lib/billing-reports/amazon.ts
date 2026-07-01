@@ -15,6 +15,8 @@ import {
 } from "@/lib/billing-reports/non-title-project-summary";
 import type { MovieStatus } from "@prisma/client";
 
+const WARNER_INTERNATIONAL_TICKETING_BILLING_HEAD_ID = "cmp2a8ns90001js05hqtmpv73";
+
 export type AmazonReportType =
   | "social-assets"
   | "localization"
@@ -1408,6 +1410,26 @@ function isCanadaCountry(country: { isoCode: string | null; name: string }) {
   );
 }
 
+function isWorldwideCountry(country: { isoCode: string | null; name: string }) {
+  const isoCode = (country.isoCode ?? "").trim().toUpperCase();
+  const name = country.name.trim().toLowerCase();
+  return (
+    isoCode === "WW" ||
+    isoCode === "WORLDWIDE" ||
+    name === "ww" ||
+    name === "worldwide" ||
+    name === "world wide"
+  );
+}
+
+function formatWarnerCountryLabel(country: { name: string; isoCode: string | null }) {
+  return country.isoCode ? `${country.name} (${country.isoCode})` : country.name;
+}
+
+function isInternationalTicketingHead(head: { id: string }) {
+  return head.id === WARNER_INTERNATIONAL_TICKETING_BILLING_HEAD_ID;
+}
+
 async function getWarnerDeliverableEntryCountries(clientId: string) {
   return db.timeEntry.findMany({
     where: {
@@ -1430,7 +1452,7 @@ async function getWarnerIntlDeliverableEligibleMovieIds(clientId: string) {
   const eligibleMovieIds = new Set<string>();
   for (const entry of entries) {
     if (!entry.movieId || !entry.country) continue;
-    if (isUsCountry(entry.country) || isCanadaCountry(entry.country)) continue;
+    if (isUsCountry(entry.country) || isCanadaCountry(entry.country) || isWorldwideCountry(entry.country)) continue;
     eligibleMovieIds.add(entry.movieId);
   }
 
@@ -1444,7 +1466,7 @@ async function getWarnerOtherDeliverableEligibleMovieIds(clientId: string) {
 
   for (const entry of entries) {
     if (!entry.movieId || !entry.country) continue;
-    if (!isUsCountry(entry.country)) nonUsMovieIds.add(entry.movieId);
+    if (!isUsCountry(entry.country) && !isWorldwideCountry(entry.country)) nonUsMovieIds.add(entry.movieId);
     if (isCanadaCountry(entry.country)) canadaMovieIds.add(entry.movieId);
   }
 
@@ -1680,6 +1702,7 @@ async function getWarnerDeliverableData({
       if (!entry.country) continue;
       const country = entry.country;
       if (isUsCountry(country)) continue;
+      if (isWorldwideCountry(country)) continue;
       if (isIntl && isCanadaCountry(country)) continue;
       if (
         isOther &&
@@ -1753,6 +1776,17 @@ async function getWarnerDeliverableData({
     return head.intlCost;
   }
   const rows: WarnerDomesticDeliverableLine[] = [];
+  const deliverableCountryLabel = !isDomestic
+    ? Array.from(
+        new Set(
+          countryOptions
+            .map((country) => formatWarnerCountryLabel(country))
+            .filter(Boolean),
+        ),
+      )
+        .sort((a, b) => a.localeCompare(b))
+        .join(", ")
+    : "";
 
   const compulsoryHeads = await db.movieBillingHead.findMany({
     where: {
@@ -1768,12 +1802,12 @@ async function getWarnerDeliverableData({
   });
 
   for (const head of compulsoryHeads) {
-    if (isIntl && head.name.trim().toLowerCase() === "ticketing") {
+    if (isIntl && isInternationalTicketingHead(head)) {
       rows.push({
         label: head.name,
         cost: Number(head.intlCost ?? 0),
         group: "Fixed - Compulsory",
-        meta: undefined,
+        meta: deliverableCountryLabel ? `Countries: ${deliverableCountryLabel}` : undefined,
       });
       continue;
     }
@@ -1784,11 +1818,14 @@ async function getWarnerDeliverableData({
       label: head.name,
       cost: calculateBillingHeadCost(head.costType, getHeadCost(head), units),
       group: "Fixed - Compulsory",
-      meta: isIntl
-        ? undefined
-        : head.costType === "PER_UNIT_COST"
-          ? `Per-unit × ${units}`
-          : "Whole cost",
+      meta:
+        (isIntl || isOther) && isInternationalTicketingHead(head) && deliverableCountryLabel
+          ? `Countries: ${deliverableCountryLabel}`
+          : isIntl
+            ? undefined
+            : head.costType === "PER_UNIT_COST"
+              ? `Per-unit × ${units}`
+              : "Whole cost",
     });
   }
 
@@ -1893,9 +1930,15 @@ async function getWarnerDeliverableData({
         label: firstAssignment.billingHead.name,
         cost: totalCost,
         group: "Fixed - Optional",
-        meta: countries.length
-          ? `Countries: ${Array.from(new Set(countries)).join(", ")}`
-          : undefined,
+        meta: isInternationalTicketingHead(firstAssignment.billingHead)
+          ? deliverableCountryLabel
+            ? `Countries: ${deliverableCountryLabel}`
+            : countries.length
+              ? `Countries: ${Array.from(new Set(countries)).join(", ")}`
+              : undefined
+          : countries.length
+            ? `Countries: ${Array.from(new Set(countries)).join(", ")}`
+            : undefined,
       });
     }
   } else {
@@ -1910,9 +1953,11 @@ async function getWarnerDeliverableData({
         ),
         group: "Fixed - Optional",
         meta:
-          assignment.billingHead.costType === "PER_UNIT_COST"
-            ? `Per-unit × ${units}`
-            : "Whole cost",
+          (isIntl || isOther) && isInternationalTicketingHead(assignment.billingHead) && deliverableCountryLabel
+            ? `Countries: ${deliverableCountryLabel}`
+            : assignment.billingHead.costType === "PER_UNIT_COST"
+              ? `Per-unit × ${units}`
+              : "Whole cost",
       });
     }
   }
@@ -1930,6 +1975,7 @@ async function getWarnerDeliverableData({
       clientId,
       isActive: true,
       addToBilling: true,
+      warnerProjectType: "OTHER",
       timeEntries: {
         some: {
           movieId: selectedMovie.id,
@@ -3360,28 +3406,56 @@ export async function getBillingHistoryData({
     clientPoAssignmentMode === "TITLE_PROJECT" ||
     clientPoAssignmentMode === "TITLE_BILLING_REPORT";
 
-  const buildNonTitleProjectSummarySection = async ({
+  const buildNonTitleProjectSummarySections = async ({
     excludedProjectIds = [],
   }: {
     excludedProjectIds?: string[];
-  }): Promise<BillingHistorySection | null> => {
-    if (!shouldIncludeNonTitleProjectRows) return null;
-    const rows = await getNonTitleProjectBillingSummaryRows({
-      clientId,
-      clientHourlyCost: client.hourlyCost,
-      filters: { projectMonth: filters.projectMonth },
-      excludedProjectIds,
-    });
-    if (!rows.length) return null;
-    return {
-      key: "non-title-project-billing",
-      title: "Project Billing Summary",
-      poAssignmentMode: "PROJECT",
-      rows,
-      monthFilterParam: "projectMonth",
-      monthFilterValue: filters.projectMonth,
-      monthFilterLabel: "Billing Month",
-    };
+  }): Promise<BillingHistorySection[]> => {
+    if (!shouldIncludeNonTitleProjectRows) return [];
+
+    const warnerProjectTypeFilter =
+      client.id === WARNER_BROS_CLIENT_ID ? ("OTHER" as const) : undefined;
+
+    const [monthlyRows, oneTimeRows] = await Promise.all([
+      getNonTitleProjectBillingSummaryRows({
+        clientId,
+        clientHourlyCost: client.hourlyCost,
+        filters: { projectMonth: filters.projectMonth },
+        excludedProjectIds,
+        billingCycle: "MONTHLY",
+        warnerProjectType: warnerProjectTypeFilter,
+      }),
+      getNonTitleProjectBillingSummaryRows({
+        clientId,
+        clientHourlyCost: client.hourlyCost,
+        filters: { projectMonth: filters.projectMonth },
+        excludedProjectIds,
+        billingCycle: "ONE_TIME",
+        warnerProjectType: warnerProjectTypeFilter,
+      }),
+    ]);
+
+    const sections: BillingHistorySection[] = [];
+    if (monthlyRows.length) {
+      sections.push({
+        key: "non-title-project-monthly-billing",
+        title: "Project Billing Summary - Monthly",
+        poAssignmentMode: "PROJECT",
+        rows: monthlyRows,
+        monthFilterParam: "projectMonth",
+        monthFilterValue: filters.projectMonth,
+        monthFilterLabel: "Billing Month",
+      });
+    }
+    if (oneTimeRows.length) {
+      sections.push({
+        key: "non-title-project-one-time-billing",
+        title: "Project Billing Summary - One Time",
+        poAssignmentMode: "PROJECT",
+        rows: oneTimeRows,
+      });
+    }
+    return sections;
   };
 
   if (client.id === AMAZON_STUDIOS_CLIENT_ID) {
@@ -3657,14 +3731,14 @@ export async function getBillingHistoryData({
           .filter((value): value is string => Boolean(value)),
       ),
     );
-    const nonTitleProjectSection = await buildNonTitleProjectSummarySection({
+    const nonTitleProjectSections = await buildNonTitleProjectSummarySections({
       excludedProjectIds: consideredProjectIds,
     });
     return {
       client,
       filters,
       summaryRows,
-      summarySections: nonTitleProjectSection
+      summarySections: nonTitleProjectSections.length
         ? [
             {
               key: "title-project-billing",
@@ -3672,7 +3746,7 @@ export async function getBillingHistoryData({
               poAssignmentMode: "TITLE_PROJECT",
               rows: summaryRows,
             },
-            nonTitleProjectSection,
+            ...nonTitleProjectSections,
           ]
         : undefined,
       historyRows,
@@ -3931,7 +4005,7 @@ export async function getBillingHistoryData({
         .filter((projectId): projectId is string => Boolean(projectId)),
     ]),
   );
-  const nonTitleProjectSection = await buildNonTitleProjectSummarySection({
+  const nonTitleProjectSections = await buildNonTitleProjectSummarySections({
     excludedProjectIds: curatedExcludedProjectIds,
   });
   const getWarnerProjectTypeBillingRecordRows = async (
@@ -4057,9 +4131,9 @@ export async function getBillingHistoryData({
               monthFilterParam: "dvdMonth",
               monthFilterValue: filters.dvdMonth,
             },
-            ...(nonTitleProjectSection ? [nonTitleProjectSection] : []),
+            ...nonTitleProjectSections,
           ]
-        : nonTitleProjectSection
+        : nonTitleProjectSections.length
           ? [
               {
                 key: "title-billing",
@@ -4067,7 +4141,7 @@ export async function getBillingHistoryData({
                 poAssignmentMode: client.poAssignmentMode as BillingHistorySection["poAssignmentMode"],
                 rows: summaryRows,
               },
-              nonTitleProjectSection,
+              ...nonTitleProjectSections,
             ]
           : undefined,
     historySections:
