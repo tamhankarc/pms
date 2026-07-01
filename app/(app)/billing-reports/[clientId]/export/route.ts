@@ -208,11 +208,11 @@ export async function GET(
       });
     }
 
-    const excel = buildClientTitleSummaryExcel(data);
+    const excel = await buildClientTitleSummaryExcel(data);
     return new Response(excel, {
       headers: {
-        "Content-Type": "application/vnd.ms-excel; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${getClientTitleSummaryFileName(data, "xls")}"`,
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${getClientTitleSummaryFileName(data, "xlsx")}"`,
       },
     });
   }

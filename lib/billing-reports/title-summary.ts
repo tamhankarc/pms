@@ -276,7 +276,7 @@ export async function getSonyTitleSummaryData({
 
 export function getClientTitleSummaryFileName(
   data: ClientTitleSummaryData,
-  extension: "xls" | "pdf",
+  extension: "xlsx" | "pdf",
 ) {
   const safeClientName = data.client.name.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "Client";
   return `${safeClientName}_Title_Summary.${extension}`;

@@ -1,3 +1,4 @@
+import ExcelJS from "exceljs";
 import type { ClientTitleSummaryData } from "@/lib/billing-reports/title-summary";
 import { getClientTitleSummaryFileName } from "@/lib/billing-reports/title-summary";
 
@@ -4369,50 +4370,132 @@ export function getSonyBillingSummaryHistoryFileName(
   return `${sanitizeFileSegment(data.client.name)}_Billing_Summary_History_${data.filters.year}_${getExportTimestamp()}.${extension}`;
 }
 
-export function buildClientTitleSummaryExcel(data: ClientTitleSummaryData) {
-  const usedWorksheetNames = new Set<string>();
-  const sheets = data.titleBlocks.length
-    ? data.titleBlocks
-        .map((titleBlock, index) => {
-          const rows = [
-            excelRow([data.reportTitle]),
-            excelRow(["Client", data.client.name]),
-            excelRow(["Title", titleBlock.movie.title]),
-            excelRow(["Contact Person(s)", formatContactPersonsForExport(titleBlock.contactPersons)]),
-          ];
-          for (const block of titleBlock.blocks) {
-            rows.push(
-              excelRow([]),
-              excelRow([block.reportTitle]),
-              excelRow(["Billing Head / Project", "Details", "Cost (USD)"]),
-              ...block.rows.map((row) =>
-                excelRow([row.label, row.meta ?? "-", row.cost], [2]),
-              ),
-              excelRow(["Total", "", block.totalCost], [2]),
-            );
-          }
-          rows.push(excelRow([]), excelRow(["Title Total", "", titleBlock.totalCost], [2]));
-          return worksheet(
-            buildSafeWorksheetName(titleBlock.movie.title, `Title ${index + 1}`, usedWorksheetNames),
-            rows,
-          );
-        })
-        .join("\n")
-    : worksheet(data.reportTitle, [
-        excelRow([data.reportTitle]),
-        excelRow(["Client", data.client.name]),
-        excelRow(["No title summary rows found."]),
-      ]);
+function applyTitleSummaryWorksheetFormatting(worksheet: ExcelJS.Worksheet) {
+  worksheet.columns = [
+    { key: "col1", width: 40 },
+    { key: "col2", width: 60 },
+    { key: "col3", width: 10 },
+  ];
 
-  return `<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:html="http://www.w3.org/TR/REC-html40">
- ${sheets}
-</Workbook>`;
+  worksheet.getColumn(1).alignment = {
+    wrapText: true,
+    vertical: "middle",
+    horizontal: "left",
+  };
+  worksheet.getColumn(2).alignment = {
+    wrapText: true,
+    vertical: "middle",
+    horizontal: "left",
+  };
+  worksheet.getColumn(3).alignment = {
+    wrapText: true,
+    vertical: "middle",
+    horizontal: "center",
+  };
+
+  worksheet.eachRow((row) => {
+    row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
+      cell.alignment = {
+        wrapText: true,
+        vertical: "middle",
+        horizontal: columnNumber === 3 ? "center" : "left",
+      };
+    });
+  });
+}
+
+function addTitleSummaryRow(
+  worksheet: ExcelJS.Worksheet,
+  values: Array<string | number>,
+  options: { bold?: boolean; numberColumns?: number[] } = {},
+) {
+  const row = worksheet.addRow([
+    values[0] ?? "",
+    values[1] ?? "",
+    values[2] ?? "",
+  ]);
+  if (options.bold) row.font = { bold: true };
+  for (const columnNumber of options.numberColumns ?? []) {
+    const cell = row.getCell(columnNumber);
+    cell.numFmt = '"$"#,##0.00';
+  }
+  return row;
+}
+
+export async function buildClientTitleSummaryExcel(data: ClientTitleSummaryData) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "PMS";
+  workbook.created = new Date();
+  workbook.modified = new Date();
+
+  const usedWorksheetNames = new Set<string>();
+
+  const buildSheet = (
+    sheetName: string,
+    titleBlock?: ClientTitleSummaryData["titleBlocks"][number],
+  ) => {
+    const worksheet = workbook.addWorksheet(sheetName);
+    applyTitleSummaryWorksheetFormatting(worksheet);
+
+    addTitleSummaryRow(worksheet, [data.reportTitle, "", ""], { bold: true });
+    addTitleSummaryRow(worksheet, ["Client", data.client.name, ""]);
+
+    if (!titleBlock) {
+      addTitleSummaryRow(worksheet, ["No title summary rows found.", "", ""]);
+      applyTitleSummaryWorksheetFormatting(worksheet);
+      return;
+    }
+
+    addTitleSummaryRow(worksheet, ["Title", titleBlock.movie.title, ""]);
+    addTitleSummaryRow(worksheet, [
+      "Contact Person(s)",
+      formatContactPersonsForExport(titleBlock.contactPersons),
+      "",
+    ]);
+
+    for (const block of titleBlock.blocks) {
+      worksheet.addRow(["", "", ""]);
+      addTitleSummaryRow(worksheet, [block.reportTitle, "", ""], { bold: true });
+      addTitleSummaryRow(
+        worksheet,
+        ["Billing Head / Project", "Details", "Cost (USD)"],
+        { bold: true },
+      );
+      for (const row of block.rows) {
+        addTitleSummaryRow(worksheet, [row.label, row.meta ?? "-", row.cost], {
+          numberColumns: [3],
+        });
+      }
+      addTitleSummaryRow(worksheet, ["Total", "", block.totalCost], {
+        bold: true,
+        numberColumns: [3],
+      });
+    }
+
+    worksheet.addRow(["", "", ""]);
+    addTitleSummaryRow(worksheet, ["Title Total", "", titleBlock.totalCost], {
+      bold: true,
+      numberColumns: [3],
+    });
+    applyTitleSummaryWorksheetFormatting(worksheet);
+  };
+
+  if (data.titleBlocks.length) {
+    data.titleBlocks.forEach((titleBlock, index) => {
+      buildSheet(
+        buildSafeWorksheetName(
+          titleBlock.movie.title,
+          `Title ${index + 1}`,
+          usedWorksheetNames,
+        ),
+        titleBlock,
+      );
+    });
+  } else {
+    buildSheet(buildSafeWorksheetName(data.reportTitle, "Title Summary", usedWorksheetNames));
+  }
+
+  return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
 export function buildClientTitleSummaryPdf(data: ClientTitleSummaryData) {
