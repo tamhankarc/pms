@@ -249,13 +249,17 @@ export async function getNonTitleProjectBillingSummaryRows({
       assignmentMode: "PROJECT",
       projectId: { in: pendingProjects.map((project) => project.id) },
       purchaseOrder: { status: { not: "CANCELLED" } },
-      OR: [
-        {
-          billingMonth: projectMonthRange.month,
-          billingYear: projectMonthRange.year,
-        },
-        { billingMonth: null, billingYear: null },
-      ],
+      ...(billingCycle === "MONTHLY"
+        ? {
+            OR: [
+              {
+                billingMonth: projectMonthRange.month,
+                billingYear: projectMonthRange.year,
+              },
+              { billingMonth: null, billingYear: null },
+            ],
+          }
+        : {}),
     },
     select: {
       projectId: true,
@@ -272,7 +276,13 @@ export async function getNonTitleProjectBillingSummaryRows({
     const isMonthSpecific =
       assignment.billingMonth === projectMonthRange.month &&
       assignment.billingYear === projectMonthRange.year;
-    if (isMonthSpecific || !poByProject.has(assignment.projectId)) {
+    const isOpenAssignment =
+      assignment.billingMonth == null && assignment.billingYear == null;
+    if (
+      (billingCycle === "MONTHLY" && isMonthSpecific) ||
+      (billingCycle !== "MONTHLY" && isOpenAssignment) ||
+      !poByProject.has(assignment.projectId)
+    ) {
       poByProject.set(assignment.projectId, assignment.purchaseOrder.poNumber);
     }
   }
@@ -311,6 +321,158 @@ export async function getNonTitleProjectBillingSummaryRows({
       };
     }),
   );
+}
+
+
+export async function getNonTitleProjectBillingHistoryRows({
+  clientId,
+  year,
+  excludedProjectIds = [],
+  billingCycle,
+  warnerProjectType,
+}: {
+  clientId: string;
+  year: number;
+  excludedProjectIds?: string[];
+  billingCycle?: "MONTHLY" | "ONE_TIME";
+  warnerProjectType?: "OTHER" | "PORTAL" | "DVD" | "TICKETING" | "SOCIAL";
+}): Promise<NonTitleProjectBillingSummaryRow[]> {
+  const excludedProjectIdSet = new Set(
+    excludedProjectIds.filter((projectId): projectId is string =>
+      Boolean(projectId),
+    ),
+  );
+
+  const projectSelect = {
+    id: true,
+    name: true,
+    status: true,
+    billingModel: true,
+    billingCycle: true,
+    billingDate: true,
+    projectCost: true,
+    perCountryCharges: true,
+    fixedContractHours: true,
+    fixedMonthlyHours: true,
+    additionalCharges: true,
+    partialBillingCost: true,
+    _count: { select: { timeEntries: true } },
+  } as const;
+
+  const records = await db.billingRecord.findMany({
+    where: {
+      clientId,
+      projectId: { not: null },
+      billingYear: year,
+      project: {
+        clientId,
+        isActive: true,
+        addToBilling: true,
+        ...(billingCycle ? { billingCycle } : {}),
+        ...(warnerProjectType ? { warnerProjectType } : {}),
+        ...(excludedProjectIds.length
+          ? { id: { notIn: excludedProjectIds } }
+          : {}),
+        OR: [
+          { hideMoviesInEntries: true },
+          { timeEntries: { some: { movieId: null } } },
+        ],
+      },
+    },
+    include: {
+      project: { select: projectSelect },
+      purchaseOrder: { select: { poNumber: true } },
+    },
+    orderBy: [
+      { billingYear: "desc" },
+      { billingMonth: "desc" },
+      { billingDate: "desc" },
+    ],
+  });
+
+  const filteredRecords = records.filter(
+    (record) => record.project && !excludedProjectIdSet.has(record.project.id),
+  );
+  const projectIds = Array.from(
+    new Set(
+      filteredRecords
+        .map((record) => record.projectId)
+        .filter((projectId): projectId is string => Boolean(projectId)),
+    ),
+  );
+
+  const poAssignments = projectIds.length
+    ? await db.purchaseOrderAssignment.findMany({
+        where: {
+          clientId,
+          assignmentMode: "PROJECT",
+          projectId: { in: projectIds },
+          purchaseOrder: { status: { not: "CANCELLED" } },
+        },
+        select: {
+          projectId: true,
+          billingMonth: true,
+          billingYear: true,
+          purchaseOrder: { select: { poNumber: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
+
+  const poByProject = new Map<string, string>();
+  const poByProjectMonth = new Map<string, string>();
+  for (const assignment of poAssignments) {
+    if (!assignment.projectId) continue;
+    if (assignment.billingMonth && assignment.billingYear) {
+      const key = `${assignment.projectId}:${assignment.billingYear}:${assignment.billingMonth}`;
+      if (!poByProjectMonth.has(key)) {
+        poByProjectMonth.set(key, assignment.purchaseOrder.poNumber);
+      }
+    }
+    if (!poByProject.has(assignment.projectId)) {
+      poByProject.set(assignment.projectId, assignment.purchaseOrder.poNumber);
+    }
+    if (assignment.billingMonth == null && assignment.billingYear == null) {
+      poByProject.set(assignment.projectId, assignment.purchaseOrder.poNumber);
+    }
+  }
+
+  return filteredRecords
+    .filter((record) => record.project)
+    .map((record) => {
+      const project = record.project!;
+      const billingMonth =
+        record.billingYear && record.billingMonth
+          ? `${record.billingYear}-${String(record.billingMonth).padStart(2, "0")}`
+          : undefined;
+      const projectMonthKey =
+        record.projectId && record.billingYear && record.billingMonth
+          ? `${record.projectId}:${record.billingYear}:${record.billingMonth}`
+          : null;
+      return {
+        itemId: `non-title-project-history:${record.projectId}:${record.billingYear}:${record.billingMonth ?? "one-time"}:${record.id}`,
+        itemType: "PROJECT" as const,
+        itemName: project.name,
+        title: project.name,
+        projectName: project.name,
+        projectId: project.id,
+        billingRegion: "Project",
+        billingRegions: "Project",
+        billingDate: formatDisplayDate(record.billingDate),
+        billingMonth,
+        poNumber:
+          record.purchaseOrder?.poNumber ??
+          (projectMonthKey ? poByProjectMonth.get(projectMonthKey) : undefined) ??
+          poByProject.get(project.id) ??
+          "-",
+        status: formatProjectStatus(project.status),
+        projectStatus: formatProjectStatus(project.status),
+        billingModel: formatProjectBillingModel(project.billingModel),
+        cost: Number(record.amount ?? 0),
+        timeEntryCount: project._count.timeEntries,
+        movieBillingHeadCount: 0,
+      };
+    });
 }
 
 export type TitleCountryPoGroup = {

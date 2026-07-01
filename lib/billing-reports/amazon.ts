@@ -9,6 +9,7 @@ import {
 } from "@/lib/billing-reports/config";
 import { getLensBillingAdjustments } from "@/lib/billing-reports/lens";
 import {
+  getNonTitleProjectBillingHistoryRows,
   getNonTitleProjectBillingSummaryRows,
   getProjectsConsideredByTitleRows,
   getTitleCountryPoGroups,
@@ -3429,15 +3430,15 @@ export async function getBillingHistoryData({
     clientPoAssignmentMode === "TITLE_PROJECT" ||
     clientPoAssignmentMode === "TITLE_BILLING_REPORT";
 
+  const warnerNonTitleProjectTypeFilter =
+    client.id === WARNER_BROS_CLIENT_ID ? ("OTHER" as const) : undefined;
+
   const buildNonTitleProjectSummarySections = async ({
     excludedProjectIds = [],
   }: {
     excludedProjectIds?: string[];
   }): Promise<BillingHistorySection[]> => {
     if (!shouldIncludeNonTitleProjectRows) return [];
-
-    const warnerProjectTypeFilter =
-      client.id === WARNER_BROS_CLIENT_ID ? ("OTHER" as const) : undefined;
 
     const [monthlyRows, oneTimeRows] = await Promise.all([
       getNonTitleProjectBillingSummaryRows({
@@ -3446,7 +3447,7 @@ export async function getBillingHistoryData({
         filters: { projectMonth: filters.projectMonth },
         excludedProjectIds,
         billingCycle: "MONTHLY",
-        warnerProjectType: warnerProjectTypeFilter,
+        warnerProjectType: warnerNonTitleProjectTypeFilter,
       }),
       getNonTitleProjectBillingSummaryRows({
         clientId,
@@ -3454,13 +3455,12 @@ export async function getBillingHistoryData({
         filters: { projectMonth: filters.projectMonth },
         excludedProjectIds,
         billingCycle: "ONE_TIME",
-        warnerProjectType: warnerProjectTypeFilter,
+        warnerProjectType: warnerNonTitleProjectTypeFilter,
       }),
     ]);
 
-    const sections: BillingHistorySection[] = [];
-    if (monthlyRows.length) {
-      sections.push({
+    return [
+      {
         key: "non-title-project-monthly-billing",
         title: "Project Billing Summary - Monthly",
         poAssignmentMode: "PROJECT",
@@ -3468,17 +3468,60 @@ export async function getBillingHistoryData({
         monthFilterParam: "projectMonth",
         monthFilterValue: filters.projectMonth,
         monthFilterLabel: "Billing Month",
-      });
-    }
-    if (oneTimeRows.length) {
-      sections.push({
+      },
+      {
         key: "non-title-project-one-time-billing",
         title: "Project Billing Summary - One Time",
         poAssignmentMode: "PROJECT",
         rows: oneTimeRows,
-      });
-    }
-    return sections;
+      },
+    ];
+  };
+
+  const buildNonTitleProjectHistorySections = async ({
+    excludedProjectIds = [],
+  }: {
+    excludedProjectIds?: string[];
+  }): Promise<BillingHistorySection[]> => {
+    if (!shouldIncludeNonTitleProjectRows) return [];
+
+    const [monthlyHistoryRows, oneTimeHistoryRows] = await Promise.all([
+      getNonTitleProjectBillingHistoryRows({
+        clientId,
+        year,
+        excludedProjectIds,
+        billingCycle: "MONTHLY",
+        warnerProjectType: warnerNonTitleProjectTypeFilter,
+      }),
+      getNonTitleProjectBillingHistoryRows({
+        clientId,
+        year,
+        excludedProjectIds,
+        billingCycle: "ONE_TIME",
+        warnerProjectType: warnerNonTitleProjectTypeFilter,
+      }),
+    ]);
+
+    return [
+      {
+        key: "non-title-project-monthly-history",
+        title: "Project Billing Summary - Monthly History",
+        poAssignmentMode: "PROJECT",
+        rows: monthlyHistoryRows,
+        yearFilterParam: "year",
+        yearFilterValue: filters.year,
+        yearFilterLabel: "Year",
+      },
+      {
+        key: "non-title-project-one-time-history",
+        title: "Project Billing Summary - One Time History",
+        poAssignmentMode: "PROJECT",
+        rows: oneTimeHistoryRows,
+        yearFilterParam: "year",
+        yearFilterValue: filters.year,
+        yearFilterLabel: "Year",
+      },
+    ];
   };
 
   if (client.id === AMAZON_STUDIOS_CLIENT_ID) {
@@ -3757,21 +3800,34 @@ export async function getBillingHistoryData({
     const nonTitleProjectSections = await buildNonTitleProjectSummarySections({
       excludedProjectIds: consideredProjectIds,
     });
+    const nonTitleProjectHistorySections = await buildNonTitleProjectHistorySections({
+      excludedProjectIds: consideredProjectIds,
+    });
     return {
       client,
       filters,
       summaryRows,
-      summarySections: nonTitleProjectSections.length
-        ? [
-            {
-              key: "title-project-billing",
-              title: "Billing Summary",
-              poAssignmentMode: "TITLE_PROJECT",
-              rows: summaryRows,
-            },
-            ...nonTitleProjectSections,
-          ]
-        : undefined,
+      summarySections: [
+        {
+          key: "title-project-billing",
+          title: "Billing Summary",
+          poAssignmentMode: "TITLE_PROJECT",
+          rows: summaryRows,
+        },
+        ...nonTitleProjectSections,
+      ],
+      historySections: [
+        {
+          key: "title-project-billing-history",
+          title: `${client.name} Billing Summary & History`,
+          poAssignmentMode: "TITLE_PROJECT",
+          rows: historyRows,
+          yearFilterParam: "year",
+          yearFilterValue: filters.year,
+          yearFilterLabel: "Year",
+        },
+        ...nonTitleProjectHistorySections,
+      ],
       historyRows,
       rows: historyRows,
     };
@@ -4031,6 +4087,9 @@ export async function getBillingHistoryData({
   const nonTitleProjectSections = await buildNonTitleProjectSummarySections({
     excludedProjectIds: curatedExcludedProjectIds,
   });
+  const nonTitleProjectHistorySections = await buildNonTitleProjectHistorySections({
+    excludedProjectIds: curatedExcludedProjectIds,
+  });
   const getWarnerProjectTypeBillingRecordRows = async (
     projectType: "PORTAL" | "DVD",
     label: string,
@@ -4156,17 +4215,15 @@ export async function getBillingHistoryData({
             },
             ...nonTitleProjectSections,
           ]
-        : nonTitleProjectSections.length
-          ? [
-              {
-                key: "title-billing",
-                title: "Billing Summary",
-                poAssignmentMode: client.poAssignmentMode as BillingHistorySection["poAssignmentMode"],
-                rows: summaryRows,
-              },
-              ...nonTitleProjectSections,
-            ]
-          : undefined,
+        : [
+            {
+              key: "title-billing",
+              title: "Billing Summary",
+              poAssignmentMode: client.poAssignmentMode as BillingHistorySection["poAssignmentMode"],
+              rows: summaryRows,
+            },
+            ...nonTitleProjectSections,
+          ],
     historySections:
       client.id === WARNER_BROS_CLIENT_ID
         ? [
@@ -4175,21 +4232,42 @@ export async function getBillingHistoryData({
               title: `${client.name} Billing Summary & History`,
               poAssignmentMode: "TITLE_BILLING_REPORT",
               rows: historyRows,
+              yearFilterParam: "year",
+              yearFilterValue: filters.year,
+              yearFilterLabel: "Year",
             },
             {
               key: "portal-history",
               title: "Portals Billing History",
               poAssignmentMode: "TITLE_PROJECT",
               rows: portalHistoryRows,
+              yearFilterParam: "year",
+              yearFilterValue: filters.year,
+              yearFilterLabel: "Year",
             },
             {
               key: "dvd-sites-history",
               title: "DVD Sites Billing History",
               poAssignmentMode: "TITLE_PROJECT",
               rows: dvdHistoryRows,
+              yearFilterParam: "year",
+              yearFilterValue: filters.year,
+              yearFilterLabel: "Year",
             },
+            ...nonTitleProjectHistorySections,
           ]
-        : undefined,
+        : [
+            {
+              key: "title-billing-history",
+              title: `${client.name} Billing Summary & History`,
+              poAssignmentMode: client.poAssignmentMode as BillingHistorySection["poAssignmentMode"],
+              rows: historyRows,
+              yearFilterParam: "year",
+              yearFilterValue: filters.year,
+              yearFilterLabel: "Year",
+            },
+            ...nonTitleProjectHistorySections,
+          ],
     historyRows,
     rows: historyRows,
   };
