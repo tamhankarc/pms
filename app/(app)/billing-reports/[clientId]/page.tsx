@@ -117,19 +117,100 @@ function getBillingHistoryPageParam(sectionKey: string) {
   return `billingHistoryPage_${normalizePaginationKey(sectionKey)}`;
 }
 
+type BillingHistoryGroupableRow = {
+  itemId?: string;
+  itemName?: string;
+  movieId?: string | null;
+  titleName?: string | null;
+  itemType?: string;
+  titleRowSpan?: number;
+  showTitleCell?: boolean;
+};
+
+function shouldPaginateBillingRowsByTitleGroup<T>(
+  rows: T[],
+): rows is Array<T & BillingHistoryGroupableRow> {
+  return rows.some((row) => {
+    const value = row as BillingHistoryGroupableRow;
+    return (
+      value.itemType === "TITLE_COUNTRY" ||
+      value.titleRowSpan !== undefined ||
+      value.showTitleCell === false
+    );
+  });
+}
+
+function getBillingRowTitleGroupKey(
+  row: BillingHistoryGroupableRow,
+  index: number,
+) {
+  return (
+    row.movieId ??
+    row.titleName ??
+    row.itemName ??
+    row.itemId ??
+    `billing-row-${index}`
+  );
+}
+
 function getPaginatedBillingHistoryRows<T>(
   rows: T[],
   searchParams: BillingReportPageSearchParams,
   sectionKey: string,
 ) {
   const pageParam = getBillingHistoryPageParam(sectionKey);
+  const requestedPage = parsePageParam(
+    getSearchParamValue(searchParams, pageParam),
+  );
+
+  if (!shouldPaginateBillingRowsByTitleGroup(rows)) {
+    return {
+      pageParam,
+      page: paginateItems(rows, requestedPage, BILLING_HISTORY_PAGE_SIZE),
+    };
+  }
+
+  const groupedRows: Array<{
+    key: string;
+    rows: Array<T & BillingHistoryGroupableRow>;
+  }> = [];
+  const groupIndexByKey = new Map<string, number>();
+
+  rows.forEach((row, index) => {
+    const groupKey = getBillingRowTitleGroupKey(row, index);
+    const existingIndex = groupIndexByKey.get(groupKey);
+    if (existingIndex === undefined) {
+      groupIndexByKey.set(groupKey, groupedRows.length);
+      groupedRows.push({ key: groupKey, rows: [row] });
+      return;
+    }
+    groupedRows[existingIndex].rows.push(row);
+  });
+
+  const paginatedGroups = paginateItems(
+    groupedRows,
+    requestedPage,
+    BILLING_HISTORY_PAGE_SIZE,
+  );
+  const paginatedRows = paginatedGroups.items.flatMap((group) =>
+    group.rows.map(
+      (row, rowIndex) =>
+        ({
+          ...row,
+          showTitleCell: rowIndex === 0,
+          titleRowSpan: rowIndex === 0 ? group.rows.length : undefined,
+        }) as T,
+    ),
+  );
+
   return {
     pageParam,
-    page: paginateItems(
-      rows,
-      parsePageParam(getSearchParamValue(searchParams, pageParam)),
-      BILLING_HISTORY_PAGE_SIZE,
-    ),
+    page: {
+      ...paginatedGroups,
+      items: paginatedRows,
+      startIndex: paginatedRows.length ? paginatedGroups.startIndex : 0,
+      endIndex: paginatedGroups.endIndex,
+    },
   };
 }
 
@@ -1480,7 +1561,6 @@ function WarnerDomesticTable({
   );
 }
 
-
 function ClientTitleSummaryFilters({
   clientId,
   activeReport,
@@ -1573,7 +1653,9 @@ function ClientTitleSummaryBlockTable({
                 <td className="table-cell">
                   <div className="font-medium text-slate-900">{row.label}</div>
                   {row.meta ? (
-                    <div className="mt-1 text-xs text-slate-500">{row.meta}</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {row.meta}
+                    </div>
                   ) : null}
                 </td>
                 <td className="table-cell whitespace-nowrap font-medium text-slate-900">
@@ -1583,7 +1665,10 @@ function ClientTitleSummaryBlockTable({
             ))
           ) : (
             <tr>
-              <td colSpan={2} className="table-cell text-center text-sm text-slate-500">
+              <td
+                colSpan={2}
+                className="table-cell text-center text-sm text-slate-500"
+              >
                 No rows found.
               </td>
             </tr>
@@ -1616,7 +1701,11 @@ function ClientTitleSummaryWorkspace({
         activeReport={activeReport}
         clientName={data.client.name}
       />
-      <ClientTitleSummaryFilters clientId={clientId} activeReport={activeReport} data={data} />
+      <ClientTitleSummaryFilters
+        clientId={clientId}
+        activeReport={activeReport}
+        data={data}
+      />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="section-title">{data.reportTitle}</h2>
@@ -1624,19 +1713,30 @@ function ClientTitleSummaryWorkspace({
             Per-title summary of configured client-specific report blocks.
           </p>
         </div>
-        <ClientTitleSummaryExportButtons clientId={clientId} activeReport={activeReport} data={data} />
+        <ClientTitleSummaryExportButtons
+          clientId={clientId}
+          activeReport={activeReport}
+          data={data}
+        />
       </div>
       {data.titleBlocks.length ? (
         <div className="space-y-6">
           {data.titleBlocks.map((titleBlock) => (
-            <section key={titleBlock.movie.id} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <section
+              key={titleBlock.movie.id}
+              className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+            >
               <div>
-                <h3 className="text-base font-semibold text-slate-900">{titleBlock.movie.title}</h3>
+                <h3 className="text-base font-semibold text-slate-900">
+                  {titleBlock.movie.title}
+                </h3>
                 <ContactListAccordion contacts={titleBlock.contactPersons} />
               </div>
               {titleBlock.blocks.map((block) => (
                 <div key={block.reportType} className="space-y-2">
-                  <h4 className="text-sm font-semibold text-slate-700">{block.reportTitle}</h4>
+                  <h4 className="text-sm font-semibold text-slate-700">
+                    {block.reportTitle}
+                  </h4>
                   <ClientTitleSummaryBlockTable block={block} />
                 </div>
               ))}
@@ -2073,7 +2173,9 @@ function SonyNonTitleProjectSummaryTable({
           <th className="table-cell">Project (Project Status)</th>
           <th className="table-cell">Billing Model</th>
           <th className="table-cell">Cost</th>
-          {hasBillingMonth ? <th className="table-cell">Billing Month</th> : null}
+          {hasBillingMonth ? (
+            <th className="table-cell">Billing Month</th>
+          ) : null}
           <th className="table-cell">PO Number</th>
           <th className="table-cell">Action</th>
         </tr>
@@ -2343,7 +2445,10 @@ function SonyBillingSummaryHistoryWorkspace({
                       clientId={clientId}
                       searchParams={searchParams}
                       paramName="projectMonth"
-                      value={data.filters.projectMonth ?? new Date().toISOString().slice(0, 7)}
+                      value={
+                        data.filters.projectMonth ??
+                        new Date().toISOString().slice(0, 7)
+                      }
                     />
                   </div>
                 </div>
@@ -3270,7 +3375,8 @@ function BillingHistoryTitleReportTable({
               ))}
               {includeAction ? (
                 <td className="table-cell">
-                  {row.movieId && (!isTitleCountryMode || row.showTitleCell !== false) ? (
+                  {row.movieId &&
+                  (!isTitleCountryMode || row.showTitleCell !== false) ? (
                     <BillingDoneButton
                       movieId={row.movieId}
                       label="Billing Done"
@@ -3491,7 +3597,10 @@ function BillingHistoryDefaultTable({
               </td>
               {includeAction ? (
                 <td className="table-cell">
-                  {(row.itemType === "TITLE" || row.itemType === "TITLE_COUNTRY") && row.movieId && row.showTitleCell !== false ? (
+                  {(row.itemType === "TITLE" ||
+                    row.itemType === "TITLE_COUNTRY") &&
+                  row.movieId &&
+                  row.showTitleCell !== false ? (
                     <BillingDoneButton
                       movieId={row.movieId}
                       label={
@@ -5579,13 +5688,20 @@ export default async function ClientBillingReportPage({
           filters: domesticFilters,
         })
       : null;
-  const titleSummaryFilters = buildClientTitleSummaryFilters(resolvedSearchParams);
+  const titleSummaryFilters =
+    buildClientTitleSummaryFilters(resolvedSearchParams);
   const titleSummaryData =
     activeReportDefinition?.kind === "title-summary"
       ? client.id === "cmn66av4j0001l104077m5vxz"
-        ? await getWarnerTitleSummaryData({ clientId, filters: titleSummaryFilters })
+        ? await getWarnerTitleSummaryData({
+            clientId,
+            filters: titleSummaryFilters,
+          })
         : client.id === "cmn66d3q40002l104n6wvefvl"
-          ? await getSonyTitleSummaryData({ clientId, filters: titleSummaryFilters })
+          ? await getSonyTitleSummaryData({
+              clientId,
+              filters: titleSummaryFilters,
+            })
           : null
       : null;
   const warnerPortalReportData =
