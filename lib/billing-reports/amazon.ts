@@ -1423,6 +1423,36 @@ function isWorldwideCountry(country: { isoCode: string | null; name: string }) {
   );
 }
 
+function getWarnerTitleCountryReportType(group: {
+  countries: { isoCode: string | null; name: string }[];
+}): AmazonReportType | null {
+  const countries = group.countries ?? [];
+  if (countries.some((country) => isUsCountry(country))) {
+    return "domestic-deliverable";
+  }
+  if (countries.some((country) => isCanadaCountry(country))) {
+    return "other-deliverable";
+  }
+  if (
+    countries.some(
+      (country) =>
+        !isUsCountry(country) &&
+        !isCanadaCountry(country) &&
+        !isWorldwideCountry(country),
+    )
+  ) {
+    return "intl-deliverable";
+  }
+  if (
+    countries.some(
+      (country) => !isUsCountry(country) && !isWorldwideCountry(country),
+    )
+  ) {
+    return "other-deliverable";
+  }
+  return null;
+}
+
 function formatWarnerCountryLabel(country: { name: string; isoCode: string | null }) {
   return country.isoCode ? `${country.name} (${country.isoCode})` : country.name;
 }
@@ -1963,6 +1993,33 @@ async function getWarnerDeliverableData({
     }
   }
 
+  const domesticUsCountryIds = isDomestic
+    ? Array.from(
+        new Set(
+          (
+            await db.timeEntry.findMany({
+              where: {
+                movieId: selectedMovie.id,
+                project: { clientId },
+                countryId: { not: null },
+              },
+              select: {
+                country: { select: { id: true, name: true, isoCode: true } },
+              },
+            })
+          )
+            .map((entry) => entry.country)
+            .filter(
+              (
+                country,
+              ): country is { id: string; name: string; isoCode: string | null } =>
+                country !== null && isUsCountry(country),
+            )
+            .map((country) => country.id),
+        ),
+      )
+    : [];
+
   const titleProjectCountryFilter = isDomestic
     ? {}
     : isIntl
@@ -1970,6 +2027,14 @@ async function getWarnerDeliverableData({
       : aggregateOtherCountries
         ? { countryId: { in: countryOptions.map((country) => country.id) } }
         : { countryId: selectedCountry?.id ?? "" };
+
+  const titleProjectLensCountryIds = isIntl || aggregateOtherCountries
+    ? countryOptions.map((country) => country.id)
+    : isDomestic
+      ? domesticUsCountryIds
+      : selectedCountry
+        ? [selectedCountry.id]
+        : [];
 
   const titleBasedProjects = await db.project.findMany({
     where: {
@@ -1999,20 +2064,61 @@ async function getWarnerDeliverableData({
     orderBy: { name: "asc" },
   });
 
-  const lensAdjustments = await getLensBillingAdjustments({
-    projectIds: titleBasedProjects.map((project) => project.id),
-    movieId: selectedMovie.id,
-    ...(isIntl || aggregateOtherCountries
-      ? { countryIds: countryOptions.map((country) => country.id) }
-      : isDomestic
-        ? {}
-        : selectedCountry
-          ? { countryIds: [selectedCountry.id] }
-          : {}),
-  });
+  const fixedPerCountryProjectIds = titleBasedProjects
+    .filter((project) => project.billingModel === "FIXED_PER_COUNTRY")
+    .map((project) => project.id);
+  const nonFixedPerCountryProjectIds = titleBasedProjects
+    .filter((project) => project.billingModel !== "FIXED_PER_COUNTRY")
+    .map((project) => project.id);
+
+  const [nonFixedPerCountryLensAdjustments, fixedPerCountryLensAdjustments, fixedPerCountryLensEntries] =
+    await Promise.all([
+      getLensBillingAdjustments({
+        projectIds: nonFixedPerCountryProjectIds,
+        movieId: selectedMovie.id,
+        ...(isIntl || aggregateOtherCountries
+          ? { countryIds: countryOptions.map((country) => country.id) }
+          : isDomestic
+            ? {}
+            : selectedCountry
+              ? { countryIds: [selectedCountry.id] }
+              : {}),
+      }),
+      getLensBillingAdjustments({
+        projectIds: fixedPerCountryProjectIds,
+        movieId: selectedMovie.id,
+        ...(titleProjectLensCountryIds.length
+          ? { countryIds: titleProjectLensCountryIds }
+          : { countryIds: [] }),
+      }),
+      fixedPerCountryProjectIds.length
+        ? db.timeEntry.findMany({
+            where: {
+              projectId: { in: fixedPerCountryProjectIds },
+              movieId: selectedMovie.id,
+              lensTypeId: { not: null },
+              countryId: { not: null },
+            },
+            select: { projectId: true },
+            distinct: ["projectId"],
+          })
+        : Promise.resolve([]),
+    ]);
+
+  const lensAdjustments = new Map([
+    ...nonFixedPerCountryLensAdjustments,
+    ...fixedPerCountryLensAdjustments,
+  ]);
+  const fixedPerCountryProjectsWithLensEntries = new Set(
+    fixedPerCountryLensEntries.map((entry) => entry.projectId),
+  );
 
   for (const project of titleBasedProjects) {
     const lens = lensAdjustments.get(project.id);
+    const isFixedPerCountry = project.billingModel === "FIXED_PER_COUNTRY";
+    const hasLensEntries = fixedPerCountryProjectsWithLensEntries.has(project.id);
+    if (isDomestic && isFixedPerCountry && hasLensEntries && !lens) continue;
+
     const billingModel = formatBillingModel(project.billingModel);
     let projectCost = 0;
     let meta = billingModel;
@@ -2030,12 +2136,15 @@ async function getWarnerDeliverableData({
       projectCost = hours * Number(client.hourlyCost ?? 0);
       meta = `${hours.toFixed(2)} hrs × ${formatUsd(Number(client.hourlyCost ?? 0))}`;
     } else if (project.billingModel === "FIXED_PER_COUNTRY") {
+      const fixedPerCountryCountryFilter = isDomestic
+        ? { countryId: { in: domesticUsCountryIds } }
+        : titleProjectCountryFilter;
       const countryEntries = await db.timeEntry.findMany({
         where: {
           projectId: project.id,
           movieId: selectedMovie.id,
           countryId: { not: null },
-          ...titleProjectCountryFilter,
+          ...fixedPerCountryCountryFilter,
         },
         select: {
           countryId: true,
@@ -2073,7 +2182,6 @@ async function getWarnerDeliverableData({
       meta = billingModel;
     }
 
-    const isFixedPerCountry = project.billingModel === "FIXED_PER_COUNTRY";
     const projectLabel = `${project.name} (${project.status.replaceAll("_", " ")})${lens && !isFixedPerCountry ? ` (${lens.lensNames.join(", ")})` : ""}`;
     const projectMeta = lens
       ? isFixedPerCountry
@@ -2170,7 +2278,7 @@ export type BillingHistoryFilters = {
 export type BillingHistoryReportValue = {
   reportType: string;
   reportTitle: string;
-  cost: number;
+  cost?: number;
   poNumber: string;
   billingMonth?: string;
   billingDate?: string;
@@ -3940,7 +4048,8 @@ export async function getBillingHistoryData({
     row: BillingHistoryRow,
     includeCompletedBilled = false,
   ): Promise<BillingHistoryRow> =>
-    client.poAssignmentMode === "TITLE_BILLING_REPORT"
+    client.poAssignmentMode === "TITLE_BILLING_REPORT" ||
+    (client.id === WARNER_BROS_CLIENT_ID && client.poAssignmentMode === "TITLE_COUNTRY")
       ? {
           ...row,
           cost: await getBillingReportCalculatedCostForSummary({
@@ -3995,15 +4104,71 @@ export async function getBillingHistoryData({
         rows.push(baseRow);
         continue;
       }
-      groups.forEach((group, index) => {
-        rows.push({
+
+      const titleRows: BillingHistoryRow[] = [];
+      const assignedAmountByReport = new Map<string, number>();
+      const reportValues = baseRow.reportValues ?? [];
+
+      for (const group of groups) {
+        const reportType =
+          client.id === WARNER_BROS_CLIENT_ID
+            ? getWarnerTitleCountryReportType(group)
+            : null;
+        if (!reportType) continue;
+
+        assignedAmountByReport.set(
+          reportType,
+          (assignedAmountByReport.get(reportType) ?? 0) + group.amount,
+        );
+
+        titleRows.push({
           ...baseRow,
           itemId: `${movie.id}:country-po:${group.assignmentId}`,
           itemType: "TITLE_COUNTRY",
           poNumber: group.poNumber,
           countryNames: group.countryNames,
           countryLabel: group.countryLabel,
-          titleRowSpan: index === 0 ? groups.length : undefined,
+          reportValues: reportValues.map((report) =>
+            report.reportType === reportType
+              ? { ...report, cost: group.amount, poNumber: group.poNumber }
+              : { ...report, cost: undefined, poNumber: "-" },
+          ),
+        });
+      }
+
+      const remainingReportValues = reportValues.map((report) => {
+        const remainingCost = Math.max(
+          Number(report.cost ?? 0) -
+            Number(assignedAmountByReport.get(report.reportType) ?? 0),
+          0,
+        );
+        return {
+          ...report,
+          cost: remainingCost > 0 ? remainingCost : undefined,
+          poNumber: "-",
+        };
+      });
+      if (remainingReportValues.some((report) => Number(report.cost ?? 0) > 0)) {
+        titleRows.push({
+          ...baseRow,
+          itemId: `${movie.id}:country-po:remaining`,
+          itemType: "TITLE_COUNTRY",
+          poNumber: "-",
+          countryNames: [],
+          countryLabel: "Remaining / Unassigned",
+          reportValues: remainingReportValues,
+        });
+      }
+
+      if (!titleRows.length) {
+        rows.push(baseRow);
+        continue;
+      }
+
+      titleRows.forEach((row, index) => {
+        rows.push({
+          ...row,
+          titleRowSpan: index === 0 ? titleRows.length : undefined,
           showTitleCell: index === 0,
         });
       });

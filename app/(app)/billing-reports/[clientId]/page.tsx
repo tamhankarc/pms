@@ -3205,6 +3205,7 @@ function BillingHistoryTitleReportTable({
   includeAction: boolean;
 }) {
   const returnTo = `/billing-reports/${clientId}?report=${activeReport}&year=${data.filters.year}`;
+  const isTitleCountryMode = data.client.poAssignmentMode === "TITLE_COUNTRY";
   const reportColumns = rows[0]?.reportValues ?? [];
   const emptyColSpan =
     1 + Math.max(reportColumns.length, 1) * 2 + (includeAction ? 1 : 0);
@@ -3244,9 +3245,14 @@ function BillingHistoryTitleReportTable({
         <tbody className="divide-y divide-slate-100">
           {rows.map((row) => (
             <tr key={row.itemId}>
-              <td className="table-cell font-medium text-slate-900">
-                {row.itemName} ({row.titleStatus ?? row.status})
-              </td>
+              {!isTitleCountryMode || row.showTitleCell !== false ? (
+                <td
+                  className="table-cell font-medium text-slate-900"
+                  rowSpan={isTitleCountryMode ? row.titleRowSpan : undefined}
+                >
+                  {row.itemName} ({row.titleStatus ?? row.status})
+                </td>
+              ) : null}
               {(row.reportValues ?? []).map((report) => (
                 <Fragment key={`${row.itemId}-${report.reportType}`}>
                   <td className="table-cell">
@@ -3257,7 +3263,7 @@ function BillingHistoryTitleReportTable({
               ))}
               {includeAction ? (
                 <td className="table-cell">
-                  {row.movieId ? (
+                  {row.movieId && (!isTitleCountryMode || row.showTitleCell !== false) ? (
                     <BillingDoneButton
                       movieId={row.movieId}
                       label="Billing Done"

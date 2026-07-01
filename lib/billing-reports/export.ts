@@ -3413,12 +3413,14 @@ function billingHistoryExcelRows(
       excelRow(headers),
       ...rows.map((row) =>
         excelRow([
-          `${row.itemName} (${row.titleStatus ?? row.status})`,
+          row.showTitleCell === false
+            ? ""
+            : `${row.itemName} (${row.titleStatus ?? row.status})`,
           ...(row.reportValues ?? []).flatMap((report) => [
-            report.cost,
+            typeof report.cost === "number" ? report.cost : "-",
             report.poNumber || "-",
           ]),
-          ...(includeAction ? ["Billing Done"] : []),
+          ...(includeAction ? [row.showTitleCell === false ? "" : "Billing Done"] : []),
         ]),
       ),
     ];
@@ -3658,9 +3660,11 @@ function billingHistoryPdfPage(
       ]),
     ];
     tableRows = rows.map((row) => [
-      `${row.itemName} (${row.titleStatus ?? row.status})`,
+      row.showTitleCell === false
+        ? ""
+        : `${row.itemName} (${row.titleStatus ?? row.status})`,
       ...(row.reportValues ?? []).flatMap((report) => [
-        formatUsd(report.cost),
+        typeof report.cost === "number" ? formatUsd(report.cost) : "-",
         report.poNumber || "-",
       ]),
     ]);
@@ -4246,7 +4250,7 @@ function sonySummaryHistoryPdfPage(
   const tableRows: PdfTableRow[] = rows.map((row) => [
     `${row.title} (${row.status})`,
     ...row.reportValues.flatMap((report) => [
-      formatUsd(report.cost),
+      typeof report.cost === "number" ? formatUsd(report.cost) : "-",
       ...(hasBillingMonth ? [row.billingMonth ?? "-"] : []),
       report.poNumber || "-",
     ]),

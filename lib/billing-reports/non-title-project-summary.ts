@@ -265,7 +265,7 @@ export async function getNonTitleProjectBillingSummaryRows({
       projectId: true,
       billingMonth: true,
       billingYear: true,
-      purchaseOrder: { select: { poNumber: true } },
+      purchaseOrder: { select: { poNumber: true, amount: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -381,7 +381,7 @@ export async function getNonTitleProjectBillingHistoryRows({
     },
     include: {
       project: { select: projectSelect },
-      purchaseOrder: { select: { poNumber: true } },
+      purchaseOrder: { select: { poNumber: true, amount: true } },
     },
     orderBy: [
       { billingYear: "desc" },
@@ -413,7 +413,7 @@ export async function getNonTitleProjectBillingHistoryRows({
           projectId: true,
           billingMonth: true,
           billingYear: true,
-          purchaseOrder: { select: { poNumber: true } },
+          purchaseOrder: { select: { poNumber: true, amount: true } },
         },
         orderBy: { createdAt: "desc" },
       })
@@ -479,8 +479,10 @@ export type TitleCountryPoGroup = {
   movieId: string;
   assignmentId: string;
   poNumber: string;
+  amount: number;
   countryNames: string[];
   countryLabel: string;
+  countries: { name: string; isoCode: string | null }[];
 };
 
 export async function getTitleCountryPoGroups({
@@ -499,7 +501,7 @@ export async function getTitleCountryPoGroups({
       purchaseOrder: { status: { not: "CANCELLED" } },
     },
     include: {
-      purchaseOrder: { select: { poNumber: true } },
+      purchaseOrder: { select: { poNumber: true, amount: true } },
       countries: {
         include: {
           country: { select: { name: true, isoCode: true } },
@@ -523,8 +525,13 @@ export async function getTitleCountryPoGroups({
         movieId: assignment.movieId!,
         assignmentId: assignment.id,
         poNumber: assignment.purchaseOrder.poNumber,
+        amount: Number(assignment.purchaseOrder.amount ?? 0),
         countryNames,
         countryLabel: countryNames.length ? countryNames.join(", ") : "-",
+        countries: assignment.countries.map((item) => ({
+          name: item.country.name,
+          isoCode: item.country.isoCode,
+        })),
       };
     });
 }
