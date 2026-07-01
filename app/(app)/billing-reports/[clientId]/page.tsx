@@ -3205,7 +3205,14 @@ function BillingHistoryTitleReportTable({
   includeAction: boolean;
 }) {
   const returnTo = `/billing-reports/${clientId}?report=${activeReport}&year=${data.filters.year}`;
-  const isTitleCountryMode = data.client.poAssignmentMode === "TITLE_COUNTRY";
+  const isTitleCountryMode =
+    data.client.poAssignmentMode === "TITLE_COUNTRY" ||
+    rows.some(
+      (row) =>
+        row.itemType === "TITLE_COUNTRY" ||
+        row.titleRowSpan !== undefined ||
+        row.showTitleCell === false,
+    );
   const reportColumns = rows[0]?.reportValues ?? [];
   const emptyColSpan =
     1 + Math.max(reportColumns.length, 1) * 2 + (includeAction ? 1 : 0);

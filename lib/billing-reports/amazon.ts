@@ -4001,10 +4001,13 @@ export async function getBillingHistoryData({
     (movie) => movie.id,
   );
 
-  const titleCountryGroups =
-    client.poAssignmentMode === "TITLE_COUNTRY"
-      ? await getTitleCountryPoGroups({ clientId, movieIds: allMovieIds })
-      : [];
+  const shouldApplyTitleCountryPoSplit =
+    client.poAssignmentMode === "TITLE_COUNTRY" ||
+    client.id === WARNER_BROS_CLIENT_ID;
+
+  const titleCountryGroups = shouldApplyTitleCountryPoSplit
+    ? await getTitleCountryPoGroups({ clientId, movieIds: allMovieIds })
+    : [];
   const titleCountryGroupsByMovie = new Map<string, typeof titleCountryGroups>();
   for (const group of titleCountryGroups) {
     const current = titleCountryGroupsByMovie.get(group.movieId) ?? [];
@@ -4049,7 +4052,8 @@ export async function getBillingHistoryData({
     includeCompletedBilled = false,
   ): Promise<BillingHistoryRow> =>
     client.poAssignmentMode === "TITLE_BILLING_REPORT" ||
-    (client.id === WARNER_BROS_CLIENT_ID && client.poAssignmentMode === "TITLE_COUNTRY")
+    client.poAssignmentMode === "TITLE_COUNTRY" ||
+    client.id === WARNER_BROS_CLIENT_ID
       ? {
           ...row,
           cost: await getBillingReportCalculatedCostForSummary({
@@ -4100,7 +4104,7 @@ export async function getBillingHistoryData({
         includeCompletedBilled,
       );
       const groups = titleCountryGroupsByMovie.get(movie.id) ?? [];
-      if (client.poAssignmentMode !== "TITLE_COUNTRY" || !groups.length) {
+      if (!shouldApplyTitleCountryPoSplit || !groups.length) {
         rows.push(baseRow);
         continue;
       }
