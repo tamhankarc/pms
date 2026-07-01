@@ -68,6 +68,12 @@ import {
   type SonyBillingSummaryHistoryData,
 } from "@/lib/billing-reports/sony";
 import {
+  buildClientTitleSummaryFilters,
+  getSonyTitleSummaryData,
+  getWarnerTitleSummaryData,
+  type ClientTitleSummaryData,
+} from "@/lib/billing-reports/title-summary";
+import {
   buildAmazonBillingReportFilters,
   buildBillingHistoryFilters,
   buildWarnerDomesticDeliverableFilters,
@@ -1470,6 +1476,181 @@ function WarnerDomesticTable({
           ) : null}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+
+function ClientTitleSummaryFilters({
+  clientId,
+  activeReport,
+  data,
+}: {
+  clientId: string;
+  activeReport: AmazonReportType;
+  data: ClientTitleSummaryData;
+}) {
+  return (
+    <AutoSubmitFilterForm
+      method="get"
+      action={`/billing-reports/${clientId}`}
+      className="card p-5"
+    >
+      <input type="hidden" name="report" value={activeReport} />
+      <div>
+        <label className="label" htmlFor="movieId">
+          Title
+        </label>
+        <SearchableCombobox
+          id="movieId"
+          name="movieId"
+          defaultValue={data.filters.movieId}
+          options={[
+            { value: "all", label: "All Titles" },
+            ...data.movieOptions.map((movie) => ({
+              value: movie.id,
+              label: movie.title,
+            })),
+          ]}
+          placeholder="All Titles"
+          searchPlaceholder="Search titles..."
+          emptyLabel="No titles found."
+        />
+      </div>
+    </AutoSubmitFilterForm>
+  );
+}
+
+function ClientTitleSummaryExportButtons({
+  clientId,
+  activeReport,
+  data,
+}: {
+  clientId: string;
+  activeReport: AmazonReportType;
+  data: ClientTitleSummaryData;
+}) {
+  const query = buildQueryString({
+    report: activeReport,
+    movieId: data.filters.movieId,
+  });
+  return (
+    <div className="flex flex-wrap gap-3">
+      <Link
+        className="btn-secondary"
+        href={`/billing-reports/${clientId}/export?format=excel&${query}`}
+      >
+        Export Excel
+      </Link>
+      <Link
+        className="btn-secondary"
+        href={`/billing-reports/${clientId}/export?format=pdf&${query}`}
+      >
+        Export PDF
+      </Link>
+    </div>
+  );
+}
+
+function ClientTitleSummaryBlockTable({
+  block,
+}: {
+  block: ClientTitleSummaryData["titleBlocks"][number]["blocks"][number];
+}) {
+  return (
+    <div className="table-wrap">
+      <table className="table-base">
+        <thead className="table-head">
+          <tr>
+            <th className="table-cell">Billing Head / Project</th>
+            <th className="table-cell">Cost</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {block.rows.length ? (
+            block.rows.map((row, index) => (
+              <tr key={`${row.label}-${index}`}>
+                <td className="table-cell">
+                  <div className="font-medium text-slate-900">{row.label}</div>
+                  {row.meta ? (
+                    <div className="mt-1 text-xs text-slate-500">{row.meta}</div>
+                  ) : null}
+                </td>
+                <td className="table-cell whitespace-nowrap font-medium text-slate-900">
+                  {formatUsd(row.cost)}
+                </td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={2} className="table-cell text-center text-sm text-slate-500">
+                No rows found.
+              </td>
+            </tr>
+          )}
+          <tr className="bg-slate-100">
+            <td className="table-cell font-semibold text-slate-900">Total</td>
+            <td className="table-cell whitespace-nowrap font-semibold text-slate-900">
+              {formatUsd(block.totalCost)}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ClientTitleSummaryWorkspace({
+  clientId,
+  activeReport,
+  data,
+}: {
+  clientId: string;
+  activeReport: AmazonReportType;
+  data: ClientTitleSummaryData;
+}) {
+  return (
+    <div className="space-y-6">
+      <ReportTabs
+        clientId={clientId}
+        activeReport={activeReport}
+        clientName={data.client.name}
+      />
+      <ClientTitleSummaryFilters clientId={clientId} activeReport={activeReport} data={data} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="section-title">{data.reportTitle}</h2>
+          <p className="section-subtitle">
+            Per-title summary of configured client-specific report blocks.
+          </p>
+        </div>
+        <ClientTitleSummaryExportButtons clientId={clientId} activeReport={activeReport} data={data} />
+      </div>
+      {data.titleBlocks.length ? (
+        <div className="space-y-6">
+          {data.titleBlocks.map((titleBlock) => (
+            <section key={titleBlock.movie.id} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">{titleBlock.movie.title}</h3>
+                <ContactListAccordion contacts={titleBlock.contactPersons} />
+              </div>
+              {titleBlock.blocks.map((block) => (
+                <div key={block.reportType} className="space-y-2">
+                  <h4 className="text-sm font-semibold text-slate-700">{block.reportTitle}</h4>
+                  <ClientTitleSummaryBlockTable block={block} />
+                </div>
+              ))}
+              <div className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">
+                Title Total: {formatUsd(titleBlock.totalCost)}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-500">
+          No title summary rows found for the selected filter.
+        </div>
+      )}
     </div>
   );
 }
@@ -3252,6 +3433,7 @@ function BillingHistoryDefaultTable({
   const effectivePoAssignmentMode =
     poAssignmentMode ?? data.client.poAssignmentMode;
   const isAmazonTitleClosure = clientId === "cmnh294gs0000l504iifuarli";
+  const isTitleCountryMode = effectivePoAssignmentMode === "TITLE_COUNTRY";
   return (
     <div className="table-wrap">
       <table className="table-base">
@@ -3263,6 +3445,9 @@ function BillingHistoryDefaultTable({
                 : "Title"}
             </th>
             <th className="table-cell">Type / Billing Region</th>
+            {isTitleCountryMode ? (
+              <th className="table-cell">Country/Countries</th>
+            ) : null}
             <th className="table-cell">PO Number</th>
             {includeAction ? (
               <th className="table-cell">Status</th>
@@ -3275,17 +3460,25 @@ function BillingHistoryDefaultTable({
         <tbody className="divide-y divide-slate-100">
           {rows.map((row) => (
             <tr key={row.itemId}>
-              <td className="table-cell font-medium text-slate-900">
-                {row.itemName}
-              </td>
+              {!isTitleCountryMode || row.showTitleCell !== false ? (
+                <td
+                  className="table-cell font-medium text-slate-900"
+                  rowSpan={isTitleCountryMode ? row.titleRowSpan : undefined}
+                >
+                  {row.itemName}
+                </td>
+              ) : null}
               <td className="table-cell">{row.billingRegion}</td>
+              {isTitleCountryMode ? (
+                <td className="table-cell">{row.countryLabel ?? "-"}</td>
+              ) : null}
               <td className="table-cell">{row.poNumber || "-"}</td>
               <td className="table-cell">
                 {includeAction ? row.status : row.billingDate}
               </td>
               {includeAction ? (
                 <td className="table-cell">
-                  {row.itemType === "TITLE" && row.movieId ? (
+                  {(row.itemType === "TITLE" || row.itemType === "TITLE_COUNTRY") && row.movieId && row.showTitleCell !== false ? (
                     <BillingDoneButton
                       movieId={row.movieId}
                       label={
@@ -3313,7 +3506,7 @@ function BillingHistoryDefaultTable({
           {rows.length === 0 ? (
             <tr>
               <td
-                colSpan={includeAction ? 5 : 4}
+                colSpan={(includeAction ? 5 : 4) + (isTitleCountryMode ? 1 : 0)}
                 className="table-cell text-center text-sm text-slate-500"
               >
                 No billing records available.
@@ -4716,6 +4909,7 @@ function GenericSummaryHistoryTable({
   const isProjectMode = data.client.poAssignmentMode === "PROJECT";
   const isTitleProjectMode = data.client.poAssignmentMode === "TITLE_PROJECT";
   const isSonyPicturesClassics = clientId === SONY_PICTURES_CLASSICS_CLIENT_ID;
+  const isTitleCountryMode = data.client.poAssignmentMode === "TITLE_COUNTRY";
   const hasBillingMonth = rows.some((row) => row.billingMonth);
   const returnTo = `/billing-reports/${clientId}?report=billing-summary-history&year=${data.filters.year}`;
 
@@ -4809,6 +5003,9 @@ function GenericSummaryHistoryTable({
           {!isSonyPicturesClassics ? (
             <th className="table-cell">Billing Region</th>
           ) : null}
+          {isTitleCountryMode ? (
+            <th className="table-cell">Country/Countries</th>
+          ) : null}
           <th className="table-cell">Cost</th>
           <th className="table-cell">PO Number</th>
           {includeAction ? (
@@ -4822,11 +5019,19 @@ function GenericSummaryHistoryTable({
       <tbody className="divide-y divide-slate-100">
         {rows.map((row) => (
           <tr key={row.itemId}>
-            <td className="table-cell font-medium text-slate-900">
-              {row.title}
-            </td>
+            {!isTitleCountryMode || row.showTitleCell !== false ? (
+              <td
+                className="table-cell font-medium text-slate-900"
+                rowSpan={isTitleCountryMode ? row.titleRowSpan : undefined}
+              >
+                {row.title}
+              </td>
+            ) : null}
             {!isSonyPicturesClassics ? (
               <td className="table-cell">{row.billingRegions}</td>
+            ) : null}
+            {isTitleCountryMode ? (
+              <td className="table-cell">{row.countryLabel ?? "-"}</td>
             ) : null}
             <td className="table-cell">
               {typeof row.cost === "number" ? formatGenericUsd(row.cost) : "-"}
@@ -4837,7 +5042,7 @@ function GenericSummaryHistoryTable({
             </td>
             {includeAction ? (
               <td className="table-cell">
-                {row.movieId ? (
+                {row.movieId && row.showTitleCell !== false ? (
                   <BillingDoneButton
                     movieId={row.movieId}
                     label="Billing Done"
@@ -4854,7 +5059,9 @@ function GenericSummaryHistoryTable({
           <tr>
             <td
               colSpan={
-                (includeAction ? 5 : 4) + (isSonyPicturesClassics ? 0 : 1)
+                (includeAction ? 5 : 4) +
+                (isSonyPicturesClassics ? 0 : 1) +
+                (isTitleCountryMode ? 1 : 0)
               }
               className="table-cell text-center text-sm text-slate-500"
             >
@@ -5359,6 +5566,15 @@ export default async function ClientBillingReportPage({
           filters: domesticFilters,
         })
       : null;
+  const titleSummaryFilters = buildClientTitleSummaryFilters(resolvedSearchParams);
+  const titleSummaryData =
+    activeReportDefinition?.kind === "title-summary"
+      ? client.id === "cmn66av4j0001l104077m5vxz"
+        ? await getWarnerTitleSummaryData({ clientId, filters: titleSummaryFilters })
+        : client.id === "cmn66d3q40002l104n6wvefvl"
+          ? await getSonyTitleSummaryData({ clientId, filters: titleSummaryFilters })
+          : null
+      : null;
   const warnerPortalReportData =
     isWarnerBillingReportClient(client.name) &&
     (activeReport === "portals" || activeReport === "dvd-sites")
@@ -5500,6 +5716,12 @@ export default async function ClientBillingReportPage({
           clientId={clientId}
           activeReport={activeReport}
           data={universalBillingSummaryData}
+        />
+      ) : titleSummaryData ? (
+        <ClientTitleSummaryWorkspace
+          clientId={clientId}
+          activeReport={activeReport}
+          data={titleSummaryData}
         />
       ) : warnerPortalReportData ? (
         <WarnerPortalReportWorkspace

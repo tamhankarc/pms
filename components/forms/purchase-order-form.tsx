@@ -3,8 +3,8 @@
 import { useActionState, useMemo, useState } from "react";
 import { FormLabel } from "@/components/ui/form-label";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
-import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import type { PurchaseOrderFormState } from "@/lib/actions/purchase-order-actions";
+import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 
 type Client = {
   id: string;
@@ -17,6 +17,11 @@ type Title = {
   title: string;
   clientId: string;
   clientName?: string;
+};
+type Country = {
+  id: string;
+  name: string;
+  isoCode?: string | null;
 };
 type Project = {
   id: string;
@@ -36,6 +41,7 @@ type BillingReportOption = {
 };
 type AssignmentMode =
   | "TITLE"
+  | "TITLE_COUNTRY"
   | "TITLE_BILLING_REPORT"
   | "TITLE_PROJECT"
   | "PROJECT"
@@ -56,6 +62,7 @@ export function PurchaseOrderForm({
   clients,
   titles,
   projects,
+  countries,
   billingReports = defaultReportTypeOptions,
   action,
   submitLabel,
@@ -65,6 +72,7 @@ export function PurchaseOrderForm({
   clients: Client[];
   titles: Title[];
   projects: Project[];
+  countries: Country[];
   billingReports?: BillingReportOption[];
   action: (
     state: PurchaseOrderFormState,
@@ -86,6 +94,7 @@ export function PurchaseOrderForm({
     notes?: string;
     assignmentMode: AssignmentMode;
     movieIds: string[];
+    countryIds?: string[];
     projectId?: string;
     billingReportType?: string;
     billingMonth?: string;
@@ -100,6 +109,7 @@ export function PurchaseOrderForm({
   const normalizeAssignmentMode = (mode?: string): AssignmentMode => {
     if (
       mode === "TITLE" ||
+      mode === "TITLE_COUNTRY" ||
       mode === "TITLE_BILLING_REPORT" ||
       mode === "TITLE_PROJECT" ||
       mode === "PROJECT" ||
@@ -110,6 +120,7 @@ export function PurchaseOrderForm({
   };
   const isTitleBasedAssignmentMode = (mode: AssignmentMode) =>
     mode === "TITLE" ||
+    mode === "TITLE_COUNTRY" ||
     mode === "TITLE_BILLING_REPORT" ||
     mode === "TITLE_PROJECT";
   const normalizeAvailableAssignmentMode = (
@@ -127,6 +138,9 @@ export function PurchaseOrderForm({
   );
   const [movieIds, setTitleIds] = useState<string[]>(
     initialValues?.movieIds ?? [],
+  );
+  const [countryIds, setCountryIds] = useState<string[]>(
+    initialValues?.countryIds ?? [],
   );
   const [projectId, setProjectId] = useState(initialValues?.projectId ?? "");
   const [billingReportType, setBillingReportType] = useState(
@@ -156,6 +170,7 @@ export function PurchaseOrderForm({
     ...(clientUsesTitleDropdown
       ? [
           { value: "TITLE", label: "Title only" },
+          { value: "TITLE_COUNTRY", label: "Title + Country" },
           { value: "TITLE_BILLING_REPORT", label: "Title + Billing Report" },
           { value: "TITLE_PROJECT", label: "Title + Project" },
         ]
@@ -163,6 +178,17 @@ export function PurchaseOrderForm({
     { value: "PROJECT", label: "Project only" },
     { value: "BILLING_REPORT", label: "Billing Report only" },
   ];
+  const countryOptions = useMemo(
+    () =>
+      countries.map((country) => ({
+        value: country.id,
+        label: country.isoCode
+          ? `${country.name} (${country.isoCode})`
+          : country.name,
+        keywords: country.isoCode ?? "",
+      })),
+    [countries],
+  );
   const titleOptions = useMemo(
     () =>
       titles
@@ -219,6 +245,7 @@ export function PurchaseOrderForm({
     setClientId(nextClientId);
     setTitleIds([]);
     setProjectId("");
+    setCountryIds([]);
     setBillingReportType("");
     setNewsletterType("");
     if (nextClientId) {
@@ -244,6 +271,7 @@ export function PurchaseOrderForm({
     setAssignmentMode(nextMode);
     setTitleIds([]);
     setProjectId("");
+    setCountryIds([]);
     setBillingReportType("");
     setNewsletterType("");
   }
@@ -434,22 +462,46 @@ export function PurchaseOrderForm({
         effectiveAssignmentMode !== "BILLING_REPORT" ? (
           <div>
             <FormLabel htmlFor="movieIds" required>
-              Title(s)
+              Title
             </FormLabel>
-            <SearchableMultiSelect
+            <input type="hidden" name="movieIds" value={movieIds[0] ?? ""} />
+            <SearchableCombobox
               id="movieIds"
-              name="movieIds"
               options={titleOptions}
-              value={movieIds}
-              onValueChange={setTitleIds}
-              placeholder={clientId ? "Select title(s)" : "Select client first"}
+              value={movieIds[0] ?? ""}
+              onValueChange={(value) => setTitleIds(value ? [value] : [])}
+              placeholder={clientId ? "Select title" : "Select client first"}
               searchPlaceholder="Search titles..."
               emptyLabel="No titles found."
               disabled={!clientId}
-              required
             />
+            <p className="mt-1 text-xs text-slate-500">
+              Title-based PO assignment modes allow one title per PO.
+            </p>
           </div>
         ) : null}
+        {effectiveAssignmentMode === "TITLE_COUNTRY" ? (
+          <div>
+            <FormLabel htmlFor="countryIds" required>
+              Country/Countries
+            </FormLabel>
+            <SearchableMultiSelect
+              id="countryIds"
+              name="countryIds"
+              options={countryOptions}
+              value={countryIds}
+              onValueChange={setCountryIds}
+              placeholder="Select country/countries"
+              searchPlaceholder="Search countries..."
+              emptyLabel="No countries found."
+              required
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              This PO will be matched to the selected title and one or more countries.
+            </p>
+          </div>
+        ) : null}
+
         {effectiveAssignmentMode === "TITLE_BILLING_REPORT" ||
         effectiveAssignmentMode === "BILLING_REPORT" ? (
           <div>

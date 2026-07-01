@@ -306,3 +306,57 @@ export async function getNonTitleProjectBillingSummaryRows({
     }),
   );
 }
+
+export type TitleCountryPoGroup = {
+  movieId: string;
+  assignmentId: string;
+  poNumber: string;
+  countryNames: string[];
+  countryLabel: string;
+};
+
+export async function getTitleCountryPoGroups({
+  clientId,
+  movieIds,
+}: {
+  clientId: string;
+  movieIds: string[];
+}): Promise<TitleCountryPoGroup[]> {
+  if (!movieIds.length) return [];
+  const assignments = await db.purchaseOrderAssignment.findMany({
+    where: {
+      clientId,
+      assignmentMode: "TITLE_COUNTRY",
+      movieId: { in: movieIds },
+      purchaseOrder: { status: { not: "CANCELLED" } },
+    },
+    include: {
+      purchaseOrder: { select: { poNumber: true } },
+      countries: {
+        include: {
+          country: { select: { name: true, isoCode: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return assignments
+    .filter((assignment) => Boolean(assignment.movieId))
+    .map((assignment) => {
+      const countryNames = assignment.countries
+        .map((item) =>
+          item.country.isoCode
+            ? `${item.country.name} (${item.country.isoCode})`
+            : item.country.name,
+        )
+        .sort((a, b) => a.localeCompare(b));
+      return {
+        movieId: assignment.movieId!,
+        assignmentId: assignment.id,
+        poNumber: assignment.purchaseOrder.poNumber,
+        countryNames,
+        countryLabel: countryNames.length ? countryNames.join(", ") : "-",
+      };
+    });
+}

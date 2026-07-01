@@ -11,6 +11,7 @@ import { getLensBillingAdjustments } from "@/lib/billing-reports/lens";
 import {
   getNonTitleProjectBillingSummaryRows,
   getProjectsConsideredByTitleRows,
+  getTitleCountryPoGroups,
 } from "@/lib/billing-reports/non-title-project-summary";
 import type { MovieStatus } from "@prisma/client";
 
@@ -28,7 +29,8 @@ export type AmazonReportType =
   | "newsletters"
   | "billing-summary"
   | "billing-history"
-  | "billing-summary-history";
+  | "billing-summary-history"
+  | "title-summary";
 
 export type AmazonBillingReportFilters = {
   fromDate: string;
@@ -100,7 +102,7 @@ export type WarnerDomesticDeliverableFilters = WarnerDeliverableFilters;
 export type WarnerDomesticDeliverableLine = {
   label: string;
   cost: number;
-  group: "Fixed - Compulsory" | "Fixed - Optional" | "Fixed Full Projects";
+  group: "Fixed - Compulsory" | "Fixed - Optional" | "Title Based Projects";
   meta?: string;
 };
 
@@ -163,6 +165,7 @@ export type BillingReportDefinition = {
   includeCountry: boolean;
   poAssignmentMode?:
     | "TITLE"
+    | "TITLE_COUNTRY"
     | "TITLE_BILLING_REPORT"
     | "TITLE_PROJECT"
     | "PROJECT"
@@ -179,7 +182,8 @@ export type BillingReportDefinition = {
     | "sony-newsletters"
     | "sony-summary-history"
     | "billing-history"
-    | "warner-portals";
+    | "warner-portals"
+    | "title-summary";
 };
 
 export const AMAZON_REPORTS: Partial<
@@ -318,6 +322,13 @@ export const WARNER_REPORTS: Partial<
     includeCountry: false,
     kind: "billing-history",
   },
+  "title-summary": {
+    title: "Title Summary",
+    projectName: "",
+    includeLanguage: false,
+    includeCountry: false,
+    kind: "title-summary",
+  },
 };
 
 export const SONY_PICTURES_REPORTS: Partial<
@@ -350,6 +361,13 @@ export const SONY_PICTURES_REPORTS: Partial<
     includeLanguage: false,
     includeCountry: false,
     kind: "sony-summary-history",
+  },
+  "title-summary": {
+    title: "Title Summary",
+    projectName: "",
+    includeLanguage: false,
+    includeCountry: false,
+    kind: "title-summary",
   },
 };
 
@@ -1899,29 +1917,23 @@ async function getWarnerDeliverableData({
     }
   }
 
-  const fixedFullProjects = await db.project.findMany({
+  const titleProjectCountryFilter = isDomestic
+    ? {}
+    : isIntl
+      ? { countryId: { in: countryOptions.map((country) => country.id) } }
+      : aggregateOtherCountries
+        ? { countryId: { in: countryOptions.map((country) => country.id) } }
+        : { countryId: selectedCountry?.id ?? "" };
+
+  const titleBasedProjects = await db.project.findMany({
     where: {
       clientId,
+      isActive: true,
       addToBilling: true,
-      billingModel: "FIXED_FULL",
       timeEntries: {
         some: {
           movieId: selectedMovie.id,
-          ...(isDomestic
-            ? {}
-            : isIntl
-              ? {
-                  countryId: {
-                    in: countryOptions.map((country) => country.id),
-                  },
-                }
-              : aggregateOtherCountries
-                ? {
-                    countryId: {
-                      in: countryOptions.map((country) => country.id),
-                    },
-                  }
-                : { countryId: selectedCountry?.id ?? "" }),
+          ...titleProjectCountryFilter,
         },
       },
     },
@@ -1929,14 +1941,19 @@ async function getWarnerDeliverableData({
       id: true,
       name: true,
       status: true,
+      billingModel: true,
+      projectCost: true,
+      perCountryCharges: true,
       fixedContractHours: true,
+      fixedMonthlyHours: true,
       additionalCharges: true,
+      partialBillingCost: true,
     },
     orderBy: { name: "asc" },
   });
 
   const lensAdjustments = await getLensBillingAdjustments({
-    projectIds: fixedFullProjects.map((project) => project.id),
+    projectIds: titleBasedProjects.map((project) => project.id),
     movieId: selectedMovie.id,
     ...(isIntl || aggregateOtherCountries
       ? { countryIds: countryOptions.map((country) => country.id) }
@@ -1947,18 +1964,58 @@ async function getWarnerDeliverableData({
           : {}),
   });
 
-  for (const project of fixedFullProjects) {
+  for (const project of titleBasedProjects) {
     const lens = lensAdjustments.get(project.id);
-    const fixedHoursCost =
-      Number(project.fixedContractHours ?? 0) * Number(client.hourlyCost ?? 0);
-    const additionalCharges = Number(project.additionalCharges ?? 0);
+    const billingModel = formatBillingModel(project.billingModel);
+    let projectCost = 0;
+    let meta = billingModel;
+
+    if (project.billingModel === "HOURLY") {
+      const minutes = await db.timeEntry.aggregate({
+        where: {
+          projectId: project.id,
+          movieId: selectedMovie.id,
+          ...titleProjectCountryFilter,
+        },
+        _sum: { minutesSpent: true },
+      });
+      const hours = Number(minutes._sum.minutesSpent ?? 0) / 60;
+      projectCost = hours * Number(client.hourlyCost ?? 0);
+      meta = `${hours.toFixed(2)} hrs × ${formatUsd(Number(client.hourlyCost ?? 0))}`;
+    } else if (project.billingModel === "FIXED_PER_COUNTRY") {
+      const countryEntries = await db.timeEntry.findMany({
+        where: {
+          projectId: project.id,
+          movieId: selectedMovie.id,
+          countryId: { not: null },
+          ...titleProjectCountryFilter,
+        },
+        select: { countryId: true },
+        distinct: ["countryId"],
+      });
+      const countryCount = countryEntries.length || 1;
+      projectCost = countryCount * Number(project.perCountryCharges ?? 0);
+      meta = `${countryCount} countr${countryCount === 1 ? "y" : "ies"} × ${formatUsd(Number(project.perCountryCharges ?? 0))}`;
+    } else if (project.billingModel === "FIXED_FULL") {
+      projectCost =
+        Number(project.fixedContractHours ?? 0) * Number(client.hourlyCost ?? 0) +
+        Number(project.additionalCharges ?? 0) -
+        Number(project.partialBillingCost ?? 0);
+      meta = `${Number(project.fixedContractHours ?? 0)} hrs × ${formatUsd(Number(client.hourlyCost ?? 0))}${Number(project.additionalCharges ?? 0) > 0 ? ` + ${formatUsd(Number(project.additionalCharges ?? 0))} additional` : ""}`;
+    } else if (project.billingModel === "FIXED_MONTHLY") {
+      projectCost =
+        Number(project.fixedMonthlyHours ?? 0) * Number(client.hourlyCost ?? 0);
+      meta = `${Number(project.fixedMonthlyHours ?? 0)} monthly hrs × ${formatUsd(Number(client.hourlyCost ?? 0))}`;
+    } else {
+      projectCost = Number(project.projectCost ?? 0);
+      meta = billingModel;
+    }
+
     rows.push({
       label: `${project.name} (${project.status.replaceAll("_", " ")})${lens ? ` (${lens.lensNames.join(", ")})` : ""}`,
-      cost: lens ? lens.cost : fixedHoursCost + additionalCharges,
-      group: "Fixed Full Projects",
-      meta: lens
-        ? `Lens Types: ${lens.lensNames.join(", ")}`
-        : `${Number(project.fixedContractHours ?? 0)} hrs × ${formatUsd(Number(client.hourlyCost ?? 0))}${additionalCharges > 0 ? ` + ${formatUsd(additionalCharges)} additional` : ""}`,
+      cost: lens ? lens.cost : projectCost,
+      group: "Title Based Projects",
+      meta: lens ? `Lens Types: ${lens.lensNames.join(", ")}` : meta,
     });
   }
 
@@ -2052,11 +2109,15 @@ export type BillingHistoryReportValue = {
 
 export type BillingHistoryRow = {
   itemId: string;
-  itemType: "TITLE" | "PROJECT" | "BILLING_REPORT" | "TITLE_PROJECT";
+  itemType: "TITLE" | "TITLE_COUNTRY" | "PROJECT" | "BILLING_REPORT" | "TITLE_PROJECT";
   itemName: string;
   titleName?: string;
   projectName?: string;
   billingRegion: string;
+  countryNames?: string[];
+  countryLabel?: string;
+  titleRowSpan?: number;
+  showTitleCell?: boolean;
   billingDate: string;
   poNumber: string;
   status: string;
@@ -2118,6 +2179,7 @@ export type BillingHistorySection = {
   title: string;
   poAssignmentMode:
     | "TITLE"
+    | "TITLE_COUNTRY"
     | "TITLE_BILLING_REPORT"
     | "TITLE_PROJECT"
     | "PROJECT"
@@ -3294,6 +3356,7 @@ export async function getBillingHistoryData({
   const clientPoAssignmentMode: string = client.poAssignmentMode;
   const shouldIncludeNonTitleProjectRows =
     clientPoAssignmentMode === "TITLE" ||
+    clientPoAssignmentMode === "TITLE_COUNTRY" ||
     clientPoAssignmentMode === "TITLE_PROJECT" ||
     clientPoAssignmentMode === "TITLE_BILLING_REPORT";
 
@@ -3673,6 +3736,21 @@ export async function getBillingHistoryData({
     }),
   ]);
 
+  const allMovieIds = [...summaryMovies, ...historyMovies].map(
+    (movie) => movie.id,
+  );
+
+  const titleCountryGroups =
+    client.poAssignmentMode === "TITLE_COUNTRY"
+      ? await getTitleCountryPoGroups({ clientId, movieIds: allMovieIds })
+      : [];
+  const titleCountryGroupsByMovie = new Map<string, typeof titleCountryGroups>();
+  for (const group of titleCountryGroups) {
+    const current = titleCountryGroupsByMovie.get(group.movieId) ?? [];
+    current.push(group);
+    titleCountryGroupsByMovie.set(group.movieId, current);
+  }
+
   const mapMovieRow = (
     movie: (typeof summaryMovies)[number],
   ): BillingHistoryRow => ({
@@ -3749,14 +3827,39 @@ export async function getBillingHistoryData({
           }),
         };
 
-  const summaryRows = await Promise.all(
-    visibleSummaryMovies.map((movie) => withReportValues(mapMovieRow(movie))),
-  );
-  const historyRows = await Promise.all(
-    visibleHistoryMovies.map((movie) =>
-      withReportValues(mapMovieRow(movie), true),
-    ),
-  );
+  const expandTitleCountryRows = async (
+    movies: typeof summaryMovies,
+    includeCompletedBilled = false,
+  ) => {
+    const rows: BillingHistoryRow[] = [];
+    for (const movie of movies) {
+      const baseRow = await withReportValues(
+        mapMovieRow(movie),
+        includeCompletedBilled,
+      );
+      const groups = titleCountryGroupsByMovie.get(movie.id) ?? [];
+      if (client.poAssignmentMode !== "TITLE_COUNTRY" || !groups.length) {
+        rows.push(baseRow);
+        continue;
+      }
+      groups.forEach((group, index) => {
+        rows.push({
+          ...baseRow,
+          itemId: `${movie.id}:country-po:${group.assignmentId}`,
+          itemType: "TITLE_COUNTRY",
+          poNumber: group.poNumber,
+          countryNames: group.countryNames,
+          countryLabel: group.countryLabel,
+          titleRowSpan: index === 0 ? groups.length : undefined,
+          showTitleCell: index === 0,
+        });
+      });
+    }
+    return rows;
+  };
+
+  const summaryRows = await expandTitleCountryRows(visibleSummaryMovies);
+  const historyRows = await expandTitleCountryRows(visibleHistoryMovies, true);
   const portalRows =
     client.id === WARNER_BROS_CLIENT_ID
       ? ((

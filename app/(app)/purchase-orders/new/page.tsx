@@ -44,7 +44,7 @@ export default async function NewPurchaseOrderPage() {
     redirect("/dashboard");
   }
 
-  const [clients, movies, projects, newsletters] = await Promise.all([
+  const [clients, movies, projects, newsletters, countries] = await Promise.all([
     db.client.findMany({
       where: {
         isActive: true,
@@ -115,6 +115,11 @@ export default async function NewPurchaseOrderPage() {
       select: { clientId: true, newsletterType: true },
       orderBy: { name: "asc" },
     }),
+    db.country.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, isoCode: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   const newsletterTypesByClient = new Map<string, string[]>();
@@ -147,6 +152,7 @@ export default async function NewPurchaseOrderPage() {
             clientId: movie.clientId,
             clientName: movie.client.name,
           }))}
+          countries={countries}
           projects={projects.map((project: PurchaseOrderProjectOption) => ({
             id: project.id,
             name: project.name,

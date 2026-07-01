@@ -162,6 +162,7 @@ enum EmploymentStatus {
 enum PurchaseOrderAssignmentMode {
   NOT_REQUIRED
   TITLE
+  TITLE_COUNTRY
   TITLE_BILLING_REPORT
   TITLE_PROJECT
   PROJECT
@@ -358,12 +359,27 @@ model PurchaseOrderAssignment {
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   movie         Movie?        @relation(fields: [movieId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   project       Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  countries     PurchaseOrderAssignmentCountry[] @relation("PurchaseOrderAssignmentCountries")
 
   @@index([clientId, assignmentMode])
   @@index([purchaseOrderId])
   @@index([movieId])
   @@index([projectId])
   @@index([billingReportType])
+}
+
+model PurchaseOrderAssignmentCountry {
+  id           String   @id @default(cuid())
+  assignmentId String
+  countryId    String
+  createdAt    DateTime @default(now())
+
+  assignment PurchaseOrderAssignment @relation("PurchaseOrderAssignmentCountries", fields: [assignmentId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "poa_country_assignmentId_fkey")
+  country    Country                 @relation("CountryPurchaseOrderAssignmentCountries", fields: [countryId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "poa_country_countryId_fkey")
+
+  @@unique([assignmentId, countryId])
+  @@index([assignmentId])
+  @@index([countryId])
 }
 
 model ProjectType {
@@ -615,6 +631,7 @@ model Country {
   timeEntries                 TimeEntry[]
   contactPersons              ContactPerson[]
   movieBillingHeadAssignments MovieBillingHeadAssignment[]
+  purchaseOrderAssignmentCountries PurchaseOrderAssignmentCountry[] @relation("CountryPurchaseOrderAssignmentCountries")
 
   @@index([isActive])
   @@index([name])

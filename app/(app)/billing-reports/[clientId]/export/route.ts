@@ -2,6 +2,11 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { canViewBillingReports } from "@/lib/permissions";
 import {
+  buildClientTitleSummaryFilters,
+  getSonyTitleSummaryData,
+  getWarnerTitleSummaryData,
+} from "@/lib/billing-reports/title-summary";
+import {
   buildAmazonBillingReportFilters,
   buildWarnerDomesticDeliverableFilters,
   getAmazonBillingReportData,
@@ -81,6 +86,9 @@ import {
   buildSonyBillingSummaryHistoryExcel,
   buildSonyBillingSummaryHistoryPdf,
   getSonyBillingSummaryHistoryFileName,
+  buildClientTitleSummaryExcel,
+  buildClientTitleSummaryPdf,
+  getClientTitleSummaryFileName,
 } from "@/lib/billing-reports/export";
 
 export async function GET(
@@ -176,6 +184,35 @@ export async function GET(
       headers: {
         "Content-Type": "application/vnd.ms-excel; charset=utf-8",
         "Content-Disposition": `attachment; filename="${getBillingHistoryReportFileName(data, "xls")}"`,
+      },
+    });
+  }
+
+  if (reportDefinition?.kind === "title-summary") {
+    const filters = buildClientTitleSummaryFilters(searchParams);
+    const data =
+      client.id === "cmn66av4j0001l104077m5vxz"
+        ? await getWarnerTitleSummaryData({ clientId, filters })
+        : client.id === "cmn66d3q40002l104n6wvefvl"
+          ? await getSonyTitleSummaryData({ clientId, filters })
+          : null;
+    if (!data) redirect("/billing-reports");
+
+    if (format === "pdf") {
+      const pdf = buildClientTitleSummaryPdf(data);
+      return new Response(Buffer.from(pdf, "binary"), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${getClientTitleSummaryFileName(data, "pdf")}"`,
+        },
+      });
+    }
+
+    const excel = buildClientTitleSummaryExcel(data);
+    return new Response(excel, {
+      headers: {
+        "Content-Type": "application/vnd.ms-excel; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${getClientTitleSummaryFileName(data, "xls")}"`,
       },
     });
   }

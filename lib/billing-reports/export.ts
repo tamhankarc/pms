@@ -1,3 +1,6 @@
+import type { ClientTitleSummaryData } from "@/lib/billing-reports/title-summary";
+import { getClientTitleSummaryFileName } from "@/lib/billing-reports/title-summary";
+
 import {
   type AmazonBillingReportData,
   type UniversalBillingSummaryData,
@@ -55,6 +58,31 @@ function excelRow(
 
 function worksheet(name: string, rows: string[]) {
   return `<Worksheet ss:Name="${escapeXml(name)}"><Table>${rows.join("")}</Table></Worksheet>`;
+}
+
+function buildSafeWorksheetName(
+  rawName: string | null | undefined,
+  fallbackName: string,
+  usedNames: Set<string>,
+) {
+  const normalized = (rawName || fallbackName)
+    .replace(/[\\/?*\[\]:]/g, " ")
+    .replace(/[\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^'+|'+$/g, "");
+  const baseName = (normalized || fallbackName).slice(0, 31) || "Sheet";
+  let sheetName = baseName;
+  let counter = 2;
+
+  while (usedNames.has(sheetName.toLowerCase())) {
+    const suffix = ` ${counter}`;
+    sheetName = `${baseName.slice(0, 31 - suffix.length)}${suffix}`;
+    counter += 1;
+  }
+
+  usedNames.add(sheetName.toLowerCase());
+  return sheetName;
 }
 
 function formatContactPersonsForExport(
@@ -2546,11 +2574,12 @@ export function buildSonyPicturesReportExcel(data: SonyPicturesReportData) {
       data.showCountryList ? [3] : [2],
     ),
   ];
+  const usedWorksheetNames = new Set<string>();
   const sheets = data.titleBlocks.length
     ? data.titleBlocks
         .map((block, index) =>
           worksheet(
-            `Title ${index + 1}`,
+            buildSafeWorksheetName(block.movie.title, `Title ${index + 1}`, usedWorksheetNames),
             buildRows(
               block.movie.title,
               block.contactPersons,
@@ -3450,9 +3479,11 @@ function billingHistoryExcelRows(
   }
 
   const hasBillingMonth = rows.some((row) => row.billingMonth);
+  const isTitleCountryMode = poAssignmentMode === "TITLE_COUNTRY";
   const headers = [
     "Name",
     "Type / Billing Region",
+    ...(isTitleCountryMode ? ["Country/Countries"] : []),
     "Cost",
     ...(hasBillingMonth ? ["Billing Month"] : []),
     "PO Number",
@@ -3464,16 +3495,18 @@ function billingHistoryExcelRows(
     ...rows.map((row) =>
       includeAction
         ? excelRow([
-            row.itemName,
+            isTitleCountryMode && row.showTitleCell === false ? "" : row.itemName,
             row.billingRegion,
+            ...(isTitleCountryMode ? [row.countryLabel ?? "-"] : []),
             typeof row.cost === "number" ? row.cost : "-",
             ...(hasBillingMonth ? [row.billingMonth ?? "-"] : []),
             row.poNumber || "-",
             row.status,
           ])
         : excelRow([
-            row.itemName,
+            isTitleCountryMode && row.showTitleCell === false ? "" : row.itemName,
             row.billingRegion,
+            ...(isTitleCountryMode ? [row.countryLabel ?? "-"] : []),
             typeof row.cost === "number" ? row.cost : "-",
             ...(hasBillingMonth ? [row.billingMonth ?? "-"] : []),
             row.poNumber || "-",
@@ -3679,13 +3712,17 @@ function billingHistoryPdfPage(
     ]);
   } else {
     const hasBillingMonth = rows.some((row) => row.billingMonth);
+    const isTitleCountryMode = poAssignmentMode === "TITLE_COUNTRY";
     columns = [
       {
         header:
           poAssignmentMode === "BILLING_REPORT" ? "Billing Report" : "Title",
         width: hasBillingMonth ? 185 : 210,
       },
-      { header: "Type / Billing Region", width: 145 },
+      { header: "Type / Billing Region", width: isTitleCountryMode ? 110 : 145 },
+      ...(isTitleCountryMode
+        ? ([{ header: "Country/Countries", width: 120 }] as PdfTableColumn[])
+        : []),
       { header: "Cost", width: 80, align: "right" },
       ...(hasBillingMonth
         ? ([{ header: "Billing Month", width: 95 }] as PdfTableColumn[])
@@ -3694,8 +3731,9 @@ function billingHistoryPdfPage(
       { header: includeAction ? "Status" : "Billing Date", width: 105 },
     ];
     tableRows = rows.map((row) => [
-      row.itemName,
+      isTitleCountryMode && row.showTitleCell === false ? "" : row.itemName,
       row.billingRegion,
+      ...(isTitleCountryMode ? [row.countryLabel ?? "-"] : []),
       typeof row.cost === "number" ? formatUsd(row.cost) : "-",
       ...(hasBillingMonth ? [row.billingMonth ?? "-"] : []),
       row.poNumber || "-",
@@ -3767,6 +3805,7 @@ function genericSummaryHistoryExcelRows(
 ) {
   const isProjectMode = data.client.poAssignmentMode === "PROJECT";
   const isTitleProjectMode = data.client.poAssignmentMode === "TITLE_PROJECT";
+  const isTitleCountryMode = data.client.poAssignmentMode === "TITLE_COUNTRY";
   const hasBillingMonth = rows.some((row) => row.billingMonth);
   if (isProjectMode || isTitleProjectMode) {
     return [
@@ -3799,6 +3838,7 @@ function genericSummaryHistoryExcelRows(
     excelRow([
       "Title",
       "Billing Region",
+      ...(isTitleCountryMode ? ["Country/Countries"] : []),
       "Cost",
       ...(hasBillingMonth ? ["Billing Month"] : []),
       "PO Number",
@@ -3808,15 +3848,16 @@ function genericSummaryHistoryExcelRows(
     ...rows.map((row) =>
       excelRow(
         [
-          row.title,
+          isTitleCountryMode && row.showTitleCell === false ? "" : row.title,
           row.billingRegions,
+          ...(isTitleCountryMode ? [row.countryLabel ?? "-"] : []),
           typeof row.cost === "number" ? row.cost : "-",
           ...(hasBillingMonth ? [row.billingMonth ?? "-"] : []),
           row.poNumber || "-",
           includeAction ? row.status : row.billingDate,
           ...(includeAction ? ["Billing Done"] : []),
         ],
-        typeof row.cost === "number" ? [2] : [],
+        typeof row.cost === "number" ? [isTitleCountryMode ? 3 : 2] : [],
       ),
     ),
   ];
@@ -3899,6 +3940,7 @@ function genericSummaryHistoryPdfPage(
   ];
   const isProjectMode = data.client.poAssignmentMode === "PROJECT";
   const isTitleProjectMode = data.client.poAssignmentMode === "TITLE_PROJECT";
+  const isTitleCountryMode = data.client.poAssignmentMode === "TITLE_COUNTRY";
   const hasBillingMonth = rows.some((row) => row.billingMonth);
   const columns: PdfTableColumn[] =
     isProjectMode || isTitleProjectMode
@@ -3919,7 +3961,10 @@ function genericSummaryHistoryPdfPage(
         ]
       : [
           { header: "Title", width: hasBillingMonth ? 190 : 220 },
-          { header: "Billing Region", width: 140 },
+          { header: "Billing Region", width: isTitleCountryMode ? 110 : 140 },
+          ...(isTitleCountryMode
+            ? ([{ header: "Country/Countries", width: 120 }] as PdfTableColumn[])
+            : []),
           { header: "Cost", width: 90, align: "right" },
           ...(hasBillingMonth
             ? ([{ header: "Billing Month", width: 95 }] as PdfTableColumn[])
@@ -3939,8 +3984,9 @@ function genericSummaryHistoryPdfPage(
           row.poNumber || "-",
         ]
       : [
-          row.title,
+          isTitleCountryMode && row.showTitleCell === false ? "" : row.title,
           row.billingRegions,
+          ...(isTitleCountryMode ? [row.countryLabel ?? "-"] : []),
           typeof row.cost === "number" ? formatUsd(row.cost) : "-",
           ...(hasBillingMonth ? [row.billingMonth ?? "-"] : []),
           row.poNumber || "-",
@@ -4322,3 +4368,106 @@ export function getSonyBillingSummaryHistoryFileName(
 ) {
   return `${sanitizeFileSegment(data.client.name)}_Billing_Summary_History_${data.filters.year}_${getExportTimestamp()}.${extension}`;
 }
+
+export function buildClientTitleSummaryExcel(data: ClientTitleSummaryData) {
+  const usedWorksheetNames = new Set<string>();
+  const sheets = data.titleBlocks.length
+    ? data.titleBlocks
+        .map((titleBlock, index) => {
+          const rows = [
+            excelRow([data.reportTitle]),
+            excelRow(["Client", data.client.name]),
+            excelRow(["Title", titleBlock.movie.title]),
+            excelRow(["Contact Person(s)", formatContactPersonsForExport(titleBlock.contactPersons)]),
+          ];
+          for (const block of titleBlock.blocks) {
+            rows.push(
+              excelRow([]),
+              excelRow([block.reportTitle]),
+              excelRow(["Billing Head / Project", "Details", "Cost (USD)"]),
+              ...block.rows.map((row) =>
+                excelRow([row.label, row.meta ?? "-", row.cost], [2]),
+              ),
+              excelRow(["Total", "", block.totalCost], [2]),
+            );
+          }
+          rows.push(excelRow([]), excelRow(["Title Total", "", titleBlock.totalCost], [2]));
+          return worksheet(
+            buildSafeWorksheetName(titleBlock.movie.title, `Title ${index + 1}`, usedWorksheetNames),
+            rows,
+          );
+        })
+        .join("\n")
+    : worksheet(data.reportTitle, [
+        excelRow([data.reportTitle]),
+        excelRow(["Client", data.client.name]),
+        excelRow(["No title summary rows found."]),
+      ]);
+
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ ${sheets}
+</Workbook>`;
+}
+
+export function buildClientTitleSummaryPdf(data: ClientTitleSummaryData) {
+  const columns: PdfTableColumn[] = [
+    { header: "Billing Head / Project", width: 285 },
+    { header: "Details", width: 215 },
+    { header: "Cost", width: 80, align: "right" },
+  ];
+  const rows: PdfTableRow[] = [];
+  for (const titleBlock of data.titleBlocks) {
+    rows.push([titleBlock.movie.title, "", ""]);
+    rows.push([
+      `Contact Person(s): ${formatContactPersonsForExport(titleBlock.contactPersons)}`,
+      "",
+      "",
+    ]);
+    for (const block of titleBlock.blocks) {
+      rows.push([block.reportTitle, "", ""]);
+      rows.push(
+        ...block.rows.map(
+          (row) => [row.label, row.meta ?? "-", formatUsd(row.cost)] as PdfTableRow,
+        ),
+      );
+      rows.push(["Total", "", formatUsd(block.totalCost)]);
+    }
+    rows.push(["Title Total", "", formatUsd(titleBlock.totalCost)]);
+  }
+  if (!rows.length) rows.push(["No title summary rows found.", "", ""]);
+
+  const pageStreams: string[] = [];
+  let rowIndex = 0;
+  let pageNumber = 1;
+  while (rowIndex < rows.length) {
+    const commands: string[] = [];
+    const isFirstPage = pageNumber === 1;
+    const startY = isFirstPage ? TOP_Y - 72 : TOP_Y - 32;
+    if (isFirstPage) {
+      commands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 15, true));
+      commands.push(textCommand(`Client: ${data.client.name}`, MARGIN_X, TOP_Y - 22, 9, true));
+      commands.push(textCommand(`Generated: ${new Date().toLocaleString("en-IN")}`, MARGIN_X, TOP_Y - 40, 9));
+    } else {
+      commands.push(textCommand(data.reportTitle, MARGIN_X, TOP_Y, 12, true));
+    }
+    drawTableHeader(commands, columns, MARGIN_X, startY);
+    let y = startY - HEADER_HEIGHT;
+    const maxRows = Math.max(1, Math.floor((y - 35) / SUMMARY_ROW_HEIGHT));
+    rows.slice(rowIndex, rowIndex + maxRows).forEach((row) => {
+      drawTableRow(commands, columns, row, MARGIN_X, y, SUMMARY_ROW_HEIGHT, 7);
+      y -= SUMMARY_ROW_HEIGHT;
+    });
+    rowIndex += maxRows;
+    pageNumber += 1;
+    pageStreams.push(commands.join("\n"));
+  }
+  return buildPdfDocument(pageStreams);
+}
+
+export { getClientTitleSummaryFileName };

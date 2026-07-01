@@ -104,6 +104,7 @@ export function ClientForm({
             options={[
               { value: "NOT_REQUIRED", label: "Not Required" },
               { value: "TITLE", label: "Title" },
+              { value: "TITLE_COUNTRY", label: "Title + Country" },
               { value: "TITLE_BILLING_REPORT", label: "Title + Billing Report" },
               { value: "TITLE_PROJECT", label: "Title + Project" },
               { value: "PROJECT", label: "Project" },

@@ -32,6 +32,12 @@ function assignmentLabel(po: {
       name: string;
     } | null;
     billingReportType: string | null;
+    countries?: Array<{
+      country?: {
+        name: string;
+        isoCode: string | null;
+      } | null;
+    }>;
   }>;
 }) {
   if (!po.assignments.length) return "—";
@@ -45,6 +51,22 @@ function assignmentLabel(po: {
     const type = titles.length > 1 ? "Residual" : "Normal";
 
     return `${type}: ${titles.join(", ") || "—"}`;
+  }
+
+  if (mode === "TITLE_COUNTRY") {
+    const titles = po.assignments
+      .map((assignment) => assignment.movie?.title)
+      .filter(Boolean);
+    const countries = Array.from(
+      new Set(
+        po.assignments.flatMap((assignment) =>
+          (assignment.countries ?? [])
+            .map((item) => item.country?.isoCode || item.country?.name)
+            .filter(Boolean),
+        ),
+      ),
+    );
+    return `Title + Country: ${titles.join(", ") || "—"} · ${countries.join(", ") || "—"}`;
   }
 
   if (mode === "TITLE_BILLING_REPORT") {
@@ -130,6 +152,16 @@ export default async function PurchaseOrdersPage({
             project: {
               select: {
                 name: true,
+              },
+            },
+            countries: {
+              include: {
+                country: {
+                  select: {
+                    name: true,
+                    isoCode: true,
+                  },
+                },
               },
             },
           },

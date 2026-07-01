@@ -10,6 +10,7 @@ import { canManagePurchaseOrders } from "@/lib/permissions";
 
 type AssignmentMode =
   | "TITLE"
+  | "TITLE_COUNTRY"
   | "TITLE_BILLING_REPORT"
   | "TITLE_PROJECT"
   | "PROJECT"
@@ -41,6 +42,7 @@ type PurchaseOrderProjectOption = {
 
 type PurchaseOrderAssignmentItem = {
   movieId: string | null;
+  countries?: { countryId: string }[];
 };
 
 type PurchaseOrderNewsletterOption = {
@@ -50,6 +52,7 @@ type PurchaseOrderNewsletterOption = {
 
 function toFormAssignmentMode(value?: string | null): AssignmentMode {
   if (
+    value === "TITLE_COUNTRY" ||
     value === "TITLE_BILLING_REPORT" ||
     value === "TITLE_PROJECT" ||
     value === "PROJECT" ||
@@ -78,7 +81,7 @@ export default async function EditPurchaseOrderPage({
 
   const { id } = await params;
 
-  const [clients, movies, projects, newsletters, po] = await Promise.all([
+  const [clients, movies, projects, newsletters, countries, po] = await Promise.all([
     db.client.findMany({
       where: {
         isActive: true,
@@ -149,12 +152,17 @@ export default async function EditPurchaseOrderPage({
       select: { clientId: true, newsletterType: true },
       orderBy: { name: "asc" },
     }),
+    db.country.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, isoCode: true },
+      orderBy: { name: "asc" },
+    }),
     db.purchaseOrder.findUnique({
       where: {
         id,
       },
       include: {
-        assignments: true,
+        assignments: { include: { countries: true } },
       },
     }),
   ]);
@@ -195,6 +203,7 @@ export default async function EditPurchaseOrderPage({
             clientId: movie.clientId,
             clientName: movie.client.name,
           }))}
+          countries={countries}
           projects={projects.map((project: PurchaseOrderProjectOption) => ({
             id: project.id,
             name: project.name,
@@ -226,6 +235,13 @@ export default async function EditPurchaseOrderPage({
             movieIds: po.assignments
               .map((item: PurchaseOrderAssignmentItem) => item.movieId)
               .filter((value): value is string => Boolean(value)),
+            countryIds: Array.from(
+              new Set(
+                po.assignments.flatMap((item: PurchaseOrderAssignmentItem) =>
+                  (item.countries ?? []).map((country) => country.countryId),
+                ),
+              ),
+            ),
             projectId: assignment?.projectId ?? "",
             billingReportType:
               assignment?.assignmentMode === "TITLE_BILLING_REPORT" ||

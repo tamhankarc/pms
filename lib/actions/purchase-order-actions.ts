@@ -23,12 +23,14 @@ const purchaseOrderSchema = z.object({
   notes: z.string().trim().optional(),
   assignmentMode: z.enum([
     "TITLE",
+    "TITLE_COUNTRY",
     "TITLE_BILLING_REPORT",
     "TITLE_PROJECT",
     "PROJECT",
     "BILLING_REPORT",
   ]),
   movieIds: z.array(z.string()).optional(),
+  countryIds: z.array(z.string()).optional(),
   projectId: z.string().optional(),
   billingReportType: z.string().optional(),
   billingMonth: z.string().optional(),
@@ -59,6 +61,7 @@ async function requireCanManagePurchaseOrders() {
 
 function getFormValues(formData: FormData) {
   const movieIds = formData.getAll("movieIds").map(String).filter(Boolean);
+  const countryIds = formData.getAll("countryIds").map(String).filter(Boolean);
   return {
     id: String(formData.get("id") ?? "") || undefined,
     clientId: String(formData.get("clientId") ?? ""),
@@ -73,6 +76,7 @@ function getFormValues(formData: FormData) {
     notes: String(formData.get("notes") ?? ""),
     assignmentMode: String(formData.get("assignmentMode") ?? "TITLE"),
     movieIds,
+    countryIds,
     projectId: String(formData.get("projectId") ?? ""),
     billingReportType: String(formData.get("billingReportType") ?? ""),
     billingMonth: String(formData.get("billingMonth") ?? ""),
@@ -91,13 +95,14 @@ async function validateAssignmentPayload(
 
   if (
     data.assignmentMode === "TITLE" ||
+    data.assignmentMode === "TITLE_COUNTRY" ||
     data.assignmentMode === "TITLE_BILLING_REPORT" ||
     data.assignmentMode === "TITLE_PROJECT"
   ) {
     if (!data.movieIds?.length)
-      throw new Error(
-        "At least one Title is required for this PO assignment mode.",
-      );
+      throw new Error("Title is required for this PO assignment mode.");
+    if (data.movieIds.length !== 1)
+      throw new Error("Only one Title can be assigned to this PO assignment mode.");
     const movies = await db.movie.findMany({
       where: { id: { in: data.movieIds }, clientId: data.clientId },
       select: { id: true },
@@ -106,6 +111,17 @@ async function validateAssignmentPayload(
       throw new Error(
         "One or more selected Titles do not belong to selected client.",
       );
+  }
+
+  if (data.assignmentMode === "TITLE_COUNTRY") {
+    if (!data.countryIds?.length)
+      throw new Error("At least one Country is required for Title + Country PO assignment mode.");
+    const countries = await db.country.findMany({
+      where: { id: { in: data.countryIds }, isActive: true },
+      select: { id: true },
+    });
+    if (countries.length !== data.countryIds.length)
+      throw new Error("One or more selected Countries are invalid.");
   }
 
   if (
@@ -208,34 +224,55 @@ async function savePurchaseOrder(
     parsed.data.assignmentMode === "PROJECT" ||
     parsed.data.assignmentMode === "BILLING_REPORT"
       ? [null]
-      : (parsed.data.movieIds ?? []);
+      : [(parsed.data.movieIds ?? [])[0]].filter(
+          (value): value is string => Boolean(value),
+        );
+  const countryIds =
+    parsed.data.assignmentMode === "TITLE_COUNTRY"
+      ? Array.from(new Set(parsed.data.countryIds ?? []))
+      : [];
   const { billingMonth, billingYear } = parseBillingMonth(
     parsed.data.billingMonth,
   );
-  await db.purchaseOrderAssignment.createMany({
-    data: movieIds.map((movieId) => ({
-      clientId: parsed.data.clientId,
-      purchaseOrderId: purchaseOrder.id,
-      assignmentMode: parsed.data.assignmentMode,
-      movieId,
-      projectId:
-        parsed.data.assignmentMode === "TITLE" ||
-        parsed.data.assignmentMode === "TITLE_BILLING_REPORT" ||
-        parsed.data.assignmentMode === "BILLING_REPORT"
-          ? null
-          : parsed.data.projectId || null,
-      billingReportType:
-        parsed.data.assignmentMode === "TITLE_BILLING_REPORT" ||
-        parsed.data.assignmentMode === "BILLING_REPORT"
-          ? parsed.data.billingReportType || null
-          : parsed.data.assignmentMode === "TITLE_PROJECT" ||
-              parsed.data.assignmentMode === "PROJECT"
-            ? parsed.data.newsletterType || null
-            : null,
-      billingMonth,
-      billingYear,
-    })),
-  });
+
+  for (const movieId of movieIds) {
+    const assignment = await db.purchaseOrderAssignment.create({
+      data: {
+        clientId: parsed.data.clientId,
+        purchaseOrderId: purchaseOrder.id,
+        assignmentMode: parsed.data.assignmentMode,
+        movieId,
+        projectId:
+          parsed.data.assignmentMode === "TITLE" ||
+          parsed.data.assignmentMode === "TITLE_COUNTRY" ||
+          parsed.data.assignmentMode === "TITLE_BILLING_REPORT" ||
+          parsed.data.assignmentMode === "BILLING_REPORT"
+            ? null
+            : parsed.data.projectId || null,
+        billingReportType:
+          parsed.data.assignmentMode === "TITLE_BILLING_REPORT" ||
+          parsed.data.assignmentMode === "BILLING_REPORT"
+            ? parsed.data.billingReportType || null
+            : parsed.data.assignmentMode === "TITLE_PROJECT" ||
+                parsed.data.assignmentMode === "PROJECT"
+              ? parsed.data.newsletterType || null
+              : null,
+        billingMonth,
+        billingYear,
+      },
+      select: { id: true },
+    });
+
+    if (parsed.data.assignmentMode === "TITLE_COUNTRY" && countryIds.length) {
+      await db.purchaseOrderAssignmentCountry.createMany({
+        data: countryIds.map((countryId) => ({
+          assignmentId: assignment.id,
+          countryId,
+        })),
+        skipDuplicates: true,
+      });
+    }
+  }
 
   revalidatePath("/purchase-orders");
   revalidatePath(`/purchase-orders/${purchaseOrder.id}`);

@@ -7,6 +7,7 @@ import {
   sanitizeFileSegment,
 } from "@/lib/billing-reports/amazon";
 import { getLensBillingAdjustments } from "@/lib/billing-reports/lens";
+import { getTitleCountryPoGroups } from "@/lib/billing-reports/non-title-project-summary";
 import type { MovieStatus } from "@prisma/client";
 
 import { SONY_PICTURES_CLASSICS_CLIENT_ID } from "@/lib/billing-reports/config";
@@ -71,7 +72,7 @@ export type GenericBillingSummaryHistoryFilters = {
 
 export type GenericBillingSummaryHistoryRow = {
   itemId: string;
-  itemType: "TITLE" | "PROJECT" | "TITLE_PROJECT";
+  itemType: "TITLE" | "TITLE_COUNTRY" | "PROJECT" | "TITLE_PROJECT";
   movieId?: string;
   projectId?: string;
   title: string;
@@ -82,6 +83,10 @@ export type GenericBillingSummaryHistoryRow = {
   billingModel?: string;
   billingMonth?: string;
   billingRegions: string;
+  countryNames?: string[];
+  countryLabel?: string;
+  titleRowSpan?: number;
+  showTitleCell?: boolean;
   billingDate: string;
   poNumber: string;
   cost?: number;
@@ -535,6 +540,7 @@ export async function getGenericBillingSummaryHistoryData({
   const clientPoAssignmentMode: string = client.poAssignmentMode;
   const shouldIncludeNonTitleProjectRows =
     clientPoAssignmentMode === "TITLE" ||
+    clientPoAssignmentMode === "TITLE_COUNTRY" ||
     clientPoAssignmentMode === "TITLE_PROJECT";
 
   if (client.poAssignmentMode === "PROJECT") {
@@ -913,6 +919,17 @@ export async function getGenericBillingSummaryHistoryData({
         )
       : [];
 
+  const titleCountryGroups =
+    client.poAssignmentMode === "TITLE_COUNTRY"
+      ? await getTitleCountryPoGroups({ clientId, movieIds: allMovieIds })
+      : [];
+  const titleCountryGroupsByMovie = new Map<string, typeof titleCountryGroups>();
+  for (const group of titleCountryGroups) {
+    const current = titleCountryGroupsByMovie.get(group.movieId) ?? [];
+    current.push(group);
+    titleCountryGroupsByMovie.set(group.movieId, current);
+  }
+
   const mapRow = async (
     movie: (typeof summaryMovies)[number],
     includeCompletedBilled = false,
@@ -931,10 +948,38 @@ export async function getGenericBillingSummaryHistoryData({
       includeCompletedBilled,
     }),
   });
+  const expandTitleCountryRows = async (
+    movies: typeof summaryMovies,
+    includeCompletedBilled = false,
+  ) => {
+    const rows: GenericBillingSummaryHistoryRow[] = [];
+    for (const movie of movies) {
+      const baseRow = await mapRow(movie, includeCompletedBilled);
+      const groups = titleCountryGroupsByMovie.get(movie.id) ?? [];
+      if (client.poAssignmentMode !== "TITLE_COUNTRY" || !groups.length) {
+        rows.push(baseRow);
+        continue;
+      }
+      groups.forEach((group, index) => {
+        rows.push({
+          ...baseRow,
+          itemId: `${movie.id}:country-po:${group.assignmentId}`,
+          itemType: "TITLE_COUNTRY",
+          poNumber: group.poNumber,
+          countryNames: group.countryNames,
+          countryLabel: group.countryLabel,
+          titleRowSpan: index === 0 ? groups.length : undefined,
+          showTitleCell: index === 0,
+        });
+      });
+    }
+    return rows;
+  };
+
   return {
     client,
     filters,
-    summaryRows: await Promise.all(summaryMovies.map((movie) => mapRow(movie))),
+    summaryRows: await expandTitleCountryRows(summaryMovies),
     nonTitleProjectRows: shouldIncludeNonTitleProjectRows
       ? await getNonTitleProjectBillingSummaryRows({
           clientId,
@@ -943,9 +988,7 @@ export async function getGenericBillingSummaryHistoryData({
           excludedProjectIds: consideredTitleProjectIds,
         })
       : [],
-    historyRows: await Promise.all(
-      historyMovies.map((movie) => mapRow(movie, true)),
-    ),
+    historyRows: await expandTitleCountryRows(historyMovies, true),
   };
 }
 
