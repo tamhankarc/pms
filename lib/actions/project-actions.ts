@@ -24,7 +24,7 @@ const baseSchema = z.object({
     "FIXED_COST",
   ]),
   billingCycle: z.enum(["ONE_TIME", "MONTHLY"]).default("ONE_TIME"),
-  warnerProjectType: z.enum(["OTHER", "PORTAL", "DVD", "TICKETING"]).default("OTHER"),
+  warnerProjectType: z.enum(["OTHER", "PORTAL", "DVD", "TICKETING", "SOCIAL"]).default("OTHER"),
   sonyProjectType: z.enum(["OTHER", "NEWSLETTERS"]).default("OTHER"),
   fixedContractHours: z.coerce.number().nonnegative().optional(),
   fixedMonthlyHours: z.coerce.number().nonnegative().optional(),

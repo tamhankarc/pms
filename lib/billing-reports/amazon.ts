@@ -2036,12 +2036,27 @@ async function getWarnerDeliverableData({
           countryId: { not: null },
           ...titleProjectCountryFilter,
         },
-        select: { countryId: true },
+        select: {
+          countryId: true,
+          country: { select: { id: true, name: true, isoCode: true } },
+        },
         distinct: ["countryId"],
       });
-      const countryCount = countryEntries.length || 1;
+      const countries = countryEntries
+        .map((entry) => entry.country)
+        .filter(
+          (
+            country,
+          ): country is { id: string; name: string; isoCode: string | null } =>
+            Boolean(country),
+        )
+        .map((country) => formatWarnerCountryLabel(country))
+        .sort((a, b) => a.localeCompare(b));
+      const countryCount = countries.length || 1;
       projectCost = countryCount * Number(project.perCountryCharges ?? 0);
-      meta = `${countryCount} countr${countryCount === 1 ? "y" : "ies"} × ${formatUsd(Number(project.perCountryCharges ?? 0))}`;
+      meta = countries.length
+        ? `Countries: ${countries.join(", ")}`
+        : `${countryCount} countr${countryCount === 1 ? "y" : "ies"} × ${formatUsd(Number(project.perCountryCharges ?? 0))}`;
     } else if (project.billingModel === "FIXED_FULL") {
       projectCost =
         Number(project.fixedContractHours ?? 0) * Number(client.hourlyCost ?? 0) +
@@ -2057,11 +2072,19 @@ async function getWarnerDeliverableData({
       meta = billingModel;
     }
 
+    const isFixedPerCountry = project.billingModel === "FIXED_PER_COUNTRY";
+    const projectLabel = `${project.name} (${project.status.replaceAll("_", " ")})${lens && !isFixedPerCountry ? ` (${lens.lensNames.join(", ")})` : ""}`;
+    const projectMeta = lens
+      ? isFixedPerCountry
+        ? `Lens Type / Countries: ${lens.detailLines.join("; ")}`
+        : `Lens Types: ${lens.lensNames.join(", ")}`
+      : meta;
+
     rows.push({
-      label: `${project.name} (${project.status.replaceAll("_", " ")})${lens ? ` (${lens.lensNames.join(", ")})` : ""}`,
+      label: projectLabel,
       cost: lens ? lens.cost : projectCost,
       group: "Title Based Projects",
-      meta: lens ? `Lens Types: ${lens.lensNames.join(", ")}` : meta,
+      meta: projectMeta,
     });
   }
 

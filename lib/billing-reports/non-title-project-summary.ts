@@ -159,7 +159,7 @@ export async function getNonTitleProjectBillingSummaryRows({
   filters: NonTitleProjectBillingSummaryFilters;
   excludedProjectIds?: string[];
   billingCycle?: "MONTHLY" | "ONE_TIME";
-  warnerProjectType?: "OTHER" | "PORTAL" | "DVD" | "TICKETING";
+  warnerProjectType?: "OTHER" | "PORTAL" | "DVD" | "TICKETING" | "SOCIAL";
 }): Promise<NonTitleProjectBillingSummaryRow[]> {
   const projectMonthRange = parseYearMonth(filters.projectMonth);
   const excludedProjectIdSet = new Set(
