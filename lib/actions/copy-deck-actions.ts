@@ -2,6 +2,7 @@
 
 import { createHash, randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { Prisma, type CopyDeckTranslationSource } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -26,13 +27,22 @@ import {
   ensureDefaultCopyDeckMarkets,
   normalizeMarketCode,
 } from "@/lib/copy-decks/markets";
-import { getCopyDeckTranslationProvider } from "@/lib/copy-decks/translation-provider";
+import {
+  getCopyDeckTranslationProvider,
+  translateCopyDeckTexts,
+} from "@/lib/copy-decks/translation-provider";
 
 export type CopyDeckActionState = {
   success?: boolean;
   error?: string;
   message?: string;
   copyDeckId?: string;
+};
+
+export type CopyDeckProviderTestState = {
+  success?: boolean;
+  message?: string;
+  error?: string;
 };
 
 const BULK_TRANSACTION_OPTIONS = {
@@ -197,57 +207,122 @@ export async function createCopyDeckAction(
         source: CopyDeckTranslationSource;
       }
     >();
-    for (const [hash, englishText] of unique) {
-      for (const market of markets) {
+    for (const market of markets) {
+      const missing: Array<{ hash: string; englishText: string }> = [];
+      for (const [hash, englishText] of unique) {
         const translation = existingByHash
           .get(hash)
           ?.translations.find((item) => item.marketId === market.id);
-        resolved.set(
-          `${hash}:${market.id}`,
-          translation
-            ? {
-                englishText,
-                translatedText: translation.translatedText,
-                source: "MASTER",
-              }
-            : { englishText, ...(await translateMissing(englishText, market)) },
+        if (translation) {
+          resolved.set(`${hash}:${market.id}`, {
+            englishText,
+            translatedText: translation.translatedText,
+            source: "MASTER",
+          });
+        } else {
+          missing.push({ hash, englishText });
+        }
+      }
+      if (!missing.length) continue;
+      try {
+        const translations = await translateCopyDeckTexts(
+          missing.map(({ englishText }) => ({
+            englishText,
+            marketCode: market.code,
+            marketName: market.name,
+            language: market.language,
+            countryCode: market.country?.isoCode ?? undefined,
+            countryName: market.country?.name,
+          })),
         );
+        missing.forEach((item, index) => {
+          const translation = translations[index];
+          resolved.set(`${item.hash}:${market.id}`, {
+            englishText: item.englishText,
+            translatedText: translation.text,
+            source: translation.fallback
+              ? "ENGLISH_FALLBACK"
+              : "AUTO_TRANSLATED",
+          });
+        });
+      } catch (error) {
+        console.error("Copy Deck translation batch failed", {
+          marketCode: market.code,
+          marketName: market.name,
+          itemCount: missing.length,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        missing.forEach((item) => {
+          resolved.set(`${item.hash}:${market.id}`, {
+            englishText: item.englishText,
+            translatedText: item.englishText,
+            source: "ENGLISH_FALLBACK",
+          });
+        });
       }
     }
 
     const deck = await db.$transaction(async (tx) => {
-      const masterTextByHash = new Map<string, string>();
-      for (const [hash, englishText] of unique) {
-        const masterText = await tx.copyDeckMasterText.upsert({
-          where: { englishHash: hash },
-          update: { englishText },
-          create: {
-            englishHash: hash,
-            englishText,
-          },
-          select: { id: true },
-        });
-        masterTextByHash.set(hash, masterText.id);
-        for (const market of markets) {
-          const value = resolved.get(`${hash}:${market.id}`)!;
-          await tx.copyDeckMasterTranslation.upsert({
-            where: {
-              masterTextId_marketId: {
-                masterTextId: masterText.id,
-                marketId: market.id,
-              },
-            },
-            update: {},
-            create: {
-              masterTextId: masterText.id,
-              marketId: market.id,
-              translatedText: value.translatedText,
-              source: value.source === "MASTER" ? "MASTER" : value.source,
-            },
-          });
-        }
+      const uniqueRows = [...unique].map(([hash, englishText]) => ({
+        hash,
+        englishText,
+      }));
+      for (const batch of chunks(uniqueRows)) {
+        const now = new Date();
+        await tx.$executeRaw(
+          Prisma.sql`
+            INSERT INTO CopyDeckMasterText
+              (id, englishHash, englishText, createdAt, updatedAt)
+            VALUES ${Prisma.join(
+              batch.map(
+                (row) =>
+                  Prisma.sql`(${randomUUID()}, ${row.hash}, ${row.englishText}, ${now}, ${now})`,
+              ),
+            )}
+            ON DUPLICATE KEY UPDATE
+              englishText = VALUES(englishText),
+              updatedAt = VALUES(updatedAt)
+          `,
+        );
       }
-      return tx.copyDeck.create({
+
+      const masterTexts = await tx.copyDeckMasterText.findMany({
+        where: { englishHash: { in: uniqueRows.map((row) => row.hash) } },
+        select: { id: true, englishHash: true },
+      });
+      const masterTextByHash = new Map(
+        masterTexts.map((text) => [text.englishHash, text.id]),
+      );
+      const masterTranslations = uniqueRows.flatMap((row) =>
+        markets.map((market) => {
+          const value = resolved.get(`${row.hash}:${market.id}`)!;
+          return {
+            masterTextId: masterTextByHash.get(row.hash)!,
+            marketId: market.id,
+            translatedText: value.translatedText,
+            source: value.source === "MASTER" ? "MASTER" : value.source,
+          };
+        }),
+      );
+      for (const batch of chunks(masterTranslations)) {
+        const now = new Date();
+        await tx.$executeRaw(
+          Prisma.sql`
+            INSERT INTO CopyDeckMasterTranslation
+              (id, masterTextId, marketId, translatedText, source, createdAt, updatedAt)
+            VALUES ${Prisma.join(
+              batch.map(
+                (row) =>
+                  Prisma.sql`(${randomUUID()}, ${row.masterTextId}, ${row.marketId}, ${row.translatedText}, ${row.source}, ${now}, ${now})`,
+              ),
+            )}
+            ON DUPLICATE KEY UPDATE
+              updatedAt = updatedAt
+          `,
+        );
+      }
+
+      const createdDeck = await tx.copyDeck.create({
         data: {
           name: parsed.data.name,
           clientId: parsed.data.clientId,
@@ -258,46 +333,104 @@ export async function createCopyDeckAction(
           countryId: primaryMarket.countryId,
           originalFileName: file.name,
           createdById: user.id,
-          marketSelections: {
-            create: markets.map((market) => ({ marketId: market.id })),
-          },
-          rows: {
-            create: uploadedRows.map((row, index) => {
-              const hash = englishHash(row.englishText);
-              const primaryValue = resolved.get(`${hash}:${primaryMarket.id}`)!;
-              return {
-                rowOrder: index + 1,
-                englishText: normalizedEnglish(row.englishText),
-                translatedText: primaryValue.translatedText,
-                source: primaryValue.source,
-                masterTextId: masterTextByHash.get(hash),
-                marketId: primaryMarket.id,
-                translations: {
-                  create: markets.map((market) => {
-                    const value = resolved.get(`${hash}:${market.id}`)!;
-                    return {
-                      marketId: market.id,
-                      translatedText: value.translatedText,
-                      source: value.source,
-                    };
-                  }),
-                },
-              };
-            }),
-          },
         },
       });
+      await tx.copyDeckMarketSelection.createMany({
+        data: markets.map((market) => ({
+          copyDeckId: createdDeck.id,
+          marketId: market.id,
+        })),
+      });
+      const deckRows = uploadedRows.map((row, index) => {
+        const hash = englishHash(row.englishText);
+        const primaryValue = resolved.get(`${hash}:${primaryMarket.id}`)!;
+        return {
+          id: randomUUID(),
+          copyDeckId: createdDeck.id,
+          rowOrder: index + 1,
+          englishText: normalizedEnglish(row.englishText),
+          translatedText: primaryValue.translatedText,
+          source: primaryValue.source,
+          masterTextId: masterTextByHash.get(hash)!,
+          marketId: primaryMarket.id,
+        };
+      });
+      for (const batch of chunks(deckRows)) {
+        await tx.copyDeckRow.createMany({ data: batch });
+      }
+      const rowTranslations = deckRows.flatMap((row) => {
+        const hash = englishHash(row.englishText);
+        return markets.map((market) => {
+          const value = resolved.get(`${hash}:${market.id}`)!;
+          return {
+            copyDeckRowId: row.id,
+            marketId: market.id,
+            translatedText: value.translatedText,
+            source: value.source,
+          };
+        });
+      });
+      for (const batch of chunks(rowTranslations)) {
+        await tx.copyDeckRowTranslation.createMany({ data: batch });
+      }
+      return createdDeck;
     }, BULK_TRANSACTION_OPTIONS);
     revalidatePath("/copy-decks");
+    const fallbackCount = [...resolved.values()].filter(
+      (value) => value.source === "ENGLISH_FALLBACK",
+    ).length;
     return {
       success: true,
       copyDeckId: deck.id,
-      message: `Created ${uploadedRows.length} copy-deck row(s).`,
+      message: `Created ${uploadedRows.length} copy-deck row(s) across ${markets.length} market(s).${
+        fallbackCount
+          ? ` ${fallbackCount} translation(s) used English fallback; run the provider test and check the server log.`
+          : ""
+      }`,
     };
   } catch (error) {
     return {
       error:
         error instanceof Error ? error.message : "Unable to create copy deck.",
+    };
+  }
+}
+
+export async function testCopyDeckTranslationProviderAction(
+  _state: CopyDeckProviderTestState,
+  _formData: FormData,
+): Promise<CopyDeckProviderTestState> {
+  void _state;
+  void _formData;
+  try {
+    await requireCopyDeckAccess();
+    const result = await getCopyDeckTranslationProvider().translate({
+      englishText: "Translation provider test",
+      marketCode: "FRANCE",
+      marketName: "France",
+      language: "fr",
+      countryCode: "FR",
+      countryName: "France",
+    });
+    if (result.fallback) {
+      return {
+        error: `${result.provider}. Configure or correct the translation provider before generating missing translations.`,
+      };
+    }
+    return {
+      success: true,
+      message: `${result.provider} responded successfully: ${result.text}`,
+    };
+  } catch (error) {
+    console.error(
+      "Copy Deck translation provider test failed",
+      error instanceof Error ? error.message : error,
+    );
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Translation provider test failed.",
     };
   }
 }
@@ -694,6 +827,23 @@ export async function setCopyDeckAccessAction(formData: FormData) {
     data: { extraMenuItemsJson: JSON.stringify(normalizeMenuKeys([...keys])) },
   });
   revalidatePath("/copy-decks/access");
+}
+
+export async function deleteCopyDeckAction(formData: FormData) {
+  const user = await requireCopyDeckAccess();
+  const copyDeckId = String(formData.get("copyDeckId") ?? "");
+  if (!copyDeckId) throw new Error("Copy deck is required.");
+  const deck = await db.copyDeck.findUnique({
+    where: { id: copyDeckId },
+    select: { id: true, createdById: true },
+  });
+  if (!deck) throw new Error("Copy deck not found.");
+  if (deck.createdById !== user.id && !canAssignCopyDeckAccess(user)) {
+    throw new Error("You are not allowed to delete this copy deck.");
+  }
+  await db.copyDeck.delete({ where: { id: deck.id } });
+  revalidatePath("/copy-decks");
+  redirect("/copy-decks");
 }
 
 export async function uploadCopyDeckMasterAction(

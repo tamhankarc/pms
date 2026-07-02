@@ -15,6 +15,7 @@ export type TranslationResult = {
 
 export interface CopyDeckTranslationProvider {
   translate(request: TranslationRequest): Promise<TranslationResult>;
+  translateMany?(requests: TranslationRequest[]): Promise<TranslationResult[]>;
 }
 
 const MARKET_LANGUAGE_CODES: Record<string, string> = {
@@ -77,6 +78,10 @@ class EnglishFallbackProvider implements CopyDeckTranslationProvider {
       fallback: true,
     };
   }
+
+  async translateMany(requests: TranslationRequest[]) {
+    return Promise.all(requests.map((request) => this.translate(request)));
+  }
 }
 
 class GoogleCloudTranslationProvider
@@ -85,20 +90,34 @@ class GoogleCloudTranslationProvider
   constructor(private readonly apiKey: string) {}
 
   async translate(request: TranslationRequest): Promise<TranslationResult> {
-    const target = targetLanguage(request);
+    return (await this.translateMany([request]))[0];
+  }
+
+  async translateMany(
+    requests: TranslationRequest[],
+  ): Promise<TranslationResult[]> {
+    if (!requests.length) return [];
+    const target = targetLanguage(requests[0]);
+    if (
+      requests.some(
+        (request) => targetLanguage(request) !== target,
+      )
+    ) {
+      throw new Error("A Google translation batch must use one target language.");
+    }
     if (!target) {
-      return {
+      return requests.map((request) => ({
         text: request.englishText,
         provider: `English fallback (no target language mapping for ${request.marketCode})`,
         fallback: true,
-      };
+      }));
     }
     if (target === "en") {
-      return {
+      return requests.map((request) => ({
         text: request.englishText,
         provider: "English target market",
         fallback: false,
-      };
+      }));
     }
     const response = await fetch(
       `https://translation.googleapis.com/language/translate/v2?key=${encodeURIComponent(this.apiKey)}`,
@@ -106,7 +125,7 @@ class GoogleCloudTranslationProvider
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          q: request.englishText,
+          q: requests.map((request) => request.englishText),
           source: "en",
           target,
           format: "text",
@@ -123,14 +142,18 @@ class GoogleCloudTranslationProvider
     const payload = (await response.json()) as {
       data?: { translations?: Array<{ translatedText?: string }> };
     };
-    const translatedText = payload.data?.translations?.[0]?.translatedText;
-    if (!translatedText?.trim())
-      throw new Error("Google Translation returned an empty translation.");
-    return {
-      text: decodeGoogleText(translatedText.trim()),
-      provider: "Google Cloud Translation Basic",
-      fallback: false,
-    };
+    const translations = payload.data?.translations;
+    if (!translations || translations.length !== requests.length)
+      throw new Error("Google Translation returned an incomplete translation batch.");
+    return translations.map((translation) => {
+      if (!translation.translatedText?.trim())
+        throw new Error("Google Translation returned an empty translation.");
+      return {
+        text: decodeGoogleText(translation.translatedText.trim()),
+        provider: "Google Cloud Translation Basic",
+        fallback: false,
+      };
+    });
   }
 }
 
@@ -194,4 +217,41 @@ export function getCopyDeckTranslationStatus() {
     label:
       "No translation provider is configured. Missing translations will use English fallback text.",
   };
+}
+
+function translationBatches(requests: TranslationRequest[]) {
+  const batches: TranslationRequest[][] = [];
+  let batch: TranslationRequest[] = [];
+  let characters = 0;
+  for (const request of requests) {
+    if (
+      batch.length >= 100 ||
+      (batch.length > 0 && characters + request.englishText.length > 25_000)
+    ) {
+      batches.push(batch);
+      batch = [];
+      characters = 0;
+    }
+    batch.push(request);
+    characters += request.englishText.length;
+  }
+  if (batch.length) batches.push(batch);
+  return batches;
+}
+
+export async function translateCopyDeckTexts(
+  requests: TranslationRequest[],
+): Promise<TranslationResult[]> {
+  const provider = getCopyDeckTranslationProvider();
+  const results: TranslationResult[] = [];
+  for (const batch of translationBatches(requests)) {
+    if (provider.translateMany) {
+      results.push(...(await provider.translateMany(batch)));
+    } else {
+      for (const request of batch) {
+        results.push(await provider.translate(request));
+      }
+    }
+  }
+  return results;
 }

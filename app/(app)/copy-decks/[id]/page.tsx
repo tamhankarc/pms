@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { canAccessCopyDecks } from "@/lib/permissions";
+import { canAccessCopyDecks, canAssignCopyDeckAccess } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/ui/page-header";
 import { CopyDeckCorrectedUploadForm } from "@/components/forms/copy-deck-corrected-upload-form";
+import { DeleteButton } from "@/components/ui/delete-button";
+import { deleteCopyDeckAction } from "@/lib/actions/copy-deck-actions";
 
 export default async function CopyDeckPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
@@ -16,7 +18,7 @@ export default async function CopyDeckPage({ params }: { params: Promise<{ id: s
   });
   if (!deck) notFound();
   return <div className="space-y-6">
-    <PageHeader title={deck.name} description={`${deck.client.name} · ${deck.marketSelections.length ? deck.marketSelections.map((selection) => selection.market.name).join(", ") : deck.market?.name ?? deck.country?.name ?? "No market"}`} actions={<><Link className="btn-secondary" href="/copy-decks">Back</Link><Link className="btn-primary" href={`/copy-decks/${deck.id}/export`}>Download XLSX</Link></>} />
+    <PageHeader title={deck.name} description={`${deck.client.name} · ${deck.marketSelections.length ? deck.marketSelections.map((selection) => selection.market.name).join(", ") : deck.market?.name ?? deck.country?.name ?? "No market"}`} actions={<><Link className="btn-secondary" href="/copy-decks">Back</Link><Link className="btn-primary" href={`/copy-decks/${deck.id}/export`}>Download XLSX</Link>{deck.createdById === user.id || canAssignCopyDeckAccess(user) ? <form action={deleteCopyDeckAction}><input type="hidden" name="copyDeckId" value={deck.id} /><DeleteButton label="Delete Copy Deck" className="btn-secondary border-red-300 text-red-700" confirmMessage="Delete this copy deck? Its rows and generated translations will be removed, but the shared translation master will be kept." /></form> : null}</>} />
     <CopyDeckCorrectedUploadForm copyDeckId={deck.id} />
     <div className="table-wrap"><table className="table-base"><thead className="table-head"><tr><th className="table-cell">#</th><th className="table-cell">English Text</th>{(deck.marketSelections.length ? deck.marketSelections.map((selection) => selection.market) : deck.market ? [deck.market] : []).map((market) => <th className="table-cell" key={market.id}>{market.name}</th>)}</tr></thead>
       <tbody className="divide-y divide-slate-100">{deck.rows.map((row) => <tr key={row.id}><td className="table-cell">{row.rowOrder}</td><td className="table-cell max-w-xl whitespace-pre-wrap">{row.englishText}</td>{(deck.marketSelections.length ? deck.marketSelections.map((selection) => selection.market) : deck.market ? [deck.market] : []).map((market) => { const translation = row.translations.find((item) => item.marketId === market.id); return <td className="table-cell max-w-xl whitespace-pre-wrap" key={market.id}><div>{translation?.translatedText ?? (market.id === row.marketId ? row.translatedText : "—")}</div>{translation ? <span className={translation.source === "ENGLISH_FALLBACK" ? "badge-rose" : "badge-slate"}>{translation.source.replaceAll("_", " ")}</span> : null}</td>; })}</tr>)}</tbody>
