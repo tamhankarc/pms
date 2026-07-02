@@ -84,6 +84,7 @@ export default async function NewLeaveRequestPage() {
         leaveBalance={data.leaveBalance}
         blockedDateKeys={data.officialHolidays}
         canCreateOnBehalf={canCreateOnBehalf}
+        currentUserId={user.id}
         employeeContexts={employeeContexts}
       />
     </div>

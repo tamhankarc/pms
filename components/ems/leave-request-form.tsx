@@ -75,6 +75,7 @@ export function LeaveRequestForm({
   blockedDateKeys,
   employeeContexts = [],
   canCreateOnBehalf = false,
+  currentUserId,
 }: {
   action: (
     state: LeaveFormState,
@@ -105,6 +106,7 @@ export function LeaveRequestForm({
   blockedDateKeys: string[];
   employeeContexts?: FormContext[];
   canCreateOnBehalf?: boolean;
+  currentUserId?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [requestedForUserId, setRequestedForUserId] = useState(
@@ -117,6 +119,11 @@ export function LeaveRequestForm({
   const activeLeaveBalance = selectedContext?.leaveBalance ?? leaveBalance;
   const activeBlockedDates =
     selectedContext?.blockedDateKeys ?? blockedDateKeys;
+  const canSelectPastDate =
+    mode === "create" &&
+    canCreateOnBehalf &&
+    Boolean(requestedForUserId) &&
+    requestedForUserId !== currentUserId;
   const [approverIds, setApproverIds] = useState<string[]>(
     initialValues?.approverIds?.length
       ? initialValues.approverIds
@@ -347,7 +354,7 @@ export function LeaveRequestForm({
             id="startDate"
             name="startDate"
             type="date"
-            min={minDate}
+            min={canSelectPastDate ? undefined : minDate}
             value={startDate}
             onChange={(event) => {
               const next = event.target.value;

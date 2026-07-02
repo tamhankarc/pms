@@ -72,6 +72,34 @@ function parseDateRange(startDate: string, endDate: string) {
   return { start, end };
 }
 
+async function validateNoOverlappingLeaveRequest(
+  userId: string,
+  start: Date,
+  end: Date,
+  excludeRequestId?: string,
+) {
+  const overlapping = await db.leaveRequest.findFirst({
+    where: {
+      userId,
+      status: { notIn: ["REJECTED", "CANCELLED"] },
+      startDate: { lte: end },
+      endDate: { gte: start },
+      ...(excludeRequestId ? { id: { not: excludeRequestId } } : {}),
+    },
+    select: {
+      startDate: true,
+      endDate: true,
+      status: true,
+    },
+    orderBy: { startDate: "asc" },
+  });
+  if (overlapping) {
+    throw new Error(
+      `A ${overlapping.status.toLowerCase()} leave request already overlaps the selected dates (${getIstDateKey(overlapping.startDate)} to ${getIstDateKey(overlapping.endDate)}).`,
+    );
+  }
+}
+
 function buildReason(reason: string, diwaliLeave?: string) {
   const normalizedReason = reason.trim();
   return diwaliLeave === "true"
@@ -342,7 +370,11 @@ export async function createLeaveRequestAction(
         error:
           "One or more selected approvers are not available for this employee.",
       };
-    validateStartDateNotInPast(parsed.data.startDate);
+    const isHrCreatingForAnotherEmployee =
+      isHR(actor) && employee.id !== actor.id;
+    if (!isHrCreatingForAnotherEmployee) {
+      validateStartDateNotInPast(parsed.data.startDate);
+    }
     await validateBoundaryDates(
       parsed.data.startDate,
       parsed.data.endDate,
@@ -352,6 +384,7 @@ export async function createLeaveRequestAction(
       parsed.data.startDate,
       parsed.data.endDate,
     );
+    await validateNoOverlappingLeaveRequest(employee.id, start, end);
     const requestDetails = await computeRequestedLeaveDetails(
       parsed.data.startDate,
       parsed.data.endDate,
@@ -468,6 +501,12 @@ export async function updateLeaveRequestAction(
     const { start, end } = parseDateRange(
       parsed.data.startDate,
       parsed.data.endDate,
+    );
+    await validateNoOverlappingLeaveRequest(
+      employee.id,
+      start,
+      end,
+      parsed.data.id,
     );
     const requestDetails = await computeRequestedLeaveDetails(
       parsed.data.startDate,
