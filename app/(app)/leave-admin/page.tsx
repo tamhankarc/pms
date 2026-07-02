@@ -4,7 +4,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { requireUser } from "@/lib/auth";
-import { canAccessMenuItem, isHR } from "@/lib/permissions";
+import { canAccessMenuItem, isAdmin, isHR } from "@/lib/permissions";
 import { formatUserTypeLabel } from "@/lib/display-labels";
 import { getLeaveAdminList } from "@/lib/ems-queries";
 import { createOfficialHolidayAction, deleteOfficialHolidayAction } from "@/lib/actions/hr-leave-admin-actions";
@@ -28,6 +28,18 @@ export default async function LeaveAdminPage({
   return (
     <div className="space-y-6">
       <PageHeader title="Leave Administration" description="Manage leave balances, shift, employment status, and official holidays for leave allowed users." />
+
+      {isAdmin(user) && user.functionalRole === "OTHER" ? (
+        <section className="card p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="section-title">Quarterly casual leave maintenance</h2>
+              <p className="section-subtitle">Credit quarterly casual leaves and adjust approved requests affected by a missed quarter credit.</p>
+            </div>
+            <Link className="btn-primary" href="/leave-admin/quarterly-casual-leaves">Open maintenance</Link>
+          </div>
+        </section>
+      ) : null}
 
       <section className="card p-5">
         <AutoSubmitFilterForm className="grid gap-4 md:grid-cols-3">

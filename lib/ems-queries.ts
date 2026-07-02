@@ -1,5 +1,5 @@
 import "server-only";
-import { Prisma } from "@prisma/client";
+import { Prisma, type LeaveYearProfile } from "@prisma/client";
 import { db } from "@/lib/db";
 import {
   getAttendanceWorkDateKey,
@@ -41,6 +41,14 @@ export function isLeaveAllowedUser(user: {
   )
     return false;
   return true;
+}
+
+function ensureLeaveYearProfile<T>(profile: T | null): T {
+  if (!profile) {
+    throw new Error("Unable to create or find leave year profile.");
+  }
+
+  return profile;
 }
 
 export async function getApprovedLeaveMonthCalendar(monthKey: string) {
@@ -385,9 +393,8 @@ export async function getAttendanceCalendarData(
   const monthEndExclusive = getMonthEndUtcExclusiveFromIstKey(monthKey);
 
   const calendarYear = Number(monthKey.slice(0, 4));
-  const leaveYearProfile = await getOrCreateLeaveYearProfile(
-    userId,
-    calendarYear,
+  const leaveYearProfile = ensureLeaveYearProfile(
+    await getOrCreateLeaveYearProfile(userId, calendarYear),
   );
 
   const [attendanceRows, leaveRows] = await Promise.all([
@@ -684,7 +691,10 @@ export async function areValidLeaveRequestApproversForUser(
 }
 
 export async function getLeaveBalanceForUser(userId: string, year: number) {
-  const profile = await getOrCreateLeaveYearProfile(userId, year);
+  const profile = ensureLeaveYearProfile(
+    await getOrCreateLeaveYearProfile(userId, year),
+  );
+
   return {
     year,
     casualLeaves: Number(profile.casualLeaves),
@@ -796,58 +806,59 @@ export async function getLeaveApprovalsForUser(
   });
 }
 
-function getQuarterCountForToday(year: number) {
-  const todayKey = getIstDateKey();
-  if (!todayKey.startsWith(String(year))) return 4;
-  const month = Number(todayKey.slice(5, 7));
-  return month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : 4;
-}
-
 export async function getOrCreateLeaveYearProfile(
   userId: string,
   year: number,
-) {
+): Promise<LeaveYearProfile> {
   const existing = await db.leaveYearProfile.findUnique({
     where: { userId_year: { userId, year } },
   });
+
   if (existing) {
-    if (
-      (existing.employmentStatus === "PROBATION" ||
-        existing.employmentStatus === "CONSULTANT") &&
-      (Number(existing.casualLeaves) !== 0 ||
-        Number(existing.earnedLeaves) !== 0)
-    ) {
-      return db.leaveYearProfile.update({
-        where: { id: existing.id },
-        data: {
-          casualLeaves: new Prisma.Decimal(0),
-          earnedLeaves: new Prisma.Decimal(0),
-        },
-      });
-    }
     return existing;
   }
 
   const previous = await db.leaveYearProfile.findUnique({
     where: { userId_year: { userId, year: year - 1 } },
   });
+
   const carryForwardEarned = Math.min(Number(previous?.earnedLeaves ?? 0), 45);
   const employmentStatus = previous?.employmentStatus ?? "PROBATION";
   const unpaidOnly =
     employmentStatus === "PROBATION" || employmentStatus === "CONSULTANT";
   const initialEarned = unpaidOnly ? 0 : carryForwardEarned + 12.96;
-  const initialCasual = unpaidOnly ? 0 : getQuarterCountForToday(year) * 2;
+  // Casual leaves are now credited only by the quarterly credit job/action.
+  // This keeps find/create reads from silently applying quarter credits and
+  // respects the June 2026 HR-manual opening balances.
+  const initialCasual = 0;
 
-  return db.leaveYearProfile.create({
-    data: {
-      userId,
-      year,
-      casualLeaves: new Prisma.Decimal(initialCasual.toFixed(2)),
-      earnedLeaves: new Prisma.Decimal(initialEarned.toFixed(2)),
-      shift: previous?.shift ?? "DAY",
-      employmentStatus,
-    },
-  });
+  try {
+    return await db.leaveYearProfile.create({
+      data: {
+        userId,
+        year,
+        casualLeaves: new Prisma.Decimal(initialCasual.toFixed(2)),
+        earnedLeaves: new Prisma.Decimal(initialEarned.toFixed(2)),
+        shift: previous?.shift ?? "DAY",
+        employmentStatus,
+      },
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      const racedProfile = await db.leaveYearProfile.findUnique({
+        where: { userId_year: { userId, year } },
+      });
+
+      if (racedProfile) {
+        return racedProfile;
+      }
+    }
+
+    throw error;
+  }
 }
 
 function getOfficialHolidayShiftWhere(
@@ -970,13 +981,18 @@ export async function getLeaveAdminList(filters?: {
   );
 
   const hydratedUsers = await Promise.all(
-    users.map(async (user) => ({
-      ...user,
-      profile:
+    users.map(async (user) => {
+      const profile = ensureLeaveYearProfile(
         user.leaveYearProfiles[0] ??
-        (await getOrCreateLeaveYearProfile(user.id, year)),
-      totalUnpaidLeaves: unpaidDaysByUserId.get(user.id) ?? 0,
-    })),
+          (await getOrCreateLeaveYearProfile(user.id, year)),
+      );
+
+      return {
+        ...user,
+        profile,
+        totalUnpaidLeaves: unpaidDaysByUserId.get(user.id) ?? 0,
+      };
+    }),
   );
 
   return {

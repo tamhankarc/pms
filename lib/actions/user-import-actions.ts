@@ -257,6 +257,14 @@ function valuesDiffer(a: unknown, b: unknown) {
   return normalizeText(a) !== normalizeText(b);
 }
 
+function ensureLeaveYearProfile<T>(profile: T | null): T {
+  if (!profile) {
+    throw new Error("Unable to create or find leave year profile.");
+  }
+
+  return profile;
+}
+
 async function validateRows(
   rows: SheetRow[],
   intent: ImportIntent,
@@ -344,7 +352,9 @@ async function validateRows(
       }
     }
 
-    const profile = await getOrCreateLeaveYearProfile(user.id, year);
+    const profile = ensureLeaveYearProfile(
+      await getOrCreateLeaveYearProfile(user.id, year),
+    );
     const unpaidOnly =
       profile.employmentStatus === "PROBATION" ||
       profile.employmentStatus === "CONSULTANT";

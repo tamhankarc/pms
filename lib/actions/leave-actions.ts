@@ -112,6 +112,16 @@ function validateStartDateNotInPast(startDate: string) {
     throw new Error("Start date cannot be in the past.");
 }
 
+function ensureLeaveYearProfile<T>(
+  profile: T | null,
+): T {
+  if (!profile) {
+    throw new Error("Unable to create or find leave year profile.");
+  }
+
+  return profile;
+}
+
 async function getRequestEmployee(
   actor: Awaited<ReturnType<typeof requireUserForAction>>,
   requestedForUserId?: string,
@@ -144,7 +154,9 @@ async function getWorkingDateKeys(
   userId: string,
 ) {
   const year = Number(startDateKey.slice(0, 4));
-  const profile = await getOrCreateLeaveYearProfile(userId, year);
+  const profile = ensureLeaveYearProfile(
+    await getOrCreateLeaveYearProfile(userId, year),
+  );
   const holidayKeys = new Set(
     await getOfficialHolidayDateKeysForYear(year, profile.shift),
   );
@@ -585,9 +597,11 @@ export async function cancelLeaveRequestAction(formData: FormData) {
   const { startUtc } = getDayBoundsUtcFromIstDateKey(getIstDateKey());
   if (existing.endDate < startUtc)
     throw new Error("Past leave requests cannot be cancelled.");
-  const profile = await getOrCreateLeaveYearProfile(
-    user.id,
-    Number(getIstDateKey(existing.startDate).slice(0, 4)),
+  const profile = ensureLeaveYearProfile(
+    await getOrCreateLeaveYearProfile(
+      user.id,
+      Number(getIstDateKey(existing.startDate).slice(0, 4)),
+    ),
   );
   await db.$transaction([
     db.leaveRequest.update({
@@ -659,9 +673,11 @@ export async function reviewLeaveRequestAction(formData: FormData) {
       existing.daySelectionMode as DaySelectionMode,
       existing.leaveDayTypesJson ?? undefined,
     );
-    const profile = await getOrCreateLeaveYearProfile(
-      existing.userId,
-      approvedBreakup.year,
+    const profile = ensureLeaveYearProfile(
+      await getOrCreateLeaveYearProfile(
+        existing.userId,
+        approvedBreakup.year,
+      ),
     );
     await db.$transaction([
       db.leaveRequest.update({

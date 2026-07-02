@@ -29,6 +29,10 @@ export default async function LeaveAdminUserPage({
   const year = Number(getIstDateKey().slice(0, 4));
   const profile = await getOrCreateLeaveYearProfile(target.id, year);
 
+  if (!profile) {
+    notFound();
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader

@@ -52,6 +52,14 @@ function getProfileShift(
   return profiles.find((profile) => profile.year === year)?.shift ?? "DAY";
 }
 
+function ensureLeaveYearProfile<T>(profile: T | null): T {
+  if (!profile) {
+    throw new Error("Unable to create or find leave year profile.");
+  }
+
+  return profile;
+}
+
 export type AttendanceExportDay = {
   dateKey: string;
   status: string;
@@ -210,7 +218,10 @@ export async function getHRReportData(
     );
     const rows = await Promise.all(
       users.map(async (user) => {
-        const profile = await getOrCreateLeaveYearProfile(user.id, year);
+        const profile = ensureLeaveYearProfile(
+          await getOrCreateLeaveYearProfile(user.id, year),
+        );
+
         return [
           user.fullName,
           Number(profile.casualLeaves),

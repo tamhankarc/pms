@@ -1127,6 +1127,24 @@ model LeaveYearProfile {
   @@index([year])
 }
 
+
+model LeaveQuarterlyCasualCredit {
+  id           String   @id @default(cuid())
+  userId       String
+  year         Int
+  quarter      Int
+  credited     Decimal  @default(2) @db.Decimal(6, 2)
+  creditedAt   DateTime @default(now())
+  creditedById String?
+  runDateKey   String?
+  source       String   @default("ADMIN")
+
+  @@unique([userId, year, quarter])
+  @@index([userId])
+  @@index([year, quarter])
+  @@index([creditedAt])
+}
+
 model DashboardAnnouncement {
   id          String   @id @default(cuid())
   heading     String?
