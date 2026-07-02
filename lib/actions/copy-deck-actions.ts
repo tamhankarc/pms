@@ -1,9 +1,9 @@
 "use server";
 
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import type { CopyDeckTranslationSource } from "@prisma/client";
+import { Prisma, type CopyDeckTranslationSource } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
 import {
@@ -38,6 +38,14 @@ const BULK_TRANSACTION_OPTIONS = {
   maxWait: 10_000,
   timeout: 300_000,
 } as const;
+
+function chunks<T>(values: T[], size = 500) {
+  const result: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    result.push(values.slice(index, index + size));
+  }
+  return result;
+}
 
 const createSchema = z.object({
   name: z.string().trim().min(2, "Copy deck name is required.").max(160),
@@ -513,39 +521,71 @@ export async function uploadCopyDeckMasterAction(
         `Master upload may contain at most ${MAX_COPY_DECK_ROWS} rows.`,
       );
 
-    let translationsUpdated = 0;
+    const rowsWithHashes = rows.map((row) => ({
+      ...row,
+      englishHash: englishHash(row.englishText),
+    }));
+    const translationsUpdated = rows.reduce(
+      (total, row) => total + row.translations.length,
+      0,
+    );
     await db.$transaction(async (tx) => {
-      for (const row of rows) {
-        const masterText = await tx.copyDeckMasterText.upsert({
-          where: { englishHash: englishHash(row.englishText) },
-          update: { englishText: row.englishText },
-          create: {
-            englishHash: englishHash(row.englishText),
-            englishText: row.englishText,
-          },
-          select: { id: true },
-        });
-        for (const translation of row.translations) {
-          await tx.copyDeckMasterTranslation.upsert({
-            where: {
-              masterTextId_marketId: {
-                masterTextId: masterText.id,
-                marketId: translation.marketId,
-              },
-            },
-            update: {
-              translatedText: translation.text,
-              source: "MASTER_UPLOAD",
-            },
-            create: {
-              masterTextId: masterText.id,
-              marketId: translation.marketId,
-              translatedText: translation.text,
-              source: "MASTER_UPLOAD",
-            },
-          });
-          translationsUpdated += 1;
-        }
+      for (const batch of chunks(rowsWithHashes)) {
+        const now = new Date();
+        await tx.$executeRaw(
+          Prisma.sql`
+            INSERT INTO CopyDeckMasterText
+              (id, englishHash, englishText, createdAt, updatedAt)
+            VALUES ${Prisma.join(
+              batch.map(
+                (row) =>
+                  Prisma.sql`(${randomUUID()}, ${row.englishHash}, ${row.englishText}, ${now}, ${now})`,
+              ),
+            )}
+            ON DUPLICATE KEY UPDATE
+              englishText = VALUES(englishText),
+              updatedAt = VALUES(updatedAt)
+          `,
+        );
+      }
+
+      const masterTexts = await tx.copyDeckMasterText.findMany({
+        where: {
+          englishHash: { in: rowsWithHashes.map((row) => row.englishHash) },
+        },
+        select: { id: true, englishHash: true },
+      });
+      const masterTextIdByHash = new Map(
+        masterTexts.map((text) => [text.englishHash, text.id]),
+      );
+      const translationRows = rowsWithHashes.flatMap((row) => {
+        const masterTextId = masterTextIdByHash.get(row.englishHash);
+        if (!masterTextId) return [];
+        return row.translations.map((translation) => ({
+          masterTextId,
+          marketId: translation.marketId,
+          translatedText: translation.text,
+        }));
+      });
+
+      for (const batch of chunks(translationRows)) {
+        const now = new Date();
+        await tx.$executeRaw(
+          Prisma.sql`
+            INSERT INTO CopyDeckMasterTranslation
+              (id, masterTextId, marketId, translatedText, source, createdAt, updatedAt)
+            VALUES ${Prisma.join(
+              batch.map(
+                (row) =>
+                  Prisma.sql`(${randomUUID()}, ${row.masterTextId}, ${row.marketId}, ${row.translatedText}, ${"MASTER_UPLOAD"}, ${now}, ${now})`,
+              ),
+            )}
+            ON DUPLICATE KEY UPDATE
+              translatedText = VALUES(translatedText),
+              source = VALUES(source),
+              updatedAt = VALUES(updatedAt)
+          `,
+        );
       }
     }, BULK_TRANSACTION_OPTIONS);
     revalidatePath("/copy-decks/master");
