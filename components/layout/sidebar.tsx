@@ -23,6 +23,7 @@ import {
   ListChecks,
   Bell,
   Mail,
+  Files,
   ChevronDown,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/auth";
@@ -35,6 +36,7 @@ import {
   canViewAttendanceHistory,
   canViewSweepInTriggers,
   canManageUsers,
+  canAccessCopyDecks,
   isHR,
   isOperations,
   isRoleScopedManager,
@@ -75,6 +77,7 @@ const iconByMenuKey: Record<
   estimates: ClipboardCheck,
   "team-lead-assignments": BriefcaseBusiness,
   reports: BarChart3,
+  "copy-decks": Files,
   "billing-reports": ReceiptText,
   "leave-requests": CalendarDays,
   "leave-approvals": CheckCheck,
@@ -268,11 +271,15 @@ export function getSidebarItems(
   user: SessionUser,
   canAccessLeaveApprovals: boolean,
 ): SidebarNavItem[] {
+  const addCopyDecks = (items: SidebarNavItem[]) => {
+    if (!canAccessCopyDecks(user) || items.some((item) => item.key === "copy-decks")) return items;
+    return [...items, ...getItemsByKeys(["copy-decks"])];
+  };
   if (user.userType === "EMPLOYEE") {
-    return appendExtraMenus(
+    return addCopyDecks(appendExtraMenus(
       withLeaveItems(employeeItems, user, canAccessLeaveApprovals),
       user,
-    );
+    ));
   }
 
   if (user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) {
@@ -287,10 +294,10 @@ export function getSidebarItems(
           ),
         ]
       : scopedItems;
-    return appendExtraMenus(
+    return addCopyDecks(appendExtraMenus(
       withLeaveItems(withSweepInItems, user, canAccessLeaveApprovals),
       user,
-    );
+    ));
   }
 
   if (isOperations(user)) {
@@ -373,7 +380,7 @@ export function getSidebarItems(
     return true;
   });
 
-  return appendExtraMenus(filtered, user);
+  return addCopyDecks(appendExtraMenus(filtered, user));
 }
 
 export type BillingReportClientNavItem = { id: string; name: string };

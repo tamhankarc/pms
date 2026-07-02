@@ -145,6 +145,7 @@ const MENU_ROUTE_PREFIXES: Record<string, string> = {
   profile: "/profile",
   "billing-reports": "/billing-reports",
   "change-password": "/change-password",
+  "copy-decks": "/copy-decks",
 };
 
 function hasExtraMenuRouteAccess(pathname: string, extraMenuKeys?: string[]) {
@@ -209,6 +210,21 @@ export async function middleware(request: NextRequest) {
     pathname,
     session?.extraMenuKeys,
   );
+
+  if (pathname === "/copy-decks" || pathname.startsWith("/copy-decks/")) {
+    const role = session?.functionalRole;
+    const canAccessCopyDecks =
+      session?.userType === "TEAM_LEAD" ||
+      (session?.userType === "MANAGER" && role === "PROJECT_MANAGER") ||
+      (session?.userType === "EMPLOYEE" &&
+        (role === "LOCALIZATION" || role === "QA")) ||
+      (session?.userType === "ADMIN" && role === "OTHER") ||
+      hasExtraAccess;
+    if (!canAccessCopyDecks) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+    return NextResponse.next();
+  }
 
   if (
     session?.userType === "ACCOUNTS" &&

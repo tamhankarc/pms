@@ -34,6 +34,7 @@ export const menuItems = [
     label: "Filmik Resources",
   },
   { key: "reports", href: "/reports", label: "Reports" },
+  { key: "copy-decks", href: "/copy-decks", label: "Copy Decks" },
   { key: "leave-requests", href: "/leave-requests", label: "Leave Requests" },
   {
     key: "leave-approvals",
@@ -165,6 +166,7 @@ export function getBaseMenuKeysForUserType(
     case "TEAM_LEAD":
       return [
         "dashboard",
+        "copy-decks",
         "time-entries",
         "estimates",
         "leave-requests",

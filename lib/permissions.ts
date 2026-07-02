@@ -77,6 +77,26 @@ export function canViewCostData(user: UserLike) {
 export function canViewBillingReports(user: UserLike) {
   return isAdmin(user) || isAccounts(user);
 }
+export function canAccessCopyDecks(user: UserLike) {
+  const role = getFunctionalRole(user);
+  return (
+    isTeamLead(user) ||
+    (isManager(user) && role === "PROJECT_MANAGER") ||
+    (isEmployee(user) && (role === "LOCALIZATION" || role === "QA")) ||
+    (isAdmin(user) && role === "OTHER") ||
+    hasExtraMenuAccess(user, "copy-decks")
+  );
+}
+export function canAssignCopyDeckAccess(user: UserLike) {
+  return (
+    isTeamLead(user) ||
+    (isManager(user) && getFunctionalRole(user) === "PROJECT_MANAGER") ||
+    (isAdmin(user) && getFunctionalRole(user) === "OTHER")
+  );
+}
+export function canManageCopyDeckMaster(user: UserLike) {
+  return isAdmin(user) && getFunctionalRole(user) === "OTHER";
+}
 export function isGeneralManager(user: UserLike) {
   return isManager(user) && getFunctionalRole(user) === "GENERAL_MANAGER";
 }
