@@ -34,6 +34,11 @@ export type CopyDeckActionState = {
   copyDeckId?: string;
 };
 
+const BULK_TRANSACTION_OPTIONS = {
+  maxWait: 10_000,
+  timeout: 300_000,
+} as const;
+
 const createSchema = z.object({
   name: z.string().trim().min(2, "Copy deck name is required.").max(160),
   clientId: z.string().min(1, "Client is required."),
@@ -250,7 +255,7 @@ export async function createCopyDeckAction(
           },
         },
       });
-    });
+    }, BULK_TRANSACTION_OPTIONS);
     revalidatePath("/copy-decks");
     return {
       success: true,
@@ -403,7 +408,7 @@ export async function uploadCorrectedCopyDeckAction(
           });
         }
       }
-    });
+    }, BULK_TRANSACTION_OPTIONS);
     revalidatePath("/copy-decks");
     revalidatePath(`/copy-decks/${copyDeckId}`);
     return {
@@ -542,7 +547,7 @@ export async function uploadCopyDeckMasterAction(
           translationsUpdated += 1;
         }
       }
-    });
+    }, BULK_TRANSACTION_OPTIONS);
     revalidatePath("/copy-decks/master");
     revalidatePath("/copy-decks");
     return {
