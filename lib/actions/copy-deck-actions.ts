@@ -1,9 +1,9 @@
 "use server";
 
-import ExcelJS from "exceljs";
 import { createHash } from "crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import type { CopyDeckTranslationSource } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireUserForAction } from "@/lib/auth";
 import {
@@ -13,13 +13,19 @@ import {
 } from "@/lib/permissions";
 import { normalizeMenuKeys, parseMenuKeysJson } from "@/lib/menu-access";
 import {
-  MAX_COPY_DECK_FILE_BYTES,
+  getCellText,
+  getHeaderMap,
+  loadCopyDeckWorksheet,
   MAX_COPY_DECK_ROWS,
   parseCorrectedCopyDeck,
   parseNewCopyDeck,
 } from "@/lib/copy-decks/excel";
+import {
+  ensureCopyDeckMarketsFromHeaders,
+  ensureDefaultCopyDeckMarkets,
+  normalizeMarketCode,
+} from "@/lib/copy-decks/markets";
 import { getCopyDeckTranslationProvider } from "@/lib/copy-decks/translation-provider";
-import type { CopyDeckTranslationSource } from "@prisma/client";
 
 export type CopyDeckActionState = {
   success?: boolean;
@@ -34,40 +40,101 @@ const createSchema = z.object({
   movieId: z.string().optional(),
   projectId: z.string().optional(),
   subProjectId: z.string().optional(),
-  countryId: z.string().min(1, "Country is required."),
+  marketId: z.string().min(1, "Country/Market is required."),
 });
 
 function normalizedEnglish(value: string) {
-  return value.trim().replace(/\s+/g, " ");
+  return value.trim().replace(/[ \t]+/g, " ");
 }
 
 function englishHash(value: string) {
-  return createHash("sha256").update(normalizedEnglish(value).toLocaleLowerCase()).digest("hex");
+  return createHash("sha256")
+    .update(normalizedEnglish(value).toLocaleLowerCase())
+    .digest("hex");
 }
 
 async function requireCopyDeckAccess() {
   const user = await requireUserForAction();
-  if (!canAccessCopyDecks(user)) throw new Error("You are not allowed to access Copy Decks.");
+  if (!canAccessCopyDecks(user))
+    throw new Error("You are not allowed to access Copy Decks.");
   return user;
 }
 
 async function validateScope(data: z.infer<typeof createSchema>) {
-  const [client, country, movie, project, subProject] = await Promise.all([
-    db.client.findFirst({ where: { id: data.clientId, isActive: true }, select: { id: true } }),
-    db.country.findFirst({ where: { id: data.countryId, isActive: true }, select: { id: true, name: true, isoCode: true } }),
-    data.movieId ? db.movie.findFirst({ where: { id: data.movieId, clientId: data.clientId }, select: { id: true } }) : null,
-    data.projectId ? db.project.findFirst({ where: { id: data.projectId, clientId: data.clientId }, select: { id: true } }) : null,
-    data.subProjectId ? db.subProject.findFirst({ where: { id: data.subProjectId, project: { clientId: data.clientId } }, select: { id: true, projectId: true } }) : null,
+  const [client, market, movie, project, subProject] = await Promise.all([
+    db.client.findFirst({
+      where: { id: data.clientId, isActive: true },
+      select: { id: true },
+    }),
+    db.copyDeckMarket.findFirst({
+      where: { id: data.marketId, isActive: true },
+      include: { country: { select: { id: true, name: true, isoCode: true } } },
+    }),
+    data.movieId
+      ? db.movie.findFirst({
+          where: { id: data.movieId, clientId: data.clientId },
+          select: { id: true },
+        })
+      : null,
+    data.projectId
+      ? db.project.findFirst({
+          where: { id: data.projectId, clientId: data.clientId },
+          select: { id: true },
+        })
+      : null,
+    data.subProjectId
+      ? db.subProject.findFirst({
+          where: {
+            id: data.subProjectId,
+            project: { clientId: data.clientId },
+          },
+          select: { id: true, projectId: true },
+        })
+      : null,
   ]);
   if (!client) throw new Error("Selected client is invalid.");
-  if (!country) throw new Error("Selected country is invalid.");
-  if (data.movieId && !movie) throw new Error("Selected title does not belong to the client.");
-  if (data.projectId && !project) throw new Error("Selected project does not belong to the client.");
-  if (data.subProjectId && !subProject) throw new Error("Selected sub-project does not belong to the client.");
-  if (subProject && data.projectId && subProject.projectId !== data.projectId) {
+  if (!market) throw new Error("Selected country/market is invalid.");
+  if (data.movieId && !movie)
+    throw new Error("Selected title does not belong to the client.");
+  if (data.projectId && !project)
+    throw new Error("Selected project does not belong to the client.");
+  if (data.subProjectId && !subProject)
+    throw new Error("Selected sub-project does not belong to the client.");
+  if (subProject && data.projectId && subProject.projectId !== data.projectId)
     throw new Error("Selected sub-project does not belong to the project.");
+  return market;
+}
+
+async function translateMissing(
+  englishText: string,
+  market: {
+    code: string;
+    name: string;
+    language: string | null;
+    country: { name: string; isoCode: string | null } | null;
+  },
+) {
+  try {
+    const result = await getCopyDeckTranslationProvider().translate({
+      englishText,
+      marketCode: market.code,
+      marketName: market.name,
+      language: market.language,
+      countryCode: market.country?.isoCode ?? undefined,
+      countryName: market.country?.name,
+    });
+    return {
+      translatedText: result.text,
+      source: (result.fallback
+        ? "ENGLISH_FALLBACK"
+        : "AUTO_TRANSLATED") as CopyDeckTranslationSource,
+    };
+  } catch {
+    return {
+      translatedText: englishText,
+      source: "ENGLISH_FALLBACK" as CopyDeckTranslationSource,
+    };
   }
-  return country;
 }
 
 export async function createCopyDeckAction(
@@ -82,59 +149,79 @@ export async function createCopyDeckAction(
       movieId: String(formData.get("movieId") ?? "") || undefined,
       projectId: String(formData.get("projectId") ?? "") || undefined,
       subProjectId: String(formData.get("subProjectId") ?? "") || undefined,
-      countryId: formData.get("countryId"),
+      marketId: formData.get("marketId"),
     });
     if (!parsed.success) return { error: parsed.error.issues[0]?.message };
     const file = formData.get("file");
     if (!(file instanceof File)) throw new Error("Upload an Excel .xlsx file.");
-    const country = await validateScope(parsed.data);
+
+    const market = await validateScope(parsed.data);
     const uploadedRows = await parseNewCopyDeck(file);
-    const unique = new Map(uploadedRows.map((row) => [englishHash(row.englishText), normalizedEnglish(row.englishText)]));
-    const hashes = [...unique.keys()];
-    const existing = await db.copyDeckMasterEntry.findMany({
-      where: { countryId: parsed.data.countryId, englishHash: { in: hashes } },
+    const unique = new Map(
+      uploadedRows.map((row) => [
+        englishHash(row.englishText),
+        normalizedEnglish(row.englishText),
+      ]),
+    );
+    const existingTexts = await db.copyDeckMasterText.findMany({
+      where: { englishHash: { in: [...unique.keys()] } },
+      include: {
+        translations: { where: { marketId: market.id }, take: 1 },
+      },
     });
-    const byHash = new Map(existing.map((entry) => [entry.englishHash, entry]));
-    const provider = getCopyDeckTranslationProvider();
-    const resolved = new Map<string, { englishText: string; translatedText: string; source: CopyDeckTranslationSource }>();
+    const existingByHash = new Map(
+      existingTexts.map((text) => [text.englishHash, text]),
+    );
+    const resolved = new Map<
+      string,
+      {
+        englishText: string;
+        translatedText: string;
+        source: CopyDeckTranslationSource;
+      }
+    >();
     for (const [hash, englishText] of unique) {
-      const master = byHash.get(hash);
-      if (master) {
-        resolved.set(hash, { englishText, translatedText: master.translatedText, source: "MASTER" });
-        continue;
-      }
-      try {
-        const translation = await provider.translate({
-          englishText,
-          countryCode: country.isoCode ?? "",
-          countryName: country.name,
-        });
-        resolved.set(hash, {
-          englishText,
-          translatedText: translation.text,
-          source: translation.fallback ? "ENGLISH_FALLBACK" : "PROVIDER",
-        });
-      } catch {
-        resolved.set(hash, { englishText, translatedText: englishText, source: "ENGLISH_FALLBACK" });
-      }
+      const translation = existingByHash.get(hash)?.translations[0];
+      resolved.set(
+        hash,
+        translation
+          ? {
+              englishText,
+              translatedText: translation.translatedText,
+              source: "MASTER",
+            }
+          : { englishText, ...(await translateMissing(englishText, market)) },
+      );
     }
 
     const deck = await db.$transaction(async (tx) => {
-      const masterByHash = new Map<string, string>();
+      const masterTextByHash = new Map<string, string>();
       for (const [hash, value] of resolved) {
-        const master = await tx.copyDeckMasterEntry.upsert({
-          where: { countryId_englishHash: { countryId: parsed.data.countryId, englishHash: hash } },
-          update: {},
+        const masterText = await tx.copyDeckMasterText.upsert({
+          where: { englishHash: hash },
+          update: { englishText: value.englishText },
           create: {
-            countryId: parsed.data.countryId,
             englishHash: hash,
             englishText: value.englishText,
-            translatedText: value.translatedText,
-            source: value.source,
           },
           select: { id: true },
         });
-        masterByHash.set(hash, master.id);
+        masterTextByHash.set(hash, masterText.id);
+        await tx.copyDeckMasterTranslation.upsert({
+          where: {
+            masterTextId_marketId: {
+              masterTextId: masterText.id,
+              marketId: market.id,
+            },
+          },
+          update: {},
+          create: {
+            masterTextId: masterText.id,
+            marketId: market.id,
+            translatedText: value.translatedText,
+            source: value.source === "MASTER" ? "MASTER" : value.source,
+          },
+        });
       }
       return tx.copyDeck.create({
         data: {
@@ -143,7 +230,8 @@ export async function createCopyDeckAction(
           movieId: parsed.data.movieId ?? null,
           projectId: parsed.data.projectId ?? null,
           subProjectId: parsed.data.subProjectId ?? null,
-          countryId: parsed.data.countryId,
+          marketId: market.id,
+          countryId: market.countryId,
           originalFileName: file.name,
           createdById: user.id,
           rows: {
@@ -155,7 +243,8 @@ export async function createCopyDeckAction(
                 englishText: normalizedEnglish(row.englishText),
                 translatedText: value.translatedText,
                 source: value.source,
-                masterEntryId: masterByHash.get(hash),
+                masterTextId: masterTextByHash.get(hash),
+                marketId: market.id,
               };
             }),
           },
@@ -169,7 +258,10 @@ export async function createCopyDeckAction(
       message: `Created ${uploadedRows.length} copy-deck row(s).`,
     };
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Unable to create copy deck." };
+    return {
+      error:
+        error instanceof Error ? error.message : "Unable to create copy deck.",
+    };
   }
 }
 
@@ -182,78 +274,173 @@ export async function uploadCorrectedCopyDeckAction(
     const copyDeckId = String(formData.get("copyDeckId") ?? "");
     const file = formData.get("file");
     if (!copyDeckId) throw new Error("Copy deck is required.");
-    if (!(file instanceof File)) throw new Error("Upload a corrected Excel .xlsx file.");
+    if (!(file instanceof File))
+      throw new Error("Upload a corrected Excel .xlsx file.");
     const deck = await db.copyDeck.findUnique({
       where: { id: copyDeckId },
-      include: { country: true, rows: { select: { id: true } } },
+      include: {
+        market: { include: { country: true } },
+        rows: { select: { id: true } },
+      },
     });
-    if (!deck) throw new Error("Copy deck not found.");
-    const uploaded = await parseCorrectedCopyDeck(file);
+    if (!deck?.market)
+      throw new Error(
+        "This legacy copy deck has no market. Select a market before importing corrections.",
+      );
+    const market = deck.market;
+    const uploaded = await parseCorrectedCopyDeck(file, market);
     const validIds = new Set(deck.rows.map((row) => row.id));
     const seenIds = new Set<string>();
     for (const row of uploaded) {
-      if (row.rowId && !validIds.has(row.rowId)) throw new Error(`Row ${row.rowNumber}: Row ID does not belong to this copy deck.`);
-      if (row.rowId && seenIds.has(row.rowId)) throw new Error(`Row ${row.rowNumber}: duplicate Row ID.`);
-      if (!row.englishText) throw new Error(`Row ${row.rowNumber}: English Text is required.`);
+      if (row.rowId && !validIds.has(row.rowId))
+        throw new Error(
+          `Row ${row.rowNumber}: Row ID does not belong to this copy deck.`,
+        );
+      if (row.rowId && seenIds.has(row.rowId))
+        throw new Error(`Row ${row.rowNumber}: duplicate Row ID.`);
+      if (!row.englishText)
+        throw new Error(`Row ${row.rowNumber}: English text is required.`);
       if (row.rowId) seenIds.add(row.rowId);
     }
-    const nextOrder = (await db.copyDeckRow.aggregate({ where: { copyDeckId }, _max: { rowOrder: true } }))._max.rowOrder ?? 0;
+
+    const uniqueHashes = [
+      ...new Set(uploaded.map((row) => englishHash(row.englishText))),
+    ];
+    const existingTexts = await db.copyDeckMasterText.findMany({
+      where: { englishHash: { in: uniqueHashes } },
+      include: {
+        translations: { where: { marketId: market.id }, take: 1 },
+      },
+    });
+    const existingByHash = new Map(
+      existingTexts.map((text) => [text.englishHash, text]),
+    );
+    const resolved: Array<
+      (typeof uploaded)[number] & {
+        englishText: string;
+        translatedText: string;
+        source: CopyDeckTranslationSource;
+      }
+    > = [];
+    for (const row of uploaded) {
+      const englishText = normalizedEnglish(row.englishText);
+      const existing = existingByHash.get(englishHash(englishText))
+        ?.translations[0];
+      const generated = row.translation
+        ? {
+            translatedText: row.translation,
+            source: "CLIENT_CORRECTED" as CopyDeckTranslationSource,
+          }
+        : existing
+          ? {
+              translatedText: existing.translatedText,
+              source: "MASTER" as CopyDeckTranslationSource,
+            }
+          : await translateMissing(englishText, market);
+      resolved.push({ ...row, englishText, ...generated });
+    }
+
+    const nextOrder =
+      (
+        await db.copyDeckRow.aggregate({
+          where: { copyDeckId },
+          _max: { rowOrder: true },
+        })
+      )._max.rowOrder ?? 0;
     await db.$transaction(async (tx) => {
       let added = 0;
-      for (const row of uploaded) {
-        const englishText = normalizedEnglish(row.englishText);
-        const hash = englishHash(englishText);
-        const translation = row.translation || englishText;
-        const source: CopyDeckTranslationSource = row.translation ? "CLIENT_CORRECTED" : "ENGLISH_FALLBACK";
-        const master = await tx.copyDeckMasterEntry.upsert({
-          where: { countryId_englishHash: { countryId: deck.countryId, englishHash: hash } },
-          update: { englishText, translatedText: translation, source },
-          create: { countryId: deck.countryId, englishHash: hash, englishText, translatedText: translation, source },
+      for (const row of resolved) {
+        const hash = englishHash(row.englishText);
+        const masterText = await tx.copyDeckMasterText.upsert({
+          where: { englishHash: hash },
+          update: { englishText: row.englishText },
+          create: { englishHash: hash, englishText: row.englishText },
           select: { id: true },
+        });
+        await tx.copyDeckMasterTranslation.upsert({
+          where: {
+            masterTextId_marketId: {
+              masterTextId: masterText.id,
+              marketId: market.id,
+            },
+          },
+          update: row.translation
+            ? {
+                translatedText: row.translatedText,
+                source: "CLIENT_CORRECTED",
+              }
+            : {},
+          create: {
+            masterTextId: masterText.id,
+            marketId: market.id,
+            translatedText: row.translatedText,
+            source: row.source,
+          },
         });
         if (row.rowId) {
           await tx.copyDeckRow.update({
             where: { id: row.rowId },
-            data: { englishText, translatedText: translation, source, masterEntryId: master.id },
+            data: {
+              englishText: row.englishText,
+              translatedText: row.translatedText,
+              source: row.source,
+              masterTextId: masterText.id,
+              marketId: market.id,
+            },
           });
         } else {
           added += 1;
           await tx.copyDeckRow.create({
-            data: { copyDeckId, rowOrder: nextOrder + added, englishText, translatedText: translation, source, masterEntryId: master.id },
+            data: {
+              copyDeckId,
+              rowOrder: nextOrder + added,
+              englishText: row.englishText,
+              translatedText: row.translatedText,
+              source: row.source,
+              masterTextId: masterText.id,
+              marketId: market.id,
+            },
           });
         }
       }
     });
     revalidatePath("/copy-decks");
     revalidatePath(`/copy-decks/${copyDeckId}`);
-    return { success: true, copyDeckId, message: `Processed ${uploaded.length} corrected row(s).` };
+    return {
+      success: true,
+      copyDeckId,
+      message: `Processed ${uploaded.length} corrected row(s).`,
+    };
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Unable to upload corrected copy deck." };
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Unable to upload corrected copy deck.",
+    };
   }
 }
 
 export async function setCopyDeckAccessAction(formData: FormData) {
   const actor = await requireUserForAction();
-  if (!canAssignCopyDeckAccess(actor)) throw new Error("You cannot assign Copy Deck access.");
+  if (!canAssignCopyDeckAccess(actor))
+    throw new Error("You cannot assign Copy Deck access.");
   const userId = String(formData.get("userId") ?? "");
   const enabled = formData.get("enabled") === "true";
   if (!userId || userId === actor.id) throw new Error("Select another user.");
-  const target = await db.user.findFirst({ where: { id: userId, isActive: true }, select: { extraMenuItemsJson: true } });
+  const target = await db.user.findFirst({
+    where: { id: userId, isActive: true },
+    select: { extraMenuItemsJson: true },
+  });
   if (!target) throw new Error("User not found.");
   const keys = new Set(parseMenuKeysJson(target.extraMenuItemsJson));
-  if (enabled) keys.add("copy-decks"); else keys.delete("copy-decks");
+  if (enabled) keys.add("copy-decks");
+  else keys.delete("copy-decks");
   await db.user.update({
     where: { id: userId },
     data: { extraMenuItemsJson: JSON.stringify(normalizeMenuKeys([...keys])) },
   });
   revalidatePath("/copy-decks/access");
-}
-
-function cellText(value: ExcelJS.CellValue | null | undefined) {
-  if (value == null) return "";
-  if (typeof value === "object" && "text" in value) return String(value.text).trim();
-  if (typeof value === "object" && "result" in value) return String(value.result ?? "").trim();
-  return String(value).trim();
 }
 
 export async function uploadCopyDeckMasterAction(
@@ -262,67 +449,110 @@ export async function uploadCopyDeckMasterAction(
 ): Promise<CopyDeckActionState> {
   try {
     const user = await requireUserForAction();
-    if (!canManageCopyDeckMaster(user)) throw new Error("Only Admin + Other can upload the Copy Deck master.");
+    if (!canManageCopyDeckMaster(user))
+      throw new Error(
+        "Only Admin + Other can upload the Copy Deck master.",
+      );
     const file = formData.get("file");
-    if (!(file instanceof File) || !file.name.toLowerCase().endsWith(".xlsx")) throw new Error("Upload an Excel .xlsx file.");
-    if (file.size > MAX_COPY_DECK_FILE_BYTES) throw new Error("Excel file must be 10 MB or smaller.");
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(await file.arrayBuffer());
-    const sheet = workbook.worksheets[0];
-    if (!sheet) throw new Error("The workbook has no worksheet.");
-    const headers = new Map<string, number>();
-    sheet.getRow(1).eachCell((cell, column) => headers.set(cellText(cell.value).toLowerCase(), column));
-    const englishCol = headers.get("english text");
-    const translationCol = headers.get("translation");
-    const idCol = headers.get("master id");
-    const isoCol = headers.get("country iso");
-    const countryCol = headers.get("country");
-    if (!englishCol || !translationCol || (!isoCol && !countryCol)) throw new Error("Master requires Country or Country ISO, English Text, and Translation columns.");
-    const raw: { id: string; iso: string; country: string; english: string; translation: string; row: number }[] = [];
-    sheet.eachRow((row, number) => {
-      if (number === 1) return;
-      const english = cellText(row.getCell(englishCol).value);
-      if (english) raw.push({
-        id: idCol ? cellText(row.getCell(idCol).value) : "",
-        iso: isoCol ? cellText(row.getCell(isoCol).value) : "",
-        country: countryCol ? cellText(row.getCell(countryCol).value) : "",
-        english,
-        translation: cellText(row.getCell(translationCol).value),
-        row: number,
+    if (!(file instanceof File))
+      throw new Error("Upload an Excel .xlsx file.");
+    const sheet = await loadCopyDeckWorksheet(file);
+    const headers = getHeaderMap(sheet);
+    const englishColumn = ["english", "english text", "source text", "copy"]
+      .map((header) => headers.get(header))
+      .find((column) => Boolean(column));
+    if (!englishColumn)
+      throw new Error(
+        "Master requires an English, English Text, Source Text, or Copy column.",
+      );
+    const marketColumns = [...headers.entries()]
+      .filter(([, column]) => column !== englishColumn)
+      .map(([, column]) => ({
+        header: getCellText(sheet.getRow(1).getCell(column)),
+        column,
+      }))
+      .filter((item) => item.header);
+    if (!marketColumns.length)
+      throw new Error("Master must contain at least one market column.");
+    const codes = marketColumns.map((item) => normalizeMarketCode(item.header));
+    if (new Set(codes).size !== codes.length)
+      throw new Error(
+        "Two or more market headers normalize to the same market code.",
+      );
+
+    await ensureDefaultCopyDeckMarkets();
+    const markets = await ensureCopyDeckMarketsFromHeaders(
+      marketColumns.map((item) => item.header),
+    );
+    const marketByCode = new Map(markets.map((market) => [market.code, market]));
+    const rows: {
+      englishText: string;
+      translations: { marketId: string; text: string }[];
+    }[] = [];
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const englishText = getCellText(row.getCell(englishColumn)).trim();
+      if (!englishText) return;
+      rows.push({
+        englishText: normalizedEnglish(englishText),
+        translations: marketColumns.flatMap((item) => {
+          const text = getCellText(row.getCell(item.column)).trim();
+          const market = marketByCode.get(normalizeMarketCode(item.header));
+          return text && market ? [{ marketId: market.id, text }] : [];
+        }),
       });
     });
-    if (!raw.length) throw new Error("No master rows were found.");
-    if (raw.length > MAX_COPY_DECK_ROWS) throw new Error(`Master upload may contain at most ${MAX_COPY_DECK_ROWS} rows.`);
-    const countries = await db.country.findMany({ select: { id: true, name: true, isoCode: true } });
+    if (!rows.length) throw new Error("No English master rows were found.");
+    if (rows.length > MAX_COPY_DECK_ROWS)
+      throw new Error(
+        `Master upload may contain at most ${MAX_COPY_DECK_ROWS} rows.`,
+      );
+
+    let translationsUpdated = 0;
     await db.$transaction(async (tx) => {
-      for (const row of raw) {
-        const country = countries.find((item) =>
-          (row.iso && item.isoCode?.toLowerCase() === row.iso.toLowerCase()) ||
-          (row.country && item.name.toLowerCase() === row.country.toLowerCase()),
-        );
-        if (!country) throw new Error(`Row ${row.row}: country was not found.`);
-        const englishText = normalizedEnglish(row.english);
-        const translatedText = row.translation || englishText;
-        const source: CopyDeckTranslationSource = row.translation ? "CLIENT_CORRECTED" : "ENGLISH_FALLBACK";
-        if (row.id) {
-          const existing = await tx.copyDeckMasterEntry.findUnique({ where: { id: row.id }, select: { id: true } });
-          if (!existing) throw new Error(`Row ${row.row}: Master ID was not found.`);
-          await tx.copyDeckMasterEntry.update({
-            where: { id: row.id },
-            data: { countryId: country.id, englishHash: englishHash(englishText), englishText, translatedText, source },
+      for (const row of rows) {
+        const masterText = await tx.copyDeckMasterText.upsert({
+          where: { englishHash: englishHash(row.englishText) },
+          update: { englishText: row.englishText },
+          create: {
+            englishHash: englishHash(row.englishText),
+            englishText: row.englishText,
+          },
+          select: { id: true },
+        });
+        for (const translation of row.translations) {
+          await tx.copyDeckMasterTranslation.upsert({
+            where: {
+              masterTextId_marketId: {
+                masterTextId: masterText.id,
+                marketId: translation.marketId,
+              },
+            },
+            update: {
+              translatedText: translation.text,
+              source: "MASTER_UPLOAD",
+            },
+            create: {
+              masterTextId: masterText.id,
+              marketId: translation.marketId,
+              translatedText: translation.text,
+              source: "MASTER_UPLOAD",
+            },
           });
-        } else {
-          await tx.copyDeckMasterEntry.upsert({
-            where: { countryId_englishHash: { countryId: country.id, englishHash: englishHash(englishText) } },
-            update: { englishText, translatedText, source },
-            create: { countryId: country.id, englishHash: englishHash(englishText), englishText, translatedText, source },
-          });
+          translationsUpdated += 1;
         }
       }
     });
     revalidatePath("/copy-decks/master");
-    return { success: true, message: `Updated ${raw.length} master row(s).` };
+    revalidatePath("/copy-decks");
+    return {
+      success: true,
+      message: `Imported ${rows.length} English row(s) and ${translationsUpdated} non-blank market translation(s).`,
+    };
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Unable to upload master." };
+    return {
+      error:
+        error instanceof Error ? error.message : "Unable to upload master.",
+    };
   }
 }

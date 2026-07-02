@@ -1,7 +1,10 @@
 export type TranslationRequest = {
   englishText: string;
-  countryCode: string;
-  countryName: string;
+  marketCode: string;
+  marketName: string;
+  language?: string | null;
+  countryCode?: string;
+  countryName?: string;
 };
 
 export type TranslationResult = {

@@ -1,33 +1,43 @@
 import ExcelJS from "exceljs";
 import { db } from "@/lib/db";
 import { styleCopyDeckSheet } from "@/lib/copy-decks/excel";
+import {
+  ensureDefaultCopyDeckMarkets,
+  ensureLegacyCopyDeckCompatibility,
+} from "@/lib/copy-decks/markets";
+
+function sourceLabel(source: string) {
+  return source === "ENGLISH_FALLBACK"
+    ? "ENGLISH FALLBACK — NOT TRANSLATED"
+    : source.replaceAll("_", " ");
+}
 
 export async function buildCopyDeckWorkbook(copyDeckId: string) {
   const deck = await db.copyDeck.findUnique({
     where: { id: copyDeckId },
     include: {
-      client: true, movie: true, project: true, subProject: true, country: true,
+      market: true,
+      country: true,
       rows: { orderBy: { rowOrder: "asc" } },
     },
   });
   if (!deck) throw new Error("Copy deck not found.");
+  const marketName = deck.market?.name ?? deck.country?.name ?? "Translation";
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "PMS";
   const sheet = workbook.addWorksheet("Copy Deck");
   sheet.columns = [
-    { header: "Row ID", key: "rowId", width: 30 },
-    { header: "English Text", key: "englishText", width: 55 },
-    { header: "Translation", key: "translation", width: 55 },
+    { header: "Row ID", key: "rowId", width: 30, hidden: true },
+    { header: "English", key: "englishText", width: 55 },
+    { header: marketName, key: "translation", width: 55 },
     { header: "Translation Source", key: "source", width: 24 },
-    { header: "Country", key: "country", width: 24 },
   ];
   for (const row of deck.rows) {
     sheet.addRow({
       rowId: row.id,
       englishText: row.englishText,
       translation: row.translatedText,
-      source: row.source === "ENGLISH_FALLBACK" ? "ENGLISH FALLBACK — NOT TRANSLATED" : row.source.replaceAll("_", " "),
-      country: deck.country.name,
+      source: sourceLabel(row.source),
     });
   }
   styleCopyDeckSheet(sheet);
@@ -38,29 +48,36 @@ export async function buildCopyDeckWorkbook(copyDeckId: string) {
 }
 
 export async function buildCopyDeckMasterWorkbook() {
-  const entries = await db.copyDeckMasterEntry.findMany({
-    include: { country: true },
-    orderBy: [{ country: { name: "asc" } }, { englishText: "asc" }],
-  });
+  await ensureDefaultCopyDeckMarkets();
+  await ensureLegacyCopyDeckCompatibility();
+  const [markets, texts] = await Promise.all([
+    db.copyDeckMarket.findMany({
+      where: { isActive: true },
+      orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+    }),
+    db.copyDeckMasterText.findMany({
+      include: { translations: true },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "PMS";
   const sheet = workbook.addWorksheet("Copy Deck Master");
   sheet.columns = [
-    { header: "Master ID", key: "id", width: 30 },
-    { header: "Country", key: "country", width: 24 },
-    { header: "Country ISO", key: "iso", width: 14 },
-    { header: "English Text", key: "english", width: 55 },
-    { header: "Translation", key: "translation", width: 55 },
-    { header: "Translation Source", key: "source", width: 24 },
+    { header: "English", key: "english", width: 55 },
+    ...markets.map((market) => ({
+      header: market.name,
+      key: market.id,
+      width: 45,
+    })),
   ];
-  entries.forEach((entry) => sheet.addRow({
-    id: entry.id,
-    country: entry.country.name,
-    iso: entry.country.isoCode ?? "",
-    english: entry.englishText,
-    translation: entry.translatedText,
-    source: entry.source.replaceAll("_", " "),
-  }));
+  for (const text of texts) {
+    const values: Record<string, string> = { english: text.englishText };
+    for (const translation of text.translations) {
+      values[translation.marketId] = translation.translatedText;
+    }
+    sheet.addRow(values);
+  }
   styleCopyDeckSheet(sheet);
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }

@@ -3,23 +3,49 @@ import ExcelJS from "exceljs";
 export const MAX_COPY_DECK_FILE_BYTES = 10 * 1024 * 1024;
 export const MAX_COPY_DECK_ROWS = 5000;
 
-function text(value: ExcelJS.CellValue | null | undefined) {
+function formatDate(value: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(value);
+}
+
+function isDateFormat(numFmt: string) {
+  return /[dmy]/i.test(numFmt.replace(/"[^"]*"/g, ""));
+}
+
+function valueText(value: ExcelJS.CellValue | null | undefined, numFmt = ""): string {
   if (value == null) return "";
+  if (value instanceof Date) return formatDate(value);
+  if (typeof value === "number" && isDateFormat(numFmt)) {
+    const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+    if (!Number.isNaN(date.getTime())) return formatDate(date);
+  }
+  if (typeof value === "object" && "richText" in value) {
+    return value.richText.map((part) => part.text).join("").trim();
+  }
   if (typeof value === "object" && "text" in value) return String(value.text).trim();
-  if (typeof value === "object" && "result" in value) return String(value.result ?? "").trim();
+  if (typeof value === "object" && "result" in value) return valueText(value.result, numFmt);
+  if (typeof value === "object" && "error" in value) return "";
   return String(value).trim();
 }
 
-function headerMap(sheet: ExcelJS.Worksheet) {
+export function getCellText(cell: ExcelJS.Cell) {
+  return valueText(cell.value, cell.numFmt);
+}
+
+export function getHeaderMap(sheet: ExcelJS.Worksheet) {
   const result = new Map<string, number>();
   sheet.getRow(1).eachCell((cell, column) => {
-    const value = text(cell.value).toLowerCase();
+    const value = getCellText(cell).toLowerCase();
     if (value) result.set(value, column);
   });
   return result;
 }
 
-async function load(file: File) {
+export async function loadCopyDeckWorksheet(file: File) {
   if (!file.size) throw new Error("Upload an Excel file.");
   if (file.size > MAX_COPY_DECK_FILE_BYTES) throw new Error("Excel file must be 10 MB or smaller.");
   if (!file.name.toLowerCase().endsWith(".xlsx")) throw new Error("Only .xlsx files are supported.");
@@ -30,15 +56,21 @@ async function load(file: File) {
   return sheet;
 }
 
+const ENGLISH_HEADERS = ["english", "english text", "source text", "copy"];
+
+function findEnglishColumn(headers: Map<string, number>) {
+  return ENGLISH_HEADERS.map((header) => headers.get(header)).find(Boolean);
+}
+
 export async function parseNewCopyDeck(file: File) {
-  const sheet = await load(file);
-  const headers = headerMap(sheet);
-  const englishColumn = headers.get("english text");
-  if (!englishColumn) throw new Error('Missing required "English Text" column.');
+  const sheet = await loadCopyDeckWorksheet(file);
+  const headers = getHeaderMap(sheet);
+  const englishColumn = findEnglishColumn(headers);
+  if (!englishColumn) throw new Error('Missing an English, English Text, Source Text, or Copy column.');
   const rows: { englishText: string; rowNumber: number }[] = [];
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
-    const englishText = text(row.getCell(englishColumn).value);
+    const englishText = getCellText(row.getCell(englishColumn));
     if (englishText) rows.push({ englishText, rowNumber });
   });
   if (!rows.length) throw new Error("No English text rows were found.");
@@ -46,21 +78,32 @@ export async function parseNewCopyDeck(file: File) {
   return rows;
 }
 
-export async function parseCorrectedCopyDeck(file: File) {
-  const sheet = await load(file);
-  const headers = headerMap(sheet);
+export async function parseCorrectedCopyDeck(
+  file: File,
+  market: { code: string; name: string },
+) {
+  const sheet = await loadCopyDeckWorksheet(file);
+  const headers = getHeaderMap(sheet);
   const rowIdColumn = headers.get("row id");
-  const englishColumn = headers.get("english text");
-  const translationColumn = headers.get("translation");
+  const englishColumn = findEnglishColumn(headers);
+  const translationColumn =
+    headers.get("translation") ??
+    [...headers.entries()].find(([header]) => {
+      const normalized = header.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "").toUpperCase();
+      return normalized === market.code;
+    })?.[1] ??
+    headers.get(market.name.toLowerCase());
   if (!englishColumn || !translationColumn) {
-    throw new Error('Corrected files require "English Text" and "Translation" columns.');
+    throw new Error(
+      `Corrected files require an English column and either "${market.name}" or "Translation" column.`,
+    );
   }
   const rows: { rowId: string; englishText: string; translation: string; rowNumber: number }[] = [];
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
-    const englishText = text(row.getCell(englishColumn).value);
-    const translation = text(row.getCell(translationColumn).value);
-    const rowId = rowIdColumn ? text(row.getCell(rowIdColumn).value) : "";
+    const englishText = getCellText(row.getCell(englishColumn));
+    const translation = getCellText(row.getCell(translationColumn));
+    const rowId = rowIdColumn ? getCellText(row.getCell(rowIdColumn)) : "";
     if (rowId || englishText || translation) rows.push({ rowId, englishText, translation, rowNumber });
   });
   if (!rows.length) throw new Error("No corrected rows were found.");
@@ -70,7 +113,12 @@ export async function parseCorrectedCopyDeck(file: File) {
 
 export function styleCopyDeckSheet(sheet: ExcelJS.Worksheet) {
   sheet.views = [{ state: "frozen", ySplit: 1 }];
-  sheet.autoFilter = { from: "A1", to: "E1" };
+  if (sheet.columnCount > 0) {
+    sheet.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: { row: 1, column: sheet.columnCount },
+    };
+  }
   sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
   sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E293B" } };
   sheet.columns.forEach((column) => {

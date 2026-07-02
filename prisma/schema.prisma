@@ -187,8 +187,10 @@ enum PurchaseOrderStatus {
 
 enum CopyDeckTranslationSource {
   PROVIDER
+  AUTO_TRANSLATED
   ENGLISH_FALLBACK
   MASTER
+  MASTER_UPLOAD
   CLIENT_CORRECTED
 }
 
@@ -646,6 +648,7 @@ model Country {
   purchaseOrderAssignmentCountries PurchaseOrderAssignmentCountry[] @relation("CountryPurchaseOrderAssignmentCountries")
   copyDecks                   CopyDeck[]
   copyDeckMasterEntries       CopyDeckMasterEntry[]
+  copyDeckMarkets             CopyDeckMarket[]
 
   @@index([isActive])
   @@index([name])
@@ -815,7 +818,8 @@ model CopyDeck {
   movieId          String?
   projectId        String?
   subProjectId     String?
-  countryId        String
+  countryId        String?
+  marketId         String?
   name             String
   originalFileName String?
   createdById      String
@@ -826,7 +830,8 @@ model CopyDeck {
   movie        Movie?      @relation(fields: [movieId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   project      Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   subProject   SubProject? @relation(fields: [subProjectId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  country      Country     @relation(fields: [countryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  country      Country?    @relation(fields: [countryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  market       CopyDeckMarket? @relation(fields: [marketId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdBy    User        @relation("CopyDeckCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
   rows         CopyDeckRow[]
 
@@ -835,6 +840,7 @@ model CopyDeck {
   @@index([projectId])
   @@index([subProjectId])
   @@index([countryId])
+  @@index([marketId])
   @@index([createdById])
 }
 
@@ -842,6 +848,8 @@ model CopyDeckRow {
   id             String                    @id @default(cuid())
   copyDeckId     String
   masterEntryId  String?
+  masterTextId   String?
+  marketId       String?
   rowOrder       Int
   englishText    String                    @db.Text
   translatedText String                    @db.Text
@@ -851,10 +859,14 @@ model CopyDeckRow {
 
   copyDeck    CopyDeck             @relation(fields: [copyDeckId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   masterEntry CopyDeckMasterEntry? @relation(fields: [masterEntryId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  masterText  CopyDeckMasterText?  @relation(fields: [masterTextId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  market      CopyDeckMarket?      @relation(fields: [marketId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@unique([copyDeckId, rowOrder])
   @@index([copyDeckId])
   @@index([masterEntryId])
+  @@index([masterTextId])
+  @@index([marketId])
 }
 
 model CopyDeckMasterEntry {
@@ -872,6 +884,57 @@ model CopyDeckMasterEntry {
 
   @@unique([countryId, englishHash])
   @@index([countryId])
+  @@index([updatedAt])
+}
+
+model CopyDeckMarket {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  countryId String?
+  language  String?
+  isDefault Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  country      Country?                    @relation(fields: [countryId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  translations CopyDeckMasterTranslation[]
+  copyDecks    CopyDeck[]
+  rows         CopyDeckRow[]
+
+  @@index([countryId])
+  @@index([isActive, name])
+  @@index([isDefault])
+}
+
+model CopyDeckMasterText {
+  id          String   @id @default(cuid())
+  englishHash String   @unique
+  englishText String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  translations CopyDeckMasterTranslation[]
+  rows         CopyDeckRow[]
+
+  @@index([updatedAt])
+}
+
+model CopyDeckMasterTranslation {
+  id             String                    @id @default(cuid())
+  masterTextId   String
+  marketId       String
+  translatedText String                    @db.Text
+  source         CopyDeckTranslationSource
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  masterText CopyDeckMasterText @relation(fields: [masterTextId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  market     CopyDeckMarket     @relation(fields: [marketId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([masterTextId, marketId])
+  @@index([marketId])
   @@index([updatedAt])
 }
 
