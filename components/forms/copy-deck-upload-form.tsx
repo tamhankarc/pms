@@ -7,7 +7,7 @@ import { createCopyDeckAction, type CopyDeckActionState } from "@/lib/actions/co
 type Option = { id: string; name: string; clientId?: string; projectId?: string };
 
 export function CopyDeckUploadForm({
-  clients, movies, projects, subProjects, markets, australiaMarketId,
+  clients, movies, projects, subProjects, markets, australiaMarketId, translationStatus,
 }: {
   clients: Option[];
   movies: Option[];
@@ -15,6 +15,7 @@ export function CopyDeckUploadForm({
   subProjects: Option[];
   markets: Option[];
   australiaMarketId: string;
+  translationStatus: { configured: boolean; label: string };
 }) {
   const [state, action, pending] = useActionState<CopyDeckActionState, FormData>(createCopyDeckAction, {});
   const [clientId, setClientId] = useState("");
@@ -34,6 +35,9 @@ export function CopyDeckUploadForm({
         <p className="section-subtitle">The first worksheet must contain an “English Text” column.</p>
       </div>
       {state.error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{state.error}</div> : null}
+      <div className={`rounded-xl border p-3 text-sm ${translationStatus.configured ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+        {translationStatus.label}
+      </div>
       {state.success ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
           {state.message} {state.copyDeckId ? <Link className="font-semibold underline" href={`/copy-decks/${state.copyDeckId}`}>Open copy deck</Link> : null}
