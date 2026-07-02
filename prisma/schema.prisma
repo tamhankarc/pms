@@ -834,6 +834,7 @@ model CopyDeck {
   market       CopyDeckMarket? @relation(fields: [marketId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdBy    User        @relation("CopyDeckCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
   rows         CopyDeckRow[]
+  marketSelections CopyDeckMarketSelection[]
 
   @@index([clientId, createdAt])
   @@index([movieId])
@@ -861,6 +862,7 @@ model CopyDeckRow {
   masterEntry CopyDeckMasterEntry? @relation(fields: [masterEntryId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   masterText  CopyDeckMasterText?  @relation(fields: [masterTextId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   market      CopyDeckMarket?      @relation(fields: [marketId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  translations CopyDeckRowTranslation[]
 
   @@unique([copyDeckId, rowOrder])
   @@index([copyDeckId])
@@ -902,10 +904,41 @@ model CopyDeckMarket {
   translations CopyDeckMasterTranslation[]
   copyDecks    CopyDeck[]
   rows         CopyDeckRow[]
+  deckSelections CopyDeckMarketSelection[]
+  rowTranslations CopyDeckRowTranslation[]
 
   @@index([countryId])
   @@index([isActive, name])
   @@index([isDefault])
+}
+
+model CopyDeckMarketSelection {
+  id         String   @id @default(cuid())
+  copyDeckId String
+  marketId   String
+  createdAt  DateTime @default(now())
+
+  copyDeck CopyDeck       @relation(fields: [copyDeckId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  market   CopyDeckMarket @relation(fields: [marketId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([copyDeckId, marketId])
+  @@index([marketId])
+}
+
+model CopyDeckRowTranslation {
+  id             String                    @id @default(cuid())
+  copyDeckRowId  String
+  marketId       String
+  translatedText String                    @db.Text
+  source         CopyDeckTranslationSource
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  copyDeckRow CopyDeckRow    @relation(fields: [copyDeckRowId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  market      CopyDeckMarket @relation(fields: [marketId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([copyDeckRowId, marketId])
+  @@index([marketId])
 }
 
 model CopyDeckMasterText {

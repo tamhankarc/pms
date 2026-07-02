@@ -171,5 +171,40 @@ export async function ensureLegacyCopyDeckCompatibility() {
       },
       data: { marketId: market.id },
     });
+    const decks = await db.copyDeck.findMany({
+      where: { marketId: market.id },
+      select: { id: true },
+    });
+    if (decks.length) {
+      await db.copyDeckMarketSelection.createMany({
+        data: decks.map((deck) => ({
+          copyDeckId: deck.id,
+          marketId: market.id,
+        })),
+        skipDuplicates: true,
+      });
+      const rows = await db.copyDeckRow.findMany({
+        where: {
+          copyDeckId: { in: decks.map((deck) => deck.id) },
+          marketId: market.id,
+        },
+        select: {
+          id: true,
+          translatedText: true,
+          source: true,
+        },
+      });
+      if (rows.length) {
+        await db.copyDeckRowTranslation.createMany({
+          data: rows.map((row) => ({
+            copyDeckRowId: row.id,
+            marketId: market.id,
+            translatedText: row.translatedText,
+            source: row.source,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
   }
 }

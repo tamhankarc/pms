@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { normalizeMarketCode } from "@/lib/copy-decks/markets";
 
 export const MAX_COPY_DECK_FILE_BYTES = 10 * 1024 * 1024;
 export const MAX_COPY_DECK_ROWS = 5000;
@@ -108,6 +109,56 @@ export async function parseCorrectedCopyDeck(
   });
   if (!rows.length) throw new Error("No corrected rows were found.");
   if (rows.length > MAX_COPY_DECK_ROWS) throw new Error(`A corrected copy deck may contain at most ${MAX_COPY_DECK_ROWS} rows.`);
+  return rows;
+}
+
+export async function parseCorrectedCopyDeckForMarkets(
+  file: File,
+  markets: Array<{ id: string; code: string; name: string }>,
+) {
+  const sheet = await loadCopyDeckWorksheet(file);
+  const headers = getHeaderMap(sheet);
+  const rowIdColumn = headers.get("row id");
+  const englishColumn = findEnglishColumn(headers);
+  if (!englishColumn) throw new Error("Corrected files require an English column.");
+  const marketColumns = markets.flatMap((market) => {
+    const column =
+      [...headers.entries()].find(
+        ([header]) => normalizeMarketCode(header) === market.code,
+      )?.[1] ??
+      (markets.length === 1 ? headers.get("translation") : undefined);
+    return column ? [{ marketId: market.id, column }] : [];
+  });
+  if (!marketColumns.length) {
+    throw new Error(
+      "The corrected file does not contain any selected market columns.",
+    );
+  }
+  const rows: {
+    rowId: string;
+    englishText: string;
+    translations: Record<string, string>;
+    rowNumber: number;
+  }[] = [];
+  sheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const englishText = getCellText(row.getCell(englishColumn));
+    const rowId = rowIdColumn ? getCellText(row.getCell(rowIdColumn)) : "";
+    const translations = Object.fromEntries(
+      marketColumns.map(({ marketId, column }) => [
+        marketId,
+        getCellText(row.getCell(column)),
+      ]),
+    );
+    if (rowId || englishText || Object.values(translations).some(Boolean)) {
+      rows.push({ rowId, englishText, translations, rowNumber });
+    }
+  });
+  if (!rows.length) throw new Error("No corrected rows were found.");
+  if (rows.length > MAX_COPY_DECK_ROWS)
+    throw new Error(
+      `A corrected copy deck may contain at most ${MAX_COPY_DECK_ROWS} rows.`,
+    );
   return rows;
 }
 

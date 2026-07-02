@@ -6,39 +6,61 @@ import {
   ensureLegacyCopyDeckCompatibility,
 } from "@/lib/copy-decks/markets";
 
-function sourceLabel(source: string) {
-  return source === "ENGLISH_FALLBACK"
-    ? "ENGLISH FALLBACK — NOT TRANSLATED"
-    : source.replaceAll("_", " ");
-}
-
 export async function buildCopyDeckWorkbook(copyDeckId: string) {
   const deck = await db.copyDeck.findUnique({
     where: { id: copyDeckId },
     include: {
       market: true,
       country: true,
-      rows: { orderBy: { rowOrder: "asc" } },
+      marketSelections: {
+        include: { market: true },
+        orderBy: { createdAt: "asc" },
+      },
+      rows: {
+        include: { translations: true },
+        orderBy: { rowOrder: "asc" },
+      },
     },
   });
   if (!deck) throw new Error("Copy deck not found.");
-  const marketName = deck.market?.name ?? deck.country?.name ?? "Translation";
+  const markets = deck.marketSelections.length
+    ? deck.marketSelections.map((selection) => selection.market)
+    : deck.market
+      ? [deck.market]
+      : [];
+  const legacyMarketName = deck.country?.name ?? "Translation";
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "PMS";
   const sheet = workbook.addWorksheet("Copy Deck");
   sheet.columns = [
     { header: "Row ID", key: "rowId", width: 30, hidden: true },
     { header: "English", key: "englishText", width: 55 },
-    { header: marketName, key: "translation", width: 55 },
-    { header: "Translation Source", key: "source", width: 24 },
+    ...(markets.length
+      ? markets.map((market) => ({
+          header: market.name,
+          key: market.id,
+          width: 55,
+        }))
+      : [{ header: legacyMarketName, key: "translation", width: 55 }]),
   ];
   for (const row of deck.rows) {
-    sheet.addRow({
+    const values: Record<string, string> = {
       rowId: row.id,
       englishText: row.englishText,
-      translation: row.translatedText,
-      source: sourceLabel(row.source),
-    });
+    };
+    if (markets.length) {
+      for (const market of markets) {
+        const translation = row.translations.find(
+          (item) => item.marketId === market.id,
+        );
+        values[market.id] =
+          translation?.translatedText ??
+          (market.id === deck.marketId ? row.translatedText : "");
+      }
+    } else {
+      values.translation = row.translatedText;
+    }
+    sheet.addRow(values);
   }
   styleCopyDeckSheet(sheet);
   return {

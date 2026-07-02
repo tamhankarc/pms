@@ -20,12 +20,20 @@ export default async function CopyDecksPage({ searchParams }: {
   const marketId = clientId ? (params.marketId || options.australiaMarketId) : options.australiaMarketId;
   const decks = await db.copyDeck.findMany({
     where: {
-      ...(clientId ? { clientId, marketId } : {}),
+      ...(clientId
+        ? {
+            clientId,
+            OR: [
+              { marketId },
+              { marketSelections: { some: { marketId } } },
+            ],
+          }
+        : {}),
       ...(clientId && params.movieId ? { movieId: params.movieId } : {}),
       ...(clientId && params.projectId ? { projectId: params.projectId } : {}),
       ...(clientId && params.subProjectId ? { subProjectId: params.subProjectId } : {}),
     },
-    include: { client: true, movie: true, project: true, subProject: true, market: true, country: true, createdBy: true, _count: { select: { rows: true } } },
+    include: { client: true, movie: true, project: true, subProject: true, market: true, marketSelections: { include: { market: true }, orderBy: { createdAt: "asc" } }, country: true, createdBy: true, _count: { select: { rows: true } } },
     orderBy: { createdAt: "desc" },
   });
   const page = paginateItems(decks, parsePageParam(params.page), DEFAULT_PAGE_SIZE);
@@ -42,7 +50,7 @@ export default async function CopyDecksPage({ searchParams }: {
       {page.items.map((deck) => <tr key={deck.id}>
         <td className="table-cell font-medium">{deck.name}</td><td className="table-cell">{deck.client.name}</td>
         <td className="table-cell">{[deck.movie?.title, deck.project?.name, deck.subProject?.name].filter(Boolean).join(" / ") || "—"}</td>
-        <td className="table-cell">{deck.market?.name ?? deck.country?.name ?? "—"}</td><td className="table-cell">{deck._count.rows}</td>
+        <td className="table-cell">{deck.marketSelections.length ? deck.marketSelections.map((selection) => selection.market.name).join(", ") : deck.market?.name ?? deck.country?.name ?? "—"}</td><td className="table-cell">{deck._count.rows}</td>
         <td className="table-cell">{deck.createdAt.toLocaleDateString()} by {deck.createdBy.fullName}</td>
         <td className="table-cell"><Link className="btn-secondary text-xs" href={`/copy-decks/${deck.id}`}>Open</Link></td>
       </tr>)}

@@ -3,6 +3,9 @@
 import { useActionState, useMemo, useState } from "react";
 import Link from "next/link";
 import { createCopyDeckAction, type CopyDeckActionState } from "@/lib/actions/copy-deck-actions";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
+import { FormLabel } from "@/components/ui/form-label";
 
 type Option = { id: string; name: string; clientId?: string; projectId?: string };
 
@@ -22,6 +25,7 @@ export function CopyDeckUploadForm({
   const [movieId, setMovieId] = useState("");
   const [projectId, setProjectId] = useState("");
   const [subProjectId, setSubProjectId] = useState("");
+  const [marketIds, setMarketIds] = useState([australiaMarketId]);
   const filteredMovies = useMemo(() => movies.filter((item) => item.clientId === clientId), [movies, clientId]);
   const filteredProjects = useMemo(() => projects.filter((item) => item.clientId === clientId), [projects, clientId]);
   const filteredSubProjects = useMemo(
@@ -44,34 +48,27 @@ export function CopyDeckUploadForm({
         </div>
       ) : null}
       <div className="grid gap-4 md:grid-cols-2">
-        <label className="space-y-1 text-sm font-medium">Name<input className="input" name="name" required /></label>
-        <label className="space-y-1 text-sm font-medium">Client
-          <select className="input" name="clientId" required value={clientId} onChange={(event) => { setClientId(event.target.value); setMovieId(""); setProjectId(""); setSubProjectId(""); }}>
-            <option value="">Select client first</option>
-            {clients.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
-        </label>
-        <label className="space-y-1 text-sm font-medium">Title
-          <select className="input" name="movieId" disabled={!clientId} value={movieId} onChange={(event) => setMovieId(event.target.value)}><option value="">No title</option>{filteredMovies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-        </label>
-        <label className="space-y-1 text-sm font-medium">Project
-          <select className="input" name="projectId" disabled={!clientId} value={projectId} onChange={(event) => { setProjectId(event.target.value); setSubProjectId(""); }}>
-            <option value="">No project</option>{filteredProjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
-        </label>
-        <label className="space-y-1 text-sm font-medium">Sub-Project
-          <select className="input" name="subProjectId" disabled={!clientId} value={subProjectId} onChange={(event) => setSubProjectId(event.target.value)}><option value="">No sub-project</option>{filteredSubProjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-        </label>
-        <label className="space-y-1 text-sm font-medium">Country/Market
-          <select className="input" name="marketId" required disabled={!clientId} defaultValue={australiaMarketId}>
-            {markets.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
-        </label>
+        <div><FormLabel htmlFor="name" required>Name</FormLabel><input id="name" className="input" name="name" required /></div>
+        <div><FormLabel htmlFor="copyDeckClientId" required>Client</FormLabel>
+          <SearchableCombobox id="copyDeckClientId" name="clientId" required value={clientId} onValueChange={(value) => { setClientId(value); setMovieId(""); setProjectId(""); setSubProjectId(""); }} options={clients.map((item) => ({ value: item.id, label: item.name }))} placeholder="Select client first" searchPlaceholder="Search clients..." emptyLabel="No clients found." />
+        </div>
+        <div><FormLabel htmlFor="copyDeckMovieId">Title</FormLabel>
+          <SearchableCombobox id="copyDeckMovieId" name="movieId" disabled={!clientId} value={movieId} onValueChange={setMovieId} options={[{ value: "", label: "No title" }, ...filteredMovies.map((item) => ({ value: item.id, label: item.name }))]} placeholder="No title" searchPlaceholder="Search titles..." emptyLabel="No titles found." />
+        </div>
+        <div><FormLabel htmlFor="copyDeckProjectId">Project</FormLabel>
+          <SearchableCombobox id="copyDeckProjectId" name="projectId" disabled={!clientId} value={projectId} onValueChange={(value) => { setProjectId(value); setSubProjectId(""); }} options={[{ value: "", label: "No project" }, ...filteredProjects.map((item) => ({ value: item.id, label: item.name }))]} placeholder="No project" searchPlaceholder="Search projects..." emptyLabel="No projects found." />
+        </div>
+        <div><FormLabel htmlFor="copyDeckSubProjectId">Sub-Project</FormLabel>
+          <SearchableCombobox id="copyDeckSubProjectId" name="subProjectId" disabled={!clientId} value={subProjectId} onValueChange={setSubProjectId} options={[{ value: "", label: "No sub-project" }, ...filteredSubProjects.map((item) => ({ value: item.id, label: item.name }))]} placeholder="No sub-project" searchPlaceholder="Search sub-projects..." emptyLabel="No sub-projects found." />
+        </div>
+        <div><FormLabel htmlFor="copyDeckMarketIds" required>Markets</FormLabel>
+          <SearchableMultiSelect id="copyDeckMarketIds" name="marketIds" required disabled={!clientId} value={marketIds} onValueChange={setMarketIds} options={markets.map((item) => ({ value: item.id, label: item.name }))} placeholder="Select one or more markets" searchPlaceholder="Search markets..." emptyLabel="No markets found." />
+        </div>
       </div>
       <label className="block space-y-1 text-sm font-medium">Excel file (.xlsx)
         <input className="input" type="file" name="file" required accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
       </label>
-      <button className="btn-primary" disabled={pending || !clientId}>{pending ? "Generating..." : "Upload and generate"}</button>
+      <button className="btn-primary" disabled={pending || !clientId || marketIds.length === 0}>{pending ? "Generating..." : "Upload and generate"}</button>
     </form>
   );
 }

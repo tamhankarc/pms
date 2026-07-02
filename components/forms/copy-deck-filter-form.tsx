@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
 type Option = { id: string; name: string; clientId?: string; projectId?: string };
 
@@ -20,13 +21,11 @@ export function CopyDeckFilterForm({
   const filteredSubProjects = useMemo(() => subProjects.filter((item) => item.clientId === clientId && (!projectId || item.projectId === projectId)), [subProjects, clientId, projectId]);
   return (
     <form method="get" className="card grid gap-3 p-4 md:grid-cols-3 xl:grid-cols-6">
-      <select className="input" name="clientId" value={clientId} onChange={(event) => { setClientId(event.target.value); setMovieId(""); setProjectId(""); setSubProjectId(""); }}>
-        <option value="">Select client</option>{clients.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-      </select>
-      <select className="input" name="movieId" disabled={!clientId} value={movieId} onChange={(event) => setMovieId(event.target.value)}><option value="">All Titles</option>{filteredMovies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-      <select className="input" name="projectId" disabled={!clientId} value={projectId} onChange={(event) => { setProjectId(event.target.value); setSubProjectId(""); }}><option value="">All Projects</option>{filteredProjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-      <select className="input" name="subProjectId" disabled={!clientId} value={subProjectId} onChange={(event) => setSubProjectId(event.target.value)}><option value="">All Sub-Projects</option>{filteredSubProjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-      <select className="input" name="marketId" disabled={!clientId} defaultValue={initial.marketId || australiaMarketId}>{markets.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+      <SearchableCombobox id="copyDeckFilterClient" name="clientId" value={clientId} onValueChange={(value) => { setClientId(value); setMovieId(""); setProjectId(""); setSubProjectId(""); }} options={[{ value: "", label: "Select client" }, ...clients.map((item) => ({ value: item.id, label: item.name }))]} placeholder="Select client" searchPlaceholder="Search clients..." emptyLabel="No clients found." />
+      <SearchableCombobox id="copyDeckFilterMovie" name="movieId" disabled={!clientId} value={movieId} onValueChange={setMovieId} options={[{ value: "", label: "All Titles" }, ...filteredMovies.map((item) => ({ value: item.id, label: item.name }))]} placeholder="All Titles" searchPlaceholder="Search titles..." emptyLabel="No titles found." />
+      <SearchableCombobox id="copyDeckFilterProject" name="projectId" disabled={!clientId} value={projectId} onValueChange={(value) => { setProjectId(value); setSubProjectId(""); }} options={[{ value: "", label: "All Projects" }, ...filteredProjects.map((item) => ({ value: item.id, label: item.name }))]} placeholder="All Projects" searchPlaceholder="Search projects..." emptyLabel="No projects found." />
+      <SearchableCombobox id="copyDeckFilterSubProject" name="subProjectId" disabled={!clientId} value={subProjectId} onValueChange={setSubProjectId} options={[{ value: "", label: "All Sub-Projects" }, ...filteredSubProjects.map((item) => ({ value: item.id, label: item.name }))]} placeholder="All Sub-Projects" searchPlaceholder="Search sub-projects..." emptyLabel="No sub-projects found." />
+      <SearchableCombobox id="copyDeckFilterMarket" name="marketId" disabled={!clientId} defaultValue={initial.marketId || australiaMarketId} options={markets.map((item) => ({ value: item.id, label: item.name }))} placeholder="Select market" searchPlaceholder="Search markets..." emptyLabel="No markets found." />
       <button className="btn-secondary" disabled={!clientId}>Apply Filters</button>
     </form>
   );

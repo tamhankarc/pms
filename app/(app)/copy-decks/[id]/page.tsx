@@ -12,14 +12,14 @@ export default async function CopyDeckPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const deck = await db.copyDeck.findUnique({
     where: { id },
-    include: { client: true, movie: true, project: true, subProject: true, market: true, country: true, rows: { orderBy: { rowOrder: "asc" } } },
+    include: { client: true, movie: true, project: true, subProject: true, market: true, marketSelections: { include: { market: true }, orderBy: { createdAt: "asc" } }, country: true, rows: { include: { translations: true }, orderBy: { rowOrder: "asc" } } },
   });
   if (!deck) notFound();
   return <div className="space-y-6">
-    <PageHeader title={deck.name} description={`${deck.client.name} · ${deck.market?.name ?? deck.country?.name ?? "No market"}`} actions={<><Link className="btn-secondary" href="/copy-decks">Back</Link><Link className="btn-primary" href={`/copy-decks/${deck.id}/export`}>Download XLSX</Link></>} />
+    <PageHeader title={deck.name} description={`${deck.client.name} · ${deck.marketSelections.length ? deck.marketSelections.map((selection) => selection.market.name).join(", ") : deck.market?.name ?? deck.country?.name ?? "No market"}`} actions={<><Link className="btn-secondary" href="/copy-decks">Back</Link><Link className="btn-primary" href={`/copy-decks/${deck.id}/export`}>Download XLSX</Link></>} />
     <CopyDeckCorrectedUploadForm copyDeckId={deck.id} />
-    <div className="table-wrap"><table className="table-base"><thead className="table-head"><tr><th className="table-cell">#</th><th className="table-cell">English Text</th><th className="table-cell">Translation</th><th className="table-cell">Source</th></tr></thead>
-      <tbody className="divide-y divide-slate-100">{deck.rows.map((row) => <tr key={row.id}><td className="table-cell">{row.rowOrder}</td><td className="table-cell max-w-xl whitespace-pre-wrap">{row.englishText}</td><td className="table-cell max-w-xl whitespace-pre-wrap">{row.translatedText}</td><td className="table-cell"><span className={row.source === "ENGLISH_FALLBACK" ? "badge-rose" : "badge-slate"}>{row.source.replaceAll("_", " ")}</span></td></tr>)}</tbody>
+    <div className="table-wrap"><table className="table-base"><thead className="table-head"><tr><th className="table-cell">#</th><th className="table-cell">English Text</th>{(deck.marketSelections.length ? deck.marketSelections.map((selection) => selection.market) : deck.market ? [deck.market] : []).map((market) => <th className="table-cell" key={market.id}>{market.name}</th>)}</tr></thead>
+      <tbody className="divide-y divide-slate-100">{deck.rows.map((row) => <tr key={row.id}><td className="table-cell">{row.rowOrder}</td><td className="table-cell max-w-xl whitespace-pre-wrap">{row.englishText}</td>{(deck.marketSelections.length ? deck.marketSelections.map((selection) => selection.market) : deck.market ? [deck.market] : []).map((market) => { const translation = row.translations.find((item) => item.marketId === market.id); return <td className="table-cell max-w-xl whitespace-pre-wrap" key={market.id}><div>{translation?.translatedText ?? (market.id === row.marketId ? row.translatedText : "—")}</div>{translation ? <span className={translation.source === "ENGLISH_FALLBACK" ? "badge-rose" : "badge-slate"}>{translation.source.replaceAll("_", " ")}</span> : null}</td>; })}</tr>)}</tbody>
     </table></div>
   </div>;
 }
