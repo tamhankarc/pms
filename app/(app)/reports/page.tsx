@@ -573,7 +573,7 @@ export default async function ReportsPage({
           country: true,
           movie: true,
         },
-        orderBy: [{ workDate: "asc" }, { createdAt: "asc" }],
+        orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
       })
     : [];
 
