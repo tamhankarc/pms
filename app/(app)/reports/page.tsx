@@ -90,6 +90,7 @@ type TaskDetailRow = {
   projectName: string;
   subProjectName: string;
   taskName: string;
+  taskDate: string;
   taskDescription: string;
   countryName: string;
   countryCode: string;
@@ -329,7 +330,7 @@ export default async function ReportsPage({
   const projectSortBy = params.projectSortBy ?? "clientName";
   const projectSortDir = normalizeSortDirection(params.projectSortDir);
 
-  const taskFromDate = normalizeDateInput(params.taskFromDate) ?? defaultTodayRange.fromDate;
+  const taskFromDate = normalizeDateInput(params.taskFromDate) ?? defaultMonthRange.fromDate;
   const taskToDate = normalizeDateInput(params.taskToDate) ?? defaultTodayRange.toDate;
   const taskClientId = params.taskClientId ?? "all";
   const taskProjectId = params.taskProjectId ?? "all";
@@ -572,7 +573,7 @@ export default async function ReportsPage({
           country: true,
           movie: true,
         },
-        orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
+        orderBy: [{ workDate: "asc" }, { createdAt: "asc" }],
       })
     : [];
 
@@ -749,12 +750,13 @@ export default async function ReportsPage({
     projectName: entry.project.name,
     subProjectName: entry.subProject?.name ?? "-",
     taskName: entry.taskName,
+    taskDate: entry.workDate.toISOString().slice(0, 10),
     taskDescription: entry.notes?.trim() ? entry.notes : "-",
     countryName: entry.country?.name ?? "-",
     countryCode: entry.country?.isoCode ?? "-",
     movieName: entry.movie?.title ?? "-",
     employeeRole: formatRole(entry.employee.functionalRole),
-    employeeName: formatRole(entry.employee.functionalRole),
+    employeeName: entry.employee.fullName,
     totalMinutes: entry.minutesSpent,
   }));
   const movieBaseRows = Array.from(movieMap.values());
@@ -1246,7 +1248,7 @@ export default async function ReportsPage({
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
               {paginatedTaskRows.items.map((row) => (
-                <tr key={row.id}><td className="table-cell max-w-48 break-normal">{row.clientName}</td><td className="table-cell">{row.projectName}</td><td className="table-cell">{row.subProjectName}</td><td className="table-cell max-w-48 break-normal">{row.taskName}</td><td className="table-cell max-w-48 break-all">{row.taskDescription}</td><td className="table-cell">{row.movieName}</td>
+                <tr key={row.id}><td className="table-cell max-w-48 break-normal">{row.clientName}</td><td className="table-cell">{row.projectName}</td><td className="table-cell">{row.subProjectName}</td><td className="table-cell max-w-48 break-normal">{row.taskName}<br />{formatReportDate(new Date(`${row.taskDate}T12:00:00`))}</td><td className="table-cell max-w-48 break-all">{row.taskDescription}</td><td className="table-cell">{row.movieName}</td>
                   <td className="table-cell">{row.countryCode}</td><td className="table-cell">{row.employeeName}</td><td className="table-cell">{formatMins(row.totalMinutes)}</td></tr>
               ))}
               {taskRows.length === 0 ? <tr><td colSpan={9} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr> : null}
