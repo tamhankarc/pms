@@ -9,13 +9,14 @@ import { formatUserTypeLabel } from "@/lib/display-labels";
 import { getLeaveAdminList } from "@/lib/ems-queries";
 import { createOfficialHolidayAction, deleteOfficialHolidayAction } from "@/lib/actions/hr-leave-admin-actions";
 import { formatDateInIst } from "@/lib/ist";
+import { getPastApprovedLeaveDeletionCandidates } from "@/lib/leave-admin-ledger";
 
 const functionalRoleOptions = ["", "DEVELOPER", "QA", "DESIGNER", "LOCALIZATION", "DEVOPS", "PROJECT_MANAGER", "DIRECTOR", "GENERAL_MANAGER", "OTHER", "BILLING"];
 
 export default async function LeaveAdminPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ page?: string; functionalRole?: string; userId?: string }>;
+  searchParams?: Promise<{ page?: string; functionalRole?: string; userId?: string; oldLeavePage?: string }>;
 }) {
   const user = await requireUser();
   if (!isHR(user) && !canAccessMenuItem(user, "leave-admin")) {
@@ -24,6 +25,10 @@ export default async function LeaveAdminPage({
   const params = (await searchParams) ?? {};
   const page = Number(params.page || 1);
   const data = await getLeaveAdminList({ functionalRole: params.functionalRole || "", userId: params.userId || "", page, pageSize: 10 });
+  const oldLeavePage = Number(params.oldLeavePage || 1);
+  const pastLeaves = isAdmin(user) && user.functionalRole === "OTHER"
+    ? await getPastApprovedLeaveDeletionCandidates({ page: oldLeavePage, pageSize: 10 })
+    : null;
 
   return (
     <div className="space-y-6">
@@ -38,6 +43,69 @@ export default async function LeaveAdminPage({
             </div>
             <Link className="btn-primary" href="/leave-admin/quarterly-casual-leaves">Open maintenance</Link>
           </div>
+        </section>
+      ) : null}
+
+
+
+      {isAdmin(user) && user.functionalRole === "OTHER" && pastLeaves ? (
+        <section className="table-wrap" id="past-approved-leaves">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-5">
+            <div>
+              <h2 className="section-title">Old approved leaves deletion</h2>
+              <p className="section-subtitle">
+                Admin + Other only. These are approved leave requests from 1 June 2026 onward whose leave dates are already in the past. Use delete only for HR correction cases.
+              </p>
+            </div>
+            <Link className="btn-secondary" href="/leave-admin/leave-ledger">Open predictive leave ledger</Link>
+          </div>
+          <table className="table-base">
+            <thead className="table-head">
+              <tr>
+                <th className="table-cell">Employee</th>
+                <th className="table-cell">Leave dates</th>
+                <th className="table-cell">Approved by</th>
+                <th className="table-cell">Total</th>
+                <th className="table-cell">Casual</th>
+                <th className="table-cell">Earned</th>
+                <th className="table-cell">Unpaid</th>
+                <th className="table-cell">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {pastLeaves.rows.map((leave) => (
+                <tr key={leave.id}>
+                  <td className="table-cell font-medium text-slate-900">{leave.user.fullName}</td>
+                  <td className="table-cell">{formatDateInIst(leave.startDate)} to {formatDateInIst(leave.endDate)}</td>
+                  <td className="table-cell">{leave.approver?.fullName ?? ""}</td>
+                  <td className="table-cell">{Number(leave.totalLeaveDays ?? 0).toFixed(2)}</td>
+                  <td className="table-cell">{Number(leave.casualDaysUsed ?? 0).toFixed(2)}</td>
+                  <td className="table-cell">{Number(leave.earnedDaysUsed ?? 0).toFixed(2)}</td>
+                  <td className="table-cell">{Number(leave.unpaidDaysUsed ?? 0).toFixed(2)}</td>
+                  <td className="table-cell">
+                    <Link className="btn-secondary text-xs" href={`/leave-admin/past-approved-leaves/${leave.id}/delete`}>
+                      Delete
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+              {pastLeaves.rows.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="table-cell text-center text-sm text-slate-500">No old approved leaves available for deletion.</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+          <PaginationControls
+            basePath="/leave-admin"
+            currentPage={pastLeaves.currentPage}
+            totalPages={pastLeaves.totalPages}
+            totalItems={pastLeaves.totalItems}
+            pageSize={pastLeaves.pageSize}
+            searchParams={{ functionalRole: params.functionalRole, userId: params.userId, page: params.page, oldLeavePage: params.oldLeavePage }}
+            pageParam="oldLeavePage"
+            anchor="#past-approved-leaves"
+          />
         </section>
       ) : null}
 

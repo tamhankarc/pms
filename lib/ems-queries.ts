@@ -600,6 +600,11 @@ export async function getAllowedLeaveRequestApproversForUser(userId: string) {
     user.functionalRole !== "PROJECT_MANAGER" &&
     user.functionalRole !== "GENERAL_MANAGER";
 
+  const isManagerDesigner = (user: {
+    userType: string;
+    functionalRole: string | null;
+  }) => user.userType === "MANAGER" && user.functionalRole === "DESIGNER";
+
   const isAssignedToEmployee = (approverId: string) =>
     assignedApprovers.some((approver) => approver.id === approverId);
 
@@ -626,6 +631,14 @@ export async function getAllowedLeaveRequestApproversForUser(userId: string) {
       if (isAdminProjectManager(candidate)) {
         return true;
       }
+    }
+
+    if (
+      isManagerDesigner(requester) &&
+      isAssignedToEmployee(candidate.id) &&
+      isManagerProjectManager(candidate)
+    ) {
+      return true;
     }
 
     if (
@@ -761,11 +774,17 @@ export async function getLeaveRequestsForUser(
   return { current, past, approvers, leaveBalance, officialHolidays };
 }
 
-export async function getLeaveApprovalsForUser(
+type LeaveApprovalFilters = {
+  fromDateKey?: string;
+  toDateKey?: string;
+  userId?: string;
+};
+
+function getLeaveApprovalScopeWhere(
   viewerId: string,
   restrictToAssigned: boolean,
-) {
-  const where = restrictToAssigned
+): Prisma.LeaveRequestWhereInput {
+  return restrictToAssigned
     ? {
         OR: [
           { approverId: viewerId },
@@ -778,12 +797,86 @@ export async function getLeaveApprovalsForUser(
         ],
       }
     : {};
+}
+
+function getLeaveApprovalFilterWhere(
+  filters?: LeaveApprovalFilters,
+): Prisma.LeaveRequestWhereInput {
+  const where: Prisma.LeaveRequestWhereInput = {};
+
+  if (filters?.userId) {
+    where.userId = filters.userId;
+  }
+
+  if (filters?.fromDateKey || filters?.toDateKey) {
+    const createdAt: Prisma.DateTimeFilter = {};
+
+    if (filters.fromDateKey) {
+      createdAt.gte = getDayBoundsUtcFromIstDateKey(
+        filters.fromDateKey,
+      ).startUtc;
+    }
+
+    if (filters.toDateKey) {
+      createdAt.lt = getDayBoundsUtcFromIstDateKey(filters.toDateKey).endUtc;
+    }
+
+    where.createdAt = createdAt;
+  }
+
+  return where;
+}
+
+export async function getLeaveApprovalUserOptionsForUser(
+  viewerId: string,
+  restrictToAssigned: boolean,
+) {
+  const rows = await db.leaveRequest.findMany({
+    where: getLeaveApprovalScopeWhere(viewerId, restrictToAssigned),
+    select: {
+      user: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+        },
+      },
+    },
+    orderBy: { user: { fullName: "asc" } },
+  });
+
+  const options = new Map<
+    string,
+    { id: string; fullName: string; email: string }
+  >();
+
+  for (const row of rows) {
+    options.set(row.user.id, row.user);
+  }
+
+  return Array.from(options.values()).sort((a, b) =>
+    a.fullName.localeCompare(b.fullName),
+  );
+}
+
+export async function getLeaveApprovalsForUser(
+  viewerId: string,
+  restrictToAssigned: boolean,
+  filters?: LeaveApprovalFilters,
+) {
+  const scopeWhere = getLeaveApprovalScopeWhere(viewerId, restrictToAssigned);
+  const filterWhere = getLeaveApprovalFilterWhere(filters);
+  const where: Prisma.LeaveRequestWhereInput =
+    Object.keys(filterWhere).length > 0
+      ? { AND: [scopeWhere, filterWhere] }
+      : scopeWhere;
 
   return db.leaveRequest.findMany({
     where,
     include: {
       user: {
         select: {
+          id: true,
           fullName: true,
           userType: true,
           functionalRole: true,

@@ -25,7 +25,7 @@ function formatMoney(value: unknown) {
   return `$${Number(value ?? 0).toFixed(2)}`;
 }
 
-function formatHeadCost(row: {
+function getCountryHeadCost(row: {
   country: { isoCode: string | null; name: string };
   billingHead: {
     domesticCost: unknown;
@@ -40,12 +40,50 @@ function formatHeadCost(row: {
     iso === "US" || countryName === "united states" || countryName === "usa";
 
   if (row.billingHead.otherActive) {
-    return formatMoney(row.billingHead.otherCost);
+    return Number(row.billingHead.otherCost ?? 0);
   }
 
-  return formatMoney(
+  return Number(
     isDomestic ? row.billingHead.domesticCost : row.billingHead.intlCost,
   );
+}
+
+function formatGroupedHeadCost(group: {
+  countries: Array<{ isoCode: string | null; name: string }>;
+  billingHead: {
+    domesticCost: unknown;
+    intlCost: unknown;
+    otherCost: unknown;
+    otherActive?: boolean;
+  };
+}) {
+  const costs = group.countries.map((country) =>
+    getCountryHeadCost({ country, billingHead: group.billingHead }),
+  );
+  const uniqueCosts = Array.from(new Set(costs.map((cost) => cost.toFixed(2))));
+
+  if (uniqueCosts.length <= 1) {
+    return formatMoney(costs[0] ?? 0);
+  }
+
+  return "Varies by country";
+}
+
+function buildAssignmentGroupKey(row: {
+  clientId: string;
+  movieId: string;
+  billingHeadId: string;
+  units: unknown;
+  isActive: boolean;
+}) {
+  const unitsKey = row.units == null ? "NONE" : Number(row.units).toFixed(2);
+  return [
+    row.clientId,
+    row.movieId,
+    row.billingHeadId,
+    unitsKey,
+    row.isActive ? "ACTIVE" : "INACTIVE",
+  ].join("|");
 }
 
 export default async function MovieBillingHeadsPage({
@@ -126,11 +164,35 @@ export default async function MovieBillingHeadsPage({
     }),
   ]);
 
-  const { items, currentPage, totalPages, totalItems, pageSize } = paginateItems(
-    rows,
-    page,
-    DEFAULT_PAGE_SIZE,
-  );
+  const groupedRows = Array.from(
+    rows
+      .reduce((map, row) => {
+        const key = buildAssignmentGroupKey(row);
+        const existing = map.get(key);
+
+        if (existing) {
+          existing.countries.push(row.country);
+          existing.countryNames.push(row.country.name);
+          if (row.id < existing.id) existing.id = row.id;
+          return map;
+        }
+
+        map.set(key, {
+          ...row,
+          countries: [row.country],
+          countryNames: [row.country.name],
+        });
+        return map;
+      }, new Map<string, (typeof rows)[number] & { countries: Array<(typeof rows)[number]["country"]>; countryNames: string[] }>())
+      .values(),
+  ).map((row) => ({
+    ...row,
+    countries: [...row.countries].sort((a, b) => a.name.localeCompare(b.name)),
+    countryNames: [...row.countryNames].sort((a, b) => a.localeCompare(b)),
+  }));
+
+  const { items, currentPage, totalPages, totalItems, pageSize } =
+    paginateItems(groupedRows, page, DEFAULT_PAGE_SIZE);
 
   return (
     <div>
@@ -186,7 +248,7 @@ export default async function MovieBillingHeadsPage({
             {items.map((row) => (
               <tr key={row.id}>
                 <td className="table-cell">{row.client.name}</td>
-                <td className="table-cell">{row.country.name}</td>
+                <td className="table-cell">{row.countryNames.join(", ")}</td>
                 <td className="table-cell">
                   <div className="font-medium text-slate-900">
                     {row.movie.title}
@@ -201,7 +263,7 @@ export default async function MovieBillingHeadsPage({
                   </td>
                 ) : null}
                 {canSeeCosts ? (
-                  <td className="table-cell">{formatHeadCost(row)}</td>
+                  <td className="table-cell">{formatGroupedHeadCost(row)}</td>
                 ) : null}
                 {canSeeCosts ? (
                   <td className="table-cell">
@@ -211,7 +273,9 @@ export default async function MovieBillingHeadsPage({
                   </td>
                 ) : null}
                 <td className="table-cell">
-                  <span className={row.isActive ? "badge-emerald" : "badge-slate"}>
+                  <span
+                    className={row.isActive ? "badge-emerald" : "badge-slate"}
+                  >
                     {row.isActive ? "Active" : "Inactive"}
                   </span>
                 </td>
@@ -221,7 +285,9 @@ export default async function MovieBillingHeadsPage({
                       href={`/movie-billing-heads/${row.id}`}
                       className="btn-secondary text-xs"
                     >
-                      {row.movie.status === "COMPLETED_BILLED" ? "View" : "Edit"}
+                      {row.movie.status === "COMPLETED_BILLED"
+                        ? "View"
+                        : "Edit"}
                     </Link>
 
                     {row.movie.status === "COMPLETED_BILLED" ? (
@@ -229,7 +295,9 @@ export default async function MovieBillingHeadsPage({
                         Billed
                       </span>
                     ) : (
-                      <form action={toggleMovieBillingHeadAssignmentStatusAction}>
+                      <form
+                        action={toggleMovieBillingHeadAssignmentStatusAction}
+                      >
                         <input type="hidden" name="id" value={row.id} />
                         <button className="btn-secondary text-xs">
                           {row.isActive ? "Deactivate" : "Activate"}
@@ -241,7 +309,7 @@ export default async function MovieBillingHeadsPage({
                       <form action={deleteMovieBillingHeadAssignmentAction}>
                         <input type="hidden" name="id" value={row.id} />
                         <DeleteButton
-                          confirmMessage={`Delete title billing head ${row.billingHead.name} for ${row.movie.title}? This cannot be undone.`}
+                          confirmMessage={`Delete title billing head ${row.billingHead.name} for ${row.movie.title} (${row.countryNames.join(", ")})? This will delete the complete grouped assignment and cannot be undone.`}
                         />
                       </form>
                     ) : null}
@@ -249,7 +317,7 @@ export default async function MovieBillingHeadsPage({
                 </td>
               </tr>
             ))}
-            {rows.length === 0 ? (
+            {groupedRows.length === 0 ? (
               <tr>
                 <td
                   colSpan={canSeeCosts ? 9 : 6}

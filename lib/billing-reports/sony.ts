@@ -798,7 +798,7 @@ export async function getSonyPicturesReportData({
     const countryList =
       lens && project.billingModel === "FIXED_PER_COUNTRY"
         ? lens.detailLines.join(" | ")
-        : variant === "canada-other"
+        : project.billingModel === "FIXED_PER_COUNTRY" || variant === "canada-other"
           ? countries.join(", ")
           : "";
     pushLine(

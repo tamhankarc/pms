@@ -95,6 +95,7 @@ type TaskDetailRow = {
   countryCode: string;
   movieName: string;
   employeeRole: string;
+  employeeName: string;
   totalMinutes: number;
 };
 
@@ -565,7 +566,7 @@ export default async function ReportsPage({
           ...employeeWhereClause,
         },
         include: {
-          employee: { select: { functionalRole: true } },
+          employee: { select: { functionalRole: true, fullName: true } },
           project: { include: { client: true } },
           subProject: true,
           country: true,
@@ -753,6 +754,7 @@ export default async function ReportsPage({
     countryCode: entry.country?.isoCode ?? "-",
     movieName: entry.movie?.title ?? "-",
     employeeRole: formatRole(entry.employee.functionalRole),
+    employeeName: formatRole(entry.employee.functionalRole),
     totalMinutes: entry.minutesSpent,
   }));
   const movieBaseRows = Array.from(movieMap.values());
@@ -795,6 +797,8 @@ export default async function ReportsPage({
         return row.countryCode;
       case "employeeRole":
         return row.employeeRole;
+      case "employeeName":
+        return row.employeeName;
       case "totalMinutes":
         return row.totalMinutes;
       case "clientName":
@@ -1237,13 +1241,13 @@ export default async function ReportsPage({
               <th className="table-cell max-w-48 break-all">Task Details</th>
               <SortableHeader label="Title" sortBy="movieName" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "movieName", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
               <SortableHeader label="Country" sortBy="countryCode" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "countryCode", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
-              <SortableHeader label="Employee Role" sortBy="employeeRole" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "employeeRole", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
+              <SortableHeader label="Employee Name" sortBy="employeeName" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "employeeName", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
               <SortableHeader label="Mins" sortBy="totalMinutes" currentSortBy={taskSortBy} currentSortDir={taskSortDir} href={buildSortHref({ basePath: reportsBasePath, baseSearchParams: allReportSearch, sortByParam: "taskSortBy", sortDirParam: "taskSortDir", pageParam: "taskPage", sortBy: "totalMinutes", currentSortBy: taskSortBy, currentSortDir: taskSortDir, anchor: "#task-wise-hours" })} />
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
               {paginatedTaskRows.items.map((row) => (
                 <tr key={row.id}><td className="table-cell max-w-48 break-normal">{row.clientName}</td><td className="table-cell">{row.projectName}</td><td className="table-cell">{row.subProjectName}</td><td className="table-cell max-w-48 break-normal">{row.taskName}</td><td className="table-cell max-w-48 break-all">{row.taskDescription}</td><td className="table-cell">{row.movieName}</td>
-                  <td className="table-cell">{row.countryCode}</td><td className="table-cell">{row.employeeRole}</td><td className="table-cell">{formatMins(row.totalMinutes)}</td></tr>
+                  <td className="table-cell">{row.countryCode}</td><td className="table-cell">{row.employeeName}</td><td className="table-cell">{formatMins(row.totalMinutes)}</td></tr>
               ))}
               {taskRows.length === 0 ? <tr><td colSpan={9} className="table-cell text-center text-sm text-slate-500">No records found.</td></tr> : null}
             </tbody>
