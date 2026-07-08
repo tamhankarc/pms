@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import {
   updateTimeEntryAction,
   type TimeEntryFormState,
@@ -26,6 +26,18 @@ type TimeEntryProjectOption = {
   hideAssetNamesInEntries: boolean;
   showNewslettersInEntries: boolean;
   hideNewslettersInEntries: boolean;
+  requireCountriesInTimeEntries: boolean;
+  requireMoviesInTimeEntries: boolean;
+  requireAssetTypesInTimeEntries: boolean;
+  requireLensTypesInTimeEntries: boolean;
+  requireAssetNamesInTimeEntries: boolean;
+  requireNewslettersInTimeEntries: boolean;
+  allowedCountryIdsJson?: string | null;
+  allowedMovieIdsJson?: string | null;
+  allowedAssetTypeIdsJson?: string | null;
+  allowedLensTypeIdsJson?: string | null;
+  allowedAssetNameIdsJson?: string | null;
+  allowedNewsletterIdsJson?: string | null;
   showLanguagesInEntries: boolean;
   assignedUserIds: string[];
 };
@@ -80,6 +92,26 @@ type LanguageOption = {
 };
 
 const initialState: TimeEntryFormState = {};
+
+function parseAllowedIds(value?: string | null) {
+  if (!value) return [] as string[];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+  } catch {
+    return [] as string[];
+  }
+}
+
+function filterByAllowedIds<T extends { id: string }>(items: T[], allowedIds: string[]) {
+  if (!allowedIds.length) return items;
+  const allowed = new Set(allowedIds);
+  return items.filter((item) => allowed.has(item.id));
+}
+
+function getOnlyOptionId<T extends { id: string }>(items: T[]) {
+  return items.length === 1 ? items[0].id : "";
+}
 
 function getTodayDateString() {
   const now = new Date();
@@ -163,6 +195,11 @@ export function TimeEntryEditForm({
     entry.subProjectId ?? "",
   );
   const [selectedMovieId, setSelectedMovieId] = useState(entry.movieId ?? "");
+  const [selectedCountryId, setSelectedCountryId] = useState(entry.countryId ?? "");
+  const [selectedAssetTypeId, setSelectedAssetTypeId] = useState(entry.assetTypeId ?? "");
+  const [selectedLensTypeId, setSelectedLensTypeId] = useState(entry.lensTypeId ?? "");
+  const [selectedAssetNameId, setSelectedAssetNameId] = useState(entry.assetNameId ?? "");
+  const [selectedNewsletterId, setSelectedNewsletterId] = useState(entry.newsletterId ?? "");
 
   const filteredProjects = useMemo(
     () => projects.filter((project) => project.clientId === selectedClientId),
@@ -203,33 +240,71 @@ export function TimeEntryEditForm({
     ],
   );
 
+  const activeProjectForRestrictions = projects.find(
+    (project) => project.id === selectedProjectId,
+  );
+  const allowedCountryIds = useMemo(
+    () => parseAllowedIds(activeProjectForRestrictions?.allowedCountryIdsJson),
+    [activeProjectForRestrictions?.allowedCountryIdsJson],
+  );
+  const allowedMovieIds = useMemo(
+    () => parseAllowedIds(activeProjectForRestrictions?.allowedMovieIdsJson),
+    [activeProjectForRestrictions?.allowedMovieIdsJson],
+  );
+  const allowedAssetTypeIds = useMemo(
+    () => parseAllowedIds(activeProjectForRestrictions?.allowedAssetTypeIdsJson),
+    [activeProjectForRestrictions?.allowedAssetTypeIdsJson],
+  );
+  const allowedLensTypeIds = useMemo(
+    () => parseAllowedIds(activeProjectForRestrictions?.allowedLensTypeIdsJson),
+    [activeProjectForRestrictions?.allowedLensTypeIdsJson],
+  );
+  const allowedAssetNameIds = useMemo(
+    () => parseAllowedIds(activeProjectForRestrictions?.allowedAssetNameIdsJson),
+    [activeProjectForRestrictions?.allowedAssetNameIdsJson],
+  );
+  const allowedNewsletterIds = useMemo(
+    () => parseAllowedIds(activeProjectForRestrictions?.allowedNewsletterIdsJson),
+    [activeProjectForRestrictions?.allowedNewsletterIdsJson],
+  );
+
+  const filteredCountries = useMemo(
+    () => filterByAllowedIds(countries, allowedCountryIds),
+    [countries, allowedCountryIds],
+  );
+
   const filteredTitles = useMemo(
-    () => movies.filter((movie) => movie.clientId === selectedClientId),
-    [movies, selectedClientId],
+    () => filterByAllowedIds(movies.filter((movie) => movie.clientId === selectedClientId), allowedMovieIds),
+    [movies, selectedClientId, allowedMovieIds],
   );
 
   const filteredAssetTypes = useMemo(
     () =>
-      assetTypes.filter((assetType) => assetType.clientId === selectedClientId),
-    [assetTypes, selectedClientId],
+      filterByAllowedIds(assetTypes.filter((assetType) => assetType.clientId === selectedClientId), allowedAssetTypeIds),
+    [assetTypes, selectedClientId, allowedAssetTypeIds],
   );
 
   const filteredAssetNames = useMemo(
     () =>
-      assetNames.filter(
+      filterByAllowedIds(assetNames.filter(
         (assetName) =>
           assetName.clientId === selectedClientId &&
           assetName.movieId === selectedMovieId,
-      ),
-    [assetNames, selectedClientId, selectedMovieId],
+      ), allowedAssetNameIds),
+    [assetNames, selectedClientId, selectedMovieId, allowedAssetNameIds],
   );
 
   const filteredNewsletters = useMemo(
     () =>
-      newsletters.filter(
+      filterByAllowedIds(newsletters.filter(
         (newsletter) => newsletter.clientId === selectedClientId,
-      ),
-    [newsletters, selectedClientId],
+      ), allowedNewsletterIds),
+    [newsletters, selectedClientId, allowedNewsletterIds],
+  );
+
+  const filteredLensTypes = useMemo(
+    () => filterByAllowedIds(lensTypes, allowedLensTypeIds),
+    [lensTypes, allowedLensTypeIds],
   );
 
   const selectedProject = projects.find(
@@ -269,8 +344,68 @@ export function TimeEntryEditForm({
     !selectedSubProject?.hideNewslettersInEntries,
   );
   const showLanguageField = Boolean(selectedProject?.showLanguagesInEntries);
-  const countryRequired = showCountryField;
+  const assetNameRequired = Boolean(
+    showAssetNameField && selectedProject?.requireAssetNamesInTimeEntries,
+  );
+  const countryRequired = Boolean(
+    showCountryField && selectedProject?.requireCountriesInTimeEntries,
+  );
+  const titleRequired = Boolean(
+    showTitleField &&
+      (selectedProject?.requireMoviesInTimeEntries || assetNameRequired),
+  );
+  const assetTypeRequired = Boolean(
+    showAssetTypeField && selectedProject?.requireAssetTypesInTimeEntries,
+  );
+  const lensTypeRequired = Boolean(
+    showLensTypeField && selectedProject?.requireLensTypesInTimeEntries,
+  );
+  const newsletterRequired = Boolean(
+    showNewsletterField && selectedProject?.requireNewslettersInTimeEntries,
+  );
   const languageRequired = showLanguageField;
+  const singleAllowedAssetName = allowedAssetNameIds.length === 1
+    ? assetNames.find((assetName) => assetName.id === allowedAssetNameIds[0])
+    : undefined;
+  const countryLocked = showCountryField && filteredCountries.length === 1;
+  const titleLocked = Boolean(
+    showTitleField && (filteredTitles.length === 1 || singleAllowedAssetName?.movieId),
+  );
+  const assetTypeLocked = showAssetTypeField && filteredAssetTypes.length === 1;
+  const lensTypeLocked = showLensTypeField && filteredLensTypes.length === 1;
+  const assetNameLocked = showAssetNameField && filteredAssetNames.length === 1;
+  const newsletterLocked = showNewsletterField && filteredNewsletters.length === 1;
+
+  useEffect(() => {
+    const only = getOnlyOptionId(filteredCountries);
+    if (countryLocked && selectedCountryId !== only) setSelectedCountryId(only);
+    if (!countryLocked && selectedCountryId && !filteredCountries.some((country) => country.id === selectedCountryId)) setSelectedCountryId("");
+  }, [countryLocked, filteredCountries, selectedCountryId]);
+  useEffect(() => {
+    const only = singleAllowedAssetName?.movieId ?? getOnlyOptionId(filteredTitles);
+    if (titleLocked && only && selectedMovieId !== only) setSelectedMovieId(only);
+    if (!titleLocked && selectedMovieId && !filteredTitles.some((movie) => movie.id === selectedMovieId)) setSelectedMovieId("");
+  }, [titleLocked, filteredTitles, selectedMovieId, singleAllowedAssetName?.movieId]);
+  useEffect(() => {
+    const only = getOnlyOptionId(filteredAssetTypes);
+    if (assetTypeLocked && selectedAssetTypeId !== only) setSelectedAssetTypeId(only);
+    if (!assetTypeLocked && selectedAssetTypeId && !filteredAssetTypes.some((assetType) => assetType.id === selectedAssetTypeId)) setSelectedAssetTypeId("");
+  }, [assetTypeLocked, filteredAssetTypes, selectedAssetTypeId]);
+  useEffect(() => {
+    const only = getOnlyOptionId(filteredLensTypes);
+    if (lensTypeLocked && selectedLensTypeId !== only) setSelectedLensTypeId(only);
+    if (!lensTypeLocked && selectedLensTypeId && !filteredLensTypes.some((lensType) => lensType.id === selectedLensTypeId)) setSelectedLensTypeId("");
+  }, [lensTypeLocked, filteredLensTypes, selectedLensTypeId]);
+  useEffect(() => {
+    const only = getOnlyOptionId(filteredAssetNames);
+    if (assetNameLocked && selectedAssetNameId !== only) setSelectedAssetNameId(only);
+    if (!assetNameLocked && selectedAssetNameId && !filteredAssetNames.some((assetName) => assetName.id === selectedAssetNameId)) setSelectedAssetNameId("");
+  }, [assetNameLocked, filteredAssetNames, selectedAssetNameId]);
+  useEffect(() => {
+    const only = getOnlyOptionId(filteredNewsletters);
+    if (newsletterLocked && selectedNewsletterId !== only) setSelectedNewsletterId(only);
+    if (!newsletterLocked && selectedNewsletterId && !filteredNewsletters.some((newsletter) => newsletter.id === selectedNewsletterId)) setSelectedNewsletterId("");
+  }, [newsletterLocked, filteredNewsletters, selectedNewsletterId]);
 
   return (
     <form action={formAction} className="card p-6">
@@ -316,6 +451,11 @@ export function TimeEntryEditForm({
               setSelectedProjectId(nextProjectId);
               setSelectedSubProjectId("");
               setSelectedMovieId("");
+              setSelectedCountryId("");
+              setSelectedAssetTypeId("");
+              setSelectedLensTypeId("");
+              setSelectedAssetNameId("");
+              setSelectedNewsletterId("");
             }}
             options={clientOptions.map((client) => ({
               value: client.id,
@@ -340,6 +480,11 @@ export function TimeEntryEditForm({
               setSelectedProjectId(nextValue);
               setSelectedSubProjectId("");
               setSelectedMovieId("");
+              setSelectedCountryId("");
+              setSelectedAssetTypeId("");
+              setSelectedLensTypeId("");
+              setSelectedAssetNameId("");
+              setSelectedNewsletterId("");
             }}
             options={filteredProjects.map((project) => ({
               value: project.id,
@@ -381,10 +526,11 @@ export function TimeEntryEditForm({
             <SearchableCombobox
               id="countryId"
               name="countryId"
-              defaultValue={entry.countryId ?? ""}
+              value={selectedCountryId}
+              onValueChange={setSelectedCountryId}
               options={[
                 { value: "", label: "Select country" },
-                ...countries.map((country) => ({
+                ...filteredCountries.map((country) => ({
                   value: country.id,
                   label: country.name,
                 })),
@@ -393,13 +539,14 @@ export function TimeEntryEditForm({
               searchPlaceholder="Search countries..."
               emptyLabel="No countries found."
               required={countryRequired}
+              disabled={countryLocked}
             />
           </div>
         ) : null}
 
         {showTitleField ? (
           <div>
-            <FormLabel htmlFor="movieId">Title</FormLabel>
+            <FormLabel htmlFor="movieId" required={titleRequired}>Title</FormLabel>
             <SearchableCombobox
               id="movieId"
               name="movieId"
@@ -415,17 +562,20 @@ export function TimeEntryEditForm({
               placeholder="No specific movie"
               searchPlaceholder="Search titles..."
               emptyLabel="No titles found."
+              required={titleRequired}
+              disabled={titleLocked}
             />
           </div>
         ) : null}
 
         {showNewsletterField ? (
           <div>
-            <FormLabel htmlFor="newsletterId">Newsletter</FormLabel>
+            <FormLabel htmlFor="newsletterId" required={newsletterRequired}>Newsletter</FormLabel>
             <SearchableCombobox
               id="newsletterId"
               name="newsletterId"
-              defaultValue={entry.newsletterId ?? ""}
+              value={selectedNewsletterId}
+              onValueChange={setSelectedNewsletterId}
               options={[
                 { value: "", label: "No specific newsletter" },
                 ...filteredNewsletters.map((newsletter) => ({
@@ -436,22 +586,21 @@ export function TimeEntryEditForm({
               placeholder="No specific newsletter"
               searchPlaceholder="Search newsletters..."
               emptyLabel="No newsletters found."
+              required={newsletterRequired}
+              disabled={newsletterLocked}
             />
           </div>
         ) : null}
 
         {showAssetNameField ? (
           <div>
-            <FormLabel htmlFor="assetNameId">Asset Name</FormLabel>
+            <FormLabel htmlFor="assetNameId" required={assetNameRequired}>Asset Name</FormLabel>
             <SearchableCombobox
               key={selectedMovieId || "no-movie"}
               id="assetNameId"
               name="assetNameId"
-              defaultValue={
-                selectedMovieId === entry.movieId
-                  ? (entry.assetNameId ?? "")
-                  : ""
-              }
+              value={selectedAssetNameId}
+              onValueChange={setSelectedAssetNameId}
               options={[
                 {
                   value: "",
@@ -475,18 +624,20 @@ export function TimeEntryEditForm({
                   ? "No asset names found for selected title."
                   : "Select a title first."
               }
-              disabled={!selectedMovieId}
+              disabled={!selectedMovieId || assetNameLocked}
+              required={assetNameRequired}
             />
           </div>
         ) : null}
 
         {showAssetTypeField ? (
           <div>
-            <FormLabel htmlFor="assetTypeId">Asset Type</FormLabel>
+            <FormLabel htmlFor="assetTypeId" required={assetTypeRequired}>Asset Type</FormLabel>
             <SearchableCombobox
               id="assetTypeId"
               name="assetTypeId"
-              defaultValue={entry.assetTypeId ?? ""}
+              value={selectedAssetTypeId}
+              onValueChange={setSelectedAssetTypeId}
               options={[
                 { value: "", label: "No specific asset type" },
                 ...filteredAssetTypes.map((assetType) => ({
@@ -497,20 +648,23 @@ export function TimeEntryEditForm({
               placeholder="No specific asset type"
               searchPlaceholder="Search asset types..."
               emptyLabel="No asset types found."
+              required={assetTypeRequired}
+              disabled={assetTypeLocked}
             />
           </div>
         ) : null}
 
         {showLensTypeField ? (
           <div>
-            <FormLabel htmlFor="lensTypeId">Lens Type</FormLabel>
+            <FormLabel htmlFor="lensTypeId" required={lensTypeRequired}>Lens Type</FormLabel>
             <SearchableCombobox
               id="lensTypeId"
               name="lensTypeId"
-              defaultValue={entry.lensTypeId ?? ""}
+              value={selectedLensTypeId}
+              onValueChange={setSelectedLensTypeId}
               options={[
                 { value: "", label: "No specific lens type" },
-                ...lensTypes.map((lensType) => ({
+                ...filteredLensTypes.map((lensType) => ({
                   value: lensType.id,
                   label: lensType.name,
                 })),
@@ -518,6 +672,8 @@ export function TimeEntryEditForm({
               placeholder="No specific lens type"
               searchPlaceholder="Search lens types..."
               emptyLabel="No lens types found."
+              required={lensTypeRequired}
+              disabled={lensTypeLocked}
             />
           </div>
         ) : null}

@@ -4,163 +4,64 @@ import { PageHeader } from "@/components/ui/page-header";
 import { ListReportFilters } from "@/components/forms/list-report-filters";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { requireUser } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { getVisibleProjects } from "@/lib/queries";
 import { DEFAULT_PAGE_SIZE, paginateItems, parsePageParam } from "@/lib/pagination";
 import { formatMinutes } from "@/lib/utils";
-import { canFullyModerateProject, isManager, isRoleScopedManager, canAccessMenuItem } from "@/lib/permissions";
+import {
+  canFullyModerateProject,
+  isManager,
+  isRoleScopedManager,
+  canAccessMenuItem,
+} from "@/lib/permissions";
 import { deleteTimeEntryAction } from "@/lib/actions/time-actions";
+import {
+  getInvalidTimeEntryReasons,
+  getTimeEntryFilterData,
+  getTimeEntryRows,
+  type TimeEntryListSearchParams,
+} from "@/lib/time-entry-reporting";
 
-function normalizeDateInput(value?: string) {
-  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
-}
-
-function buildFromBoundary(value: string) {
-  return value ? new Date(`${value}T00:00:00`) : undefined;
-}
-
-function buildToBoundary(value: string) {
-  return value ? new Date(`${value}T23:59:59.999`) : undefined;
+function buildExportHref(params: TimeEntryListSearchParams) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value && value !== "all") query.set(key, value);
+  });
+  const queryString = query.toString();
+  return `/time-entries/export${queryString ? `?${queryString}` : ""}`;
 }
 
 export default async function TimeEntriesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ clientId?: string; projectId?: string; fromDate?: string; toDate?: string; userId?: string; search?: string; page?: string }>;
+  searchParams?: Promise<TimeEntryListSearchParams & { page?: string }>;
 }) {
   const user = await requireUser();
   if (!canAccessMenuItem(user, "time-entries")) redirect("/dashboard");
+
   const params = (await searchParams) ?? {};
-  const selectedClientId = params.clientId ?? "all";
-  const selectedProjectId = params.projectId ?? "all";
-  const selectedFromDate = normalizeDateInput(params.fromDate);
-  const selectedToDate = normalizeDateInput(params.toDate);
-  const selectedUserId = user.userType === "ADMIN" ? params.userId ?? "all" : "all";
-  const selectedTextSearch = user.userType === "ADMIN" ? (params.search ?? "").trim().slice(0, 200) : "";
   const page = parsePageParam(params.page);
-
-  const [projects, countries, supervisorAssignments, adminUserOptions] = await Promise.all([
-    getVisibleProjects(user, { allowedStatuses: ["ACTIVE"] }),
-    db.country.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
-    user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
-      ? db.employeeTeamLead.findMany({
-          where: { teamLeadId: user.id },
-          include: {
-            employee: {
-              select: { id: true, fullName: true, functionalRole: true, userType: true, isActive: true },
-            },
-          },
-        })
-      : Promise.resolve([]),
-    user.userType === "ADMIN"
-      ? db.user.findMany({
-          where: { isActive: true, userType: { in: ["MANAGER", "TEAM_LEAD", "EMPLOYEE"] } },
-          select: { id: true, fullName: true, employeeCode: true, userType: true, functionalRole: true, },
-          orderBy: { fullName: "asc" },
-        })
-      : Promise.resolve([]),
-  ]);
-
-  const filteredProjects = projects.filter((project) => {
-    const matchesClient = selectedClientId === "all" ? true : project.clientId === selectedClientId;
-    const matchesProject = selectedProjectId === "all" ? true : project.id === selectedProjectId;
-    return matchesClient && matchesProject;
+  const filterData = await getTimeEntryFilterData(user);
+  const { entries, filters, scopedEmployeeIds } = await getTimeEntryRows({
+    user,
+    params,
+    filterData,
   });
-
-  const visibleProjectIds = filteredProjects.map((project) => project.id);
-  const safeProjectIds = visibleProjectIds.length ? visibleProjectIds : ["__none__"];
-  const scopedEmployeeIds = supervisorAssignments
-    .filter((row) => row.employee.functionalRole === user.functionalRole)
-    .map((row) => row.employeeId);
-
-  const validAdminUserIds = new Set(adminUserOptions.map((option) => option.id));
-  const effectiveUserId = selectedUserId !== "all" && validAdminUserIds.has(selectedUserId) ? selectedUserId : "all";
-
-  const fromBoundary = buildFromBoundary(selectedFromDate);
-  const toBoundary = buildToBoundary(selectedToDate);
-  const workDateFilter = {
-    ...(fromBoundary ? { gte: fromBoundary } : {}),
-    ...(toBoundary ? { lte: toBoundary } : {}),
-  };
-  const hasWorkDateFilter = Object.keys(workDateFilter).length > 0;
-
-  const entries = await db.timeEntry.findMany({
-    where:
-      user.userType === "EMPLOYEE"
-        ? {
-            employeeId: user.id,
-            projectId: { in: safeProjectIds },
-            project: { is: { isActive: true, status: "ACTIVE" } },
-            OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
-            ...(hasWorkDateFilter ? { workDate: workDateFilter } : {}),
-          }
-        : user.userType === "TEAM_LEAD" || isRoleScopedManager(user)
-          ? {
-              OR: [
-                {
-                  employeeId: user.id,
-                  projectId: { in: safeProjectIds },
-                  project: { is: { isActive: true, status: "ACTIVE" } },
-                  OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
-                  ...(hasWorkDateFilter ? { workDate: workDateFilter } : {}),
-                },
-                {
-                  employeeId: { in: scopedEmployeeIds.length ? scopedEmployeeIds : ["__none__"] },
-                  projectId: { in: safeProjectIds },
-                  project: { is: { isActive: true, status: "ACTIVE" } },
-                  OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
-                  ...(hasWorkDateFilter ? { workDate: workDateFilter } : {}),
-                },
-              ],
-            }
-          : {
-              projectId: { in: safeProjectIds },
-              project: { is: { isActive: true, status: "ACTIVE" } },
-              OR: [{ subProjectId: null }, { subProject: { is: { isActive: true } } }],
-              ...(hasWorkDateFilter ? { workDate: workDateFilter } : {}),
-              ...(user.userType === "ADMIN" && effectiveUserId !== "all" ? { employeeId: effectiveUserId } : {}),
-              ...(selectedTextSearch
-                ? {
-                    AND: [
-                      {
-                        OR: [
-                          { taskName: { contains: selectedTextSearch } },
-                          { notes: { contains: selectedTextSearch } },
-                        ],
-                      },
-                    ],
-                  }
-                : {}),
-            },
-    include: {
-      employee: true,
-      project: { include: { client: true } },
-      subProject: true,
-      movie: true,
-      language: true,
-      assetName: true,
-      newsletter: true
-    },
-    orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
-  });
-
-  const countryMap = new Map(countries.map((country) => [country.id, country.name]));
   const managedIds = new Set(scopedEmployeeIds);
-
-  const clientOptions = Array.from(
-    new Map(
-      projects.map((project) => [
-        project.client.id,
-        { id: project.client.id, name: project.client.name },
-      ]),
-    ).values(),
-  ).sort((a, b) => a.name.localeCompare(b.name));
 
   const { items: paginatedEntries, currentPage, totalPages, totalItems, pageSize } = paginateItems(
     entries,
     page,
     DEFAULT_PAGE_SIZE,
   );
+
+  const exportParams: TimeEntryListSearchParams = {
+    clientId: filters.selectedClientId,
+    projectId: filters.selectedProjectId,
+    subProjectId: filters.effectiveSubProjectId,
+    fromDate: filters.selectedFromDate || undefined,
+    toDate: filters.selectedToDate || undefined,
+    userId: filters.effectiveUserId !== "all" ? filters.effectiveUserId : undefined,
+    search: filters.selectedTextSearch || undefined,
+  };
 
   return (
     <div className="space-y-6">
@@ -172,44 +73,53 @@ export default async function TimeEntriesPage({
             : "Employees and Team Leads can submit time entries. Employees can edit their own entries, and submitted entries can also be edited by assigned Team Leads, Admins, or Managers."
         }
         actions={
-          <Link className="btn-primary" href="/time-entries/new">
-            Add Time
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            {user.userType === "ADMIN" ? (
+              <Link className="btn-secondary" href="/time-entries/invalid-entries">
+                Invalid Entries
+              </Link>
+            ) : null}
+            <Link className="btn-secondary" href={buildExportHref(exportParams)}>
+              Export Excel
+            </Link>
+            <Link className="btn-primary" href="/time-entries/new">
+              Add Time
+            </Link>
+          </div>
         }
       />
 
       <div className="card p-4">
         <ListReportFilters
           basePath="/time-entries"
-          selectedFromDate={selectedFromDate}
-          selectedToDate={selectedToDate}
-          selectedClientId={selectedClientId}
-          selectedProjectId={selectedProjectId}
-          clientOptions={clientOptions}
-          projectOptions={projects.map((project) => ({
-            id: project.id,
-            name: project.name,
-            clientId: project.clientId,
-          }))}
-          selectedUserId={effectiveUserId}
-          userOptions={adminUserOptions.map((option) => ({
+          selectedFromDate={filters.selectedFromDate}
+          selectedToDate={filters.selectedToDate}
+          selectedClientId={filters.selectedClientId}
+          selectedProjectId={filters.selectedProjectId}
+          selectedSubProjectId={filters.effectiveSubProjectId}
+          clientOptions={filterData.clientOptions}
+          projectOptions={filterData.projectOptions}
+          subProjectOptions={filterData.subProjectOptions}
+          selectedUserId={filters.effectiveUserId}
+          userOptions={filterData.adminUserOptions.map((option) => ({
             id: option.id,
             name: `${option.fullName}${option.functionalRole ? ` (${option.functionalRole.replace("_", " ")})` : ""}`,
           }))}
           showTextSearch={user.userType === "ADMIN"}
-          selectedTextSearch={selectedTextSearch}
+          selectedTextSearch={filters.selectedTextSearch}
           textSearchLabel="Task Name / Notes"
           textSearchPlaceholder="Search task name or notes..."
         />
       </div>
 
       <div className="table-wrap overflow-x-auto">
-        <table className="table-base w-full min-w-[1040px] xl:min-w-[1080px] text-[13px] xl:text-sm">
+        <table className="table-base w-full min-w-[1160px] xl:min-w-[1200px] text-[13px] xl:text-sm">
           <thead className="table-head">
             <tr>
               <th className="table-cell min-w-[165px] xl:min-w-[180px]">Employee</th>
               <th className="table-cell min-w-[145px] xl:min-w-[160px]">Client</th>
               <th className="table-cell min-w-[190px] xl:min-w-[220px]">Project / Task</th>
+              <th className="table-cell min-w-[190px] xl:min-w-[220px]">Validation</th>
               <th className="table-cell min-w-[100px] xl:min-w-[110px] whitespace-nowrap">Work Date</th>
               <th className="table-cell min-w-[80px] xl:min-w-[90px] whitespace-nowrap">Time</th>
               <th className="table-cell min-w-[96px] xl:min-w-[110px] whitespace-nowrap">Action</th>
@@ -218,13 +128,15 @@ export default async function TimeEntriesPage({
 
           <tbody className="divide-y divide-slate-100">
             {paginatedEntries.map((entry) => {
+              const invalidReasons = getInvalidTimeEntryReasons(entry);
+              const isInvalidEntry = invalidReasons.length > 0;
               const isBilledEntry = entry.movie?.status === "COMPLETED_BILLED";
               const canEdit =
                 !isBilledEntry &&
                 (canFullyModerateProject(user) ||
-                entry.employeeId === user.id ||
-                ((user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) &&
-                  managedIds.has(entry.employeeId)));
+                  entry.employeeId === user.id ||
+                  ((user.userType === "TEAM_LEAD" || isRoleScopedManager(user)) &&
+                    managedIds.has(entry.employeeId)));
               const canDelete =
                 !isBilledEntry &&
                 ["ADMIN", "MANAGER", "TEAM_LEAD"].includes(user.userType) &&
@@ -233,7 +145,10 @@ export default async function TimeEntriesPage({
                     managedIds.has(entry.employeeId)));
 
               return (
-                <tr key={entry.id}>
+                <tr
+                  key={entry.id}
+                  className={isInvalidEntry ? "bg-red-50/70" : undefined}
+                >
                   <td className="table-cell align-top min-w-[165px] xl:min-w-[180px] max-w-[165px] xl:max-w-[180px]">
                     <div className="font-medium text-slate-900 break-words text-[13px] xl:text-sm">
                       {entry.employee.fullName}
@@ -251,7 +166,7 @@ export default async function TimeEntriesPage({
                     <div className="font-medium text-slate-900 break-words text-[13px] xl:text-sm">
                       {entry.project.name}
                     </div>
-                    {entry.project.id != "cmnijd30h0001l404y6i8tb2y" && (
+                    {entry.project.id !== "cmnijd30h0001l404y6i8tb2y" && (
                       <div className="text-[11px] xl:text-xs text-slate-500 break-words">
                         {entry.subProject?.name ?? "No Sub Project"}
                       </div>
@@ -263,23 +178,23 @@ export default async function TimeEntriesPage({
                     ) : (
                       <div className="text-[11px] xl:text-xs text-slate-500 break-words">{entry.taskName}</div>
                     )}
-                    {entry.project?.client.showCountriesInTimeEntries && (
+                    {entry.project.client.showCountriesInTimeEntries && (
                       <div className="text-[11px] xl:text-xs text-slate-500 break-words">
-                        {entry.countryId ? countryMap.get(entry.countryId) ?? "—" : "No specific country"}
+                        {entry.country?.name ?? "No specific country"}
                       </div>
                     )}
-                    {entry.project.id == "cmnijd30h0001l404y6i8tb2y" ? (
+                    {entry.project.id === "cmnijd30h0001l404y6i8tb2y" ? (
                       <div className="text-[11px] xl:text-xs text-slate-500 break-words">
                         {entry.newsletter?.newsletterType ?? "No Newsletter Type"}
                       </div>
                     ) : (
-                      entry.project?.client.showMoviesInEntries && (
+                      entry.project.client.showMoviesInEntries && (
                         <div className="text-[11px] xl:text-xs text-slate-500 break-words">
                           {entry.movie?.title ?? "No specific title"}
                         </div>
                       )
                     )}
-                    {entry.project.id == "cmnijd30h0001l404y6i8tb2y" && (
+                    {entry.project.id === "cmnijd30h0001l404y6i8tb2y" && (
                       <div className="text-[11px] xl:text-xs text-slate-500 break-words">
                         {entry.newsletter?.name ?? "No Newsletter Name"}
                       </div>
@@ -287,8 +202,22 @@ export default async function TimeEntriesPage({
                     {entry.language && (
                       <div className="text-[11px] xl:text-xs text-slate-500 break-words">
                         {entry.language.name} ({entry.language.code})
-                        {entry.project?.client.showMoviesInEntries}
                       </div>
+                    )}
+                  </td>
+
+                  <td className="table-cell align-top min-w-[190px] xl:min-w-[220px]">
+                    {isInvalidEntry ? (
+                      <div className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">
+                        <div className="font-semibold">Invalid entry</div>
+                        <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                          {invalidReasons.map((reason) => (
+                            <li key={reason}>{reason}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
                     )}
                   </td>
 
@@ -340,7 +269,7 @@ export default async function TimeEntriesPage({
 
             {entries.length === 0 ? (
               <tr>
-                <td colSpan={6} className="table-cell text-center text-sm text-slate-500">
+                <td colSpan={7} className="table-cell text-center text-sm text-slate-500">
                   No time entries found.
                 </td>
               </tr>
@@ -355,12 +284,13 @@ export default async function TimeEntriesPage({
           totalItems={totalItems}
           pageSize={pageSize}
           searchParams={{
-            clientId: selectedClientId,
-            projectId: selectedProjectId,
-            fromDate: selectedFromDate || undefined,
-            toDate: selectedToDate || undefined,
-            userId: effectiveUserId !== "all" ? effectiveUserId : undefined,
-            search: selectedTextSearch || undefined,
+            clientId: filters.selectedClientId,
+            projectId: filters.selectedProjectId,
+            subProjectId: filters.effectiveSubProjectId !== "all" ? filters.effectiveSubProjectId : undefined,
+            fromDate: filters.selectedFromDate || undefined,
+            toDate: filters.selectedToDate || undefined,
+            userId: filters.effectiveUserId !== "all" ? filters.effectiveUserId : undefined,
+            search: filters.selectedTextSearch || undefined,
           }}
         />
       </div>

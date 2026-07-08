@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import {
   updateProjectAction,
   type ProjectFormState,
@@ -8,6 +8,7 @@ import {
 import { FormLabel } from "@/components/ui/form-label";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
+import { ProjectDropdownRestrictionSelect } from "@/components/forms/project-dropdown-restrictions";
 
 type ProjectType = {
   id: string;
@@ -28,6 +29,24 @@ type ContactPerson = {
   email: string;
   clientId: string;
 };
+
+type RestrictionOption = {
+  id: string;
+  name?: string;
+  clientId?: string;
+  movieId?: string;
+  title?: string;
+};
+
+function parseIdsJson(value?: string | null) {
+  if (!value) return [] as string[];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+  } catch {
+    return [] as string[];
+  }
+}
 
 type BillingModel =
   | "HOURLY"
@@ -67,6 +86,12 @@ export function ProjectEditForm({
   initialValues,
   filmikResourceTypes,
   contactPersons = [],
+  countries = [],
+  movies = [],
+  assetTypes = [],
+  lensTypes = [],
+  assetNames = [],
+  newsletters = [],
   monthlyAdditionalHours = [],
   isAdmin = false,
 }: {
@@ -83,6 +108,12 @@ export function ProjectEditForm({
   clientShowsNewslettersInEntries: boolean;
   filmikResourceTypes: FilmikResourceType[];
   contactPersons?: ContactPerson[];
+  countries?: RestrictionOption[];
+  movies?: RestrictionOption[];
+  assetTypes?: RestrictionOption[];
+  lensTypes?: RestrictionOption[];
+  assetNames?: RestrictionOption[];
+  newsletters?: RestrictionOption[];
   monthlyAdditionalHours?: { month: string; hours: number }[];
   initialValues: {
     projectTypeId: string | null;
@@ -103,6 +134,18 @@ export function ProjectEditForm({
     hideLensTypesInEntries: boolean;
     hideAssetNamesInEntries: boolean;
     hideNewslettersInEntries: boolean;
+    requireCountriesInTimeEntries: boolean;
+    requireMoviesInTimeEntries: boolean;
+    requireAssetTypesInTimeEntries: boolean;
+    requireLensTypesInTimeEntries: boolean;
+    requireAssetNamesInTimeEntries: boolean;
+    requireNewslettersInTimeEntries: boolean;
+    allowedCountryIdsJson?: string | null;
+    allowedMovieIdsJson?: string | null;
+    allowedAssetTypeIdsJson?: string | null;
+    allowedLensTypeIdsJson?: string | null;
+    allowedAssetNameIdsJson?: string | null;
+    allowedNewsletterIdsJson?: string | null;
     addToBilling: boolean;
     additionalCharges: number | null;
     partialBillingCost: number | null;
@@ -156,6 +199,37 @@ export function ProjectEditForm({
   const [hideNewslettersInEntries, setHideNewslettersInEntries] = useState(
     initialValues.hideNewslettersInEntries,
   );
+  const [requireCountriesInTimeEntries, setRequireCountriesInTimeEntries] =
+    useState(initialValues.requireCountriesInTimeEntries);
+  const [requireMoviesInTimeEntries, setRequireMoviesInTimeEntries] = useState(
+    initialValues.requireMoviesInTimeEntries,
+  );
+  const [requireAssetTypesInTimeEntries, setRequireAssetTypesInTimeEntries] =
+    useState(initialValues.requireAssetTypesInTimeEntries);
+  const [requireLensTypesInTimeEntries, setRequireLensTypesInTimeEntries] =
+    useState(initialValues.requireLensTypesInTimeEntries);
+  const [requireAssetNamesInTimeEntries, setRequireAssetNamesInTimeEntries] =
+    useState(initialValues.requireAssetNamesInTimeEntries);
+  const [requireNewslettersInTimeEntries, setRequireNewslettersInTimeEntries] =
+    useState(initialValues.requireNewslettersInTimeEntries);
+  const [allowedCountryIds, setAllowedCountryIds] = useState<string[]>(
+    parseIdsJson(initialValues.allowedCountryIdsJson),
+  );
+  const [allowedMovieIds, setAllowedMovieIds] = useState<string[]>(
+    parseIdsJson(initialValues.allowedMovieIdsJson),
+  );
+  const [allowedAssetTypeIds, setAllowedAssetTypeIds] = useState<string[]>(
+    parseIdsJson(initialValues.allowedAssetTypeIdsJson),
+  );
+  const [allowedLensTypeIds, setAllowedLensTypeIds] = useState<string[]>(
+    parseIdsJson(initialValues.allowedLensTypeIdsJson),
+  );
+  const [allowedAssetNameIds, setAllowedAssetNameIds] = useState<string[]>(
+    parseIdsJson(initialValues.allowedAssetNameIdsJson),
+  );
+  const [allowedNewsletterIds, setAllowedNewsletterIds] = useState<string[]>(
+    parseIdsJson(initialValues.allowedNewsletterIdsJson),
+  );
   const [addToBilling, setAddToBilling] = useState(initialValues.addToBilling);
   const contactPersonOptions = contactPersons
     .filter((person) => person.clientId === clientId)
@@ -164,6 +238,30 @@ export function ProjectEditForm({
       label: person.name,
       keywords: person.email,
     }));
+  const countryRestrictionOptions = useMemo(
+    () => countries.map((country) => ({ value: country.id, label: country.name ?? "" })),
+    [countries],
+  );
+  const titleRestrictionOptions = useMemo(
+    () => movies.map((movie) => ({ value: movie.id, label: movie.title ?? movie.name ?? "" })),
+    [movies],
+  );
+  const assetTypeRestrictionOptions = useMemo(
+    () => assetTypes.map((assetType) => ({ value: assetType.id, label: assetType.name ?? "" })),
+    [assetTypes],
+  );
+  const lensTypeRestrictionOptions = useMemo(
+    () => lensTypes.map((lensType) => ({ value: lensType.id, label: lensType.name ?? "" })),
+    [lensTypes],
+  );
+  const assetNameRestrictionOptions = useMemo(
+    () => assetNames.map((assetName) => ({ value: assetName.id, label: assetName.name ?? "", keywords: movies.find((movie) => movie.id === assetName.movieId)?.title ?? "" })),
+    [assetNames, movies],
+  );
+  const newsletterRestrictionOptions = useMemo(
+    () => newsletters.map((newsletter) => ({ value: newsletter.id, label: newsletter.name ?? "" })),
+    [newsletters],
+  );
   const isFilmikClient = clientId === FILMIK_CLIENT_ID;
   const isSonyPicturesClient = clientId === SONY_PICTURES_CLIENT_ID;
   const isUniversalPicturesClient = clientId === UNIVERSAL_PICTURES_CLIENT_ID;
@@ -216,6 +314,34 @@ export function ProjectEditForm({
       ) : null}
       {hideNewslettersInEntries ? (
         <input type="hidden" name="hideNewslettersInEntries" value="on" />
+      ) : null}
+      {clientShowsCountriesInEntries &&
+      !hideCountriesInEntries &&
+      requireCountriesInTimeEntries ? (
+        <input type="hidden" name="requireCountriesInTimeEntries" value="on" />
+      ) : null}
+      {clientShowsMoviesInEntries && !hideMoviesInEntries && requireMoviesInTimeEntries ? (
+        <input type="hidden" name="requireMoviesInTimeEntries" value="on" />
+      ) : null}
+      {clientShowsAssetTypesInEntries &&
+      !hideAssetTypesInEntries &&
+      requireAssetTypesInTimeEntries ? (
+        <input type="hidden" name="requireAssetTypesInTimeEntries" value="on" />
+      ) : null}
+      {clientShowsLensTypesInEntries &&
+      !hideLensTypesInEntries &&
+      requireLensTypesInTimeEntries ? (
+        <input type="hidden" name="requireLensTypesInTimeEntries" value="on" />
+      ) : null}
+      {clientShowsAssetNamesInEntries &&
+      !hideAssetNamesInEntries &&
+      requireAssetNamesInTimeEntries ? (
+        <input type="hidden" name="requireAssetNamesInTimeEntries" value="on" />
+      ) : null}
+      {clientShowsNewslettersInEntries &&
+      !hideNewslettersInEntries &&
+      requireNewslettersInTimeEntries ? (
+        <input type="hidden" name="requireNewslettersInTimeEntries" value="on" />
       ) : null}
       {addToBilling ? (
         <input type="hidden" name="addToBilling" value="on" />
@@ -416,83 +542,195 @@ export function ProjectEditForm({
         </div>
 
         {clientShowsCountriesInEntries ? (
-          <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={hideCountriesInEntries}
-              onChange={(event) =>
-                setHideCountriesInEntries(event.target.checked)
-              }
-            />
-            Hide country dropdown in Time Entries and Estimates for this project
-          </label>
+          <div className="md:col-span-2 space-y-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={hideCountriesInEntries}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setHideCountriesInEntries(checked);
+                  if (checked) { setRequireCountriesInTimeEntries(false); setAllowedCountryIds([]); }
+                }}
+              />
+              Hide country dropdown in Time Entries and Estimates for this project
+            </label>
+            {!hideCountriesInEntries ? (
+              <>
+                <label className="flex items-center gap-3 pl-6">
+                  <input
+                    type="checkbox"
+                    checked={requireCountriesInTimeEntries}
+                    onChange={(event) =>
+                      setRequireCountriesInTimeEntries(event.target.checked)
+                    }
+                  />
+                  Make country dropdown mandatory in Time Entries
+                </label>
+                <ProjectDropdownRestrictionSelect label="Country" name="allowedCountryIds" value={allowedCountryIds} onValueChange={setAllowedCountryIds} options={countryRestrictionOptions} />
+              </>
+            ) : null}
+          </div>
         ) : null}
 
         {clientShowsMoviesInEntries ? (
-          <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={hideMoviesInEntries}
-              onChange={(event) => setHideTitlesInEntries(event.target.checked)}
-            />
-            Hide title dropdown in Time Entries and Estimates for this project
-          </label>
+          <div className="md:col-span-2 space-y-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={hideMoviesInEntries}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setHideTitlesInEntries(checked);
+                  if (checked) { setRequireMoviesInTimeEntries(false); setAllowedMovieIds([]); }
+                }}
+              />
+              Hide title dropdown in Time Entries and Estimates for this project
+            </label>
+            {!hideMoviesInEntries ? (
+              <>
+                <label className="flex items-center gap-3 pl-6">
+                  <input
+                    type="checkbox"
+                    checked={requireMoviesInTimeEntries}
+                    onChange={(event) =>
+                      setRequireMoviesInTimeEntries(event.target.checked)
+                    }
+                  />
+                  Make title dropdown mandatory in Time Entries
+                </label>
+                <ProjectDropdownRestrictionSelect label="Title" name="allowedMovieIds" value={allowedMovieIds} onValueChange={setAllowedMovieIds} options={titleRestrictionOptions} />
+              </>
+            ) : null}
+          </div>
         ) : null}
 
         {clientShowsAssetTypesInEntries ? (
-          <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={hideAssetTypesInEntries}
-              onChange={(event) =>
-                setHideAssetTypesInEntries(event.target.checked)
-              }
-            />
-            Hide asset type dropdown in Time Entries and Estimates for this
-            project
-          </label>
+          <div className="md:col-span-2 space-y-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={hideAssetTypesInEntries}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setHideAssetTypesInEntries(checked);
+                  if (checked) { setRequireAssetTypesInTimeEntries(false); setAllowedAssetTypeIds([]); }
+                }}
+              />
+              Hide asset type dropdown in Time Entries and Estimates for this project
+            </label>
+            {!hideAssetTypesInEntries ? (
+              <>
+                <label className="flex items-center gap-3 pl-6">
+                  <input
+                    type="checkbox"
+                    checked={requireAssetTypesInTimeEntries}
+                    onChange={(event) =>
+                      setRequireAssetTypesInTimeEntries(event.target.checked)
+                    }
+                  />
+                  Make asset type dropdown mandatory in Time Entries
+                </label>
+                <ProjectDropdownRestrictionSelect label="Asset Type" name="allowedAssetTypeIds" value={allowedAssetTypeIds} onValueChange={setAllowedAssetTypeIds} options={assetTypeRestrictionOptions} />
+              </>
+            ) : null}
+          </div>
         ) : null}
 
         {clientShowsLensTypesInEntries ? (
-          <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={hideLensTypesInEntries}
-              onChange={(event) =>
-                setHideLensTypesInEntries(event.target.checked)
-              }
-            />
-            Hide Lens Type dropdown in Time Entries and Estimates for this
-            project
-          </label>
+          <div className="md:col-span-2 space-y-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={hideLensTypesInEntries}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setHideLensTypesInEntries(checked);
+                  if (checked) { setRequireLensTypesInTimeEntries(false); setAllowedLensTypeIds([]); }
+                }}
+              />
+              Hide Lens Type dropdown in Time Entries and Estimates for this project
+            </label>
+            {!hideLensTypesInEntries ? (
+              <>
+                <label className="flex items-center gap-3 pl-6">
+                  <input
+                    type="checkbox"
+                    checked={requireLensTypesInTimeEntries}
+                    onChange={(event) =>
+                      setRequireLensTypesInTimeEntries(event.target.checked)
+                    }
+                  />
+                  Make Lens Type dropdown mandatory in Time Entries
+                </label>
+                <ProjectDropdownRestrictionSelect label="Lens Type" name="allowedLensTypeIds" value={allowedLensTypeIds} onValueChange={setAllowedLensTypeIds} options={lensTypeRestrictionOptions} />
+              </>
+            ) : null}
+          </div>
         ) : null}
 
         {clientShowsAssetNamesInEntries ? (
-          <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={hideAssetNamesInEntries}
-              onChange={(event) =>
-                setHideAssetNamesInEntries(event.target.checked)
-              }
-            />
-            Hide asset name dropdown in Time Entries and Estimates for this
-            project
-          </label>
+          <div className="md:col-span-2 space-y-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={hideAssetNamesInEntries}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setHideAssetNamesInEntries(checked);
+                  if (checked) { setRequireAssetNamesInTimeEntries(false); setAllowedAssetNameIds([]); }
+                }}
+              />
+              Hide asset name dropdown in Time Entries and Estimates for this project
+            </label>
+            {!hideAssetNamesInEntries ? (
+              <>
+                <label className="flex items-center gap-3 pl-6">
+                  <input
+                    type="checkbox"
+                    checked={requireAssetNamesInTimeEntries}
+                    onChange={(event) =>
+                      setRequireAssetNamesInTimeEntries(event.target.checked)
+                    }
+                  />
+                  Make asset name dropdown mandatory in Time Entries
+                </label>
+                <ProjectDropdownRestrictionSelect label="Asset Name" name="allowedAssetNameIds" value={allowedAssetNameIds} onValueChange={setAllowedAssetNameIds} options={assetNameRestrictionOptions} />
+              </>
+            ) : null}
+          </div>
         ) : null}
 
         {clientShowsNewslettersInEntries ? (
-          <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={hideNewslettersInEntries}
-              onChange={(event) =>
-                setHideNewslettersInEntries(event.target.checked)
-              }
-            />
-            Hide newsletter dropdown in Time Entries and Estimates for this
-            project
-          </label>
+          <div className="md:col-span-2 space-y-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={hideNewslettersInEntries}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setHideNewslettersInEntries(checked);
+                  if (checked) { setRequireNewslettersInTimeEntries(false); setAllowedNewsletterIds([]); }
+                }}
+              />
+              Hide newsletter dropdown in Time Entries and Estimates for this project
+            </label>
+            {!hideNewslettersInEntries ? (
+              <>
+                <label className="flex items-center gap-3 pl-6">
+                  <input
+                    type="checkbox"
+                    checked={requireNewslettersInTimeEntries}
+                    onChange={(event) =>
+                      setRequireNewslettersInTimeEntries(event.target.checked)
+                    }
+                  />
+                  Make newsletter dropdown mandatory in Time Entries
+                </label>
+                <ProjectDropdownRestrictionSelect label="Newsletter" name="allowedNewsletterIds" value={allowedNewsletterIds} onValueChange={setAllowedNewsletterIds} options={newsletterRestrictionOptions} />
+              </>
+            ) : null}
+          </div>
         ) : null}
         <label className="md:col-span-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
           <input

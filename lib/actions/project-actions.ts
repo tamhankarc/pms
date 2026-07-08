@@ -102,6 +102,30 @@ const baseSchema = z.object({
   hideNewslettersInEntries: z
     .union([z.literal("on"), z.literal("true"), z.literal("1")])
     .optional(),
+  requireCountriesInTimeEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  requireMoviesInTimeEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  requireAssetTypesInTimeEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  requireLensTypesInTimeEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  requireAssetNamesInTimeEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  requireNewslettersInTimeEntries: z
+    .union([z.literal("on"), z.literal("true"), z.literal("1")])
+    .optional(),
+  allowedCountryIds: z.array(z.string()).optional(),
+  allowedMovieIds: z.array(z.string()).optional(),
+  allowedAssetTypeIds: z.array(z.string()).optional(),
+  allowedLensTypeIds: z.array(z.string()).optional(),
+  allowedAssetNameIds: z.array(z.string()).optional(),
+  allowedNewsletterIds: z.array(z.string()).optional(),
   addToBilling: z
     .union([z.literal("on"), z.literal("true"), z.literal("1")])
     .optional(),
@@ -124,6 +148,59 @@ async function validateProjectType(
     where: { id: projectTypeId, clientId, isActive: true },
     select: { id: true, name: true },
   });
+}
+
+function getFormIds(formData: FormData, name: string) {
+  return Array.from(
+    new Set(formData.getAll(name).map(String).map((value) => value.trim()).filter(Boolean)),
+  );
+}
+
+function idsToJson(ids: string[]) {
+  return ids.length ? JSON.stringify(ids) : null;
+}
+
+async function getValidProjectRestrictionIds(
+  clientId: string,
+  ids: {
+    countryIds: string[];
+    movieIds: string[];
+    assetTypeIds: string[];
+    lensTypeIds: string[];
+    assetNameIds: string[];
+    newsletterIds: string[];
+  },
+) {
+  const [countryRows, movieRows, assetTypeRows, lensTypeRows, assetNameRows, newsletterRows] =
+    await Promise.all([
+      ids.countryIds.length
+        ? db.country.findMany({ where: { id: { in: ids.countryIds }, isActive: true }, select: { id: true } })
+        : Promise.resolve([]),
+      ids.movieIds.length
+        ? db.movie.findMany({ where: { id: { in: ids.movieIds }, clientId, isActive: true }, select: { id: true } })
+        : Promise.resolve([]),
+      ids.assetTypeIds.length
+        ? db.assetType.findMany({ where: { id: { in: ids.assetTypeIds }, clientId, isActive: true }, select: { id: true } })
+        : Promise.resolve([]),
+      ids.lensTypeIds.length
+        ? db.lensType.findMany({ where: { id: { in: ids.lensTypeIds }, isActive: true }, select: { id: true } })
+        : Promise.resolve([]),
+      ids.assetNameIds.length
+        ? db.assetName.findMany({ where: { id: { in: ids.assetNameIds }, clientId, isActive: true }, select: { id: true } })
+        : Promise.resolve([]),
+      ids.newsletterIds.length
+        ? db.newsletter.findMany({ where: { id: { in: ids.newsletterIds }, clientId, isActive: true }, select: { id: true } })
+        : Promise.resolve([]),
+    ]);
+
+  return {
+    countryIds: countryRows.map((row) => row.id),
+    movieIds: movieRows.map((row) => row.id),
+    assetTypeIds: assetTypeRows.map((row) => row.id),
+    lensTypeIds: lensTypeRows.map((row) => row.id),
+    assetNameIds: assetNameRows.map((row) => row.id),
+    newsletterIds: newsletterRows.map((row) => row.id),
+  };
 }
 
 const FILMIK_CLIENT_ID = "cmne6ed2o0000jo04t3363pqz";
@@ -279,6 +356,24 @@ export async function createProjectAction(
         formData.get("hideAssetNamesInEntries") ?? undefined,
       hideNewslettersInEntries:
         formData.get("hideNewslettersInEntries") ?? undefined,
+      requireCountriesInTimeEntries:
+        formData.get("requireCountriesInTimeEntries") ?? undefined,
+      requireMoviesInTimeEntries:
+        formData.get("requireMoviesInTimeEntries") ?? undefined,
+      requireAssetTypesInTimeEntries:
+        formData.get("requireAssetTypesInTimeEntries") ?? undefined,
+      requireLensTypesInTimeEntries:
+        formData.get("requireLensTypesInTimeEntries") ?? undefined,
+      requireAssetNamesInTimeEntries:
+        formData.get("requireAssetNamesInTimeEntries") ?? undefined,
+      requireNewslettersInTimeEntries:
+        formData.get("requireNewslettersInTimeEntries") ?? undefined,
+      allowedCountryIds: getFormIds(formData, "allowedCountryIds"),
+      allowedMovieIds: getFormIds(formData, "allowedMovieIds"),
+      allowedAssetTypeIds: getFormIds(formData, "allowedAssetTypeIds"),
+      allowedLensTypeIds: getFormIds(formData, "allowedLensTypeIds"),
+      allowedAssetNameIds: getFormIds(formData, "allowedAssetNameIds"),
+      allowedNewsletterIds: getFormIds(formData, "allowedNewsletterIds"),
       addToBilling: formData.get("addToBilling") ?? undefined,
     });
 
@@ -345,6 +440,15 @@ export async function createProjectAction(
             "One or more selected contact persons do not belong to selected client.",
         };
     }
+
+    const restrictions = await getValidProjectRestrictionIds(client.id, {
+      countryIds: client.showCountriesInTimeEntries && !parsed.data.hideCountriesInEntries ? parsed.data.allowedCountryIds ?? [] : [],
+      movieIds: client.showMoviesInEntries && !parsed.data.hideMoviesInEntries ? parsed.data.allowedMovieIds ?? [] : [],
+      assetTypeIds: client.showAssetTypesInEntries && !parsed.data.hideAssetTypesInEntries ? parsed.data.allowedAssetTypeIds ?? [] : [],
+      lensTypeIds: client.showLensTypesInEntries && !parsed.data.hideLensTypesInEntries ? parsed.data.allowedLensTypeIds ?? [] : [],
+      assetNameIds: client.showAssetNamesInEntries && !parsed.data.hideAssetNamesInEntries ? parsed.data.allowedAssetNameIds ?? [] : [],
+      newsletterIds: client.showNewslettersInEntries && !parsed.data.hideNewslettersInEntries ? parsed.data.allowedNewsletterIds ?? [] : [],
+    });
 
     const isAdminUser = user.userType === "ADMIN";
     const projectCode = await generateProjectCode(client.id);
@@ -428,6 +532,30 @@ export async function createProjectAction(
         hideNewslettersInEntries: client.showNewslettersInEntries
           ? Boolean(parsed.data.hideNewslettersInEntries)
           : false,
+        requireCountriesInTimeEntries: client.showCountriesInTimeEntries && !parsed.data.hideCountriesInEntries
+          ? Boolean(parsed.data.requireCountriesInTimeEntries)
+          : false,
+        requireMoviesInTimeEntries: client.showMoviesInEntries && !parsed.data.hideMoviesInEntries
+          ? Boolean(parsed.data.requireMoviesInTimeEntries)
+          : false,
+        requireAssetTypesInTimeEntries: client.showAssetTypesInEntries && !parsed.data.hideAssetTypesInEntries
+          ? Boolean(parsed.data.requireAssetTypesInTimeEntries)
+          : false,
+        requireLensTypesInTimeEntries: client.showLensTypesInEntries && !parsed.data.hideLensTypesInEntries
+          ? Boolean(parsed.data.requireLensTypesInTimeEntries)
+          : false,
+        requireAssetNamesInTimeEntries: client.showAssetNamesInEntries && !parsed.data.hideAssetNamesInEntries
+          ? Boolean(parsed.data.requireAssetNamesInTimeEntries)
+          : false,
+        requireNewslettersInTimeEntries: client.showNewslettersInEntries && !parsed.data.hideNewslettersInEntries
+          ? Boolean(parsed.data.requireNewslettersInTimeEntries)
+          : false,
+        allowedCountryIdsJson: client.showCountriesInTimeEntries && !parsed.data.hideCountriesInEntries ? idsToJson(restrictions.countryIds) : null,
+        allowedMovieIdsJson: client.showMoviesInEntries && !parsed.data.hideMoviesInEntries ? idsToJson(restrictions.movieIds) : null,
+        allowedAssetTypeIdsJson: client.showAssetTypesInEntries && !parsed.data.hideAssetTypesInEntries ? idsToJson(restrictions.assetTypeIds) : null,
+        allowedLensTypeIdsJson: client.showLensTypesInEntries && !parsed.data.hideLensTypesInEntries ? idsToJson(restrictions.lensTypeIds) : null,
+        allowedAssetNameIdsJson: client.showAssetNamesInEntries && !parsed.data.hideAssetNamesInEntries ? idsToJson(restrictions.assetNameIds) : null,
+        allowedNewsletterIdsJson: client.showNewslettersInEntries && !parsed.data.hideNewslettersInEntries ? idsToJson(restrictions.newsletterIds) : null,
         addToBilling: Boolean(parsed.data.addToBilling),
       },
     });
@@ -537,6 +665,24 @@ export async function updateProjectAction(
         formData.get("hideAssetNamesInEntries") ?? undefined,
       hideNewslettersInEntries:
         formData.get("hideNewslettersInEntries") ?? undefined,
+      requireCountriesInTimeEntries:
+        formData.get("requireCountriesInTimeEntries") ?? undefined,
+      requireMoviesInTimeEntries:
+        formData.get("requireMoviesInTimeEntries") ?? undefined,
+      requireAssetTypesInTimeEntries:
+        formData.get("requireAssetTypesInTimeEntries") ?? undefined,
+      requireLensTypesInTimeEntries:
+        formData.get("requireLensTypesInTimeEntries") ?? undefined,
+      requireAssetNamesInTimeEntries:
+        formData.get("requireAssetNamesInTimeEntries") ?? undefined,
+      requireNewslettersInTimeEntries:
+        formData.get("requireNewslettersInTimeEntries") ?? undefined,
+      allowedCountryIds: getFormIds(formData, "allowedCountryIds"),
+      allowedMovieIds: getFormIds(formData, "allowedMovieIds"),
+      allowedAssetTypeIds: getFormIds(formData, "allowedAssetTypeIds"),
+      allowedLensTypeIds: getFormIds(formData, "allowedLensTypeIds"),
+      allowedAssetNameIds: getFormIds(formData, "allowedAssetNameIds"),
+      allowedNewsletterIds: getFormIds(formData, "allowedNewsletterIds"),
       addToBilling: formData.get("addToBilling") ?? undefined,
     });
 
@@ -600,6 +746,15 @@ export async function updateProjectAction(
             "One or more selected contact persons do not belong to selected client.",
         };
     }
+
+    const restrictions = await getValidProjectRestrictionIds(client.id, {
+      countryIds: client.showCountriesInTimeEntries && !parsed.data.hideCountriesInEntries ? parsed.data.allowedCountryIds ?? [] : [],
+      movieIds: client.showMoviesInEntries && !parsed.data.hideMoviesInEntries ? parsed.data.allowedMovieIds ?? [] : [],
+      assetTypeIds: client.showAssetTypesInEntries && !parsed.data.hideAssetTypesInEntries ? parsed.data.allowedAssetTypeIds ?? [] : [],
+      lensTypeIds: client.showLensTypesInEntries && !parsed.data.hideLensTypesInEntries ? parsed.data.allowedLensTypeIds ?? [] : [],
+      assetNameIds: client.showAssetNamesInEntries && !parsed.data.hideAssetNamesInEntries ? parsed.data.allowedAssetNameIds ?? [] : [],
+      newsletterIds: client.showNewslettersInEntries && !parsed.data.hideNewslettersInEntries ? parsed.data.allowedNewsletterIds ?? [] : [],
+    });
 
     const isAdminUser = user.userType === "ADMIN";
 
@@ -701,6 +856,30 @@ export async function updateProjectAction(
         hideNewslettersInEntries: client.showNewslettersInEntries
           ? Boolean(parsed.data.hideNewslettersInEntries)
           : false,
+        requireCountriesInTimeEntries: client.showCountriesInTimeEntries && !parsed.data.hideCountriesInEntries
+          ? Boolean(parsed.data.requireCountriesInTimeEntries)
+          : false,
+        requireMoviesInTimeEntries: client.showMoviesInEntries && !parsed.data.hideMoviesInEntries
+          ? Boolean(parsed.data.requireMoviesInTimeEntries)
+          : false,
+        requireAssetTypesInTimeEntries: client.showAssetTypesInEntries && !parsed.data.hideAssetTypesInEntries
+          ? Boolean(parsed.data.requireAssetTypesInTimeEntries)
+          : false,
+        requireLensTypesInTimeEntries: client.showLensTypesInEntries && !parsed.data.hideLensTypesInEntries
+          ? Boolean(parsed.data.requireLensTypesInTimeEntries)
+          : false,
+        requireAssetNamesInTimeEntries: client.showAssetNamesInEntries && !parsed.data.hideAssetNamesInEntries
+          ? Boolean(parsed.data.requireAssetNamesInTimeEntries)
+          : false,
+        requireNewslettersInTimeEntries: client.showNewslettersInEntries && !parsed.data.hideNewslettersInEntries
+          ? Boolean(parsed.data.requireNewslettersInTimeEntries)
+          : false,
+        allowedCountryIdsJson: client.showCountriesInTimeEntries && !parsed.data.hideCountriesInEntries ? idsToJson(restrictions.countryIds) : null,
+        allowedMovieIdsJson: client.showMoviesInEntries && !parsed.data.hideMoviesInEntries ? idsToJson(restrictions.movieIds) : null,
+        allowedAssetTypeIdsJson: client.showAssetTypesInEntries && !parsed.data.hideAssetTypesInEntries ? idsToJson(restrictions.assetTypeIds) : null,
+        allowedLensTypeIdsJson: client.showLensTypesInEntries && !parsed.data.hideLensTypesInEntries ? idsToJson(restrictions.lensTypeIds) : null,
+        allowedAssetNameIdsJson: client.showAssetNamesInEntries && !parsed.data.hideAssetNamesInEntries ? idsToJson(restrictions.assetNameIds) : null,
+        allowedNewsletterIdsJson: client.showNewslettersInEntries && !parsed.data.hideNewslettersInEntries ? idsToJson(restrictions.newsletterIds) : null,
         addToBilling: Boolean(parsed.data.addToBilling),
       },
     });

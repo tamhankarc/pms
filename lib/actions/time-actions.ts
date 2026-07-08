@@ -49,6 +49,27 @@ function getTodayInIndiaDateString() {
   }).format(new Date());
 }
 
+function parseAllowedIds(value?: string | null) {
+  if (!value) return [] as string[];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+  } catch {
+    return [] as string[];
+  }
+}
+
+function isAllowedByProjectRestriction(value: string | undefined, allowedIds: string[]) {
+  return !value || allowedIds.length === 0 || allowedIds.includes(value);
+}
+
+function requireSingleAllowedValue(value: string | undefined, allowedIds: string[], label: string) {
+  if (allowedIds.length === 1 && !value) {
+    return `${label} is required because the selected project allows only one ${label.toLowerCase()} value.`;
+  }
+  return null;
+}
+
 function isFutureWorkDate(workDate: string) {
   return workDate > getTodayInIndiaDateString();
 }
@@ -400,10 +421,57 @@ async function validateClientFieldRequirements(
     !project.hideNewslettersInEntries &&
     !subProject?.hideNewslettersInEntries;
 
-  if (countryEnabled && !countryId) {
+  const countryRequired = countryEnabled && project.requireCountriesInTimeEntries;
+  const assetNameRequired = assetNameEnabled && project.requireAssetNamesInTimeEntries;
+  const movieRequired =
+    movieEnabled && (project.requireMoviesInTimeEntries || assetNameRequired);
+  const assetTypeRequired =
+    assetTypeEnabled && project.requireAssetTypesInTimeEntries;
+  const lensTypeRequired = lensTypeEnabled && project.requireLensTypesInTimeEntries;
+  const newsletterRequired =
+    newsletterEnabled && project.requireNewslettersInTimeEntries;
+
+  if (countryRequired && !countryId) {
     return {
       valid: false as const,
-      error: "Country is required for the selected client.",
+      error: "Country is required for the selected project.",
+    };
+  }
+
+  if (movieRequired && !movieId) {
+    return {
+      valid: false as const,
+      error: assetNameRequired
+        ? "Title is required before selecting the required asset name."
+        : "Title is required for the selected project.",
+    };
+  }
+
+  if (assetTypeRequired && !assetTypeId) {
+    return {
+      valid: false as const,
+      error: "Asset Type is required for the selected project.",
+    };
+  }
+
+  if (lensTypeRequired && !lensTypeId) {
+    return {
+      valid: false as const,
+      error: "Lens Type is required for the selected project.",
+    };
+  }
+
+  if (assetNameRequired && !assetNameId) {
+    return {
+      valid: false as const,
+      error: "Asset Name is required for the selected project.",
+    };
+  }
+
+  if (newsletterRequired && !newsletterId) {
+    return {
+      valid: false as const,
+      error: "Newsletter is required for the selected project.",
     };
   }
 
@@ -461,6 +529,43 @@ async function validateClientFieldRequirements(
       valid: false as const,
       error: "Language is not enabled for the selected client.",
     };
+  }
+
+  const allowedCountryIds = parseAllowedIds(project.allowedCountryIdsJson);
+  const allowedMovieIds = parseAllowedIds(project.allowedMovieIdsJson);
+  const allowedAssetTypeIds = parseAllowedIds(project.allowedAssetTypeIdsJson);
+  const allowedLensTypeIds = parseAllowedIds(project.allowedLensTypeIdsJson);
+  const allowedAssetNameIds = parseAllowedIds(project.allowedAssetNameIdsJson);
+  const allowedNewsletterIds = parseAllowedIds(project.allowedNewsletterIdsJson);
+
+  const singleRequiredError =
+    (countryEnabled ? requireSingleAllowedValue(countryId, allowedCountryIds, "Country") : null) ??
+    (movieEnabled ? requireSingleAllowedValue(movieId, allowedMovieIds, "Title") : null) ??
+    (assetTypeEnabled ? requireSingleAllowedValue(assetTypeId, allowedAssetTypeIds, "Asset Type") : null) ??
+    (lensTypeEnabled ? requireSingleAllowedValue(lensTypeId, allowedLensTypeIds, "Lens Type") : null) ??
+    (assetNameEnabled ? requireSingleAllowedValue(assetNameId, allowedAssetNameIds, "Asset Name") : null) ??
+    (newsletterEnabled ? requireSingleAllowedValue(newsletterId, allowedNewsletterIds, "Newsletter") : null);
+  if (singleRequiredError) {
+    return { valid: false as const, error: singleRequiredError };
+  }
+
+  if (!isAllowedByProjectRestriction(countryId, allowedCountryIds)) {
+    return { valid: false as const, error: "Selected country is not allowed for the selected project." };
+  }
+  if (!isAllowedByProjectRestriction(movieId, allowedMovieIds)) {
+    return { valid: false as const, error: "Selected title is not allowed for the selected project." };
+  }
+  if (!isAllowedByProjectRestriction(assetTypeId, allowedAssetTypeIds)) {
+    return { valid: false as const, error: "Selected asset type is not allowed for the selected project." };
+  }
+  if (!isAllowedByProjectRestriction(lensTypeId, allowedLensTypeIds)) {
+    return { valid: false as const, error: "Selected Lens Type is not allowed for the selected project." };
+  }
+  if (!isAllowedByProjectRestriction(assetNameId, allowedAssetNameIds)) {
+    return { valid: false as const, error: "Selected asset name is not allowed for the selected project." };
+  }
+  if (!isAllowedByProjectRestriction(newsletterId, allowedNewsletterIds)) {
+    return { valid: false as const, error: "Selected newsletter is not allowed for the selected project." };
   }
 
   if (movieId) {

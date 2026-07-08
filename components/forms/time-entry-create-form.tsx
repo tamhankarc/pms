@@ -25,6 +25,18 @@ type TimeEntryProjectOption = {
   hideAssetNamesInEntries: boolean;
   showNewslettersInEntries: boolean;
   hideNewslettersInEntries: boolean;
+  requireCountriesInTimeEntries: boolean;
+  requireMoviesInTimeEntries: boolean;
+  requireAssetTypesInTimeEntries: boolean;
+  requireLensTypesInTimeEntries: boolean;
+  requireAssetNamesInTimeEntries: boolean;
+  requireNewslettersInTimeEntries: boolean;
+  allowedCountryIdsJson?: string | null;
+  allowedMovieIdsJson?: string | null;
+  allowedAssetTypeIdsJson?: string | null;
+  allowedLensTypeIdsJson?: string | null;
+  allowedAssetNameIdsJson?: string | null;
+  allowedNewsletterIdsJson?: string | null;
   showLanguagesInEntries: boolean;
   assignedUserIds: string[];
 };
@@ -85,6 +97,26 @@ type LanguageOption = {
 };
 
 const initialState: TimeEntryFormState = {};
+
+function parseAllowedIds(value?: string | null) {
+  if (!value) return [] as string[];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+  } catch {
+    return [] as string[];
+  }
+}
+
+function filterByAllowedIds<T extends { id: string }>(items: T[], allowedIds: string[]) {
+  if (!allowedIds.length) return items;
+  const allowed = new Set(allowedIds);
+  return items.filter((item) => allowed.has(item.id));
+}
+
+function getOnlyOptionId<T extends { id: string }>(items: T[]) {
+  return items.length === 1 ? items[0].id : "";
+}
 
 function getTodayDateString() {
   const now = new Date();
@@ -154,6 +186,11 @@ export function TimeEntryCreateForm({
   );
   const [selectedSubProjectId, setSelectedSubProjectId] = useState("");
   const [selectedMovieId, setSelectedMovieId] = useState("");
+  const [selectedCountryId, setSelectedCountryId] = useState("");
+  const [selectedAssetTypeId, setSelectedAssetTypeId] = useState("");
+  const [selectedLensTypeId, setSelectedLensTypeId] = useState("");
+  const [selectedAssetNameId, setSelectedAssetNameId] = useState("");
+  const [selectedNewsletterId, setSelectedNewsletterId] = useState("");
 
   const bypassAssignmentForSelectedEmployee = Boolean(
     allowUnassignedSubProjects &&
@@ -233,36 +270,79 @@ export function TimeEntryCreateForm({
       setSelectedProjectId(nextProjectId);
       setSelectedSubProjectId("");
       setSelectedMovieId("");
+      setSelectedCountryId("");
+      setSelectedAssetTypeId("");
+      setSelectedLensTypeId("");
+      setSelectedAssetNameId("");
+      setSelectedNewsletterId("");
     }
   }, [filteredProjects, selectedProjectId]);
 
+  const activeProjectForRestrictions = projects.find(
+    (project) => project.id === selectedProjectId,
+  );
+  const allowedCountryIds = useMemo(
+    () => parseAllowedIds(activeProjectForRestrictions?.allowedCountryIdsJson),
+    [activeProjectForRestrictions?.allowedCountryIdsJson],
+  );
+  const allowedMovieIds = useMemo(
+    () => parseAllowedIds(activeProjectForRestrictions?.allowedMovieIdsJson),
+    [activeProjectForRestrictions?.allowedMovieIdsJson],
+  );
+  const allowedAssetTypeIds = useMemo(
+    () => parseAllowedIds(activeProjectForRestrictions?.allowedAssetTypeIdsJson),
+    [activeProjectForRestrictions?.allowedAssetTypeIdsJson],
+  );
+  const allowedLensTypeIds = useMemo(
+    () => parseAllowedIds(activeProjectForRestrictions?.allowedLensTypeIdsJson),
+    [activeProjectForRestrictions?.allowedLensTypeIdsJson],
+  );
+  const allowedAssetNameIds = useMemo(
+    () => parseAllowedIds(activeProjectForRestrictions?.allowedAssetNameIdsJson),
+    [activeProjectForRestrictions?.allowedAssetNameIdsJson],
+  );
+  const allowedNewsletterIds = useMemo(
+    () => parseAllowedIds(activeProjectForRestrictions?.allowedNewsletterIdsJson),
+    [activeProjectForRestrictions?.allowedNewsletterIdsJson],
+  );
+
+  const filteredCountries = useMemo(
+    () => filterByAllowedIds(countries, allowedCountryIds),
+    [countries, allowedCountryIds],
+  );
+
   const filteredTitles = useMemo(
-    () => movies.filter((movie) => movie.clientId === selectedClientId),
-    [movies, selectedClientId],
+    () => filterByAllowedIds(movies.filter((movie) => movie.clientId === selectedClientId), allowedMovieIds),
+    [movies, selectedClientId, allowedMovieIds],
   );
 
   const filteredAssetTypes = useMemo(
     () =>
-      assetTypes.filter((assetType) => assetType.clientId === selectedClientId),
-    [assetTypes, selectedClientId],
+      filterByAllowedIds(assetTypes.filter((assetType) => assetType.clientId === selectedClientId), allowedAssetTypeIds),
+    [assetTypes, selectedClientId, allowedAssetTypeIds],
   );
 
   const filteredAssetNames = useMemo(
     () =>
-      assetNames.filter(
+      filterByAllowedIds(assetNames.filter(
         (assetName) =>
           assetName.clientId === selectedClientId &&
           assetName.movieId === selectedMovieId,
-      ),
-    [assetNames, selectedClientId, selectedMovieId],
+      ), allowedAssetNameIds),
+    [assetNames, selectedClientId, selectedMovieId, allowedAssetNameIds],
   );
 
   const filteredNewsletters = useMemo(
     () =>
-      newsletters.filter(
+      filterByAllowedIds(newsletters.filter(
         (newsletter) => newsletter.clientId === selectedClientId,
-      ),
-    [newsletters, selectedClientId],
+      ), allowedNewsletterIds),
+    [newsletters, selectedClientId, allowedNewsletterIds],
+  );
+
+  const filteredLensTypes = useMemo(
+    () => filterByAllowedIds(lensTypes, allowedLensTypeIds),
+    [lensTypes, allowedLensTypeIds],
   );
 
   const showEmployeeField = assignableEmployees.length > 1;
@@ -303,8 +383,68 @@ export function TimeEntryCreateForm({
     !selectedSubProject?.hideNewslettersInEntries,
   );
   const showLanguageField = Boolean(selectedProject?.showLanguagesInEntries);
-  const countryRequired = showCountryField;
+  const assetNameRequired = Boolean(
+    showAssetNameField && selectedProject?.requireAssetNamesInTimeEntries,
+  );
+  const countryRequired = Boolean(
+    showCountryField && selectedProject?.requireCountriesInTimeEntries,
+  );
+  const titleRequired = Boolean(
+    showTitleField &&
+      (selectedProject?.requireMoviesInTimeEntries || assetNameRequired),
+  );
+  const assetTypeRequired = Boolean(
+    showAssetTypeField && selectedProject?.requireAssetTypesInTimeEntries,
+  );
+  const lensTypeRequired = Boolean(
+    showLensTypeField && selectedProject?.requireLensTypesInTimeEntries,
+  );
+  const newsletterRequired = Boolean(
+    showNewsletterField && selectedProject?.requireNewslettersInTimeEntries,
+  );
   const languageRequired = showLanguageField;
+  const singleAllowedAssetName = allowedAssetNameIds.length === 1
+    ? assetNames.find((assetName) => assetName.id === allowedAssetNameIds[0])
+    : undefined;
+  const countryLocked = showCountryField && filteredCountries.length === 1;
+  const titleLocked = Boolean(
+    showTitleField && (filteredTitles.length === 1 || singleAllowedAssetName?.movieId),
+  );
+  const assetTypeLocked = showAssetTypeField && filteredAssetTypes.length === 1;
+  const lensTypeLocked = showLensTypeField && filteredLensTypes.length === 1;
+  const assetNameLocked = showAssetNameField && filteredAssetNames.length === 1;
+  const newsletterLocked = showNewsletterField && filteredNewsletters.length === 1;
+
+  useEffect(() => {
+    const only = getOnlyOptionId(filteredCountries);
+    if (countryLocked && selectedCountryId !== only) setSelectedCountryId(only);
+    if (!countryLocked && selectedCountryId && !filteredCountries.some((country) => country.id === selectedCountryId)) setSelectedCountryId("");
+  }, [countryLocked, filteredCountries, selectedCountryId]);
+  useEffect(() => {
+    const only = singleAllowedAssetName?.movieId ?? getOnlyOptionId(filteredTitles);
+    if (titleLocked && only && selectedMovieId !== only) setSelectedMovieId(only);
+    if (!titleLocked && selectedMovieId && !filteredTitles.some((movie) => movie.id === selectedMovieId)) setSelectedMovieId("");
+  }, [titleLocked, filteredTitles, selectedMovieId, singleAllowedAssetName?.movieId]);
+  useEffect(() => {
+    const only = getOnlyOptionId(filteredAssetTypes);
+    if (assetTypeLocked && selectedAssetTypeId !== only) setSelectedAssetTypeId(only);
+    if (!assetTypeLocked && selectedAssetTypeId && !filteredAssetTypes.some((assetType) => assetType.id === selectedAssetTypeId)) setSelectedAssetTypeId("");
+  }, [assetTypeLocked, filteredAssetTypes, selectedAssetTypeId]);
+  useEffect(() => {
+    const only = getOnlyOptionId(filteredLensTypes);
+    if (lensTypeLocked && selectedLensTypeId !== only) setSelectedLensTypeId(only);
+    if (!lensTypeLocked && selectedLensTypeId && !filteredLensTypes.some((lensType) => lensType.id === selectedLensTypeId)) setSelectedLensTypeId("");
+  }, [lensTypeLocked, filteredLensTypes, selectedLensTypeId]);
+  useEffect(() => {
+    const only = getOnlyOptionId(filteredAssetNames);
+    if (assetNameLocked && selectedAssetNameId !== only) setSelectedAssetNameId(only);
+    if (!assetNameLocked && selectedAssetNameId && !filteredAssetNames.some((assetName) => assetName.id === selectedAssetNameId)) setSelectedAssetNameId("");
+  }, [assetNameLocked, filteredAssetNames, selectedAssetNameId]);
+  useEffect(() => {
+    const only = getOnlyOptionId(filteredNewsletters);
+    if (newsletterLocked && selectedNewsletterId !== only) setSelectedNewsletterId(only);
+    if (!newsletterLocked && selectedNewsletterId && !filteredNewsletters.some((newsletter) => newsletter.id === selectedNewsletterId)) setSelectedNewsletterId("");
+  }, [newsletterLocked, filteredNewsletters, selectedNewsletterId]);
 
   return (
     <form action={formAction} className="card p-6">
@@ -363,6 +503,11 @@ export function TimeEntryCreateForm({
               setSelectedProjectId(nextProjectId);
               setSelectedSubProjectId("");
               setSelectedMovieId("");
+              setSelectedCountryId("");
+              setSelectedAssetTypeId("");
+              setSelectedLensTypeId("");
+              setSelectedAssetNameId("");
+              setSelectedNewsletterId("");
             }}
             options={clientOptions.map((client) => ({
               value: client.id,
@@ -387,6 +532,11 @@ export function TimeEntryCreateForm({
               setSelectedProjectId(nextValue);
               setSelectedSubProjectId("");
               setSelectedMovieId("");
+              setSelectedCountryId("");
+              setSelectedAssetTypeId("");
+              setSelectedLensTypeId("");
+              setSelectedAssetNameId("");
+              setSelectedNewsletterId("");
             }}
             options={filteredProjects.map((project) => ({
               value: project.id,
@@ -428,10 +578,11 @@ export function TimeEntryCreateForm({
             <SearchableCombobox
               id="countryId"
               name="countryId"
-              defaultValue=""
+              value={selectedCountryId}
+              onValueChange={setSelectedCountryId}
               options={[
                 { value: "", label: "Select country" },
-                ...countries.map((country) => ({
+                ...filteredCountries.map((country) => ({
                   value: country.id,
                   label: country.name,
                 })),
@@ -440,13 +591,14 @@ export function TimeEntryCreateForm({
               searchPlaceholder="Search countries..."
               emptyLabel="No countries found."
               required={countryRequired}
+              disabled={countryLocked}
             />
           </div>
         ) : null}
 
         {showTitleField ? (
           <div>
-            <FormLabel htmlFor="movieId">Title</FormLabel>
+            <FormLabel htmlFor="movieId" required={titleRequired}>Title</FormLabel>
             <SearchableCombobox
               id="movieId"
               name="movieId"
@@ -462,17 +614,20 @@ export function TimeEntryCreateForm({
               placeholder="No specific title"
               searchPlaceholder="Search titles..."
               emptyLabel="No titles found."
+              required={titleRequired}
+              disabled={titleLocked}
             />
           </div>
         ) : null}
 
         {showNewsletterField ? (
           <div>
-            <FormLabel htmlFor="newsletterId">Newsletter</FormLabel>
+            <FormLabel htmlFor="newsletterId" required={newsletterRequired}>Newsletter</FormLabel>
             <SearchableCombobox
               id="newsletterId"
               name="newsletterId"
-              defaultValue=""
+              value={selectedNewsletterId}
+              onValueChange={setSelectedNewsletterId}
               options={[
                 { value: "", label: "No specific newsletter" },
                 ...filteredNewsletters.map((newsletter) => ({
@@ -483,18 +638,21 @@ export function TimeEntryCreateForm({
               placeholder="No specific newsletter"
               searchPlaceholder="Search newsletters..."
               emptyLabel="No newsletters found."
+              required={newsletterRequired}
+              disabled={newsletterLocked}
             />
           </div>
         ) : null}
 
         {showAssetNameField ? (
           <div>
-            <FormLabel htmlFor="assetNameId">Asset Name</FormLabel>
+            <FormLabel htmlFor="assetNameId" required={assetNameRequired}>Asset Name</FormLabel>
             <SearchableCombobox
               key={selectedMovieId || "no-movie"}
               id="assetNameId"
               name="assetNameId"
-              defaultValue=""
+              value={selectedAssetNameId}
+              onValueChange={setSelectedAssetNameId}
               options={[
                 {
                   value: "",
@@ -518,18 +676,20 @@ export function TimeEntryCreateForm({
                   ? "No asset names found for selected title."
                   : "Select a title first."
               }
-              disabled={!selectedMovieId}
+              disabled={!selectedMovieId || assetNameLocked}
+              required={assetNameRequired}
             />
           </div>
         ) : null}
 
         {showAssetTypeField ? (
           <div>
-            <FormLabel htmlFor="assetTypeId">Asset Type</FormLabel>
+            <FormLabel htmlFor="assetTypeId" required={assetTypeRequired}>Asset Type</FormLabel>
             <SearchableCombobox
               id="assetTypeId"
               name="assetTypeId"
-              defaultValue={""}
+              value={selectedAssetTypeId}
+              onValueChange={setSelectedAssetTypeId}
               options={[
                 { value: "", label: "No specific asset type" },
                 ...filteredAssetTypes.map((assetType) => ({
@@ -540,20 +700,23 @@ export function TimeEntryCreateForm({
               placeholder="No specific asset type"
               searchPlaceholder="Search asset types..."
               emptyLabel="No asset types found."
+              required={assetTypeRequired}
+              disabled={assetTypeLocked}
             />
           </div>
         ) : null}
 
         {showLensTypeField ? (
           <div>
-            <FormLabel htmlFor="lensTypeId">Lens Type</FormLabel>
+            <FormLabel htmlFor="lensTypeId" required={lensTypeRequired}>Lens Type</FormLabel>
             <SearchableCombobox
               id="lensTypeId"
               name="lensTypeId"
-              defaultValue={""}
+              value={selectedLensTypeId}
+              onValueChange={setSelectedLensTypeId}
               options={[
                 { value: "", label: "No specific lens type" },
-                ...lensTypes.map((lensType) => ({
+                ...filteredLensTypes.map((lensType) => ({
                   value: lensType.id,
                   label: lensType.name,
                 })),
@@ -561,6 +724,8 @@ export function TimeEntryCreateForm({
               placeholder="No specific lens type"
               searchPlaceholder="Search lens types..."
               emptyLabel="No lens types found."
+              required={lensTypeRequired}
+              disabled={lensTypeLocked}
             />
           </div>
         ) : null}

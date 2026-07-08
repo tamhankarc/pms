@@ -17,6 +17,13 @@ type ProjectOption = {
   clientId: string;
 };
 
+type SubProjectOption = {
+  id: string;
+  name: string;
+  projectId: string;
+  clientId: string;
+};
+
 type UserOption = {
   id: string;
   name: string;
@@ -28,8 +35,10 @@ type Props = {
   selectedToDate: string;
   selectedClientId: string;
   selectedProjectId: string;
+  selectedSubProjectId?: string;
   clientOptions: ClientOption[];
   projectOptions: ProjectOption[];
+  subProjectOptions?: SubProjectOption[];
   selectedUserId?: string;
   userOptions?: UserOption[];
   showTextSearch?: boolean;
@@ -44,8 +53,10 @@ export function ListReportFilters({
   selectedToDate,
   selectedClientId,
   selectedProjectId,
+  selectedSubProjectId = "all",
   clientOptions,
   projectOptions,
+  subProjectOptions = [],
   selectedUserId = "all",
   userOptions = [],
   showTextSearch = false,
@@ -55,6 +66,7 @@ export function ListReportFilters({
 }: Props) {
   const [clientId, setClientId] = useState(selectedClientId);
   const [projectId, setProjectId] = useState(selectedProjectId);
+  const [subProjectId, setSubProjectId] = useState(selectedSubProjectId);
 
   const filteredProjects = useMemo(
     () => projectOptions.filter((project) => (clientId === "all" ? true : project.clientId === clientId)),
@@ -63,6 +75,22 @@ export function ListReportFilters({
 
   const effectiveProjectId =
     projectId === "all" || filteredProjects.some((project) => project.id === projectId) ? projectId : "all";
+
+  const filteredSubProjects = useMemo(
+    () =>
+      subProjectOptions.filter((subProject) => {
+        const matchesClient = clientId === "all" ? true : subProject.clientId === clientId;
+        const matchesProject =
+          effectiveProjectId === "all" ? true : subProject.projectId === effectiveProjectId;
+        return matchesClient && matchesProject;
+      }),
+    [subProjectOptions, clientId, effectiveProjectId],
+  );
+
+  const effectiveSubProjectId =
+    subProjectId === "all" || filteredSubProjects.some((subProject) => subProject.id === subProjectId)
+      ? subProjectId
+      : "all";
 
   return (
     <AutoSubmitFilterForm method="get" className="flex flex-wrap items-end gap-3">
@@ -127,6 +155,10 @@ export function ListReportFilters({
             if (currentProject && value !== "all" && currentProject.clientId !== value) {
               setProjectId("all");
             }
+            const currentSubProject = subProjectOptions.find((subProject) => subProject.id === subProjectId);
+            if (currentSubProject && value !== "all" && currentSubProject.clientId !== value) {
+              setSubProjectId("all");
+            }
           }}
           options={[
             { value: "all", label: "All clients" },
@@ -148,6 +180,10 @@ export function ListReportFilters({
           value={effectiveProjectId}
           onValueChange={(value) => {
             setProjectId(value);
+            const currentSubProject = subProjectOptions.find((subProject) => subProject.id === subProjectId);
+            if (currentSubProject && value !== "all" && currentSubProject.projectId !== value) {
+              setSubProjectId("all");
+            }
             if (value === "all") return;
             const nextProject = projectOptions.find((project) => project.id === value);
             if (nextProject && clientId !== "all" && nextProject.clientId !== clientId) {
@@ -163,6 +199,28 @@ export function ListReportFilters({
           emptyLabel="No projects found."
         />
       </div>
+
+
+      {subProjectOptions.length ? (
+        <div className="w-full min-w-0 sm:w-[260px] lg:w-[300px]">
+          <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500" htmlFor={`${basePath}-subProjectId`}>
+            Sub-Project
+          </label>
+          <SearchableCombobox
+            id={`${basePath}-subProjectId`}
+            name="subProjectId"
+            value={effectiveSubProjectId}
+            onValueChange={setSubProjectId}
+            options={[
+              { value: "all", label: "All sub-projects" },
+              ...filteredSubProjects.map((subProject) => ({ value: subProject.id, label: subProject.name })),
+            ]}
+            placeholder="All sub-projects"
+            searchPlaceholder="Search sub-projects..."
+            emptyLabel="No sub-projects found."
+          />
+        </div>
+      ) : null}
 
       {userOptions.length ? (
         <div className="w-full min-w-0 sm:w-[260px] lg:w-[300px]">

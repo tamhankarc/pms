@@ -8,7 +8,18 @@ export default async function NewProjectPage() {
   const currentUser = await requireUser();
   if (!canCreateOrEditProject(currentUser)) redirect("/dashboard");
 
-  const [clients, projectTypes, filmikResourceTypes, contactPersons] = await Promise.all([
+  const [
+    clients,
+    projectTypes,
+    filmikResourceTypes,
+    contactPersons,
+    countries,
+    movies,
+    assetTypes,
+    lensTypes,
+    assetNames,
+    newsletters,
+  ] = await Promise.all([
     db.client.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
@@ -35,6 +46,12 @@ export default async function NewProjectPage() {
       orderBy: { name: "asc" },
     }),
     db.contactPerson.findMany({ where: { client: { isActive: true } }, orderBy: [{ client: { name: "asc" } }, { name: "asc" }], select: { id: true, clientId: true, name: true, email: true } }),
+    db.country.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    db.movie.findMany({ where: { isActive: true }, select: { id: true, clientId: true, title: true }, orderBy: { title: "asc" } }),
+    db.assetType.findMany({ where: { isActive: true }, select: { id: true, clientId: true, name: true }, orderBy: { name: "asc" } }),
+    db.lensType.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    db.assetName.findMany({ where: { isActive: true }, select: { id: true, clientId: true, movieId: true, name: true }, orderBy: { name: "asc" } }),
+    db.newsletter.findMany({ where: { isActive: true }, select: { id: true, clientId: true, name: true }, orderBy: { name: "asc" } }),
   ]);
   return (
     <div className="space-y-6">
@@ -47,6 +64,12 @@ export default async function NewProjectPage() {
         projectTypes={projectTypes}
         filmikResourceTypes={filmikResourceTypes}
         contactPersons={contactPersons}
+        countries={countries}
+        movies={movies}
+        assetTypes={assetTypes}
+        lensTypes={lensTypes}
+        assetNames={assetNames}
+        newsletters={newsletters}
         isAdmin={currentUser.userType === "ADMIN"}
       />
     </div>

@@ -677,6 +677,18 @@ model Project {
   hideLensTypesInEntries  Boolean       @default(false)
   hideAssetNamesInEntries Boolean       @default(false)
   hideNewslettersInEntries Boolean      @default(false)
+  requireCountriesInTimeEntries  Boolean @default(false)
+  requireMoviesInTimeEntries     Boolean @default(false)
+  requireAssetTypesInTimeEntries Boolean @default(false)
+  requireLensTypesInTimeEntries  Boolean @default(false)
+  requireAssetNamesInTimeEntries Boolean @default(false)
+  requireNewslettersInTimeEntries Boolean @default(false)
+  allowedCountryIdsJson          String? @db.Text
+  allowedMovieIdsJson            String? @db.Text
+  allowedAssetTypeIdsJson        String? @db.Text
+  allowedLensTypeIdsJson         String? @db.Text
+  allowedAssetNameIdsJson        String? @db.Text
+  allowedNewsletterIdsJson       String? @db.Text
   addToBilling            Boolean       @default(false)
   billingCycle           BillingCycle  @default(ONE_TIME)
   warnerProjectType      WarnerProjectType @default(OTHER)

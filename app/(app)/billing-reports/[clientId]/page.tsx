@@ -1535,7 +1535,7 @@ function WarnerDomesticTable({
                     <div className="font-medium text-slate-900">
                       {row.label}
                     </div>
-                    {row.meta?.startsWith("Countries:") ? (
+                    {row.meta ? (
                       <div className="mt-1 text-xs text-slate-500">
                         {row.meta}
                       </div>

@@ -25,8 +25,17 @@ export default async function ProjectDetailPage({
   });
   if (!project) notFound();
 
-  const [projectTypes, filmikResourceTypesRaw, contactPersons] =
-    await Promise.all([
+  const [
+    projectTypes,
+    filmikResourceTypesRaw,
+    contactPersons,
+    countries,
+    movies,
+    assetTypes,
+    lensTypes,
+    assetNames,
+    newsletters,
+  ] = await Promise.all([
       db.projectType.findMany({
         where: { clientId: project.clientId, isActive: true },
         orderBy: { name: "asc" },
@@ -58,6 +67,12 @@ export default async function ProjectDetailPage({
         orderBy: { name: "asc" },
         select: { id: true, clientId: true, name: true, email: true },
       }),
+      db.country.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+      db.movie.findMany({ where: { clientId: project.clientId, isActive: true }, select: { id: true, clientId: true, title: true }, orderBy: { title: "asc" } }),
+      db.assetType.findMany({ where: { clientId: project.clientId, isActive: true }, select: { id: true, clientId: true, name: true }, orderBy: { name: "asc" } }),
+      db.lensType.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+      db.assetName.findMany({ where: { clientId: project.clientId, isActive: true }, select: { id: true, clientId: true, movieId: true, name: true }, orderBy: { name: "asc" } }),
+      db.newsletter.findMany({ where: { clientId: project.clientId, isActive: true }, select: { id: true, clientId: true, name: true }, orderBy: { name: "asc" } }),
     ]);
   const [projectSpecialTypes] = await db.$queryRaw<
     Array<{
@@ -103,6 +118,12 @@ export default async function ProjectDetailPage({
         }
         filmikResourceTypes={filmikResourceTypes}
         contactPersons={contactPersons}
+        countries={countries}
+        movies={movies}
+        assetTypes={assetTypes}
+        lensTypes={lensTypes}
+        assetNames={assetNames}
+        newsletters={newsletters}
         monthlyAdditionalHours={project.monthlyAdditionalHours.map((row) => ({
           month: row.month.toISOString().slice(0, 7),
           hours: Number(row.hours ?? 0),
@@ -134,6 +155,18 @@ export default async function ProjectDetailPage({
           hideLensTypesInEntries: project.hideLensTypesInEntries,
           hideAssetNamesInEntries: project.hideAssetNamesInEntries,
           hideNewslettersInEntries: project.hideNewslettersInEntries,
+          requireCountriesInTimeEntries: project.requireCountriesInTimeEntries,
+          requireMoviesInTimeEntries: project.requireMoviesInTimeEntries,
+          requireAssetTypesInTimeEntries: project.requireAssetTypesInTimeEntries,
+          requireLensTypesInTimeEntries: project.requireLensTypesInTimeEntries,
+          requireAssetNamesInTimeEntries: project.requireAssetNamesInTimeEntries,
+          requireNewslettersInTimeEntries: project.requireNewslettersInTimeEntries,
+          allowedCountryIdsJson: project.allowedCountryIdsJson,
+          allowedMovieIdsJson: project.allowedMovieIdsJson,
+          allowedAssetTypeIdsJson: project.allowedAssetTypeIdsJson,
+          allowedLensTypeIdsJson: project.allowedLensTypeIdsJson,
+          allowedAssetNameIdsJson: project.allowedAssetNameIdsJson,
+          allowedNewsletterIdsJson: project.allowedNewsletterIdsJson,
           addToBilling: project.addToBilling,
           additionalCharges: Number(project.additionalCharges ?? 0),
           partialBillingCost: Number(project.partialBillingCost ?? 0),
