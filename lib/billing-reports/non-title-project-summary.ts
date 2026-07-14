@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { shouldExcludeWorldwideCountryFromBilling } from "@/lib/billing-reports/config";
 
 export type NonTitleProjectBillingSummaryFilters = {
   projectMonth: string;
@@ -514,7 +515,11 @@ export async function getTitleCountryPoGroups({
   return assignments
     .filter((assignment) => Boolean(assignment.movieId))
     .map((assignment) => {
-      const countryNames = assignment.countries
+      const includedCountries = assignment.countries.filter(
+        (item) =>
+          !shouldExcludeWorldwideCountryFromBilling(clientId, item.country),
+      );
+      const countryNames = includedCountries
         .map((item) =>
           item.country.isoCode
             ? `${item.country.name} (${item.country.isoCode})`
@@ -528,7 +533,7 @@ export async function getTitleCountryPoGroups({
         amount: Number(assignment.purchaseOrder.amount ?? 0),
         countryNames,
         countryLabel: countryNames.length ? countryNames.join(", ") : "-",
-        countries: assignment.countries.map((item) => ({
+        countries: includedCountries.map((item) => ({
           name: item.country.name,
           isoCode: item.country.isoCode,
         })),

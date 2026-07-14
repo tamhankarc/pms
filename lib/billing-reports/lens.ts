@@ -38,13 +38,19 @@ export async function getLensBillingAdjustments({
   movieId,
   workDate,
   countryIds,
+  excludedCountryIsoCodes = [],
 }: {
   projectIds: string[];
   movieId?: string;
   workDate?: { gte?: Date; lte?: Date };
   countryIds?: string[];
+  excludedCountryIsoCodes?: string[];
 }): Promise<Map<string, LensBillingAdjustment>> {
   if (!projectIds.length) return new Map();
+
+  const excludedCountryIsoCodeSet = new Set(
+    excludedCountryIsoCodes.map((code) => code.trim().toUpperCase()),
+  );
 
   const entries = await db.timeEntry.findMany({
     where: {
@@ -89,6 +95,13 @@ export async function getLensBillingAdjustments({
 
   for (const entry of entries) {
     if (!entry.lensType) continue;
+    if (
+      entry.country &&
+      excludedCountryIsoCodeSet.has(
+        (entry.country.isoCode ?? "").trim().toUpperCase(),
+      )
+    )
+      continue;
 
     const project = grouped.get(entry.projectId) ?? {
       billingModel: entry.project.billingModel,

@@ -2076,6 +2076,7 @@ async function getWarnerDeliverableData({
       getLensBillingAdjustments({
         projectIds: nonFixedPerCountryProjectIds,
         movieId: selectedMovie.id,
+        excludedCountryIsoCodes: ["WW"],
         ...(isIntl || aggregateOtherCountries
           ? { countryIds: countryOptions.map((country) => country.id) }
           : isDomestic
@@ -2087,6 +2088,7 @@ async function getWarnerDeliverableData({
       getLensBillingAdjustments({
         projectIds: fixedPerCountryProjectIds,
         movieId: selectedMovie.id,
+        excludedCountryIsoCodes: ["WW"],
         ...(titleProjectLensCountryIds.length
           ? { countryIds: titleProjectLensCountryIds }
           : { countryIds: [] }),
@@ -2152,7 +2154,10 @@ async function getWarnerDeliverableData({
         },
         distinct: ["countryId"],
       });
-      const countries = countryEntries
+      const billableCountryEntries = countryEntries.filter(
+        (entry) => entry.country && !isWorldwideCountry(entry.country),
+      );
+      const countries = billableCountryEntries
         .map((entry) => entry.country)
         .filter(
           (
@@ -2162,11 +2167,17 @@ async function getWarnerDeliverableData({
         )
         .map((country) => formatWarnerCountryLabel(country))
         .sort((a, b) => a.localeCompare(b));
-      const countryCount = countries.length || 1;
+      const hasOnlyExcludedWorldwideCountries =
+        countryEntries.length > 0 && billableCountryEntries.length === 0;
+      const countryCount = hasOnlyExcludedWorldwideCountries
+        ? 0
+        : countries.length || 1;
       projectCost = countryCount * Number(project.perCountryCharges ?? 0);
       meta = countries.length
         ? `Countries: ${countries.join(", ")}`
-        : `${countryCount} countr${countryCount === 1 ? "y" : "ies"} × ${formatUsd(Number(project.perCountryCharges ?? 0))}`;
+        : hasOnlyExcludedWorldwideCountries
+          ? "No billable countries"
+          : `${countryCount} countr${countryCount === 1 ? "y" : "ies"} × ${formatUsd(Number(project.perCountryCharges ?? 0))}`;
     } else if (project.billingModel === "FIXED_FULL") {
       projectCost =
         Number(project.fixedContractHours ?? 0) * Number(client.hourlyCost ?? 0) +

@@ -5,6 +5,7 @@ import {
   sanitizeFileSegment,
 } from "@/lib/billing-reports/amazon";
 import { getLensBillingAdjustments } from "@/lib/billing-reports/lens";
+import { shouldExcludeWorldwideCountryFromBilling } from "@/lib/billing-reports/config";
 import {
   getNonTitleProjectBillingSummaryRows,
   getProjectsConsideredByTitleRows,
@@ -395,9 +396,12 @@ export async function getSonyPicturesReportData({
         movie.billingSocial
       );
     if (!movie.billingDomestic && !movie.billingIntl) return false;
-    const countryCodes = movie.timeEntries.map((entry) =>
-      normalizeCountryCode(entry.country),
-    );
+    const countryCodes = movie.timeEntries
+      .filter(
+        (entry) =>
+          !shouldExcludeWorldwideCountryFromBilling(clientId, entry.country),
+      )
+      .map((entry) => normalizeCountryCode(entry.country));
     return (
       (movie.billingDomestic && countryCodes.some(isUnitedStates)) ||
       movie.sonyCoppaSite ||
@@ -605,6 +609,8 @@ export async function getSonyPicturesReportData({
   const ticketCountries = new Map<string, { label: string; code: string }>();
   for (const entry of ticketingEntries) {
     if (!entry.country) continue;
+    if (shouldExcludeWorldwideCountryFromBilling(clientId, entry.country))
+      continue;
     const code = normalizeCountryCode(entry.country);
     ticketCountries.set(entry.country.id, {
       label: entry.country.isoCode
@@ -766,6 +772,8 @@ export async function getSonyPicturesReportData({
   const countriesByProject = new Map<string, Map<string, string>>();
   for (const entry of otherCountryEntries) {
     if (!entry.country) continue;
+    if (shouldExcludeWorldwideCountryFromBilling(clientId, entry.country))
+      continue;
     const current =
       countriesByProject.get(entry.projectId) ?? new Map<string, string>();
     current.set(
@@ -781,6 +789,7 @@ export async function getSonyPicturesReportData({
   const lensAdjustments = await getLensBillingAdjustments({
     projectIds,
     movieId: selectedMovie.id,
+    excludedCountryIsoCodes: ["WW"],
   });
   for (const project of permittedOtherProjects) {
     const countries = Array.from(

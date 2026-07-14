@@ -5,6 +5,21 @@ export const WARNER_BROS_CLIENT_ID = "cmn66av4j0001l104077m5vxz";
 export const AMAZON_STUDIOS_CLIENT_ID = "cmnh294gs0000l504iifuarli";
 export const ROYAL_CARIBBEAN_CLIENT_ID = "cmn669p610000l104wdoee36r";
 
+const CLIENT_IDS_EXCLUDING_WORLDWIDE_COUNTRY = new Set([
+  WARNER_BROS_CLIENT_ID,
+  SONY_PICTURES_CLIENT_ID,
+]);
+
+export function shouldExcludeWorldwideCountryFromBilling(
+  clientId: string,
+  country: { isoCode?: string | null } | null | undefined,
+) {
+  return (
+    CLIENT_IDS_EXCLUDING_WORLDWIDE_COUNTRY.has(clientId) &&
+    (country?.isoCode ?? "").trim().toUpperCase() === "WW"
+  );
+}
+
 // Add client IDs here when a client should be hidden from Billing Reports menu and /billing-reports.
 export const EXCLUDED_BILLING_REPORT_CLIENT_IDS: string[] = ["cmnh43l2b0000l204gwxro5lw"];
 
