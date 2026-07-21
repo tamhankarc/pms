@@ -25,6 +25,17 @@ export function getIstTimeParts(date: Date = new Date()) {
   };
 }
 
+export function isValidIstDateKey(dateKey: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return false;
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const value = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  return (
+    value.getUTCFullYear() === year &&
+    value.getUTCMonth() + 1 === month &&
+    value.getUTCDate() === day
+  );
+}
+
 export function getDayBoundsUtcFromIstDateKey(dateKey: string) {
   const [year, month, day] = dateKey.split("-").map(Number);
   const startUtc = new Date(Date.UTC(year, month - 1, day, 0, -IST_OFFSET_MINUTES, 0, 0));

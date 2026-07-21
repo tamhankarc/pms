@@ -17,6 +17,7 @@ export function UserAssignmentForm({
   subProjects,
   users,
   initialValues,
+  showTimeEntryCounts = false,
 }: {
   clients: { id: string; name: string }[];
   projects: { id: string; name: string; clientId: string }[];
@@ -26,6 +27,7 @@ export function UserAssignmentForm({
     fullName: string;
     userType: string;
     functionalRole: string | null;
+    timeEntryCount?: number;
   }[];
   initialValues?: {
     clientId?: string;
@@ -33,6 +35,7 @@ export function UserAssignmentForm({
     subProjectId?: string;
     userIds?: string[];
   };
+  showTimeEntryCounts?: boolean;
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(
@@ -113,6 +116,11 @@ export function UserAssignmentForm({
       setSubProjectId("");
     }
   }, [filteredSubProjects, subProjectId]);
+
+  const displayTimeEntryCounts =
+    showTimeEntryCounts &&
+    projectId === (initialValues?.projectId ?? "") &&
+    subProjectId === (initialValues?.subProjectId ?? "");
 
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -243,6 +251,12 @@ export function UserAssignmentForm({
             placeholder="Search by name, role, or user type"
           />
 
+          {displayTimeEntryCounts ? (
+            <p className="mt-2 text-xs text-slate-500">
+              The number in brackets is the user&apos;s time-entry count for the selected assignment.
+            </p>
+          ) : null}
+
           <div className="mt-3 max-h-72 space-y-2 overflow-y-auto rounded-xl border border-slate-200 p-3">
             {filteredUsers.map((user) => (
               <label
@@ -257,6 +271,9 @@ export function UserAssignmentForm({
                 <span>
                   <span className="font-medium text-slate-900">
                     {user.fullName}
+                    {displayTimeEntryCounts
+                      ? ` (${user.timeEntryCount ?? 0})`
+                      : ""}
                   </span>
                   <span className="block text-xs text-slate-500">
                     {user.userType === "HR"

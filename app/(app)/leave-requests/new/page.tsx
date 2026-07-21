@@ -5,6 +5,7 @@ import {
   canAccessLeaveRequests,
   canAccessMenuItem,
   isHR,
+  isAdmin,
 } from "@/lib/permissions";
 import { getIstDateKey } from "@/lib/ist";
 import { createLeaveRequestAction } from "@/lib/actions/leave-actions";
@@ -16,7 +17,9 @@ export default async function NewLeaveRequestPage() {
   const user = await requireUser();
   if (
     !canAccessLeaveRequests(user) &&
-    !canAccessMenuItem(user, "leave-requests")
+    !canAccessMenuItem(user, "leave-requests") &&
+    !isAdmin(user) &&
+    !isHR(user)
   ) {
     return (
       <div className="space-y-6">
@@ -29,17 +32,12 @@ export default async function NewLeaveRequestPage() {
   }
   const todayKey = getIstDateKey();
   const data = await getLeaveRequestsForUser(user.id, todayKey);
-  const canCreateOnBehalf = isHR(user);
+  const canCreateOnBehalf = isHR(user) || isAdmin(user);
   const employeeContexts = canCreateOnBehalf
     ? await Promise.all(
         (
           await db.user.findMany({
-            where: {
-              isActive: true,
-              userType: {
-                notIn: ["ADMIN", "ACCOUNTS", "OPERATIONS", "REPORT_VIEWER"],
-              },
-            },
+            where: { isActive: true },
             select: {
               id: true,
               fullName: true,
@@ -86,6 +84,7 @@ export default async function NewLeaveRequestPage() {
         canCreateOnBehalf={canCreateOnBehalf}
         currentUserId={user.id}
         employeeContexts={employeeContexts}
+        canManualOverride={isHR(user)}
       />
     </div>
   );

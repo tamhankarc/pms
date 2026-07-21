@@ -56,6 +56,13 @@ function employeeRequestLink(id: string) {
     : `/leave-requests#leave-request-${encodeURIComponent(id)}`;
 }
 
+function cancellationReviewLink(id: string) {
+  const baseUrl = appBaseUrl();
+  return baseUrl
+    ? `${baseUrl}/leave-admin/cancellations/${encodeURIComponent(id)}`
+    : `/leave-admin/cancellations/${encodeURIComponent(id)}`;
+}
+
 function formatDaySelectionLabel(type: string) {
   if (type === "FIRST_HALF") return "First half";
   if (type === "SECOND_HALF") return "Second half";
@@ -187,3 +194,63 @@ export async function sendLeaveRequestStatusEmail(
     text: `Dear ${row.user.fullName},\n\nYour leave request for ${formatDateInIst(row.startDate)} - ${formatDateInIst(row.endDate)} has been marked as ${statusLabel} by ${actionedBy}.${row.approverComment ? `\nComment: ${row.approverComment}` : ""}\n\nView leave request: ${link}\n\nRegards,\nPMS Leave Management`,
   });
 }
+
+export async function sendLeaveCancellationRequestedEmail(
+  cancellationRequestId: string,
+) {
+  if (!isMailSendingEnabled()) return;
+
+  const [row, hrUsers] = await Promise.all([
+    db.leaveCancellationRequest.findUnique({
+      where: { id: cancellationRequestId },
+      include: {
+        requestedBy: { select: { fullName: true } },
+        leaveRequest: {
+          include: {
+            user: { select: { fullName: true } },
+          },
+        },
+      },
+    }),
+    db.user.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { userType: "HR" },
+          { userType: "MANAGER", functionalRole: "GENERAL_MANAGER" },
+        ],
+      },
+      select: { email: true },
+    }),
+  ]);
+
+  if (!row) return;
+  const recipients = uniqueEmails(hrUsers.map((item) => item.email));
+  if (!recipients.length) return;
+
+  const link = cancellationReviewLink(row.id);
+  const subject = `Leave Cancellation Request - ${row.leaveRequest.user.fullName}`;
+  const leaveRange = `${formatDateInIst(row.leaveRequest.startDate)} - ${formatDateInIst(row.leaveRequest.endDate)}`;
+
+  await sendAppEmail({
+    fromEmail: LEAVE_REQUEST_FROM_EMAIL,
+    fromName: "Leave Cancellation",
+    to: recipients,
+    subject,
+    html: `<div style="font-family:Arial,sans-serif;color:#0f172a;line-height:1.55"><p>Dear HR,</p><p>A leave cancellation request is awaiting HR review.</p><table style="border-collapse:collapse;margin:16px 0"><tr><td style="padding:6px 18px 6px 0;font-weight:600">Employee</td><td>${escapeHtml(row.leaveRequest.user.fullName)}</td></tr><tr><td style="padding:6px 18px 6px 0;font-weight:600">Leave dates</td><td>${escapeHtml(leaveRange)}</td></tr><tr><td style="padding:6px 18px 6px 0;font-weight:600">Requested by</td><td>${escapeHtml(row.requestedBy.fullName)}</td></tr><tr><td style="padding:6px 18px 6px 0;font-weight:600">Reason</td><td><pre style="font-family:Arial,sans-serif;margin:0;white-space:pre-wrap">${escapeHtml(row.reason)}</pre></td></tr></table><p><a href="${escapeHtml(link)}" style="display:inline-block;padding:10px 18px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px">Review cancellation request</a></p><p>Regards,<br/>PMS Leave Management</p></div>`,
+    text: `Dear HR,
+
+A leave cancellation request is awaiting HR review.
+
+Employee: ${row.leaveRequest.user.fullName}
+Leave dates: ${leaveRange}
+Requested by: ${row.requestedBy.fullName}
+Reason: ${row.reason}
+
+Review cancellation request: ${link}
+
+Regards,
+PMS Leave Management`,
+  });
+}
+

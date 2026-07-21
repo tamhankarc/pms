@@ -12,7 +12,10 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "leave:daily": "node scripts/process-daily-leaves.js",
+    "leave:quarterly": "node scripts/credit-quarterly-casual-leaves.js",
+    "leave:revert-pre-system-credits": "node scripts/revert-erroneous-pre-system-quarterly-credits.js"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1044.0",

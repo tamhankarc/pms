@@ -199,23 +199,40 @@ export async function getHRReportData(
       },
       orderBy: { fullName: "asc" },
     });
-    const unpaidTotals = users.length
-      ? await db.leaveRequest.groupBy({
-          by: ["userId"],
-          where: {
-            userId: { in: users.map((user) => user.id) },
-            status: "APPROVED",
-            startDate: { gte: yearStart, lt: nextYearStart },
-          },
-          _sum: { unpaidDaysUsed: true },
-        })
-      : [];
-    const unpaidDaysByUserId = new Map(
-      unpaidTotals.map((row) => [
+    const [unpaidTotals, legacyUnpaidTotals] = users.length
+      ? await Promise.all([
+          db.leaveDateAllocation.groupBy({
+            by: ["userId"],
+            where: {
+              userId: { in: users.map((user) => user.id) },
+              status: "PROCESSED",
+              leaveDate: { gte: yearStart, lt: nextYearStart },
+            },
+            _sum: { unpaidDays: true },
+          }),
+          db.leaveRequest.groupBy({
+            by: ["userId"],
+            where: {
+              userId: { in: users.map((user) => user.id) },
+              status: "APPROVED",
+              dateAllocations: { none: {} },
+              startDate: { gte: yearStart, lt: nextYearStart },
+            },
+            _sum: { unpaidDaysUsed: true },
+          }),
+        ])
+      : [[], []];
+    const unpaidDaysByUserId = new Map<string, number>();
+    for (const row of unpaidTotals) {
+      unpaidDaysByUserId.set(row.userId, Number(row._sum.unpaidDays ?? 0));
+    }
+    for (const row of legacyUnpaidTotals) {
+      unpaidDaysByUserId.set(
         row.userId,
-        Number(row._sum.unpaidDaysUsed ?? 0),
-      ]),
-    );
+        (unpaidDaysByUserId.get(row.userId) ?? 0) +
+          Number(row._sum.unpaidDaysUsed ?? 0),
+      );
+    }
     const rows = await Promise.all(
       users.map(async (user) => {
         const profile = ensureLeaveYearProfile(
@@ -241,7 +258,7 @@ export async function getHRReportData(
         "Employee",
         "Remaining Casual Leaves",
         "Remaining Earned Leaves",
-        "Approved Unpaid Leaves",
+        "Processed Unpaid Leaves",
       ],
       rows,
     };
@@ -260,7 +277,7 @@ export async function getHRReportData(
     const years = Array.from(
       new Set(rangeDateKeys.map((dateKey) => Number(dateKey.slice(0, 4)))),
     );
-    const [users, logs, approvedLeaves, officialHolidays] = await Promise.all([
+    const [users, logs, approvedLeaves, legacyApprovedLeaves, officialHolidays] = await Promise.all([
       db.user.findMany({
         where: userWhere,
         select: {
@@ -281,9 +298,17 @@ export async function getHRReportData(
         where: { attendanceDate: { gte: startUtc, lt: endUtc } },
         orderBy: { markedAt: "asc" },
       }),
+      db.leaveDateAllocation.findMany({
+        where: {
+          status: "PROCESSED",
+          leaveDate: { gte: startUtc, lt: endUtc },
+        },
+        select: { userId: true, leaveDate: true },
+      }),
       db.leaveRequest.findMany({
         where: {
           status: "APPROVED",
+          dateAllocations: { none: {} },
           startDate: { lt: endUtc },
           endDate: { gte: startUtc },
         },
@@ -307,10 +332,7 @@ export async function getHRReportData(
       if (log.type === "MARK_OUT") item.markOut = log;
       logMap.set(key, item);
     }
-    const approvedByUser = new Map<
-      string,
-      Array<{ start: string; end: string }>
-    >();
+    const approvedByUser = new Map<string, Set<string>>();
     const officialHolidayShiftsByDate = new Map<string, Set<string>>();
     for (const holiday of officialHolidays) {
       const dateKey = getIstDateKey(holiday.holidayDate);
@@ -324,11 +346,18 @@ export async function getHRReportData(
       return Boolean(shifts?.has("BOTH") || shifts?.has(shift));
     };
     for (const leave of approvedLeaves) {
-      const items = approvedByUser.get(leave.userId) ?? [];
-      items.push({
-        start: getIstDateKey(leave.startDate),
-        end: getIstDateKey(leave.endDate),
-      });
+      const items = approvedByUser.get(leave.userId) ?? new Set<string>();
+      items.add(getIstDateKey(leave.leaveDate));
+      approvedByUser.set(leave.userId, items);
+    }
+    for (const leave of legacyApprovedLeaves) {
+      const items = approvedByUser.get(leave.userId) ?? new Set<string>();
+      let cursor = getIstDateKey(leave.startDate);
+      const end = getIstDateKey(leave.endDate);
+      while (cursor <= end) {
+        if (cursor >= fromDate && cursor <= toDate) items.add(cursor);
+        cursor = getIstDateKey(getDayBoundsUtcFromIstDateKey(cursor).endUtc);
+      }
       approvedByUser.set(leave.userId, items);
     }
     const rowItems = rangeDateKeys.flatMap((dateKey) =>
@@ -340,9 +369,7 @@ export async function getHRReportData(
         if (shiftFilter !== "BOTH" && rowShift !== shiftFilter) return [];
 
         const attendance = logMap.get(`${user.id}|${dateKey}`);
-        const onLeave = (approvedByUser.get(user.id) ?? []).some(
-          (leave) => leave.start <= dateKey && leave.end >= dateKey,
-        );
+        const onLeave = approvedByUser.get(user.id)?.has(dateKey) ?? false;
         const isWeekend = isWeekendDateKey(dateKey);
         const isOfficialHoliday = isOfficialHolidayForShift(dateKey, rowShift);
         const presence = !canMarkAttendance(user)

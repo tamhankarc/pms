@@ -1,5 +1,9 @@
 import "server-only";
-import { Prisma, type LeaveYearProfile } from "@prisma/client";
+import {
+  Prisma,
+  type LeaveRequest,
+  type LeaveYearProfile,
+} from "@prisma/client";
 import { db } from "@/lib/db";
 import {
   getAttendanceWorkDateKey,
@@ -11,6 +15,71 @@ import {
   shiftMonthKey,
   isWeekendDateKey,
 } from "@/lib/ist";
+import {
+  getProjectedLeaveBalanceForUser,
+  previewLeaveRequestAllocation,
+} from "@/lib/leave-system";
+
+type LeaveProjectionSource = Pick<
+  LeaveRequest,
+  | "status"
+  | "userId"
+  | "startDate"
+  | "endDate"
+  | "daySelectionMode"
+  | "leaveDayTypesJson"
+  | "manualAllocationOverrideJson"
+  | "manualOverrideNote"
+>;
+
+type ProjectedLeaveBreakup = {
+  casualDaysUsed: number;
+  earnedDaysUsed: number;
+  unpaidDaysUsed: number;
+  totalLeaveDays: number;
+  sandwichUnpaidDays: number;
+};
+
+async function attachProjectedLeaveBreakups<T extends LeaveProjectionSource>(
+  rows: T[],
+): Promise<Array<T & { projectedBreakup: ProjectedLeaveBreakup | null }>> {
+  return Promise.all(
+    rows.map(async (row) => {
+      if (!["PENDING", "RECONSIDER"].includes(row.status)) {
+        return { ...row, projectedBreakup: null };
+      }
+
+      try {
+        const preview = await previewLeaveRequestAllocation(db, {
+          userId: row.userId,
+          startDate: row.startDate,
+          endDate: row.endDate,
+          daySelectionMode: row.daySelectionMode,
+          leaveDayTypesJson: row.leaveDayTypesJson,
+          manualAllocationOverrideJson: row.manualAllocationOverrideJson,
+          manualOverrideNote: row.manualOverrideNote,
+        });
+
+        return {
+          ...row,
+          projectedBreakup: {
+            casualDaysUsed: preview.casualDaysUsed,
+            earnedDaysUsed: preview.earnedDaysUsed,
+            unpaidDaysUsed: preview.unpaidDaysUsed,
+            totalLeaveDays: preview.totalLeaveDays,
+            sandwichUnpaidDays: preview.sandwichUnpaidDays,
+          },
+        };
+      } catch (error) {
+        console.error(
+          `Unable to calculate projected leave breakup for request ${row.userId} (${getIstDateKey(row.startDate)} to ${getIstDateKey(row.endDate)}).`,
+          error,
+        );
+        return { ...row, projectedBreakup: null };
+      }
+    }),
+  );
+}
 
 function getCityDistrictLabel(city?: string | null, district?: string | null) {
   const normalizedCity = (city ?? "").trim();
@@ -54,26 +123,34 @@ function ensureLeaveYearProfile<T>(profile: T | null): T {
 export async function getApprovedLeaveMonthCalendar(monthKey: string) {
   const monthStart = getMonthStartUtcFromIstKey(monthKey);
   const monthEndExclusive = getMonthEndUtcExclusiveFromIstKey(monthKey);
-  const rows = await db.leaveRequest.findMany({
+  const allocations = await db.leaveDateAllocation.findMany({
+    where: {
+      status: { in: ["SCHEDULED", "PROCESSED"] },
+      leaveDate: { gte: monthStart, lt: monthEndExclusive },
+    },
+    select: {
+      leaveDate: true,
+      user: { select: { fullName: true } },
+    },
+    orderBy: [{ leaveDate: "asc" }, { user: { fullName: "asc" } }],
+  });
+  const legacyRows = await db.leaveRequest.findMany({
     where: {
       status: "APPROVED",
+      dateAllocations: { none: {} },
       startDate: { lt: monthEndExclusive },
       endDate: { gte: monthStart },
     },
-    select: {
-      startDate: true,
-      endDate: true,
-      user: {
-        select: {
-          fullName: true,
-        },
-      },
-    },
-    orderBy: [{ startDate: "asc" }, { user: { fullName: "asc" } }],
+    select: { startDate: true, endDate: true, user: { select: { fullName: true } } },
   });
 
   const itemsByDate: Record<string, string[]> = {};
-  for (const row of rows) {
+  for (const row of allocations) {
+    const dateKey = getIstDateKey(row.leaveDate);
+    if (!itemsByDate[dateKey]) itemsByDate[dateKey] = [];
+    itemsByDate[dateKey].push(row.user.fullName);
+  }
+  for (const row of legacyRows) {
     let cursorKey = getIstDateKey(row.startDate);
     const endKey = getIstDateKey(row.endDate);
     while (cursorKey <= endKey) {
@@ -81,17 +158,14 @@ export async function getApprovedLeaveMonthCalendar(monthKey: string) {
         if (!itemsByDate[cursorKey]) itemsByDate[cursorKey] = [];
         itemsByDate[cursorKey].push(row.user.fullName);
       }
-      const nextStart = getDayBoundsUtcFromIstDateKey(cursorKey).endUtc;
-      cursorKey = getIstDateKey(nextStart);
+      cursorKey = nextDateKeyForQuery(cursorKey);
     }
   }
-
   Object.keys(itemsByDate).forEach((dateKey) => {
     itemsByDate[dateKey] = [...new Set(itemsByDate[dateKey])].sort((a, b) =>
       a.localeCompare(b),
     );
   });
-
   const currentMonth = getIstDateKey().slice(0, 7);
   return {
     monthKey,
@@ -100,6 +174,10 @@ export async function getApprovedLeaveMonthCalendar(monthKey: string) {
     maxMonthKey: shiftMonthKey(currentMonth, 12),
     itemsByDate,
   };
+}
+
+function nextDateKeyForQuery(dateKey: string) {
+  return getIstDateKey(getDayBoundsUtcFromIstDateKey(dateKey).endUtc);
 }
 
 export async function getPendingLeaveCount() {
@@ -251,36 +329,76 @@ export async function getAdminDashboardData(
     orderBy: [{ fullName: "asc" }],
   });
 
-  const approvedLeaves = await db.leaveRequest.findMany({
-    where: {
-      status: "APPROVED",
-      startDate: { lt: leaveEndBounds.endUtc },
-      endDate: { gte: leaveStartBounds.startUtc },
-    },
-    select: {
-      id: true,
-      userId: true,
-      leaveType: true,
-      startDate: true,
-      endDate: true,
-      totalLeaveDays: true,
-      casualDaysUsed: true,
-      earnedDaysUsed: true,
-      unpaidDaysUsed: true,
-      user: {
-        select: {
-          fullName: true,
-          userType: true,
-          functionalRole: true,
+  const [approvedLeaves, selectedAllocations, legacySelectedLeaves] =
+    await Promise.all([
+      db.leaveRequest.findMany({
+        where: {
+          status: { in: ["APPROVED", "PARTIALLY_CANCELLED"] },
+          OR: [
+            {
+              dateAllocations: {
+                some: {
+                  status: { in: ["SCHEDULED", "PROCESSED"] },
+                  leaveDate: {
+                    gte: leaveStartBounds.startUtc,
+                    lt: leaveEndBounds.endUtc,
+                  },
+                },
+              },
+            },
+            {
+              dateAllocations: { none: {} },
+              startDate: { lt: leaveEndBounds.endUtc },
+              endDate: { gte: leaveStartBounds.startUtc },
+            },
+          ],
         },
-      },
-    },
-    orderBy: [{ startDate: "asc" }, { user: { fullName: "asc" } }],
-  });
+        select: {
+          id: true,
+          userId: true,
+          leaveType: true,
+          startDate: true,
+          endDate: true,
+          totalLeaveDays: true,
+          casualDaysUsed: true,
+          earnedDaysUsed: true,
+          unpaidDaysUsed: true,
+          user: {
+            select: {
+              fullName: true,
+              userType: true,
+              functionalRole: true,
+            },
+          },
+        },
+        orderBy: [{ startDate: "asc" }, { user: { fullName: "asc" } }],
+      }),
+      db.leaveDateAllocation.findMany({
+        where: {
+          status: "PROCESSED",
+          leaveDate: {
+            gte: attendanceBounds.startUtc,
+            lt: attendanceBounds.endUtc,
+          },
+        },
+        select: { userId: true },
+        distinct: ["userId"],
+      }),
+      db.leaveRequest.findMany({
+        where: {
+          status: "APPROVED",
+          dateAllocations: { none: {} },
+          startDate: { lt: attendanceBounds.endUtc },
+          endDate: { gte: attendanceBounds.startUtc },
+        },
+        select: { userId: true },
+      }),
+    ]);
 
-  const selectedDateLeaveUserIds = new Set(
-    approvedLeaves.map((row) => row.userId),
-  );
+  const selectedDateLeaveUserIds = new Set([
+    ...selectedAllocations.map((row) => row.userId),
+    ...legacySelectedLeaves.map((row) => row.userId),
+  ]);
 
   return {
     attendanceRows: employees.map((employee) => {
@@ -365,12 +483,14 @@ export async function getAttendanceStatusForUser(userId: string) {
 }
 
 export async function getEmployeeDashboardSnapshot(userId: string) {
-  const [attendanceStatus, leaveSummary, leaveBalance] = await Promise.all([
+  const [attendanceStatus, rawLeaveSummary, leaveBalance] = await Promise.all([
     getAttendanceStatusForUser(userId),
     db.leaveRequest.findMany({
       where: {
         userId,
-        status: { in: ["PENDING", "APPROVED", "RECONSIDER"] },
+        status: {
+          in: ["PENDING", "APPROVED", "PARTIALLY_CANCELLED", "RECONSIDER"],
+        },
         endDate: {
           gte: getDayBoundsUtcFromIstDateKey(getIstDateKey()).startUtc,
         },
@@ -378,9 +498,10 @@ export async function getEmployeeDashboardSnapshot(userId: string) {
       orderBy: [{ startDate: "asc" }],
       take: 5,
     }),
-    getLeaveBalanceForUser(userId, new Date().getUTCFullYear()),
+    getLeaveBalanceForUser(userId, Number(getIstDateKey().slice(0, 4))),
   ]);
 
+  const leaveSummary = await attachProjectedLeaveBreakups(rawLeaveSummary);
   return { attendanceStatus, leaveSummary, leaveBalance };
 }
 
@@ -397,7 +518,7 @@ export async function getAttendanceCalendarData(
     await getOrCreateLeaveYearProfile(userId, calendarYear),
   );
 
-  const [attendanceRows, leaveRows] = await Promise.all([
+  const [attendanceRows, leaveRows, legacyLeaveRows] = await Promise.all([
     db.attendanceLog.findMany({
       where: {
         userId,
@@ -411,18 +532,23 @@ export async function getAttendanceCalendarData(
         type: true,
       },
     }),
+    db.leaveDateAllocation.findMany({
+      where: {
+        userId,
+        status: "PROCESSED",
+        leaveDate: { gte: monthStart, lt: monthEndExclusive },
+      },
+      select: { leaveDate: true },
+    }),
     db.leaveRequest.findMany({
       where: {
         userId,
         status: "APPROVED",
+        dateAllocations: { none: {} },
         startDate: { lt: monthEndExclusive },
         endDate: { gte: monthStart },
       },
-      select: {
-        startDate: true,
-        endDate: true,
-        unpaidDaysUsed: true,
-      },
+      select: { startDate: true, endDate: true, unpaidDaysUsed: true },
     }),
   ]);
 
@@ -458,25 +584,19 @@ export async function getAttendanceCalendarData(
     }
   }
 
-  const leaveDays = new Set<string>();
-  for (const row of leaveRows) {
-    const shouldCountSandwichDaysAsLeave = Number(row.unpaidDaysUsed ?? 0) > 0;
-    let cursorKey = getIstDateKey(row.startDate);
-    const endKey = getIstDateKey(row.endDate);
-    while (cursorKey <= endKey) {
-      const isWeekendOrHoliday =
-        isWeekendDateKey(cursorKey) || holidayKeys.has(cursorKey);
-      if (cursorKey.startsWith(monthKey)) {
-        if (isWeekendOrHoliday) {
-          if (shouldCountSandwichDaysAsLeave) {
-            leaveDays.add(cursorKey);
-          }
-        } else {
-          leaveDays.add(cursorKey);
-        }
+  const leaveDays = new Set<string>(
+    leaveRows.map((row) => getIstDateKey(row.leaveDate)),
+  );
+  for (const row of legacyLeaveRows) {
+    const includeSandwichDays = Number(row.unpaidDaysUsed ?? 0) > 0;
+    let cursor = getIstDateKey(row.startDate);
+    const end = getIstDateKey(row.endDate);
+    while (cursor <= end) {
+      if (cursor.startsWith(monthKey)) {
+        const nonWorking = isWeekendDateKey(cursor) || holidayKeys.has(cursor);
+        if (!nonWorking || includeSandwichDays) leaveDays.add(cursor);
       }
-      const nextStart = getDayBoundsUtcFromIstDateKey(cursorKey).endUtc;
-      cursorKey = getIstDateKey(nextStart);
+      cursor = nextDateKeyForQuery(cursor);
     }
   }
 
@@ -704,17 +824,7 @@ export async function areValidLeaveRequestApproversForUser(
 }
 
 export async function getLeaveBalanceForUser(userId: string, year: number) {
-  const profile = ensureLeaveYearProfile(
-    await getOrCreateLeaveYearProfile(userId, year),
-  );
-
-  return {
-    year,
-    casualLeaves: Number(profile.casualLeaves),
-    earnedLeaves: Number(profile.earnedLeaves),
-    shift: profile.shift,
-    employmentStatus: profile.employmentStatus,
-  };
+  return getProjectedLeaveBalanceForUser(userId, year, getIstDateKey());
 }
 
 export async function getLeaveRequestsForUser(
@@ -739,6 +849,11 @@ export async function getLeaveRequestsForUser(
         },
         orderBy: { approver: { fullName: "asc" } },
       },
+      cancellationRequests: {
+        where: { status: "PENDING" },
+        select: { id: true, reason: true, createdAt: true },
+        take: 1,
+      },
     },
     orderBy: [{ startDate: "asc" }, { createdAt: "desc" }],
   });
@@ -758,20 +873,34 @@ export async function getLeaveRequestsForUser(
         },
         orderBy: { approver: { fullName: "asc" } },
       },
+      cancellationRequests: {
+        where: { status: "PENDING" },
+        select: { id: true, reason: true, createdAt: true },
+        take: 1,
+      },
     },
     orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
   });
 
-  const [approvers, leaveBalance] = await Promise.all([
-    getAllowedLeaveRequestApproversForUser(userId),
-    getLeaveBalanceForUser(userId, Number(todayDateKey.slice(0, 4))),
-  ]);
+  const [currentWithProjection, pastWithProjection, approvers, leaveBalance] =
+    await Promise.all([
+      attachProjectedLeaveBreakups(current),
+      attachProjectedLeaveBreakups(past),
+      getAllowedLeaveRequestApproversForUser(userId),
+      getLeaveBalanceForUser(userId, Number(todayDateKey.slice(0, 4))),
+    ]);
   const officialHolidays = await getOfficialHolidayDateKeysForYear(
     Number(todayDateKey.slice(0, 4)),
     leaveBalance.shift,
   );
 
-  return { current, past, approvers, leaveBalance, officialHolidays };
+  return {
+    current: currentWithProjection,
+    past: pastWithProjection,
+    approvers,
+    leaveBalance,
+    officialHolidays,
+  };
 }
 
 type LeaveApprovalFilters = {
@@ -871,7 +1000,7 @@ export async function getLeaveApprovalsForUser(
       ? { AND: [scopeWhere, filterWhere] }
       : scopeWhere;
 
-  return db.leaveRequest.findMany({
+  const rows = await db.leaveRequest.findMany({
     where,
     include: {
       user: {
@@ -897,6 +1026,8 @@ export async function getLeaveApprovalsForUser(
     },
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
   });
+
+  return attachProjectedLeaveBreakups(rows);
 }
 
 export async function getOrCreateLeaveYearProfile(
@@ -1055,23 +1186,40 @@ export async function getLeaveAdminList(filters?: {
   const { startUtc: nextYearStart } = getDayBoundsUtcFromIstDateKey(
     `${year + 1}-01-01`,
   );
-  const unpaidTotals = users.length
-    ? await db.leaveRequest.groupBy({
-        by: ["userId"],
-        where: {
-          userId: { in: users.map((user) => user.id) },
-          status: "APPROVED",
-          startDate: { gte: yearStart, lt: nextYearStart },
-        },
-        _sum: { unpaidDaysUsed: true },
-      })
-    : [];
-  const unpaidDaysByUserId = new Map(
-    unpaidTotals.map((row) => [
+  const [unpaidTotals, legacyUnpaidTotals] = users.length
+    ? await Promise.all([
+        db.leaveDateAllocation.groupBy({
+          by: ["userId"],
+          where: {
+            userId: { in: users.map((user) => user.id) },
+            status: "PROCESSED",
+            leaveDate: { gte: yearStart, lt: nextYearStart },
+          },
+          _sum: { unpaidDays: true },
+        }),
+        db.leaveRequest.groupBy({
+          by: ["userId"],
+          where: {
+            userId: { in: users.map((user) => user.id) },
+            status: "APPROVED",
+            dateAllocations: { none: {} },
+            startDate: { gte: yearStart, lt: nextYearStart },
+          },
+          _sum: { unpaidDaysUsed: true },
+        }),
+      ])
+    : [[], []];
+  const unpaidDaysByUserId = new Map<string, number>();
+  for (const row of unpaidTotals) {
+    unpaidDaysByUserId.set(row.userId, Number(row._sum.unpaidDays ?? 0));
+  }
+  for (const row of legacyUnpaidTotals) {
+    unpaidDaysByUserId.set(
       row.userId,
-      Number(row._sum.unpaidDaysUsed ?? 0),
-    ]),
-  );
+      (unpaidDaysByUserId.get(row.userId) ?? 0) +
+        Number(row._sum.unpaidDaysUsed ?? 0),
+    );
+  }
 
   const hydratedUsers = await Promise.all(
     users.map(async (user) => {

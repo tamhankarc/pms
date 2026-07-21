@@ -127,9 +127,24 @@ function getLeaveBreakupLabel(row: {
   casualDaysUsed?: unknown;
   earnedDaysUsed?: unknown;
   unpaidDaysUsed?: unknown;
+  projectedBreakup?: {
+    casualDaysUsed: number;
+    earnedDaysUsed: number;
+    unpaidDaysUsed: number;
+  } | null;
 }) {
-  if (row.status === "PENDING" || row.status === "RECONSIDER")
-    return "Final breakup calculated on approval";
+  if (row.status === "PENDING" || row.status === "RECONSIDER") {
+    const projected = row.projectedBreakup;
+    if (!projected) return "Projected breakup unavailable";
+    const projectedParts: string[] = [];
+    if (projected.casualDaysUsed > 0)
+      projectedParts.push(`Casual ${projected.casualDaysUsed.toFixed(2)}`);
+    if (projected.earnedDaysUsed > 0)
+      projectedParts.push(`Earned ${projected.earnedDaysUsed.toFixed(2)}`);
+    if (projected.unpaidDaysUsed > 0)
+      projectedParts.push(`Unpaid ${projected.unpaidDaysUsed.toFixed(2)}`);
+    return `Projected: ${projectedParts.join(" · ") || "No leave deduction"}`;
+  }
   const casual = Number(row.casualDaysUsed ?? 0);
   const earned = Number(row.earnedDaysUsed ?? 0);
   const unpaid = Number(row.unpaidDaysUsed ?? 0);
@@ -389,6 +404,7 @@ export default async function DashboardPage({
     managedEmployees,
     billingData,
     pendingApprovalInfo,
+    pendingCancellationCount,
     approvers,
     selectedApproverIds,
     leaveCalendarData,
@@ -426,6 +442,9 @@ export default async function DashboardPage({
     showAttendanceCard || showEMSAdminPanel
       ? getPendingLeaveApprovalInfoForUser(user)
       : Promise.resolve(null),
+    userIsHR
+      ? db.leaveCancellationRequest.count({ where: { status: "PENDING" } })
+      : Promise.resolve(0),
     showEMSAdminPanel ? getApproverOptions() : Promise.resolve([]),
     showAttendanceCard || showEMSAdminPanel
       ? getGlobalApproverAssignmentIds()
@@ -539,6 +558,35 @@ export default async function DashboardPage({
         </section>
       ) : null}
 
+      {userIsHR && pendingCancellationCount > 0 ? (
+        <section className="rounded-3xl border border-rose-200 bg-rose-50 px-6 py-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-2xl bg-rose-100 p-3 text-rose-700">
+                <Bell className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-rose-900">
+                  Pending Leave Cancellations
+                </p>
+                <p className="mt-1 text-sm text-rose-800">
+                  <span className="font-semibold">
+                    There {pendingCancellationCount === 1 ? "is" : "are"}{" "}
+                    {pendingCancellationCount} cancellation {pendingCancellationCount === 1 ? "request" : "requests"} awaiting HR review.
+                  </span>
+                </p>
+              </div>
+            </div>
+            <Link
+              className="btn-secondary"
+              href="/leave-admin/cancellations?status=PENDING"
+            >
+              Open Cancellation Requests
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       {pendingCount > 0 && canOpenLeaveApprovals ? (
         <section className="rounded-3xl border border-amber-200 bg-amber-50 px-6 py-5 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -623,12 +671,12 @@ export default async function DashboardPage({
         <div className="space-y-6">
           <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
             <StatCard
-              label="Casual leaves remaining"
+              label="Today’s actual Casual leaves"
               value={employeeSnapshot.leaveBalance.casualLeaves.toFixed(2)}
               icon={<CalendarDays className="h-5 w-5" />}
             />
             <StatCard
-              label="Earned leaves remaining"
+              label="Today’s actual Earned leaves"
               value={employeeSnapshot.leaveBalance.earnedLeaves.toFixed(2)}
               icon={<CalendarDays className="h-5 w-5" />}
             />

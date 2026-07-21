@@ -7,7 +7,7 @@ import {
   ensureQuarterlyCasualLeaveCreditsForAllEligibleUsers,
   rectifyApprovedLeaveRequestAllocation,
 } from "@/lib/quarterly-casual-leaves";
-import { getIstDateKey } from "@/lib/ist";
+import { getIstDateKey, isValidIstDateKey } from "@/lib/ist";
 
 function requireAdminOther(user: Awaited<ReturnType<typeof requireUserForAction>>) {
   if (!isAdmin(user) || user.functionalRole !== "OTHER") {
@@ -18,7 +18,9 @@ function requireAdminOther(user: Awaited<ReturnType<typeof requireUserForAction>
 export async function runQuarterlyCasualLeaveCreditAction(formData: FormData) {
   const user = await requireUserForAction();
   requireAdminOther(user);
-  const asOfDateKey = String(formData.get("asOfDateKey") || getIstDateKey());
+  const asOfDateKey = String(formData.get("asOfDateKey") || getIstDateKey()).trim();
+  if (!isValidIstDateKey(asOfDateKey)) throw new Error("Enter a valid IST as-of date.");
+  if (asOfDateKey > getIstDateKey()) throw new Error("Quarterly leave credit cannot run for a future date.");
   const year = Number(asOfDateKey.slice(0, 4));
   await ensureQuarterlyCasualLeaveCreditsForAllEligibleUsers(
     year,

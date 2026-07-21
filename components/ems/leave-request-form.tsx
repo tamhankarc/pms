@@ -8,6 +8,18 @@ import type { LeaveFormState } from "@/lib/actions/leave-actions";
 const initialState: LeaveFormState = {};
 type DaySelection = "FULL_DAY" | "HALF_DAY" | "FIRST_HALF" | "SECOND_HALF";
 type SelectionMode = "FULL_DAYS" | "HALF_DAYS" | "CUSTOM";
+type LeaveBalance = {
+  casualLeaves: number;
+  earnedLeaves: number;
+  futureApproved?: {
+    casualLeaves: number;
+    earnedLeaves: number;
+    unpaidLeaves: number;
+    scheduledCasualCredits: number;
+  };
+  projected?: { casualLeaves: number; earnedLeaves: number };
+};
+
 type FormContext = {
   id: string;
   fullName: string;
@@ -17,7 +29,7 @@ type FormContext = {
     userType: string;
     functionalRole?: string | null;
   }>;
-  leaveBalance: { casualLeaves: number; earnedLeaves: number };
+  leaveBalance: LeaveBalance;
   blockedDateKeys: string[];
 };
 
@@ -28,9 +40,13 @@ function isWeekend(dateString: string) {
 }
 
 function nextDateKey(dateKey: string) {
-  const date = new Date(`${dateKey}T12:00:00`);
-  date.setDate(date.getDate() + 1);
-  return date.toISOString().slice(0, 10);
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const next = new Date(Date.UTC(year, month - 1, day + 1));
+  return [
+    next.getUTCFullYear(),
+    String(next.getUTCMonth() + 1).padStart(2, "0"),
+    String(next.getUTCDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 function normalizeDaySelection(value: string | undefined): DaySelection {
@@ -76,6 +92,7 @@ export function LeaveRequestForm({
   employeeContexts = [],
   canCreateOnBehalf = false,
   currentUserId,
+  canManualOverride = false,
 }: {
   action: (
     state: LeaveFormState,
@@ -102,11 +119,12 @@ export function LeaveRequestForm({
     leaveDayTypesJson?: string | null;
   };
   minDate: string;
-  leaveBalance: { casualLeaves: number; earnedLeaves: number };
+  leaveBalance: LeaveBalance;
   blockedDateKeys: string[];
   employeeContexts?: FormContext[];
   canCreateOnBehalf?: boolean;
   currentUserId?: string;
+  canManualOverride?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [requestedForUserId, setRequestedForUserId] = useState(
@@ -152,6 +170,7 @@ export function LeaveRequestForm({
     Record<string, DaySelection>
   >(() => parseStoredDurations(initialValues?.leaveDayTypesJson));
   const [boundaryError, setBoundaryError] = useState("");
+  const [manualOverrideEnabled, setManualOverrideEnabled] = useState(false);
   const [key, setKey] = useState(0);
   const blockedDates = useMemo(
     () => new Set(activeBlockedDates),
@@ -198,6 +217,7 @@ export function LeaveRequestForm({
       setHalfDaySelection("FIRST_HALF");
       setCustomDurations({});
       setBoundaryError("");
+      setManualOverrideEnabled(false);
       setKey((value) => value + 1);
     }
   }, [mode, state?.success, minDate]);
@@ -257,8 +277,8 @@ export function LeaveRequestForm({
         {mode === "create" ? "Create leave request" : "Edit leave request"}
       </h2>
       <p className="section-subtitle">
-        Submit leave for approval. Leave deduction is automatically applied from
-        casual leaves, then earned leaves, then unpaid leave.
+        Submit leave for approval. Approved future dates are reserved using projected
+        Casual, then Earned, then Unpaid leave and are deducted only when due.
       </p>
       {state?.error ? (
         <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -303,17 +323,29 @@ export function LeaveRequestForm({
           </div>
         ) : null}
         <div className="md:col-span-2 rounded-2xl border border-brand-100 bg-brand-50 px-4 py-4 text-sm text-slate-700">
-          <p className="font-semibold text-slate-900">Leaves remaining</p>
+          <p className="font-semibold text-slate-900">Today&apos;s Actual Balance</p>
           <p className="mt-1">
-            Casual:{" "}
-            <span className="font-semibold">
-              {activeLeaveBalance.casualLeaves.toFixed(2)}
-            </span>{" "}
-            · Earned:{" "}
-            <span className="font-semibold">
-              {activeLeaveBalance.earnedLeaves.toFixed(2)}
-            </span>
+            Casual: <span className="font-semibold">{activeLeaveBalance.casualLeaves.toFixed(2)}</span>{" "}
+            · Earned: <span className="font-semibold">{activeLeaveBalance.earnedLeaves.toFixed(2)}</span>
           </p>
+          {activeLeaveBalance.projected && activeLeaveBalance.futureApproved &&
+          (activeLeaveBalance.futureApproved.casualLeaves > 0 ||
+            activeLeaveBalance.futureApproved.earnedLeaves > 0 ||
+            activeLeaveBalance.futureApproved.unpaidLeaves > 0) ? (
+            <div className="mt-3 border-t border-brand-200 pt-3">
+              <p className="font-semibold text-slate-900">Projected Balance After Approved Future Leaves</p>
+              <p className="mt-1">
+                Casual: <span className="font-semibold">{activeLeaveBalance.projected.casualLeaves.toFixed(2)}</span>{" "}
+                · Earned: <span className="font-semibold">{activeLeaveBalance.projected.earnedLeaves.toFixed(2)}</span>{" "}
+                · Future unpaid: <span className="font-semibold">{activeLeaveBalance.futureApproved.unpaidLeaves.toFixed(2)}</span>
+              </p>
+              {activeLeaveBalance.futureApproved.scheduledCasualCredits > 0 ? (
+                <p className="mt-1 text-xs text-slate-600">
+                  Includes {activeLeaveBalance.futureApproved.scheduledCasualCredits.toFixed(2)} scheduled Casual Leave credit(s) due before the approved future leave dates.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
         <div>
           <label className="label" htmlFor="approverIds">
@@ -469,6 +501,41 @@ export function LeaveRequestForm({
                 </label>
               ))}
             </div>
+          </div>
+        ) : null}
+
+        {canManualOverride && canSelectPastDate && Boolean(startDate) && startDate < minDate ? (
+          <div className="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <label className="inline-flex items-center gap-3 text-sm font-semibold text-slate-900">
+              <input
+                type="checkbox"
+                checked={manualOverrideEnabled}
+                onChange={(event) => setManualOverrideEnabled(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300"
+              />
+              Manually override the Casual / Earned / Unpaid breakup
+            </label>
+            <input type="hidden" name="manualOverrideEnabled" value={manualOverrideEnabled ? "true" : "false"} />
+            {manualOverrideEnabled ? (
+              <div className="mt-4 grid gap-4 md:grid-cols-3">
+                <div>
+                  <label className="label" htmlFor="manualCasualDays">Casual days</label>
+                  <input className="input" id="manualCasualDays" name="manualCasualDays" type="number" min="0" step="0.5" defaultValue="0" required />
+                </div>
+                <div>
+                  <label className="label" htmlFor="manualEarnedDays">Earned days</label>
+                  <input className="input" id="manualEarnedDays" name="manualEarnedDays" type="number" min="0" step="0.5" defaultValue="0" required />
+                </div>
+                <div>
+                  <label className="label" htmlFor="manualUnpaidDays">Unpaid days</label>
+                  <input className="input" id="manualUnpaidDays" name="manualUnpaidDays" type="number" min="0" step="0.5" defaultValue={calculatedDays.toFixed(2)} required />
+                </div>
+                <div className="md:col-span-3">
+                  <label className="label" htmlFor="manualOverrideNote">Required override note</label>
+                  <textarea className="input min-h-24" id="manualOverrideNote" name="manualOverrideNote" rows={3} required placeholder="Explain why the normal projected allocation is being overridden." />
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
         <div className="md:col-span-2">

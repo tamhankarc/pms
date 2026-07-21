@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { AutoSubmitFilterForm } from "@/components/forms/auto-submit-filter-form";
-import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { PageHeader } from "@/components/ui/page-header";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { requireUser } from "@/lib/auth";
-import { canAccessMenuItem, isHR } from "@/lib/permissions";
+import { canAccessLeaveRequests, canAccessMenuItem, isAdmin, isHR } from "@/lib/permissions";
 import { formatDateInIst, formatTimeInIst } from "@/lib/ist";
 import {
   getUnifiedLeaveLedger,
@@ -12,7 +11,6 @@ import {
 } from "@/lib/leave-admin-ledger";
 
 type SearchParams = {
-  userId?: string;
   fromDate?: string;
   toDate?: string;
   page?: string;
@@ -23,19 +21,23 @@ function signedNumber(value: number) {
   return value.toFixed(2);
 }
 
-
-export default async function LeaveLedgerPage({
+export default async function MyLeaveLedgerPage({
   searchParams,
 }: {
   searchParams?: Promise<SearchParams>;
 }) {
   const user = await requireUser();
-  if (!isHR(user) && !canAccessMenuItem(user, "leave-admin")) {
+  if (
+    !canAccessLeaveRequests(user) &&
+    !canAccessMenuItem(user, "leave-requests") &&
+    !isAdmin(user) &&
+    !isHR(user)
+  ) {
     return (
       <div className="space-y-6">
         <PageHeader
-          title="Leave Balance Ledger"
-          description="Only leave administration users can access this page."
+          title="My Leave Ledger"
+          description="This account does not have access to leave records."
         />
       </div>
     );
@@ -43,7 +45,7 @@ export default async function LeaveLedgerPage({
 
   const params = (await searchParams) ?? {};
   const ledger = await getUnifiedLeaveLedger({
-    userId: params.userId || undefined,
+    userId: user.id,
     fromDateKey: params.fromDate || LEAVE_LEDGER_START_DATE_KEY,
     toDateKey: params.toDate || undefined,
     page: Number(params.page || 1),
@@ -53,30 +55,21 @@ export default async function LeaveLedgerPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Leave Balance Ledger"
-        description="Complete leave balance history in one continuous ledger."
-        actions={<Link className="btn-secondary" href="/leave-admin">Back to Leave Administration</Link>}
+        title="My Leave Ledger"
+        description="Your complete Casual and Earned Leave balance history in one continuous ledger."
+        actions={
+          <Link className="btn-secondary" href="/leave-requests">
+            Back to Leave Requests
+          </Link>
+        }
       />
 
       <section className="card p-5">
-        <AutoSubmitFilterForm className="grid gap-4 md:grid-cols-[1fr_180px_180px_auto]">
+        <AutoSubmitFilterForm className="grid gap-4 md:grid-cols-[180px_180px_auto]">
           <div>
-            <label className="label" htmlFor="userId">User</label>
-            <SearchableCombobox
-              id="userId"
-              name="userId"
-              defaultValue={params.userId || ""}
-              options={[
-                { value: "", label: "All users with ledger activity" },
-                ...ledger.userOptions.map((row) => ({ value: row.id, label: row.fullName })),
-              ]}
-              placeholder="All users with ledger activity"
-              searchPlaceholder="Search users..."
-              emptyLabel="No user found."
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="fromDate">From date</label>
+            <label className="label" htmlFor="fromDate">
+              From date
+            </label>
             <input
               className="input"
               id="fromDate"
@@ -87,7 +80,9 @@ export default async function LeaveLedgerPage({
             />
           </div>
           <div>
-            <label className="label" htmlFor="toDate">To date</label>
+            <label className="label" htmlFor="toDate">
+              To date
+            </label>
             <input
               className="input"
               id="toDate"
@@ -97,28 +92,36 @@ export default async function LeaveLedgerPage({
               defaultValue={params.toDate || ""}
             />
           </div>
-          <div className="flex items-end gap-3">
-            <Link className="btn-secondary" href="/leave-admin/leave-ledger">Reset</Link>
+          <div className="flex items-end">
+            <Link
+              className="btn-secondary"
+              href="/leave-requests/leave-ledger"
+            >
+              Reset
+            </Link>
           </div>
         </AutoSubmitFilterForm>
       </section>
 
       <section className="card p-5">
         <h2 className="section-title">Ledger rules</h2>
-        <p className="mt-2 text-sm text-slate-600">Opening balances, credits, deductions, adjustments, and reversals are shown using one consistent running-balance format. Approved future reservations appear when their leave date is processed.</p>
+        <p className="mt-2 text-sm text-slate-600">
+          Opening balances, quarterly credits, leave deductions, adjustments,
+          and reversals are shown using one running-balance format. Approved
+          future leave appears here when its leave date is processed.
+        </p>
       </section>
 
-      <section className="table-wrap" id="leave-ledger-table">
+      <section className="table-wrap" id="my-leave-ledger-table">
         <div className="border-b border-slate-200 px-6 py-5">
           <h2 className="section-title">Ledger rows</h2>
           <p className="section-subtitle">
-            Showing opening balances, credits, leave deductions, balance adjustments, reversals, and HR changes.
+            Your leave balance changes from {LEAVE_LEDGER_START_DATE_KEY} onward.
           </p>
         </div>
         <table className="table-base">
           <thead className="table-head">
             <tr>
-              <th className="table-cell">User</th>
               <th className="table-cell">Event date</th>
               <th className="table-cell">Type</th>
               <th className="table-cell">Description</th>
@@ -131,13 +134,18 @@ export default async function LeaveLedgerPage({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {ledger.rows.map((row, index) => (
-              <tr key={`${row.userId}-${row.referenceId ?? row.eventType}-${row.eventDate.toISOString()}-${index}`}>
-                <td className="table-cell font-medium text-slate-900">{row.userName}</td>
+              <tr
+                key={`${row.referenceId ?? row.eventType}-${row.eventDate.toISOString()}-${index}`}
+              >
                 <td className="table-cell">
                   {formatDateInIst(row.eventDate)} {formatTimeInIst(row.eventDate)}
                 </td>
-                <td className="table-cell">{row.eventType.replaceAll("_", " ")}</td>
-                <td className="table-cell max-w-xl text-sm text-slate-700">{row.description}</td>
+                <td className="table-cell">
+                  {row.eventType.replaceAll("_", " ")}
+                </td>
+                <td className="table-cell max-w-xl text-sm text-slate-700">
+                  {row.description}
+                </td>
                 <td className="table-cell">{signedNumber(row.casualChange)}</td>
                 <td className="table-cell">{signedNumber(row.earnedChange)}</td>
                 <td className="table-cell">{row.unpaidDays.toFixed(2)}</td>
@@ -147,21 +155,28 @@ export default async function LeaveLedgerPage({
             ))}
             {ledger.rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="table-cell text-center text-sm text-slate-500">
-                  No ledger rows found for the selected filters.
+                <td
+                  colSpan={8}
+                  className="table-cell text-center text-sm text-slate-500"
+                >
+                  No leave ledger rows found for the selected dates.
                 </td>
               </tr>
             ) : null}
           </tbody>
         </table>
         <PaginationControls
-          basePath="/leave-admin/leave-ledger"
+          basePath="/leave-requests/leave-ledger"
           currentPage={ledger.currentPage}
           totalPages={ledger.totalPages}
           totalItems={ledger.totalItems}
           pageSize={ledger.pageSize}
-          searchParams={{ userId: params.userId, fromDate: params.fromDate, toDate: params.toDate, page: params.page }}
-          anchor="#leave-ledger-table"
+          searchParams={{
+            fromDate: params.fromDate,
+            toDate: params.toDate,
+            page: params.page,
+          }}
+          anchor="#my-leave-ledger-table"
         />
       </section>
     </div>

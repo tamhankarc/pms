@@ -117,6 +117,36 @@ export default async function UserAssignmentsPage({
     }
   }
 
+  const showTimeEntryCounts = Boolean(initialValues && params.scope && params.id);
+  const timeEntryCountByUserId = new Map<string, number>();
+
+  if (showTimeEntryCounts && params.scope === "project" && params.id) {
+    const rows = await db.timeEntry.groupBy({
+      by: ["employeeId"],
+      where: { projectId: params.id },
+      _count: { _all: true },
+    });
+    rows.forEach((row) => {
+      timeEntryCountByUserId.set(row.employeeId, row._count._all);
+    });
+  }
+
+  if (showTimeEntryCounts && params.scope === "subproject" && params.id) {
+    const rows = await db.timeEntry.groupBy({
+      by: ["employeeId"],
+      where: { subProjectId: params.id },
+      _count: { _all: true },
+    });
+    rows.forEach((row) => {
+      timeEntryCountByUserId.set(row.employeeId, row._count._all);
+    });
+  }
+
+  const usersWithTimeEntryCounts = users.map((user) => ({
+    ...user,
+    timeEntryCount: timeEntryCountByUserId.get(user.id) ?? 0,
+  }));
+
   const visibleProjectRows = [...new Map(
     projectAssignments
       .filter((row) => !params.clientId || row.project.clientId === params.clientId)
@@ -204,8 +234,9 @@ export default async function UserAssignmentsPage({
             name: subProject.name,
             projectId: subProject.projectId,
           }))}
-          users={users}
+          users={usersWithTimeEntryCounts}
           initialValues={initialValues}
+          showTimeEntryCounts={showTimeEntryCounts}
         />
       ) : null}
 

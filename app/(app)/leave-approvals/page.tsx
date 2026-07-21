@@ -29,6 +29,22 @@ type SearchParams = {
   userId?: string;
 };
 
+function formatProjectedBreakup(projected: {
+  casualDaysUsed: number;
+  earnedDaysUsed: number;
+  unpaidDaysUsed: number;
+} | null) {
+  if (!projected) return "Projection unavailable";
+  const parts: string[] = [];
+  if (projected.casualDaysUsed > 0)
+    parts.push(`Casual ${projected.casualDaysUsed.toFixed(2)}`);
+  if (projected.earnedDaysUsed > 0)
+    parts.push(`Earned ${projected.earnedDaysUsed.toFixed(2)}`);
+  if (projected.unpaidDaysUsed > 0)
+    parts.push(`Unpaid ${projected.unpaidDaysUsed.toFixed(2)}`);
+  return parts.length ? parts.join(" · ") : "No leave deduction";
+}
+
 function hasValidDateFormat(value?: string) {
   return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
 }
@@ -56,6 +72,7 @@ export default async function LeaveApprovalsPage({
   const canAct = isDesignatedApprover;
   const canViewAll = canViewEMSAdminDashboard(user);
   const showAppliedOnColumn = isHR(user);
+  const showProjectedBreakup = isHR(user);
   const filters = {
     fromDateKey: hasValidDateFormat(params.fromDate)
       ? params.fromDate
@@ -204,11 +221,27 @@ export default async function LeaveApprovalsPage({
                     )}
                   </td>
                   <td className="table-cell">
-                    {row.status === "APPROVED" || row.status === "CANCELLED"
-                      ? row.leaveType.replaceAll("_", " ")
-                      : row.status === "REJECTED"
-                        ? "No balance deducted"
-                        : "Calculated on approval"}
+                    {row.status === "PENDING" || row.status === "RECONSIDER" ? (
+                      showProjectedBreakup ? (
+                        <div>
+                          <div className="font-medium text-slate-900">
+                            Projected:{" "}
+                            {formatProjectedBreakup(row.projectedBreakup)}
+                          </div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            Recalculated against the latest balance when approved.
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-500">
+                          Recalculated against the latest balance when approved.
+                        </div>
+                      )
+                    ) : row.status === "REJECTED" ? (
+                      "No balance deducted"
+                    ) : (
+                      row.leaveType.replaceAll("_", " ")
+                    )}
                   </td>
                   <td className="table-cell">
                     {formatDateInIst(row.startDate)} -{" "}

@@ -120,9 +120,45 @@ enum AttendanceActionType {
 enum LeaveStatus {
   PENDING
   APPROVED
+  PARTIALLY_CANCELLED
   REJECTED
   RECONSIDER
   CANCELLED
+}
+
+enum LeaveAllocationStatus {
+  SCHEDULED
+  PROCESSED
+  CANCELLED
+  REVERSED
+}
+
+enum LeaveProcessingSource {
+  DAILY_CRON
+  URGENT_APPROVAL
+  BACKDATED_APPROVAL
+  MIGRATION
+  HR_REVERSAL
+}
+
+enum LeaveBalanceTransactionType {
+  OPENING_BALANCE
+  QUARTERLY_CREDIT
+  LEAVE_DEDUCTION
+  LEAVE_REVERSAL
+  MANUAL_ADJUSTMENT
+  MIGRATION_RESTORE
+}
+
+enum LeaveCancellationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum LeaveMigrationStatus {
+  APPLIED
+  FAILED
 }
 
 enum LeaveType {
@@ -240,6 +276,16 @@ model User {
   approverForEmployees     LeaveApproverAssignment[]        @relation("LeaveApproverUser")
   leaveApprovalsAssignedBy LeaveApproverAssignment[]        @relation("LeaveApproverAssignedBy")
   leaveYearProfiles        LeaveYearProfile[]
+  leaveRequestsCreated      LeaveRequest[]                  @relation("LeaveRequestCreatedBy")
+  leaveDateAllocations      LeaveDateAllocation[]           @relation("LeaveAllocationEmployee")
+  leaveAllocationsProcessed LeaveDateAllocation[]           @relation("LeaveAllocationProcessedBy")
+  leaveBalanceTransactions  LeaveBalanceTransaction[]       @relation("LeaveTransactionEmployee")
+  leaveTransactionsActed    LeaveBalanceTransaction[]       @relation("LeaveTransactionActor")
+  leaveCancellationRequests LeaveCancellationRequest[]      @relation("LeaveCancellationRequestedBy")
+  leaveCancellationReviews  LeaveCancellationRequest[]      @relation("LeaveCancellationReviewedBy")
+  leaveMigrationRunsCreated LeaveMigrationRun[]             @relation("LeaveMigrationCreatedBy")
+  leaveMigrationSnapshots   LeaveMigrationUserSnapshot[]
+  legacyPredictiveLedgerRows LeaveLegacyPredictiveLedgerRow[]
   announcementRecipients   DashboardAnnouncementRecipient[]
   sweepInTriggersCreated SweepInTrigger[]     @relation("SweepInTriggerCreatedBy")
   sweepInTriggerSelections SweepInTriggerUser[] @relation("SweepInTriggerUser")
@@ -1065,6 +1111,7 @@ model SweepInTriggerUser {
 model LeaveRequest {
   id              String      @id @default(cuid())
   userId          String
+  createdById     String?
   leaveType       LeaveType
   startDate       DateTime
   endDate         DateTime
@@ -1083,14 +1130,21 @@ model LeaveRequest {
   casualDaysUsed  Decimal?    @db.Decimal(6, 2)
   earnedDaysUsed  Decimal?    @db.Decimal(6, 2)
   unpaidDaysUsed  Decimal?    @db.Decimal(6, 2)
+  manualAllocationOverrideJson String? @db.Text
+  manualOverrideNote           String? @db.Text
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
   user              User                            @relation("LeaveRequestEmployee", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  createdBy         User?                           @relation("LeaveRequestCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
   approver          User?                           @relation("LeaveRequestApprover", fields: [approverId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   selectedApprovers LeaveRequestSelectedApprover[]
+  dateAllocations   LeaveDateAllocation[]
+  balanceTransactions LeaveBalanceTransaction[]
+  cancellationRequests LeaveCancellationRequest[]
 
   @@index([userId, startDate, endDate])
+  @@index([createdById])
   @@index([status, approverId])
 }
 
@@ -1134,11 +1188,171 @@ model LeaveYearProfile {
   updatedAt        DateTime         @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  balanceTransactions LeaveBalanceTransaction[]
 
   @@unique([userId, year])
   @@index([year])
 }
 
+
+model LeaveDateAllocation {
+  id                    String                @id @default(cuid())
+  leaveRequestId        String
+  userId                String
+  year                  Int
+  leaveDate             DateTime
+  duration              Decimal               @db.Decimal(4, 2)
+  dayPart               String
+  casualDays            Decimal               @default(0) @db.Decimal(6, 2)
+  earnedDays            Decimal               @default(0) @db.Decimal(6, 2)
+  unpaidDays            Decimal               @default(0) @db.Decimal(6, 2)
+  isSandwichDay         Boolean               @default(false)
+  status                LeaveAllocationStatus @default(SCHEDULED)
+  processedAt           DateTime?
+  cancelledAt           DateTime?
+  reversedAt            DateTime?
+  processingSource      LeaveProcessingSource?
+  processedById         String?
+  note                  String?                @db.Text
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user         User         @relation("LeaveAllocationEmployee", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  processedBy  User?        @relation("LeaveAllocationProcessedBy", fields: [processedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  transactions LeaveBalanceTransaction[]
+
+  @@unique([leaveRequestId, leaveDate])
+  @@index([userId, leaveDate, status])
+  @@index([year, leaveDate, status])
+  @@index([processedById])
+}
+
+model LeaveBalanceTransaction {
+  id                    String                      @id @default(cuid())
+  userId                String
+  leaveYearProfileId    String?
+  leaveRequestId        String?
+  leaveDateAllocationId String?
+  year                  Int
+  transactionType       LeaveBalanceTransactionType
+  eventDate             DateTime
+  casualChange          Decimal                     @default(0) @db.Decimal(6, 2)
+  earnedChange          Decimal                     @default(0) @db.Decimal(6, 2)
+  unpaidChange          Decimal                     @default(0) @db.Decimal(6, 2)
+  casualBalanceAfter    Decimal                     @db.Decimal(6, 2)
+  earnedBalanceAfter    Decimal                     @db.Decimal(6, 2)
+  source                String
+  note                  String?                     @db.Text
+  actorId               String?
+  idempotencyKey        String?                     @unique
+  createdAt             DateTime                    @default(now())
+
+  user                User                 @relation("LeaveTransactionEmployee", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  leaveYearProfile    LeaveYearProfile?    @relation(fields: [leaveYearProfileId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  leaveRequest        LeaveRequest?        @relation(fields: [leaveRequestId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  leaveDateAllocation LeaveDateAllocation? @relation(fields: [leaveDateAllocationId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  actor               User?                @relation("LeaveTransactionActor", fields: [actorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([userId, eventDate])
+  @@index([year, eventDate])
+  @@index([leaveRequestId])
+  @@index([leaveDateAllocationId])
+  @@index([actorId])
+}
+
+model LeaveCancellationRequest {
+  id                           String                  @id @default(cuid())
+  leaveRequestId               String
+  requestedById                String
+  reason                       String                  @db.Text
+  status                       LeaveCancellationStatus @default(PENDING)
+  reviewedById                 String?
+  reviewNote                   String?                 @db.Text
+  restoredProcessedDateKeysJson String?                @db.Text
+  reviewedAt                   DateTime?
+  createdAt                    DateTime                @default(now())
+  updatedAt                    DateTime                @updatedAt
+
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  requestedBy  User         @relation("LeaveCancellationRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  reviewedBy   User?        @relation("LeaveCancellationReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([status, createdAt])
+  @@index([leaveRequestId, status])
+  @@index([requestedById])
+  @@index([reviewedById])
+}
+
+model LeaveMigrationRun {
+  id           String               @id @default(cuid())
+  cutoverDateKey String
+  status       LeaveMigrationStatus
+  note         String               @db.Text
+  createdById  String
+  appliedAt    DateTime?
+  summaryJson  String?              @db.Text
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  createdBy User                         @relation("LeaveMigrationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  snapshots LeaveMigrationUserSnapshot[]
+  legacyPredictiveLedgerRows LeaveLegacyPredictiveLedgerRow[]
+
+  @@index([status, createdAt])
+  @@index([createdById])
+}
+
+model LeaveMigrationUserSnapshot {
+  id                    String   @id @default(cuid())
+  migrationRunId        String
+  userId                String
+  year                  Int
+  beforeCasual          Decimal  @db.Decimal(6, 2)
+  beforeEarned          Decimal  @db.Decimal(6, 2)
+  restoredCasual        Decimal  @default(0) @db.Decimal(6, 2)
+  restoredEarned        Decimal  @default(0) @db.Decimal(6, 2)
+  afterCasual           Decimal  @db.Decimal(6, 2)
+  afterEarned           Decimal  @db.Decimal(6, 2)
+  futureCasual          Decimal  @default(0) @db.Decimal(6, 2)
+  futureEarned          Decimal  @default(0) @db.Decimal(6, 2)
+  futureUnpaid          Decimal  @default(0) @db.Decimal(6, 2)
+  projectedCasual       Decimal  @db.Decimal(6, 2)
+  projectedEarned       Decimal  @db.Decimal(6, 2)
+  warningsJson          String?  @db.Text
+  detailsJson           String?  @db.Text
+  createdAt             DateTime @default(now())
+
+  migrationRun LeaveMigrationRun @relation(fields: [migrationRunId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([migrationRunId, userId, year])
+  @@index([userId, year])
+}
+
+model LeaveLegacyPredictiveLedgerRow {
+  id             String   @id @default(cuid())
+  migrationRunId String
+  userId         String
+  eventDate      DateTime
+  eventDateKey   String
+  eventType      String
+  description    String   @db.Text
+  referenceId    String?
+  casualChange   Decimal  @default(0) @db.Decimal(6, 2)
+  earnedChange   Decimal  @default(0) @db.Decimal(6, 2)
+  unpaidDays     Decimal  @default(0) @db.Decimal(6, 2)
+  casualBalance  Decimal  @db.Decimal(6, 2)
+  earnedBalance  Decimal  @db.Decimal(6, 2)
+  createdAt      DateTime @default(now())
+
+  migrationRun LeaveMigrationRun @relation(fields: [migrationRunId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([migrationRunId, userId, eventDate])
+  @@index([userId, eventDate])
+  @@index([eventDateKey])
+}
 
 model LeaveQuarterlyCasualCredit {
   id           String   @id @default(cuid())

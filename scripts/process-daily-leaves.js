@@ -1,18 +1,15 @@
 #!/usr/bin/env node
 /*
-  PMS quarterly Casual Leave maintenance runner for AWS/Linux.
+  PMS deferred-leave daily processor for AWS/Linux crontab.
 
-  IMPORTANT:
-  - The normal daily leave processor already applies all due quarterly credits
-    before processing leave deductions. A separate quarterly cron is not needed.
-  - Keep this script only as an idempotent manual/fallback runner.
-  - It calls the protected application route so credits are written through the
-    new balance ledger and future leave reservations are recalculated.
+  The production server runs crontab in UTC, so schedule this at 18:30 UTC
+  for 00:00 IST. The script loads Next.js environment files from the project
+  root, then calls the protected internal maintenance route.
 
   Usage:
-    node scripts/credit-quarterly-casual-leaves.js
-    node scripts/credit-quarterly-casual-leaves.js --as-of=2026-10-01
-    node scripts/credit-quarterly-casual-leaves.js --base-url=http://127.0.0.1:3000
+    node scripts/process-daily-leaves.js
+    node scripts/process-daily-leaves.js --as-of=2026-07-20
+    node scripts/process-daily-leaves.js --base-url=http://127.0.0.1:3000
 
   Required environment:
     MAINTENANCE_CRON_SECRET (preferred) or CRON_SECRET
@@ -25,6 +22,8 @@ const path = require("node:path");
 const { loadEnvConfig } = require("@next/env");
 
 const projectRoot = path.resolve(__dirname, "..");
+// Cron normally does not set NODE_ENV. Default to production so .env.production
+// is loaded on the AWS server; set NODE_ENV=development explicitly for local use.
 process.env.NODE_ENV ||= "production";
 loadEnvConfig(projectRoot, process.env.NODE_ENV === "development", console);
 
@@ -64,7 +63,7 @@ if (!baseUrl) {
 }
 if (!secret) {
   throw new Error(
-    "MAINTENANCE_CRON_SECRET (or CRON_SECRET) is required for quarterly leave maintenance.",
+    "MAINTENANCE_CRON_SECRET (or CRON_SECRET) is required for the daily leave processor.",
   );
 }
 if (asOfDateKey && !isValidDateKey(asOfDateKey)) {
@@ -75,7 +74,7 @@ const controller = new AbortController();
 const timeout = setTimeout(() => controller.abort(), 10 * 60 * 1000);
 
 async function main() {
-  const endpoint = `${baseUrl}/api/maintenance/quarterly-casual-leaves`;
+  const endpoint = `${baseUrl}/api/maintenance/daily-leave-deductions`;
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -88,7 +87,7 @@ async function main() {
   const body = await response.text();
   if (!response.ok) {
     throw new Error(
-      `Quarterly Casual Leave maintenance failed (${response.status} ${response.statusText}): ${body}`,
+      `Daily leave processor failed (${response.status} ${response.statusText}): ${body}`,
     );
   }
 
@@ -114,7 +113,7 @@ async function main() {
 main()
   .catch((error) => {
     console.error(
-      `[${new Date().toISOString()}] Quarterly Casual Leave maintenance failed:`,
+      `[${new Date().toISOString()}] Daily leave processor failed:`,
       error,
     );
     process.exitCode = 1;

@@ -8,24 +8,37 @@ import { requireUserForAction } from "@/lib/auth";
 import {
   canAccessLeaveRequests,
   canAssignApprovers,
+  isAdmin,
   isHR,
 } from "@/lib/permissions";
 import {
-  getDayBoundsUtcFromIstDateKey,
   getIstDateKey,
-  isWeekendDateKey,
 } from "@/lib/ist";
 import {
   getEligibleEmployeeIdsForGlobalApproverAssignment,
-  getOfficialHolidayDateKeysForYear,
-  getOrCreateLeaveYearProfile,
   isLeaveAllowedUser,
   areValidLeaveRequestApproversForUser,
 } from "@/lib/ems-queries";
 import {
+  sendLeaveCancellationRequestedEmail,
   sendLeaveRequestStatusEmail,
   sendLeaveRequestSubmittedEmail,
 } from "@/lib/mail/leave-mail";
+import {
+  createAllocationRowsForApprovedRequest,
+  applyManualOverrideToRequestAllocations,
+  ensureSandwichAllocationsForRequest,
+  processDueLeaveAllocationsForUser,
+  recalculateFutureAllocationsForUser,
+  syncRequestAggregates,
+  validateManualOverrideForRequest,
+  getWorkingDateSpecs,
+  lockUserLeaveTimeline,
+  ensureQuarterlyCreditForUser,
+  isLeaveStartWithinPastCancellationWindow,
+  previewLeaveRequestAllocation,
+} from "@/lib/leave-system";
+import { getCurrentQuarterStartDateKey } from "@/lib/quarterly-casual-leaves";
 
 const leaveSchema = z.object({
   id: z.string().optional(),
@@ -41,27 +54,14 @@ const leaveSchema = z.object({
     .enum(["FULL_DAYS", "HALF_DAYS", "CUSTOM"])
     .default("FULL_DAYS"),
   leaveDayTypesJson: z.string().optional(),
+  manualOverrideEnabled: z.enum(["true", "false"]).optional(),
+  manualCasualDays: z.coerce.number().min(0).optional(),
+  manualEarnedDays: z.coerce.number().min(0).optional(),
+  manualUnpaidDays: z.coerce.number().min(0).optional(),
+  manualOverrideNote: z.string().trim().max(3000).optional(),
 });
 
-type DayDuration = "FULL_DAY" | "HALF_DAY" | "FIRST_HALF" | "SECOND_HALF";
 type DaySelectionMode = "FULL_DAYS" | "HALF_DAYS" | "CUSTOM";
-
-function normalizeDayDuration(value: string | undefined): DayDuration {
-  if (
-    value === "FIRST_HALF" ||
-    value === "SECOND_HALF" ||
-    value === "HALF_DAY"
-  ) {
-    return value;
-  }
-  return "FULL_DAY";
-}
-
-function isHalfDayDuration(value: DayDuration) {
-  return (
-    value === "HALF_DAY" || value === "FIRST_HALF" || value === "SECOND_HALF"
-  );
-}
 
 function parseDateRange(startDate: string, endDate: string) {
   const start = new Date(`${startDate}T00:00:00+05:30`);
@@ -73,12 +73,13 @@ function parseDateRange(startDate: string, endDate: string) {
 }
 
 async function validateNoOverlappingLeaveRequest(
+  client: Pick<Prisma.TransactionClient, "leaveRequest">,
   userId: string,
   start: Date,
   end: Date,
   excludeRequestId?: string,
 ) {
-  const overlapping = await db.leaveRequest.findFirst({
+  const overlapping = await client.leaveRequest.findFirst({
     where: {
       userId,
       status: { notIn: ["REJECTED", "CANCELLED"] },
@@ -112,25 +113,16 @@ function validateStartDateNotInPast(startDate: string) {
     throw new Error("Start date cannot be in the past.");
 }
 
-function ensureLeaveYearProfile<T>(
-  profile: T | null,
-): T {
-  if (!profile) {
-    throw new Error("Unable to create or find leave year profile.");
-  }
-
-  return profile;
-}
-
 async function getRequestEmployee(
   actor: Awaited<ReturnType<typeof requireUserForAction>>,
   requestedForUserId?: string,
 ) {
+  const canCreateOnBehalf = isHR(actor) || isAdmin(actor);
   const targetUserId =
-    isHR(actor) && requestedForUserId ? requestedForUserId : actor.id;
-  if (!isHR(actor) && targetUserId !== actor.id)
+    canCreateOnBehalf && requestedForUserId ? requestedForUserId : actor.id;
+  if (!canCreateOnBehalf && targetUserId !== actor.id)
     throw new Error(
-      "Only Administration/HR can submit leave requests on behalf of another user.",
+      "Only Admin or Administration/HR can submit leave requests on behalf of another user.",
     );
   const target = await db.user.findUnique({
     where: { id: targetUserId },
@@ -148,171 +140,58 @@ async function getRequestEmployee(
   return target;
 }
 
-async function getWorkingDateKeys(
-  startDateKey: string,
-  endDateKey: string,
-  userId: string,
-) {
-  const year = Number(startDateKey.slice(0, 4));
-  const profile = ensureLeaveYearProfile(
-    await getOrCreateLeaveYearProfile(userId, year),
-  );
-  const holidayKeys = new Set(
-    await getOfficialHolidayDateKeysForYear(year, profile.shift),
-  );
-  const keys: string[] = [];
-  let cursor = startDateKey;
-  while (cursor <= endDateKey) {
-    if (!isWeekendDateKey(cursor) && !holidayKeys.has(cursor))
-      keys.push(cursor);
-    cursor = getIstDateKey(getDayBoundsUtcFromIstDateKey(cursor).endUtc);
-  }
-  return { profile, year, keys, holidayKeys };
-}
-
 async function validateBoundaryDates(
+  client: Prisma.TransactionClient,
   startDate: string,
   endDate: string,
   userId: string,
+  mode: DaySelectionMode = "FULL_DAYS",
+  rawDayTypes?: string,
 ) {
-  const { holidayKeys } = await getWorkingDateKeys(startDate, endDate, userId);
-  if (isWeekendDateKey(startDate) || holidayKeys.has(startDate))
+  const { start, end } = parseDateRange(startDate, endDate);
+  const { specs } = await getWorkingDateSpecs(client, {
+    userId,
+    startDate: start,
+    endDate: end,
+    daySelectionMode: mode,
+    leaveDayTypesJson: rawDayTypes,
+  });
+  const workingKeys = new Set(specs.map((spec) => spec.dateKey));
+  if (!workingKeys.has(startDate))
     throw new Error(
       "Start date cannot be a Saturday, Sunday, or official holiday.",
     );
-  if (isWeekendDateKey(endDate) || holidayKeys.has(endDate))
+  if (!workingKeys.has(endDate))
     throw new Error(
       "End date cannot be a Saturday, Sunday, or official holiday.",
     );
 }
 
-function parseCustomDurations(
-  raw: string | undefined,
-): Record<string, DayDuration> {
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw) as Record<string, string>;
-    return Object.fromEntries(
-      Object.entries(parsed).map(([key, value]) => [
-        key,
-        normalizeDayDuration(value),
-      ]),
-    );
-  } catch {
-    return {};
-  }
-}
-
-function getDurationByDate(
-  keys: string[],
-  mode: DaySelectionMode,
-  rawDayTypes?: string,
-) {
-  const custom = parseCustomDurations(rawDayTypes);
-  const durationByDate: Record<string, DayDuration> = {};
-  for (const key of keys) {
-    durationByDate[key] =
-      mode === "HALF_DAYS"
-        ? normalizeDayDuration(custom[key]) === "SECOND_HALF"
-          ? "SECOND_HALF"
-          : "FIRST_HALF"
-        : mode === "CUSTOM"
-          ? normalizeDayDuration(custom[key])
-          : "FULL_DAY";
-  }
-  return durationByDate;
-}
-
-function sumSelectedWorkingDays(durationByDate: Record<string, DayDuration>) {
-  return Object.values(durationByDate).reduce(
-    (total, type) => total + (isHalfDayDuration(type) ? 0.5 : 1),
-    0,
-  );
-}
-
 async function computeRequestedLeaveDetails(
+  client: Prisma.TransactionClient,
   startDateKey: string,
   endDateKey: string,
   userId: string,
   mode: DaySelectionMode,
   rawDayTypes?: string,
 ) {
-  const { year, keys } = await getWorkingDateKeys(
-    startDateKey,
-    endDateKey,
+  const { start, end } = parseDateRange(startDateKey, endDateKey);
+  const { specs } = await getWorkingDateSpecs(client, {
     userId,
-  );
-  if (!keys.length)
-    throw new Error("Selected range has no working leave days.");
-  const durationByDate = getDurationByDate(keys, mode, rawDayTypes);
-  return {
-    year,
-    requestedLeaveDays: sumSelectedWorkingDays(durationByDate),
+    startDate: start,
+    endDate: end,
     daySelectionMode: mode,
-    leaveDayTypesJson: JSON.stringify(durationByDate),
-  };
-}
-
-async function computeApprovedLeaveBreakup(
-  startDateKey: string,
-  endDateKey: string,
-  userId: string,
-  mode: DaySelectionMode,
-  rawDayTypes?: string,
-) {
-  const { profile, year, keys, holidayKeys } = await getWorkingDateKeys(
-    startDateKey,
-    endDateKey,
-    userId,
-  );
-  if (!keys.length)
+    leaveDayTypesJson: rawDayTypes,
+  });
+  if (!specs.length)
     throw new Error("Selected range has no working leave days.");
-
-  const durationByDate = getDurationByDate(keys, mode, rawDayTypes);
-  const workingLeaveDays = sumSelectedWorkingDays(durationByDate);
-  const unpaidOnly =
-    profile.employmentStatus === "PROBATION" ||
-    profile.employmentStatus === "CONSULTANT";
-  const casualAvailable = unpaidOnly ? 0 : Number(profile.casualLeaves);
-  const earnedAvailable = unpaidOnly ? 0 : Number(profile.earnedLeaves);
-  const casualDaysUsed = Math.min(casualAvailable, workingLeaveDays);
-  const remainingAfterCasual = workingLeaveDays - casualDaysUsed;
-  const earnedDaysUsed = Math.min(earnedAvailable, remainingAfterCasual);
-  const workingUnpaidDaysUsed = Math.max(
-    0,
-    remainingAfterCasual - earnedDaysUsed,
-  );
-
-  // The sandwich rule is finalised only at approval time, using the
-  // employee's current remaining paid balance at that moment.
-  let sandwichUnpaidDaysUsed = 0;
-  if (workingUnpaidDaysUsed > 0) {
-    let cursor = startDateKey;
-    while (cursor <= endDateKey) {
-      const isInsideRange = cursor !== startDateKey && cursor !== endDateKey;
-      if (
-        isInsideRange &&
-        (isWeekendDateKey(cursor) || holidayKeys.has(cursor))
-      ) {
-        sandwichUnpaidDaysUsed += 1;
-      }
-      cursor = getIstDateKey(getDayBoundsUtcFromIstDateKey(cursor).endUtc);
-    }
-  }
-
-  const unpaidDaysUsed = workingUnpaidDaysUsed + sandwichUnpaidDaysUsed;
-  const totalLeaveDays = workingLeaveDays + sandwichUnpaidDaysUsed;
-  const leaveType =
-    casualDaysUsed > 0 ? "CASUAL" : earnedDaysUsed > 0 ? "EARNED" : "UNPAID";
   return {
-    year,
-    totalLeaveDays,
-    casualDaysUsed,
-    earnedDaysUsed,
-    unpaidDaysUsed,
-    leaveType: leaveType as "CASUAL" | "EARNED" | "UNPAID",
+    year: specs[0].year,
+    requestedLeaveDays: specs.reduce((sum, spec) => sum + spec.duration, 0),
     daySelectionMode: mode,
-    leaveDayTypesJson: JSON.stringify(durationByDate),
+    leaveDayTypesJson: JSON.stringify(
+      Object.fromEntries(specs.map((spec) => [spec.dateKey, spec.dayPart])),
+    ),
   };
 }
 
@@ -339,6 +218,16 @@ async function sendStatusMailWithoutRollingBack(
   }
 }
 
+async function sendCancellationMailWithoutRollingBack(
+  cancellationRequestId: string,
+) {
+  try {
+    await sendLeaveCancellationRequestedEmail(cancellationRequestId);
+  } catch (error) {
+    console.error("Unable to send leave cancellation notification email", error);
+  }
+}
+
 export type LeaveFormState = { success?: boolean; error?: string };
 
 export async function createLeaveRequestAction(
@@ -347,11 +236,13 @@ export async function createLeaveRequestAction(
 ): Promise<LeaveFormState> {
   try {
     const actor = await requireUserForAction();
-    if (!canAccessLeaveRequests(actor))
+    if (!canAccessLeaveRequests(actor) && !isAdmin(actor) && !isHR(actor)) {
       return {
         success: false,
         error: "You do not have access to leave requests.",
       };
+    }
+
     const parsed = leaveSchema.safeParse({
       requestedForUserId: formData.get("requestedForUserId") || undefined,
       startDate: formData.get("startDate"),
@@ -361,12 +252,20 @@ export async function createLeaveRequestAction(
       diwaliLeave: formData.get("diwaliLeave") === "on" ? "true" : "false",
       daySelectionMode: formData.get("daySelectionMode") || "FULL_DAYS",
       leaveDayTypesJson: formData.get("leaveDayTypesJson") || undefined,
+      manualOverrideEnabled:
+        formData.get("manualOverrideEnabled") === "true" ? "true" : "false",
+      manualCasualDays: formData.get("manualCasualDays") || undefined,
+      manualEarnedDays: formData.get("manualEarnedDays") || undefined,
+      manualUnpaidDays: formData.get("manualUnpaidDays") || undefined,
+      manualOverrideNote: formData.get("manualOverrideNote") || undefined,
     });
-    if (!parsed.success)
+    if (!parsed.success) {
       return {
         success: false,
         error: parsed.error.issues[0]?.message || "Invalid leave request.",
       };
+    }
+
     const employee = await getRequestEmployee(
       actor,
       parsed.data.requestedForUserId,
@@ -376,57 +275,125 @@ export async function createLeaveRequestAction(
         employee.id,
         parsed.data.approverIds,
       ))
-    )
+    ) {
       return {
         success: false,
         error:
           "One or more selected approvers are not available for this employee.",
       };
-    const isHrCreatingForAnotherEmployee =
-      isHR(actor) && employee.id !== actor.id;
-    if (!isHrCreatingForAnotherEmployee) {
+    }
+
+    const isPrivilegedCreatingForAnotherEmployee =
+      (isHR(actor) || isAdmin(actor)) && employee.id !== actor.id;
+    if (!isPrivilegedCreatingForAnotherEmployee) {
       validateStartDateNotInPast(parsed.data.startDate);
     }
-    await validateBoundaryDates(
-      parsed.data.startDate,
-      parsed.data.endDate,
-      employee.id,
-    );
+
+    const isBackdated = parsed.data.startDate < getIstDateKey();
+    const useManualOverride =
+      isHR(actor) &&
+      isBackdated &&
+      parsed.data.manualOverrideEnabled === "true";
+    const manualAllocationOverrideJson = useManualOverride
+      ? JSON.stringify({
+          casualDays: parsed.data.manualCasualDays ?? 0,
+          earnedDays: parsed.data.manualEarnedDays ?? 0,
+          unpaidDays: parsed.data.manualUnpaidDays ?? 0,
+        })
+      : null;
+    const manualOverrideNote = useManualOverride
+      ? parsed.data.manualOverrideNote?.trim() || null
+      : null;
     const { start, end } = parseDateRange(
       parsed.data.startDate,
       parsed.data.endDate,
     );
-    await validateNoOverlappingLeaveRequest(employee.id, start, end);
-    const requestDetails = await computeRequestedLeaveDetails(
-      parsed.data.startDate,
-      parsed.data.endDate,
-      employee.id,
-      parsed.data.daySelectionMode,
-      parsed.data.leaveDayTypesJson,
-    );
-    const request = await db.leaveRequest.create({
-      data: {
+
+    const request = await db.$transaction(async (tx) => {
+      // Uses the same per-employee lock as employment-status changes,
+      // approvals, cancellations and the daily processor. This prevents a
+      // request from being created against stale leave eligibility or balance.
+      await lockUserLeaveTimeline(tx, employee.id);
+
+      const currentEmployee = await tx.user.findUnique({
+        where: { id: employee.id },
+        select: {
+          id: true,
+          fullName: true,
+          isActive: true,
+          userType: true,
+          functionalRole: true,
+        },
+      });
+      if (!currentEmployee || !isLeaveAllowedUser(currentEmployee)) {
+        throw new Error("Selected user is not eligible for leave requests.");
+      }
+
+      await validateBoundaryDates(
+        tx,
+        parsed.data.startDate,
+        parsed.data.endDate,
+        employee.id,
+        parsed.data.daySelectionMode,
+        parsed.data.leaveDayTypesJson,
+      );
+      await validateNoOverlappingLeaveRequest(
+        tx,
+        employee.id,
+        start,
+        end,
+      );
+      const requestDetails = await computeRequestedLeaveDetails(
+        tx,
+        parsed.data.startDate,
+        parsed.data.endDate,
+        employee.id,
+        parsed.data.daySelectionMode,
+        parsed.data.leaveDayTypesJson,
+      );
+
+      const candidate = {
         userId: employee.id,
-        // Final paid/unpaid allocation is computed only when approved. This
-        // required enum value is not displayed as a final breakup while pending.
-        leaveType: "UNPAID",
         startDate: start,
         endDate: end,
-        reason: buildReason(parsed.data.reason, parsed.data.diwaliLeave),
-        approverId: parsed.data.approverIds[0] ?? null,
-        selectedApprovers: {
-          create: parsed.data.approverIds.map((approverId) => ({ approverId })),
-        },
         daySelectionMode: requestDetails.daySelectionMode,
         leaveDayTypesJson: requestDetails.leaveDayTypesJson,
-        totalLeaveDays: new Prisma.Decimal(
-          requestDetails.requestedLeaveDays.toFixed(2),
-        ),
-        casualDaysUsed: new Prisma.Decimal(0),
-        earnedDaysUsed: new Prisma.Decimal(0),
-        unpaidDaysUsed: new Prisma.Decimal(0),
-      },
+        manualAllocationOverrideJson,
+        manualOverrideNote,
+      };
+      await validateManualOverrideForRequest(tx, candidate);
+      // Preliminary validation is calculated against the complete approved
+      // future timeline, including guaranteed quarterly Casual credits. The
+      // authoritative calculation is repeated when the approver approves it.
+      await previewLeaveRequestAllocation(tx, candidate);
+
+      return tx.leaveRequest.create({
+        data: {
+          userId: employee.id,
+          createdById: actor.id,
+          // The final Casual/Earned/Unpaid breakup is assigned only on approval.
+          leaveType: "UNPAID",
+          startDate: start,
+          endDate: end,
+          reason: buildReason(parsed.data.reason, parsed.data.diwaliLeave),
+          approverId: parsed.data.approverIds[0] ?? null,
+          selectedApprovers: {
+            create: parsed.data.approverIds.map((approverId) => ({ approverId })),
+          },
+          daySelectionMode: requestDetails.daySelectionMode,
+          leaveDayTypesJson: requestDetails.leaveDayTypesJson,
+          totalLeaveDays: new Prisma.Decimal(
+            requestDetails.requestedLeaveDays.toFixed(2),
+          ),
+          casualDaysUsed: new Prisma.Decimal(0),
+          earnedDaysUsed: new Prisma.Decimal(0),
+          unpaidDaysUsed: new Prisma.Decimal(0),
+          manualAllocationOverrideJson,
+          manualOverrideNote,
+        },
+      });
     });
+
     await sendSubmittedMailWithoutRollingBack(request.id, "new");
     revalidatePath("/leave-requests");
     revalidatePath("/leave-requests/new");
@@ -457,12 +424,15 @@ export async function updateLeaveRequestAction(
       diwaliLeave: formData.get("diwaliLeave") === "on" ? "true" : "false",
       daySelectionMode: formData.get("daySelectionMode") || "FULL_DAYS",
       leaveDayTypesJson: formData.get("leaveDayTypesJson") || undefined,
+      manualOverrideEnabled: "false",
     });
-    if (!parsed.success)
+    if (!parsed.success) {
       return {
         success: false,
         error: parsed.error.issues[0]?.message || "Invalid leave request.",
       };
+    }
+
     const existing = await db.leaveRequest.findUnique({
       where: { id: parsed.data.id },
       include: {
@@ -477,83 +447,135 @@ export async function updateLeaveRequestAction(
         },
       },
     });
-    if (!existing || (existing.userId !== actor.id && !isHR(actor)))
+    if (
+      !existing ||
+      (existing.userId !== actor.id && !isHR(actor) && !isAdmin(actor))
+    ) {
       return { success: false, error: "Leave request not found." };
-    if (existing.status !== "RECONSIDER")
+    }
+    if (existing.status !== "RECONSIDER") {
       return {
         success: false,
         error: "Only leave requests marked for reconsider can be edited.",
       };
-    const employee = existing.user;
+    }
     if (
-      !isLeaveAllowedUser(employee) ||
-      ["ADMIN", "ACCOUNTS", "OPERATIONS"].includes(employee.userType)
-    )
+      !isLeaveAllowedUser(existing.user) ||
+      ["ADMIN", "ACCOUNTS", "OPERATIONS"].includes(existing.user.userType)
+    ) {
       return {
         success: false,
         error: "Selected user is not eligible for leave requests.",
       };
+    }
     if (
       !(await areValidLeaveRequestApproversForUser(
-        employee.id,
+        existing.userId,
         parsed.data.approverIds,
       ))
-    )
+    ) {
       return {
         success: false,
         error:
           "One or more selected approvers are not available for this employee.",
       };
+    }
+
     validateStartDateNotInPast(parsed.data.startDate);
-    await validateBoundaryDates(
-      parsed.data.startDate,
-      parsed.data.endDate,
-      employee.id,
-    );
     const { start, end } = parseDateRange(
       parsed.data.startDate,
       parsed.data.endDate,
     );
-    await validateNoOverlappingLeaveRequest(
-      employee.id,
-      start,
-      end,
-      parsed.data.id,
-    );
-    const requestDetails = await computeRequestedLeaveDetails(
-      parsed.data.startDate,
-      parsed.data.endDate,
-      employee.id,
-      parsed.data.daySelectionMode,
-      parsed.data.leaveDayTypesJson,
-    );
-    const request = await db.leaveRequest.update({
-      where: { id: parsed.data.id },
-      data: {
-        // Final paid/unpaid allocation is recalculated only when approved.
-        leaveType: "UNPAID",
+
+    const request = await db.$transaction(async (tx) => {
+      await lockUserLeaveTimeline(tx, existing.userId);
+      const current = await tx.leaveRequest.findUnique({
+        where: { id: parsed.data.id },
+        include: {
+          user: {
+            select: {
+              id: true,
+              fullName: true,
+              isActive: true,
+              userType: true,
+              functionalRole: true,
+            },
+          },
+        },
+      });
+      if (!current || current.status !== "RECONSIDER") {
+        throw new Error(
+          "This leave request is no longer available for reconsideration.",
+        );
+      }
+      if (!isLeaveAllowedUser(current.user)) {
+        throw new Error("Selected user is not eligible for leave requests.");
+      }
+
+      await validateBoundaryDates(
+        tx,
+        parsed.data.startDate,
+        parsed.data.endDate,
+        current.userId,
+        parsed.data.daySelectionMode,
+        parsed.data.leaveDayTypesJson,
+      );
+      await validateNoOverlappingLeaveRequest(
+        tx,
+        current.userId,
+        start,
+        end,
+        parsed.data.id,
+      );
+      const requestDetails = await computeRequestedLeaveDetails(
+        tx,
+        parsed.data.startDate,
+        parsed.data.endDate,
+        current.userId,
+        parsed.data.daySelectionMode,
+        parsed.data.leaveDayTypesJson,
+      );
+      await previewLeaveRequestAllocation(tx, {
+        userId: current.userId,
         startDate: start,
         endDate: end,
-        reason: buildReason(parsed.data.reason, parsed.data.diwaliLeave),
-        approverId: parsed.data.approverIds[0] ?? null,
-        selectedApprovers: {
-          deleteMany: {},
-          create: parsed.data.approverIds.map((approverId) => ({ approverId })),
-        },
-        status: "PENDING",
-        reconsiderNote: null,
-        rejectedAt: null,
-        reconsideredAt: new Date(),
         daySelectionMode: requestDetails.daySelectionMode,
         leaveDayTypesJson: requestDetails.leaveDayTypesJson,
-        totalLeaveDays: new Prisma.Decimal(
-          requestDetails.requestedLeaveDays.toFixed(2),
-        ),
-        casualDaysUsed: new Prisma.Decimal(0),
-        earnedDaysUsed: new Prisma.Decimal(0),
-        unpaidDaysUsed: new Prisma.Decimal(0),
-      },
+        manualAllocationOverrideJson: null,
+        manualOverrideNote: null,
+      });
+
+      return tx.leaveRequest.update({
+        where: { id: parsed.data.id },
+        data: {
+          // Final paid/unpaid allocation is recalculated only when approved.
+          leaveType: "UNPAID",
+          startDate: start,
+          endDate: end,
+          reason: buildReason(parsed.data.reason, parsed.data.diwaliLeave),
+          approverId: parsed.data.approverIds[0] ?? null,
+          selectedApprovers: {
+            deleteMany: {},
+            create: parsed.data.approverIds.map((approverId) => ({ approverId })),
+          },
+          status: "PENDING",
+          reconsiderNote: null,
+          rejectedAt: null,
+          reconsideredAt: new Date(),
+          daySelectionMode: requestDetails.daySelectionMode,
+          leaveDayTypesJson: requestDetails.leaveDayTypesJson,
+          totalLeaveDays: new Prisma.Decimal(
+            requestDetails.requestedLeaveDays.toFixed(2),
+          ),
+          casualDaysUsed: new Prisma.Decimal(0),
+          earnedDaysUsed: new Prisma.Decimal(0),
+          unpaidDaysUsed: new Prisma.Decimal(0),
+          manualAllocationOverrideJson: null,
+          manualOverrideNote: null,
+        },
+      });
     });
+
     await sendSubmittedMailWithoutRollingBack(request.id, "updated");
     revalidatePath("/leave-requests");
     revalidatePath(`/leave-requests/${parsed.data.id}/edit`);
@@ -576,8 +598,11 @@ export async function deleteLeaveRequestAction(formData: FormData) {
     where: { id, userId: user.id },
   });
   if (!existing) throw new Error("Leave request not found.");
-  if (existing.status === "APPROVED")
-    throw new Error("Approved leave requests cannot be deleted.");
+  if (existing.status !== "REJECTED") {
+    throw new Error(
+      "Active leave requests must be cancelled through the HR cancellation workflow. Only rejected requests can be deleted.",
+    );
+  }
   await db.leaveRequest.delete({ where: { id } });
   revalidatePath("/leave-requests");
   revalidatePath("/leave-approvals");
@@ -585,43 +610,69 @@ export async function deleteLeaveRequestAction(formData: FormData) {
 }
 
 export async function cancelLeaveRequestAction(formData: FormData) {
-  const user = await requireUserForAction();
-  const id = String(formData.get("id") || "");
+  const actor = await requireUserForAction();
+  const id = String(formData.get("id") || "").trim();
+  const reason = String(formData.get("reason") || "").trim();
   if (!id) throw new Error("Leave request is required.");
-  const existing = await db.leaveRequest.findFirst({
-    where: { id, userId: user.id },
-  });
+  if (!reason) throw new Error("Cancellation reason is required.");
+
+  const existing = await db.leaveRequest.findUnique({ where: { id } });
   if (!existing) throw new Error("Leave request not found.");
-  if (existing.status !== "APPROVED")
-    throw new Error("Only approved leave requests can be cancelled.");
-  const { startUtc } = getDayBoundsUtcFromIstDateKey(getIstDateKey());
-  if (existing.endDate < startUtc)
-    throw new Error("Past leave requests cannot be cancelled.");
-  const profile = ensureLeaveYearProfile(
-    await getOrCreateLeaveYearProfile(
-      user.id,
-      Number(getIstDateKey(existing.startDate).slice(0, 4)),
-    ),
-  );
-  await db.$transaction([
-    db.leaveRequest.update({
-      where: { id },
-      data: { status: "CANCELLED", cancelledAt: new Date() },
-    }),
-    db.leaveYearProfile.update({
-      where: { id: profile.id },
+  const canRequest =
+    existing.userId === actor.id || isAdmin(actor) || isHR(actor);
+  if (!canRequest)
+    throw new Error("You cannot request cancellation for this leave.");
+
+  const cancellationRequestId = await db.$transaction(async (tx) => {
+    await lockUserLeaveTimeline(tx, existing.userId);
+    const current = await tx.leaveRequest.findUnique({ where: { id } });
+    if (!current) throw new Error("Leave request not found.");
+    if (
+      !["PENDING", "RECONSIDER", "APPROVED", "PARTIALLY_CANCELLED"].includes(
+        current.status,
+      )
+    ) {
+      throw new Error("This leave request cannot be cancelled.");
+    }
+
+    const todayDateKey = getIstDateKey();
+    const isPastLeave = getIstDateKey(current.endDate) < todayDateKey;
+    const isEmployeeSelfServiceRequest =
+      current.userId === actor.id && !isAdmin(actor) && !isHR(actor);
+
+    if (
+      isEmployeeSelfServiceRequest &&
+      isPastLeave &&
+      !isLeaveStartWithinPastCancellationWindow(
+        current.startDate,
+        todayDateKey,
+      )
+    ) {
+      throw new Error(
+        "Cancellation can be requested only within 10 days of the leave start date.",
+      );
+    }
+
+    const pendingCancellation = await tx.leaveCancellationRequest.findFirst({
+      where: { leaveRequestId: id, status: "PENDING" },
+      select: { id: true },
+    });
+    if (pendingCancellation) {
+      throw new Error("A cancellation request is already awaiting HR review.");
+    }
+    const cancellationRequest = await tx.leaveCancellationRequest.create({
       data: {
-        casualLeaves: {
-          increment: existing.casualDaysUsed ?? new Prisma.Decimal(0),
-        },
-        earnedLeaves: {
-          increment: existing.earnedDaysUsed ?? new Prisma.Decimal(0),
-        },
+        leaveRequestId: id,
+        requestedById: actor.id,
+        reason,
       },
-    }),
-  ]);
+      select: { id: true },
+    });
+    return cancellationRequest.id;
+  });
+  await sendCancellationMailWithoutRollingBack(cancellationRequestId);
   revalidatePath("/leave-requests");
-  revalidatePath("/leave-approvals");
+  revalidatePath("/leave-admin/cancellations");
   revalidatePath("/dashboard");
 }
 
@@ -637,11 +688,23 @@ export async function reviewLeaveRequestAction(formData: FormData) {
     throw new Error("Invalid leave review action.");
   const existing = await db.leaveRequest.findUnique({
     where: { id },
-    include: { selectedApprovers: { select: { approverId: true } } },
+    include: {
+      selectedApprovers: { select: { approverId: true } },
+      cancellationRequests: {
+        where: { status: "PENDING" },
+        select: { id: true },
+        take: 1,
+      },
+    },
   });
   if (!existing) throw new Error("Leave request not found.");
   if (existing.status !== "PENDING")
     throw new Error("Only pending leave requests can be reviewed.");
+  if (existing.cancellationRequests.length) {
+    throw new Error(
+      "This request has a cancellation awaiting HR review and cannot be reviewed by the designated approver.",
+    );
+  }
   const assigned = Boolean(
     await db.leaveApproverAssignment.findFirst({
       where: { approverId: user.id },
@@ -666,63 +729,70 @@ export async function reviewLeaveRequestAction(formData: FormData) {
       "Only one of the selected approvers or an Admin user with functional role Project Manager who is included in the approver list can approve, reject, or reconsider this leave request.",
     );
   if (decision === "APPROVED") {
-    const approvedBreakup = await computeApprovedLeaveBreakup(
-      getIstDateKey(existing.startDate),
-      getIstDateKey(existing.endDate),
-      existing.userId,
-      existing.daySelectionMode as DaySelectionMode,
-      existing.leaveDayTypesJson ?? undefined,
-    );
-    const profile = ensureLeaveYearProfile(
-      await getOrCreateLeaveYearProfile(
-        existing.userId,
-        approvedBreakup.year,
-      ),
-    );
-    await db.$transaction([
-      db.leaveRequest.update({
-        where: { id },
+    await db.$transaction(async (tx) => {
+      await lockUserLeaveTimeline(tx, existing.userId);
+      const pendingCancellation = await tx.leaveCancellationRequest.findFirst({
+        where: { leaveRequestId: id, status: "PENDING" },
+        select: { id: true },
+      });
+      if (pendingCancellation) {
+        throw new Error(
+          "This request has a cancellation awaiting HR review and cannot be approved.",
+        );
+      }
+      const claimed = await tx.leaveRequest.updateMany({
+        where: { id, status: "PENDING" },
         data: {
           status: "APPROVED",
-          leaveType: approvedBreakup.leaveType,
-          totalLeaveDays: new Prisma.Decimal(
-            approvedBreakup.totalLeaveDays.toFixed(2),
-          ),
-          casualDaysUsed: new Prisma.Decimal(
-            approvedBreakup.casualDaysUsed.toFixed(2),
-          ),
-          earnedDaysUsed: new Prisma.Decimal(
-            approvedBreakup.earnedDaysUsed.toFixed(2),
-          ),
-          unpaidDaysUsed: new Prisma.Decimal(
-            approvedBreakup.unpaidDaysUsed.toFixed(2),
-          ),
           approverId: user.id,
           approverComment: comment || null,
           approvedAt: new Date(),
           rejectedAt: null,
           reconsiderNote: null,
         },
-      }),
-      db.leaveYearProfile.update({
-        where: { id: profile.id },
-        data: {
-          casualLeaves: {
-            decrement: new Prisma.Decimal(
-              approvedBreakup.casualDaysUsed.toFixed(2),
-            ),
-          },
-          earnedLeaves: {
-            decrement: new Prisma.Decimal(
-              approvedBreakup.earnedDaysUsed.toFixed(2),
-            ),
-          },
-        },
-      }),
-    ]);
+      });
+      if (claimed.count !== 1) {
+        throw new Error("This leave request has already been reviewed.");
+      }
+      const approvedRequest = await tx.leaveRequest.findUnique({ where: { id } });
+      if (!approvedRequest) throw new Error("Leave request not found.");
+      const approvalDateKey = getIstDateKey();
+      await ensureQuarterlyCreditForUser(tx, {
+        userId: approvedRequest.userId,
+        dateKey: getCurrentQuarterStartDateKey(approvalDateKey),
+        actorId: user.id,
+        source: "APPROVAL_PREPARATION",
+      });
+      await validateManualOverrideForRequest(tx, approvedRequest);
+      await createAllocationRowsForApprovedRequest(tx, approvedRequest);
+      await applyManualOverrideToRequestAllocations(tx, approvedRequest, user.id);
+      await processDueLeaveAllocationsForUser(tx, {
+        userId: approvedRequest.userId,
+        throughDateKey: approvalDateKey,
+        actorId: user.id,
+        approvalRequestId: approvedRequest.id,
+      });
+      await ensureSandwichAllocationsForRequest(
+        tx,
+        approvedRequest,
+        approvalDateKey,
+      );
+      await processDueLeaveAllocationsForUser(tx, {
+        userId: approvedRequest.userId,
+        throughDateKey: approvalDateKey,
+        actorId: user.id,
+        approvalRequestId: approvedRequest.id,
+      });
+      await recalculateFutureAllocationsForUser(
+        tx,
+        approvedRequest.userId,
+        approvalDateKey,
+      );
+      await syncRequestAggregates(tx, approvedRequest.id);
+    });
   } else {
-    await db.leaveRequest.update({
-      where: { id },
+    const claimed = await db.leaveRequest.updateMany({
+      where: { id, status: "PENDING" },
       data: {
         status: decision as "REJECTED" | "RECONSIDER",
         approverId: user.id,
@@ -735,6 +805,9 @@ export async function reviewLeaveRequestAction(formData: FormData) {
             : null,
       },
     });
+    if (claimed.count !== 1) {
+      throw new Error("This leave request has already been reviewed.");
+    }
   }
   await sendStatusMailWithoutRollingBack(
     id,

@@ -41,26 +41,52 @@ export async function saveUserAssignmentAction(
       const subProject = await db.subProject.findUnique({
         where: { id: parsed.data.subProjectId },
         include: {
-          assignments: true,
-          timeEntries: { select: { employeeId: true } },
-          estimates: { select: { employeeId: true } },
+          assignments: {
+            include: {
+              user: { select: { fullName: true } },
+            },
+          },
         },
       });
       if (!subProject || subProject.projectId !== parsed.data.projectId) {
         return { success: false, error: "Invalid Sub Project selected." };
       }
-      const lockedUserIds = new Set([
-        ...subProject.timeEntries.map((row) => row.employeeId),
-        ...subProject.estimates.map((row) => row.employeeId),
-      ]);
-      for (const row of subProject.assignments) {
-        if (lockedUserIds.has(row.userId) && !userIds.includes(row.userId)) {
+
+      const removedAssignments = subProject.assignments.filter(
+        (assignment) => !userIds.includes(assignment.userId),
+      );
+      if (removedAssignments.length > 0) {
+        const timeEntryCounts = await db.timeEntry.groupBy({
+          by: ["employeeId"],
+          where: {
+            subProjectId: subProject.id,
+            employeeId: {
+              in: removedAssignments.map((assignment) => assignment.userId),
+            },
+          },
+          _count: { _all: true },
+        });
+        const countByUserId = new Map(
+          timeEntryCounts.map((row) => [row.employeeId, row._count._all]),
+        );
+        const blockedAssignments = removedAssignments.filter(
+          (assignment) => (countByUserId.get(assignment.userId) ?? 0) > 0,
+        );
+
+        if (blockedAssignments.length > 0) {
+          const blockedUsers = blockedAssignments
+            .map((assignment) => {
+              const count = countByUserId.get(assignment.userId) ?? 0;
+              return `${assignment.user.fullName} (${count})`;
+            })
+            .join(", ");
           return {
             success: false,
-            error: "A user with time entries or estimates for this Sub Project cannot be removed.",
+            error: `The following user assignment(s) cannot be removed because time entries exist for this Sub Project: ${blockedUsers}.`,
           };
         }
       }
+
       await db.$transaction(async (tx) => {
         await tx.subProjectAssignment.deleteMany({
           where: {
@@ -79,24 +105,50 @@ export async function saveUserAssignmentAction(
       const project = await db.project.findUnique({
         where: { id: parsed.data.projectId },
         include: {
-          assignedUsers: true,
-          timeEntries: { select: { employeeId: true } },
-          estimates: { select: { employeeId: true } },
+          assignedUsers: {
+            include: {
+              user: { select: { fullName: true } },
+            },
+          },
         },
       });
       if (!project) return { success: false, error: "Project not found." };
-      const lockedUserIds = new Set([
-        ...project.timeEntries.map((row) => row.employeeId),
-        ...project.estimates.map((row) => row.employeeId),
-      ]);
-      for (const row of project.assignedUsers) {
-        if (lockedUserIds.has(row.userId) && !userIds.includes(row.userId)) {
+
+      const removedAssignments = project.assignedUsers.filter(
+        (assignment) => !userIds.includes(assignment.userId),
+      );
+      if (removedAssignments.length > 0) {
+        const timeEntryCounts = await db.timeEntry.groupBy({
+          by: ["employeeId"],
+          where: {
+            projectId: project.id,
+            employeeId: {
+              in: removedAssignments.map((assignment) => assignment.userId),
+            },
+          },
+          _count: { _all: true },
+        });
+        const countByUserId = new Map(
+          timeEntryCounts.map((row) => [row.employeeId, row._count._all]),
+        );
+        const blockedAssignments = removedAssignments.filter(
+          (assignment) => (countByUserId.get(assignment.userId) ?? 0) > 0,
+        );
+
+        if (blockedAssignments.length > 0) {
+          const blockedUsers = blockedAssignments
+            .map((assignment) => {
+              const count = countByUserId.get(assignment.userId) ?? 0;
+              return `${assignment.user.fullName} (${count})`;
+            })
+            .join(", ");
           return {
             success: false,
-            error: "A user with time entries or estimates for this Project cannot be removed.",
+            error: `The following user assignment(s) cannot be removed because time entries exist for this Project: ${blockedUsers}.`,
           };
         }
       }
+
       await db.$transaction(async (tx) => {
         await tx.projectUserAssignment.deleteMany({
           where: {
